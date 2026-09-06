@@ -1410,12 +1410,23 @@ export enum BufferIntrinsic {
 }
 
 export enum RuntimeIntrinsic {
-    Write
-    Eprint
+    Io(intrinsic: IoIntrinsic)
     ArgCount
     Ffi(intrinsic: FfiIntrinsic)
     Numeric(intrinsic: NumericIntrinsic)
     Buffer(intrinsic: BufferIntrinsic)
+}
+
+// The bundled I/O ABI.  Its declaration owner and selected identity decide
+// this once in the frontend; backend code never infers an operation from text.
+export enum IoIntrinsic {
+    Write
+    WriteByte
+    ReadStdin
+    ReadFile
+    ReadFileBytes
+    Eprint
+    FileExists
 }
 
 // The small, explicitly unsafe FFI floor. These are runtime ABI operations,

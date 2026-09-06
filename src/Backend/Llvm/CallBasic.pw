@@ -178,6 +178,32 @@ pub impl LlvmCtx {
         return LLVMConstNull(self.ptrty)
     }
 
+    inout fn genIoRuntimeIntrinsic(c: inout Comp, intrinsic: IoIntrinsic, args: ArgRange) -> LLVMValueRef {
+        match intrinsic {
+            IoIntrinsic.Write => { return self.emitStrSink(c: inout c, rtName: "plew_write_raw", rtId: 2U64, argExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.Eprint => { return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.WriteByte => {
+                mut val p: Array[LLVMTypeRef] = []
+                p.append(self.i8ty)
+                val ty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(p), 1U64, 0I32)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i8ty, unsigned: true))
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+            }
+            IoIntrinsic.ReadStdin => {
+                mut val p: Array[LLVMTypeRef] = []
+                val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 0U64, 0I32)
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+            }
+            IoIntrinsic.ReadFile => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.ReadFileBytes => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.FileExists => {
+                val raw: LLVMValueRef = self.emitPathStrIntrinsic(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, pathExpr: c.argAt(args: args, index: 0U64).expr)
+                return LLVMBuildICmp(self.b, llvmIntNe(), raw, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+            }
+        }
+    }
+
     // The legacy AST emitter still evaluates source operands, but the selected
     // FFI operation is a frozen enum. This is the compatibility counterpart of
     // Mid's Ffi lowering, not a source-name dispatch.
@@ -244,22 +270,7 @@ pub impl LlvmCtx {
             match c.arena.finalCallees[resolution].target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
-                        RuntimeIntrinsic.Write => {
-                            if args.len != 1U64 {
-                                c.errorAt(offset: nameStart, msg: "internal error: write runtime intrinsic has an invalid ABI arity")
-                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
-                            }
-                            val argument: U64 = c.argAt(args: args, index: 0U64).expr
-                            return self.emitStrSink(c: inout c, rtName: "plew_write_raw", rtId: 2U64, argExpr: argument)
-                        }
-                        RuntimeIntrinsic.Eprint => {
-                            if args.len != 1U64 {
-                                c.errorAt(offset: nameStart, msg: "internal error: eprint runtime intrinsic has an invalid ABI arity")
-                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
-                            }
-                            val argument: U64 = c.argAt(args: args, index: 0U64).expr
-                            return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: argument)
-                        }
+                        RuntimeIntrinsic.Io(intrinsic: val io) => { return self.genIoRuntimeIntrinsic(c: inout c, intrinsic: io, args: args) }
                         RuntimeIntrinsic.ArgCount => {
                             if args.len != 0U64 {
                                 c.errorAt(offset: nameStart, msg: "internal error: argCount runtime intrinsic has an invalid ABI arity")
@@ -382,16 +393,6 @@ pub impl LlvmCtx {
             sargs.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
             return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
         }
-        // @Std/Io writeByte(b: U8): putchar.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
-            mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(self.i8ty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i8ty, unsigned: true))
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
-        }
         // @Std/Process argCount() -> I64.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
             mut val ptys: Array[LLVMTypeRef] = []
@@ -487,20 +488,6 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
-        // @Std/Io readFile(path: String) -> String and readFileBytes(path: Array[U8])
-        // -> String / fileExists(path: Array[U8]) -> Bool: the path argument is a
-        // {ptr,i64} value (String or Array[U8], same layout), passed as two args.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
-            val r: LLVMValueRef = self.emitPathStrIntrinsic(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, pathExpr: c.argAt(args: args, index: 0U64).expr)
-            // i64 1/0 -> Bool i1.
-            return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-        }
         // @Std/Process execOut(cmd: String) -> String: run `sh -c cmd`, capture stdout
         // (the cmd String is a {ptr,i64} value, same path-intrinsic shape).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") {
@@ -577,14 +564,6 @@ pub impl LlvmCtx {
             mut val fav: Array[LLVMValueRef] = []
             fav.append(fv)
             return LLVMBuildCall2(self.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
-            // read all of stdin into a String (strty {i8*,i64}) via the runtime.
-            mut val rtys: Array[LLVMTypeRef] = []
-            val rfty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(rtys), 0U64, 0I32)
-            val rcallee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: rfty)
-            mut val rav: Array[LLVMValueRef] = []
-            return LLVMBuildCall2(self.b, rfty, rcallee, arrayCPtr(rav), 0U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "assert") {
             // assert(cond): branch to a panic block when the condition is false.

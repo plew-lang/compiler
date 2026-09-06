@@ -672,13 +672,21 @@ pub impl LlvmCtx {
                                 _ => { return <MidCallPreflight.Buffer /> }
                             }
                         }
-                        RuntimeIntrinsic.Write => {
-                            if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
-                            if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                        }
-                        RuntimeIntrinsic.Eprint => {
-                            if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
-                            if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                        RuntimeIntrinsic.Io(intrinsic: val io) => {
+                            match io {
+                                IoIntrinsic.Write => { if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.WriteByte => { if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.ReadStdin => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.ReadFile => { if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.ReadFileBytes => { if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.Eprint => { if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                IoIntrinsic.FileExists => { if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            }
+                            mut val i: U64 = 0U64
+                            while i < args.count() {
+                                if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[i])) { return <MidCallPreflight.Argument /> }
+                                i += 1U64
+                            }
                         }
                     }
                 }
@@ -902,14 +910,31 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
             match intrinsic {
-                RuntimeIntrinsic.Write => {
-                    val argument: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
-                    self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", rtId: 2U64, value: argument)
-                    return true
-                }
-                RuntimeIntrinsic.Eprint => {
-                    val argument: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
-                    self.emitStrSinkValue(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, value: argument)
+                RuntimeIntrinsic.Io(intrinsic: val io) => {
+                    match io {
+                        IoIntrinsic.Write => { self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", rtId: 2U64, value: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])) }
+                        IoIntrinsic.Eprint => { self.emitStrSinkValue(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, value: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])) }
+                        IoIntrinsic.WriteByte => {
+                            mut val parameters: Array[LLVMTypeRef] = []
+                            parameters.append(self.i8ty)
+                            val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(self.coerceInt(v: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]), target: self.i8ty, unsigned: true))
+                            LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: signature), arrayCPtr(values), 1U64, anon())
+                        }
+                        IoIntrinsic.ReadStdin => {
+                            mut val parameters: Array[LLVMTypeRef] = []
+                            val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 0U64, 0I32)
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: signature), arrayCPtr(parameters), 0U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        IoIntrinsic.ReadFile => { LLVMBuildStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), path: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])), self.midLocalPtr(body: body, local: destination.local)) }
+                        IoIntrinsic.ReadFileBytes => { LLVMBuildStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), path: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])), self.midLocalPtr(body: body, local: destination.local)) }
+                        IoIntrinsic.FileExists => {
+                            val raw: LLVMValueRef = self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, path: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]))
+                            LLVMBuildStore(self.b, LLVMBuildICmp(self.b, llvmIntNe(), raw, LLVMConstInt(self.i64ty, 0U64, 0I32), anon()), self.midLocalPtr(body: body, local: destination.local))
+                        }
+                    }
                     return true
                 }
                 RuntimeIntrinsic.ArgCount => {

@@ -25,11 +25,16 @@ pub impl Comp {
         val owner: U64 = self.moduleOf(offset: sig.nameSpan.start)
         if owner == self.modules.ioModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
-                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Write /> />
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.Write /> /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") {
-                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Eprint /> />
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.Eprint /> /> />
             }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.WriteByte /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadStdin /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadFile /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadFileBytes /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.FileExists /> /> /> }
         }
         if owner == self.modules.processModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
@@ -62,8 +67,13 @@ pub impl Comp {
         val nameLen: U64 = sig.name.end - sig.name.start
         val owner: U64 = self.moduleOf(offset: nameStart)
         if owner == self.modules.ioModule {
-            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "write") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Write /> /> }
-            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Eprint /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "write") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.Write /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.Eprint /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.WriteByte /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadStdin /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadFile /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.ReadFileBytes /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.FileExists /> /> /> }
         }
         if owner == self.modules.processModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }

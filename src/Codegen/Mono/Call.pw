@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1948,8 +1948,22 @@ pub impl Comp {
                 match b {
                     CallTarget.RuntimeIntrinsic(intrinsic: val other) => {
                         match intrinsic {
-                            RuntimeIntrinsic.Write => { match other { RuntimeIntrinsic.Write => { return true } _ => {} } }
-                            RuntimeIntrinsic.Eprint => { match other { RuntimeIntrinsic.Eprint => { return true } _ => {} } }
+                            RuntimeIntrinsic.Io(intrinsic: val left) => {
+                                match other {
+                                    RuntimeIntrinsic.Io(intrinsic: val right) => {
+                                        match left {
+                                            IoIntrinsic.Write => { match right { IoIntrinsic.Write => { return true } _ => {} } }
+                                            IoIntrinsic.WriteByte => { match right { IoIntrinsic.WriteByte => { return true } _ => {} } }
+                                            IoIntrinsic.ReadStdin => { match right { IoIntrinsic.ReadStdin => { return true } _ => {} } }
+                                            IoIntrinsic.ReadFile => { match right { IoIntrinsic.ReadFile => { return true } _ => {} } }
+                                            IoIntrinsic.ReadFileBytes => { match right { IoIntrinsic.ReadFileBytes => { return true } _ => {} } }
+                                            IoIntrinsic.Eprint => { match right { IoIntrinsic.Eprint => { return true } _ => {} } }
+                                            IoIntrinsic.FileExists => { match right { IoIntrinsic.FileExists => { return true } _ => {} } }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
                             RuntimeIntrinsic.ArgCount => { match other { RuntimeIntrinsic.ArgCount => { return true } _ => {} } }
                             RuntimeIntrinsic.Ffi(intrinsic: val left) => {
                                 match other {

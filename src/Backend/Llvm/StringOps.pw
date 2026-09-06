@@ -91,17 +91,20 @@ pub impl LlvmCtx {
     // A path-taking runtime intrinsic (`readFile`/`readFileBytes`/`fileExists`): the
     // path is a {ptr,i64} value (String or Array[U8], same layout) passed as two args;
     // returns `retTy` (strty for the file readers, i64 for fileExists).
-    inout fn emitPathStrIntrinsic(c: inout Comp, rtName: String, rtId: U64, retTy: LLVMTypeRef, pathExpr: U64) -> LLVMValueRef {
-        val pv: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: pathExpr)
+    inout fn emitPathStrIntrinsicValue(c: inout Comp, rtName: String, rtId: U64, retTy: LLVMTypeRef, path: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(retTy, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, nameId: rtId, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(self.arrValData(c: inout c, arr: pv))
-        av.append(self.arrValCount(c: inout c, arr: pv))
+        av.append(self.arrValData(c: inout c, arr: path))
+        av.append(self.arrValCount(c: inout c, arr: path))
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
+    inout fn emitPathStrIntrinsic(c: inout Comp, rtName: String, rtId: U64, retTy: LLVMTypeRef, pathExpr: U64) -> LLVMValueRef {
+        return self.emitPathStrIntrinsicValue(c: inout c, rtName: rtName, rtId: rtId, retTy: retTy, path: self.genBorrowedArg(c: inout c, argExpr: pathExpr))
     }
 
     // Call a 1-arg i64 runtime sink (`plew_print_i64` / `plew_print_u64` /

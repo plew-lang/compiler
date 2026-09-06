@@ -1,0 +1,36 @@
+// Each bundled Io ABI operation is selected by declaration identity.  Keep the
+// values unobserved here so this test isolates call lowering rather than print.
+import @Std/Io with { write, writeByte, eprint, readFile, readFileBytes, fileExists }
+
+fn sinkText() {
+    write(s: "")
+    eprint(text: "")
+}
+
+fn sinkByte() {
+    writeByte(65U8)
+    write(s: "\n")
+}
+
+fn textFile() {
+    val path: String = "/dev/null"
+    val text = readFile(path)
+}
+
+fn byteFile() {
+    val path: Array[U8] = [47U8, 100U8, 101U8, 118U8, 47U8, 110U8, 117U8, 108U8, 108U8]
+    val text = readFileBytes(path)
+}
+
+fn pathExists() {
+    val path: Array[U8] = [47U8, 100U8, 101U8, 118U8, 47U8, 110U8, 117U8, 108U8, 108U8]
+    val exists = fileExists(path: path)
+}
+
+fn main() {
+    sinkText()
+    sinkByte()
+    textFile()
+    byteFile()
+    pathExists()
+}
