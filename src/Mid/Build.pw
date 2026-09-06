@@ -1299,17 +1299,65 @@ fn midEnumTagForVariantSlot(slot: U64) -> I64 {
 // binding (with a lifetime tied to the scrutinee); treating one as a copy here
 // would silently omit its retain/drop semantics. Move matches likewise need a
 // consuming payload operation and drop-flag transfer.
+fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: String) {
+    if !(c.traceCodegen) { return }
+    eprint(text: "[trace-codegen] Mid match-preflight fn=")
+    eprintU64(n: state.sourceFunction)
+    eprint(text: " stmt=")
+    eprintU64(n: stmtId)
+    eprint(text: " reason=")
+    eprint(text: reason)
+    eprint(text: "\n")
+}
+
 export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Match(scrut: val scrut, arms: val sourceArms) => {
             val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, stmtId: stmtId)
-            if semanticIndex >= c.decls.semanticMatches.count() { return <MidBuildError.UnsupportedMatch /> }
+            if semanticIndex >= c.decls.semanticMatches.count() {
+                traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "missing-semantic-match")
+                return <MidBuildError.UnsupportedMatch />
+            }
             val semantic: SemanticMatch = c.decls.semanticMatches[semanticIndex]
-            if semantic.arms.count() != sourceArms.len { return <MidBuildError.UnsupportedMatch /> }
-            if midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) { return <MidBuildError.UnsupportedMatch /> }
-            val scrutinee: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm)
-            if !scrutinee.found { return <MidBuildError.UnsupportedMatch /> }
+            if semantic.arms.count() != sourceArms.len {
+                traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "arm-count")
+                return <MidBuildError.UnsupportedMatch />
+            }
+            if midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) {
+                traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "unique-scrutinee")
+                return <MidBuildError.UnsupportedMatch />
+            }
+            mut val scrutinee: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm)
+            // A statement match consumes its scrutinee expression exactly once,
+            // but tag reads and every arm payload projection need a stable
+            // place for the lifetime of the complete arm CFG.  Normalize an
+            // already-resolved rvalue into a lexical temporary rather than
+            // teaching EnumTag/EnumPayloadCopy to re-evaluate an operand.
+            // This is the same place discipline used for dynamic index keys:
+            // a Mid Place never embeds an effectful source expression.
+            mut val hasScrutineeScope: Bool = false
+            mut val scrutineeScope: U64 = 0U64
+            if !scrutinee.found {
+                val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm, allowAccessMarker: false)
+                match value.error {
+                    MidBuildError.None => {}
+                    _ => {
+                        traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "scrutinee-rvalue-unavailable")
+                        return value.error
+                    }
+                }
+                scrutineeScope = midOpenScope(state: inout state)
+                hasScrutineeScope = true
+                val temporary: U64 = addMidTemporary(state: inout state, typeTerm: semantic.scrutineeTerm)
+                val temporaryPlace: MidPlace = <MidPlace local=temporary typeTerm=semantic.scrutineeTerm />
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporaryPlace value=<MidRvalue.Use operand=value.operand /> />)
+                scrutinee = <MidPlaceLookup found=true place=temporaryPlace />
+            }
+            if !scrutinee.found {
+                traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "scrutinee-not-place")
+                return <MidBuildError.UnsupportedMatch />
+            }
             val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
             val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
             if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
@@ -1348,7 +1396,14 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                 mut val payloadIndex: U64 = 0U64
                 while payloadIndex < semanticArm.payloads.count() {
                     val payload: SemanticMatchPayload = semanticArm.payloads[payloadIndex]
-                    if midTermIsUnique(c: inout c, term: payload.fieldTerm) || c.arcNeedsRelease(ref: payload.fieldTerm) { return <MidBuildError.UnsupportedMatch /> }
+                    if midTermIsUnique(c: inout c, term: payload.fieldTerm) {
+                        traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "unique-payload")
+                        return <MidBuildError.UnsupportedMatch />
+                    }
+                    if c.arcNeedsRelease(ref: payload.fieldTerm) {
+                        traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "owned-payload")
+                        return <MidBuildError.UnsupportedMatch />
+                    }
                     val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false)
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
@@ -1359,6 +1414,7 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                 match armResult { MidBuildError.None => {} _ => { return armResult } }
                 if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
                     midEmitScopeExit(state: inout state, scope: armScope)
+                    if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
                     midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
                     joinReachable = true
                 }
@@ -1366,6 +1422,7 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                 state.bindings.truncate(count: bindingMark)
                 armIndex += 1U64
             }
+            if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
             state.currentBlock = joinTarget
             if !joinReachable {
                 // Every arm diverges (for example, each returns). This join is

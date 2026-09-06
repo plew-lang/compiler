@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// The match scrutinee is a call result, not a source place. Mid must evaluate
+// it exactly once into a scoped temporary, then read its tag/payload from that
+// temporary for the complete arm CFG.
+fn value(flag: Bool) -> Optional[I64] {
+    if flag { return <Optional[I64].Some v=7I64 /> }
+    return <Optional[I64].None />
+}
+
+fn describe(flag: Bool) -> I64 {
+    match value(flag: flag) {
+        Optional.Some(v: val number) => { return number }
+        Optional.None => { return 0I64 }
+    }
+}
+
+fn main() {
+    print(describe(flag: true))
+    print(describe(flag: false))
+}
+
+// expected: 7
+// expected: 0
