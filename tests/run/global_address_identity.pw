@@ -1,0 +1,43 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Expr, Global, SemanticExprType, identValueCode, identFnCode }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val unit = c.simpleTypeRef(nameStart: 0U64, nameLen: 0U64)
+    val name = c.internTmpName(prefix: "Value", n: 0U64)
+    val term = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    // The source spelling is intentionally unrelated. Only recorded binding
+    // identity may select a global; no lexical environment is installed.
+    val expression = c.pushExpr(e: <Expr.Ident start=777U64 len=1U64 />)
+    c.buildExprTyTable()
+    c.typeCache.identBind.set(i: expression, value: identValueCode())
+    c.typeCache.identTarget.set(i: expression, value: 42U64)
+    c.recordSemanticExprTerm(exprId: expression, term: term)
+    c.arena.globals.append(<Global nameStart=41U64 nameLen=1U64 letStmt=0U64 mutable=false />)
+    c.arena.globals.append(<Global nameStart=42U64 nameLen=1U64 letStmt=1U64 mutable=true />)
+    match c.recordedGlobalAddress(exprId: expression) {
+        Optional.Some(v: val address) => {
+            if address.declarationTarget == 42U64 && address.typeTerm == term && address.mutable { write(s: "exact-declaration\n") }
+        }
+        _ => {}
+    }
+    val first = c.arena.globals[0U64]
+    c.arena.globals.set(i: 0U64, value: c.arena.globals[1U64])
+    c.arena.globals.set(i: 1U64, value: first)
+    match c.recordedGlobalAddress(exprId: expression) {
+        Optional.Some(v: val address) => { if address.declarationTarget == 42U64 { write(s: "initialization-order-independent\n") } }
+        _ => {}
+    }
+    c.typeCache.identTarget.set(i: expression, value: 99U64)
+    match c.recordedGlobalAddress(exprId: expression) { Optional.None => { write(s: "local-not-global\n") } _ => {} }
+    c.typeCache.identTarget.set(i: expression, value: 42U64)
+    c.typeCache.identBind.set(i: expression, value: identFnCode())
+    match c.recordedGlobalAddress(exprId: expression) { Optional.None => { write(s: "function-not-global\n") } _ => {} }
+    match c.recordedGlobalAddress(exprId: expression + 1U64) { Optional.None => { write(s: "unrecorded-not-global\n") } _ => {} }
+    c.typeCache.identBind.set(i: expression, value: identValueCode())
+    c.typeCache.identTarget.set(i: expression, value: 41U64)
+    match c.recordedGlobalAddress(exprId: expression) { Optional.Some(v: val address) => { if !address.mutable { write(s: "readonly-capability\n") } } _ => {} }
+    c.arena.semanticExprTypes.set(i: expression, value: <SemanticExprType />)
+    match c.recordedGlobalAddress(exprId: expression) { Optional.None => { write(s: "missing-type-not-published\n") } _ => {} }
+}

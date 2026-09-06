@@ -2,6 +2,25 @@
 // ordering and import-alias / factory-construction rewriting.
 
 pub impl Comp {
+    // Consume the existing identifier decision. In particular, do not seed
+    // source locals or search names after Record has closed the lexical scope.
+    inout fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
+        if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
+        if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
+        val target = self.typeCache.identTarget[exprId]
+        val term = self.semanticExprTerm(exprId: exprId)
+        if term == 0U64 || term >= self.arena.types.count() { return <Optional.None /> }
+        mut val index: U64 = 0U64
+        while index < self.arena.globals.count() {
+            val global = self.arena.globals[index]
+            if global.nameStart == target {
+                return <Optional.Some v=<SemanticGlobalAddress declarationTarget=target typeTerm=term mutable=global.mutable /> />
+            }
+            index += 1U64
+        }
+        return <Optional.None />
+    }
+
     inout fn globalInitExpr(g: Global) -> U64 {
         match self.arena.stmts[g.letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return init }

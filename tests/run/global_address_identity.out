@@ -1,0 +1,7 @@
+exact-declaration
+initialization-order-independent
+local-not-global
+function-not-global
+unrecorded-not-global
+readonly-capability
+missing-type-not-published

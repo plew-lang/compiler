@@ -690,7 +690,8 @@ export struct PatInfo {
 // and, for the backend to locate it without re-deriving by name, the `target`
 // (identTarget's value): a resolved free-function index for a callable declaration, the
 // DECLARATION's source offset (locals[li].nameStart) for a local/param value,
-// identSelfTarget() for `self`; identNoTarget() for a global, a type qualifier, or an undef. This is the
+// identSelfTarget() for `self`; globals keep their declaration offset just like
+// locals. identNoTarget() is used for a type qualifier or an undef. This is the
 // single source both the classification query (classifyIdent/bindIsValue) and the
 // recorder (recordIdent) read, so the resolver never scans a name table twice.
 export struct IdentBinding {
@@ -1927,6 +1928,16 @@ export struct Global {
     pub val letStmt: U64
     pub val mutable: Bool
 }
+
+// A selected global storage address, not a copy of its current value. The
+// declaration target survives initialization-order changes; no source name or
+// transient position in the global table is part of this semantic identity.
+export struct SemanticGlobalAddress {
+    pub val declarationTarget: U64
+    pub val typeTerm: U64
+    pub val mutable: Bool
+}
+pub impl SemanticGlobalAddress { factory }
 
 // A `newtype Name = Underlying` (spec/10): a distinct type sharing the underlying's
 // representation. `nameId` is the interned newtype name; (underStart, underLen) /
