@@ -2346,6 +2346,41 @@ pub impl LlvmCtx {
         return true
     }
 
+    inout fn midCanonicalEmitAggregateElement(c: inout Comp, body: MidBodyNode, element: MidAggregateElementNode) -> LLVMValueRef {
+        // Non-identity conversions have their own canonical conversion slice;
+        // never repackage this operand into MidOperand merely to reuse draft
+        // lowering.  The direct aggregate path admits the identity boundary
+        // first and remains fail-closed for the rest.
+        if !c.conversionProofIsIdentity(id: element.conversion) { return LLVMConstNull(self.ptrty) }
+        val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: element.operand)
+        if element.operand != 0U64 && element.operand <= c.mid.operands.count() {
+            val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]
+            if operand.tag != 1U64 && operand.tag != 2U64 && element.targetTerm != 0U64 && element.targetTerm < c.arena.types.count() && c.arcNeedsRelease(ref: element.targetTerm) {
+                self.valueArc(c: inout c, v: value, typeRef: element.targetTerm, retain: true)
+            }
+        }
+        return value
+    }
+
+    inout fn midCanonicalEmitAggregate(c: inout Comp, body: MidBodyNode, destination: MidPlaceNode, value: MidRvalueNode) -> LLVMValueRef {
+        if value.tag == 3U64 {
+            val ty: LLVMTypeRef = self.midCanonicalPlaceTy(c: inout c, body: body, place: destination)
+            mut val aggregate: LLVMValueRef = LLVMGetUndef(ty)
+            mut val elementI: U64 = 0U64
+            while elementI < value.elements.len {
+                val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
+                mut val child: LLVMValueRef = self.midCanonicalEmitAggregateElement(c: inout c, body: body, element: element)
+                if element.isBoxed { child = self.midEmitAggregateBox(c: inout c, value: child) }
+                val fieldTy: LLVMTypeRef = LLVMStructGetTypeAtIndex(ty, truncU32(n: element.fieldIndex))
+                if LLVMGetTypeKind(LLVMTypeOf(child)) == 8U32 { child = self.coerceInt(v: child, target: fieldTy, unsigned: false) }
+                aggregate = LLVMBuildInsertValue(self.b, aggregate, child, element.fieldIndex, anon())
+                elementI = elementI + 1U64
+            }
+            return aggregate
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
     // The first direct statement slice deliberately covers the scalar rows
     // whose semantics are independent of aggregate/call lowering.  Other
     // canonical tags remain fail-closed until their direct emitters exist.
@@ -2356,8 +2391,9 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
-            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
             mut val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand)
+            if rvalue.tag == 3U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
             if rvalue.tag == 9U64 {
                 if rvalue.kindTag == 1U64 { value = LLVMBuildSIToFP(self.b, value, self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), anon()) }
