@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// A String literal has no mutable place, but `bytes` only borrows it for the
+// duration of the call. Mid must carry that rvalue as a read-only receiver,
+// exactly as it already carries a constant borrow argument.
+fn literalByteCount() -> U64 {
+    return "ok".bytes().count()
+}
+
+fn main() {
+    print(literalByteCount())
+}
+
+// expected: 2

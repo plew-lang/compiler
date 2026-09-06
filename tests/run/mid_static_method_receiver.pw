@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+// `print` is generic and invokes the `Format.format` requirement through a
+// StaticMethod template. The receiver is the generic parameter local, so this
+// isolates receiver provenance from Array/Buffer mutating access lowering.
+fn main() {
+    print(7I64)
+}
+
+// expected: 7

@@ -942,15 +942,15 @@ fn midDirectCallee(c: Comp, template: CallTemplate) -> U64 {
     }
 }
 
-fn midDirectReceiverTerm(template: CallTemplate) -> U64 {
+// Direct and StaticMethod templates both own a frozen receiver provenance.
+// Their final callee becomes available at different times, but the source
+// value must be materialized from this one sum rather than reconstructed by
+// reopening method lookup.
+fn midTemplateReceiver(template: CallTemplate) -> CallTemplateReceiver {
     match template.kind {
-        CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proof: _) => {
-            match receiver {
-                CallTemplateReceiver.Term(term: val term) => { return term }
-                _ => { return 0U64 }
-            }
-        }
-        _ => { return 0U64 }
+        CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proof: _) => { return receiver }
+        CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, resultTerm: _) => { return receiver }
+        _ => { return <CallTemplateReceiver.None /> }
     }
 }
 
@@ -969,17 +969,47 @@ fn midMethodReceiverExpr(c: Comp, exprId: U64) -> U64 {
 // or type recovery.
 fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, template: CallTemplate) -> MidReceiverBuild {
     val callee: U64 = midDirectCallee(c: c, template: template)
-    if callee >= c.arena.funcs.count() || !(c.arena.funcs[callee].hasRecv) {
+    val templateReceiver: CallTemplateReceiver = midTemplateReceiver(template: template)
+    // Direct calls already name their declaration in the parametric template,
+    // so an inout receiver can be expressed as an Access marker immediately.
+    // A StaticMethod's declaration is selected only per BodyInstance: build
+    // its frozen read receiver now and let instantiation apply the selected
+    // borrow passing. Inout/move static receivers remain intentionally closed
+    // until they have an equally explicit source-access representation.
+    val directInout: Bool = callee < c.arena.funcs.count() && c.arena.funcs[callee].hasRecv && c.arena.funcs[callee].selfInout
+    if callee >= c.arena.funcs.count() {
+        match template.kind {
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            _ => { return <MidReceiverBuild /> }
+        }
+    } else if !(c.arena.funcs[callee].hasRecv) {
         return <MidReceiverBuild />
+    }
+    match templateReceiver {
+        CallTemplateReceiver.None => { return <MidReceiverBuild /> }
+        CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorSite) => {
+            val built: MidOperandBuild = materializeMidCallValue(c: inout c, state: inout state, exprId: priorExpr, siteKey: priorSite)
+            match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
+            return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=built.operand /> />
+        }
+        CallTemplateReceiver.PriorCallResultWithViews(exprId: _, siteKey: _, views: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+        CallTemplateReceiver.PriorProtocolResult(slot: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+        CallTemplateReceiver.PriorProtocolResultWithViews(slot: _, views: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+        _ => {}
     }
     val receiverExpr: U64 = midMethodReceiverExpr(c: c, exprId: exprId)
     if receiverExpr >= c.arena.exprs.count() {
         return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> />
     }
-    val receiverTerm: U64 = midDirectReceiverTerm(template: template)
-    val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: receiverExpr, typeTerm: receiverTerm, allowAccessMarker: c.arena.funcs[callee].selfInout)
+    val receiverTerm: U64 = match templateReceiver {
+        CallTemplateReceiver.Term(term: val term) => { give term }
+        CallTemplateReceiver.Opaque => { give c.semanticExprTerm(exprId: receiverExpr) }
+        _ => { give 0U64 }
+    }
+    if receiverTerm == 0U64 { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+    val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: receiverExpr, typeTerm: receiverTerm, allowAccessMarker: directInout)
     match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
-    if c.arena.funcs[callee].selfInout {
+    if directInout {
         match built.operand {
             MidOperand.Copy(place: val place) => {
                 val borrowed: MidOperand = <MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> />

@@ -448,6 +448,13 @@ pub impl LlvmCtx {
                     CallReceiverPassing.Borrow => {
                         match operand {
                             MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } } }
+                            // A read receiver can be an rvalue: it has no
+                            // writable place and cannot outlive this call,
+                            // but LLVM can materialize the frozen constant
+                            // exactly once just as it does for a borrow
+                            // argument. Inout and move receivers remain
+                            // place-only below.
+                            MidOperand.Constant(value: val value) => { return self.midConstantLlvmSupported(c: inout c, value: value) }
                             _ => { return false }
                         }
                     }
@@ -465,6 +472,46 @@ pub impl LlvmCtx {
             }
             _ => { return false }
         }
+    }
+
+    // A receiver fallback must report the frozen ABI facts, not merely the
+    // enclosing body.  This keeps `--trace-codegen` useful for selecting the
+    // next closed Mid family without reopening source-level method lookup.
+    inout fn traceMidUnsupportedReceiver(c: inout Comp, selected: CallResolution, receiver: MidCallReceiver) {
+        if !(c.traceCodegen) { return }
+        eprint(text: "[trace-codegen] Mid receiver-preflight callee=")
+        if selected.callee < c.arena.funcs.count() {
+            val callee: Func = c.arena.funcs[selected.callee]
+            self.traceCodegenName(c: inout c, start: callee.nameStart, len: callee.nameLen)
+        } else {
+            eprint(text: "unknown")
+        }
+        eprint(text: " passing=")
+        match selected.receiverPassing {
+            CallReceiverPassing.None => { eprint(text: "none") }
+            CallReceiverPassing.Borrow => { eprint(text: "borrow") }
+            CallReceiverPassing.Inout => { eprint(text: "inout") }
+            CallReceiverPassing.Move => { eprint(text: "move") }
+        }
+        eprint(text: " operand=")
+        match receiver {
+            MidCallReceiver.None => { eprint(text: "none") }
+            MidCallReceiver.Value(operand: val operand) => {
+                match operand {
+                    MidOperand.Copy(place: _) => { eprint(text: "copy") }
+                    MidOperand.Move(place: _) => { eprint(text: "move") }
+                    MidOperand.Constant(value: _) => { eprint(text: "constant") }
+                    MidOperand.Access(candidate: _) => { eprint(text: "access") }
+                    MidOperand.Borrow(place: _, capability: val capability) => {
+                        match capability {
+                            MidBorrowCapability.Read => { eprint(text: "borrow-read") }
+                            MidBorrowCapability.Inout => { eprint(text: "borrow-inout") }
+                        }
+                    }
+                }
+            }
+        }
+        eprint(text: "\n")
     }
 
     inout fn midReadOperandSupported(c: inout Comp, body: MidBody, operand: MidOperand) -> Bool {
@@ -530,7 +577,10 @@ pub impl LlvmCtx {
         // Async remains separate because it requires Suspend/frame lowering.
         if callee.isAsync { return <MidCallPreflight.Async /> }
         if callee.hasRecv {
-            if !(self.midInitialReceiverSupported(c: inout c, body: body, receiver: receiver, passing: selected.receiverPassing)) { return <MidCallPreflight.Receiver /> }
+            if !(self.midInitialReceiverSupported(c: inout c, body: body, receiver: receiver, passing: selected.receiverPassing)) {
+                self.traceMidUnsupportedReceiver(c: inout c, selected: selected, receiver: receiver)
+                return <MidCallPreflight.Receiver />
+            }
         } else {
             match receiver { MidCallReceiver.None => { match selected.receiverPassing { CallReceiverPassing.None => {} _ => { return <MidCallPreflight.Receiver /> } } } _ => { return <MidCallPreflight.Receiver /> } }
         }
