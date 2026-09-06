@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+fn choose(flag: Bool) -> I64 {
+    if flag {
+        return 7
+    } else {
+        return 9
+    }
+}
+
+fn main() {
+    print(choose(flag: true))
+}

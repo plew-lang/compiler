@@ -168,6 +168,11 @@ if sh ./test-mid-while-true-return.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-while-true-return"
 fi
+if sh ./test-mid-if-all-diverge.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-if-all-diverge"
+fi
 
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body

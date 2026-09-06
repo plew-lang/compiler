@@ -1550,6 +1550,17 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
             }
             state.currentBlock = joinTarget
+            // Like an exhaustive match or literal-true loop exit, an `if`
+            // whose two successors both diverge still needs a builder cursor
+            // after the statement. That cursor has no predecessor, however:
+            // leaving it Open would make a function that has already returned
+            // on every source path look as though it were missing a return.
+            // CFG reachability, rather than a syntactic "both arms return"
+            // special case, also covers panic/abort and future diverging
+            // terminators.
+            if !midBlockHasIncoming(state: state, target: joinTarget) {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+            }
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }
