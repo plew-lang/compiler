@@ -176,6 +176,153 @@ export fn analyzeCanonicalMidOwnership(c: Comp, canonical: MidCanonicalBody) -> 
     return incoming
 }
 
+fn canonicalMidMakeOperandUnavailable(c: Comp, states: inout Array[MidAccessibility], operandId: U64) {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return }
+    val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+    if operand.tag == 2U64 && operand.place != 0U64 && operand.place <= c.mid.places.count() {
+        val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+        if place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidAccessibility.Unavailable />) }
+    }
+}
+
+fn canonicalMidMakeRvalueUnavailable(c: Comp, states: inout Array[MidAccessibility], rvalueId: U64) {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return }
+    val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    if value.operand != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout states, operandId: value.operand) }
+    if value.tag >= 3U64 && value.tag <= 5U64 {
+        mut val elementI: U64 = 0U64
+        while elementI < value.elements.len {
+            canonicalMidMakeOperandUnavailable(c: c, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand)
+            elementI = elementI + 1U64
+        }
+    }
+}
+
+fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlockNode, input: Array[MidAccessibility]) -> Array[MidAccessibility] {
+    mut val out: Array[MidAccessibility] = input
+    mut val statementI: U64 = 0U64
+    while statementI < block.statements.len {
+        val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+        if statement.tag == 1U64 {
+            canonicalMidMakeRvalueUnavailable(c: c, states: inout out, rvalueId: statement.value)
+            if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidAccessibility.Available />) }
+            }
+        }
+        if statement.tag == 2U64 {
+            if statement.source != 0U64 && statement.source <= c.mid.places.count() {
+                val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
+                if source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidAccessibility.Unavailable />) }
+            }
+            if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
+            }
+        }
+        if statement.tag == 3U64 || statement.tag == 4U64 {
+            if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidAccessibility.Unavailable />) }
+            }
+        }
+        if statement.tag == 6U64 && statement.scope < body.scopes.len {
+            val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
+            mut val local: U64 = scope.firstLocal
+            while local < scope.firstLocal + scope.localCount && local < out.count() {
+                out.set(i: local, value: <MidAccessibility.Unavailable />)
+                local = local + 1U64
+            }
+        }
+        statementI = statementI + 1U64
+    }
+    if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return out }
+    val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+    if term.discriminant != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.discriminant) }
+    if term.value != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.value) }
+    if term.tag == 4U64 {
+        if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand) }
+        mut val argumentI: U64 = 0U64
+        while argumentI < term.args.len {
+            canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: c.mid.callArguments[term.args.start + argumentI])
+            argumentI = argumentI + 1U64
+        }
+        if term.destination != 0U64 && term.destination <= c.mid.places.count() {
+            val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
+            if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
+        }
+    }
+    return out
+}
+
+export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody) -> Array[Array[MidAccessibility]] {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return [] }
+    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    mut val incoming: Array[Array[MidAccessibility]] = []
+    mut val reachable: Array[Bool] = []
+    mut val initial: Array[MidAccessibility] = []
+    mut val localI: U64 = 0U64
+    while localI < body.locals.len {
+        if c.mid.locals[body.locals.start + localI].ownsAtEntry { initial.append(<MidAccessibility.Available />) } else { initial.append(<MidAccessibility.Unavailable />) }
+        localI = localI + 1U64
+    }
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        mut val empty: Array[MidAccessibility] = []
+        localI = 0U64
+        while localI < body.locals.len {
+            empty.append(<MidAccessibility.Unavailable />)
+            localI = localI + 1U64
+        }
+        incoming.append(empty)
+        reachable.append(false)
+        blockI = blockI + 1U64
+    }
+    if body.entry >= body.blocks.len { return incoming }
+    incoming.set(i: body.entry, value: initial)
+    reachable.set(i: body.entry, value: true)
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        blockI = 0U64
+        while blockI < body.blocks.len {
+            if reachable[blockI] {
+                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+                val out: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(c: c, body: body, block: block, input: incoming[blockI])
+                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+                    val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+                    mut val successorI: U64 = 0U64
+                    while successorI < successors.count() {
+                        val successor: U64 = successors[successorI]
+                        if successor < body.blocks.len {
+                            if !reachable[successor] {
+                                incoming.set(i: successor, value: out)
+                                reachable.set(i: successor, value: true)
+                                changed = true
+                            } else {
+                                val before: Array[MidAccessibility] = incoming[successor]
+                                mut val merged: Array[MidAccessibility] = []
+                                localI = 0U64
+                                while localI < before.count() {
+                                    merged.append(midAccessibilityJoin(left: before[localI], right: out[localI]))
+                                    localI = localI + 1U64
+                                }
+                                if midAccessibilityStateChanged(before: before, after: merged) {
+                                    incoming.set(i: successor, value: merged)
+                                    changed = true
+                                }
+                            }
+                        }
+                        successorI = successorI + 1U64
+                    }
+                }
+            }
+            blockI = blockI + 1U64
+        }
+    }
+    return incoming
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
