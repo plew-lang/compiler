@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -274,6 +274,50 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
     val place: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef)
     c.mid.rvalues.append(<MidRvalueNode tag=source.tag place=place enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=resultTerm />)
     return c.mid.rvalues.count()
+}
+
+fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val tag: U64 = c.mid.rvalues[rvalueId - 1U64].tag
+    match tag {
+        1U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        2U64 => { return instantiateCanonicalReturnBoundary(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        3U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        4U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        5U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        6U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        7U64 => { return instantiateCanonicalCastBoundary(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef, error: inout error) }
+        8U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        9U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        10U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        11U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        12U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        13U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        14U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        15U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        _ => { return 0U64 }
+    }
+}
+
+fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
+    if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
+    val source = c.mid.statements[statementId - 1U64]
+    match source.tag {
+        1U64 => {
+            val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef)
+            val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+            if destination == 0U64 || value == 0U64 { return false }
+            c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=value />)
+        }
+        2U64 => { c.mid.statements.append(<MidStatementNode tag=2U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, placeId: source.source, environment: environment, itemRef: itemRef) />) }
+        3U64 => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
+        4U64 => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) flag=source.flag />) }
+        5U64 => { c.mid.statements.append(<MidStatementNode tag=5U64 flag=source.flag isSet=source.isSet />) }
+        6U64 => { c.mid.statements.append(<MidStatementNode tag=6U64 scope=source.scope />) }
+        7U64 => { c.mid.statements.append(<MidStatementNode tag=7U64 />) }
+        _ => { return false }
+    }
+    return true
 }
 
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
