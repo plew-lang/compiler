@@ -1,0 +1,8 @@
+// The FFI floor is selected by the resolved declaration's owner and identity,
+// never by call spelling. A user function with the same name remains ordinary
+// Plew code and must not acquire cString's C ABI.
+fn cString(text~: String) -> String { return text }
+
+fn main() {
+    val copied = cString("ordinary Plew call")
+}

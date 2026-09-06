@@ -34,6 +34,12 @@ pub impl Comp {
         if owner == self.modules.processModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
         }
+        if owner == self.modules.ffiModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CString /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cFree") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CFree /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
+        }
         if owner == self.modules.coreModule {
             mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
             if self.classifyCoreNumericIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout numeric) {
@@ -61,6 +67,12 @@ pub impl Comp {
         }
         if owner == self.modules.processModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
+        }
+        if owner == self.modules.ffiModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CString /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cFree") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CFree /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
         if owner == self.modules.coreModule {
             mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />

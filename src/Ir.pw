@@ -1413,8 +1413,19 @@ export enum RuntimeIntrinsic {
     Write
     Eprint
     ArgCount
+    Ffi(intrinsic: FfiIntrinsic)
     Numeric(intrinsic: NumericIntrinsic)
     Buffer(intrinsic: BufferIntrinsic)
+}
+
+// The small, explicitly unsafe FFI floor. These are runtime ABI operations,
+// not arbitrary extern(c) calls: their declaration identity fixes the bridge
+// from Plew values to the runtime representation.
+export enum FfiIntrinsic {
+    CString
+    CFree
+    StringFromCString
+    ArrayCPtr
 }
 
 // Declaration-time classification of a bundled runtime ABI operation. None is
@@ -2531,6 +2542,9 @@ export struct Modules {
     // The bundled Std Process module. Runtime ABI declaration identity is
     // distinct from its ordinary import visibility.
     pub mut val processModule: U64 = 4000000000U64
+    // The bundled Std Ffi floor. It is import-scoped like Io; its module
+    // identity is only used to classify the compiler-provided ABI declarations.
+    pub mut val ffiModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 

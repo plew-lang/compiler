@@ -178,6 +178,47 @@ pub impl LlvmCtx {
         return LLVMConstNull(self.ptrty)
     }
 
+    // The legacy AST emitter still evaluates source operands, but the selected
+    // FFI operation is a frozen enum. This is the compatibility counterpart of
+    // Mid's Ffi lowering, not a source-name dispatch.
+    inout fn genFfiRuntimeIntrinsic(c: inout Comp, intrinsic: FfiIntrinsic, args: ArgRange) -> LLVMValueRef {
+        match intrinsic {
+            FfiIntrinsic.CString => {
+                mut val parameters: Array[LLVMTypeRef] = []
+                parameters.append(self.ptrty)
+                parameters.append(self.i64ty)
+                val signature: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), 2U64, 0I32)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: signature)
+                val text: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.arrValData(c: inout c, arr: text))
+                values.append(self.arrValCount(c: inout c, arr: text))
+                return LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 2U64, anon())
+            }
+            FfiIntrinsic.CFree => {
+                mut val parameters: Array[LLVMTypeRef] = []
+                parameters.append(self.ptrty)
+                val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: signature)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
+                return LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
+            }
+            FfiIntrinsic.StringFromCString => {
+                mut val parameters: Array[LLVMTypeRef] = []
+                parameters.append(self.ptrty)
+                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: signature)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
+                return LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
+            }
+            FfiIntrinsic.ArrayCPtr => {
+                return self.arrValData(c: inout c, arr: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
+            }
+        }
+    }
+
     inout fn genLlvmCall(c: inout Comp, callId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
         // An indirect closure target is recorded by Mono with its resolved
         // declaration identity and grounded function type. Mono-local array
@@ -229,6 +270,9 @@ pub impl LlvmCtx {
                             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: fty)
                             mut val av: Array[LLVMValueRef] = []
                             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+                        }
+                        RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
+                            return self.genFfiRuntimeIntrinsic(c: inout c, intrinsic: ffi, args: args)
                         }
                         RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
                             return self.genNumericIntrinsic(c: inout c, intrinsic: numeric, args: args, errorOffset: nameStart)

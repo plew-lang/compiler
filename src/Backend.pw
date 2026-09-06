@@ -10,7 +10,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend, tracePhase, tracePhaseCount }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
@@ -1924,7 +1924,7 @@ fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
     return cstr(s: stringFromBytesUnchecked(bs))
 }
 
-inout fn floatTextLen(c: inout Comp, start: U64, len: U64) -> U64 {
+fn floatTextLen(c: inout Comp, start: U64, len: U64) -> U64 {
     mut val out: U64 = 0U64
     mut val i: U64 = 0U64
     while i < len {

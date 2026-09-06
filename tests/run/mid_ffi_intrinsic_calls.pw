@@ -1,0 +1,9 @@
+import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
+
+fn main() {
+    val raw = cString("Mid FFI")
+    val copied = stringFromCString(raw)
+    cFree(raw)
+    val bytes: Array[U8] = [77U8]
+    val pointer = arrayCPtr(bytes)
+}

@@ -543,6 +543,26 @@ pub impl LlvmCtx {
                         RuntimeIntrinsic.ArgCount => {
                             if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
                         }
+                        RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
+                            match ffi {
+                                FfiIntrinsic.CString => {
+                                    if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                }
+                                FfiIntrinsic.CFree => {
+                                    if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                }
+                                FfiIntrinsic.StringFromCString => {
+                                    if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                }
+                                FfiIntrinsic.ArrayCPtr => {
+                                    if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                }
+                            }
+                        }
                         RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
                             if !callee.hasRet || args.count() != self.numericIntrinsicArity(intrinsic: numeric) || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
                             mut val i: U64 = 0U64
@@ -900,6 +920,52 @@ pub impl LlvmCtx {
                     val result: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
                     LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                     return true
+                }
+                RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
+                    match ffi {
+                        FfiIntrinsic.CString => {
+                            val text: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+                            mut val parameters: Array[LLVMTypeRef] = []
+                            parameters.append(self.ptrty)
+                            parameters.append(self.i64ty)
+                            val signature: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), 2U64, 0I32)
+                            val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: signature)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(self.arrValData(c: inout c, arr: text))
+                            values.append(self.arrValCount(c: inout c, arr: text))
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 2U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                            return true
+                        }
+                        FfiIntrinsic.CFree => {
+                            val pointer: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+                            mut val parameters: Array[LLVMTypeRef] = []
+                            parameters.append(self.ptrty)
+                            val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                            val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: signature)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(pointer)
+                            LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
+                            return true
+                        }
+                        FfiIntrinsic.StringFromCString => {
+                            val pointer: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+                            mut val parameters: Array[LLVMTypeRef] = []
+                            parameters.append(self.ptrty)
+                            val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                            val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: signature)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(pointer)
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                            return true
+                        }
+                        FfiIntrinsic.ArrayCPtr => {
+                            val array: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+                            LLVMBuildStore(self.b, self.arrValData(c: inout c, arr: array), self.midLocalPtr(body: body, local: destination.local))
+                            return true
+                        }
+                    }
                 }
                 RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
                     mut val values: Array[LLVMValueRef] = []

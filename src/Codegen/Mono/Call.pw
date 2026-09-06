@@ -1951,6 +1951,19 @@ pub impl Comp {
                             RuntimeIntrinsic.Write => { match other { RuntimeIntrinsic.Write => { return true } _ => {} } }
                             RuntimeIntrinsic.Eprint => { match other { RuntimeIntrinsic.Eprint => { return true } _ => {} } }
                             RuntimeIntrinsic.ArgCount => { match other { RuntimeIntrinsic.ArgCount => { return true } _ => {} } }
+                            RuntimeIntrinsic.Ffi(intrinsic: val left) => {
+                                match other {
+                                    RuntimeIntrinsic.Ffi(intrinsic: val right) => {
+                                        match left {
+                                            FfiIntrinsic.CString => { match right { FfiIntrinsic.CString => { return true } _ => {} } }
+                                            FfiIntrinsic.CFree => { match right { FfiIntrinsic.CFree => { return true } _ => {} } }
+                                            FfiIntrinsic.StringFromCString => { match right { FfiIntrinsic.StringFromCString => { return true } _ => {} } }
+                                            FfiIntrinsic.ArrayCPtr => { match right { FfiIntrinsic.ArrayCPtr => { return true } _ => {} } }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
                             RuntimeIntrinsic.Numeric(intrinsic: val left) => {
                                 match other {
                                     RuntimeIntrinsic.Numeric(intrinsic: val right) => { return self.sameNumericIntrinsic(a: left, b: right) }
