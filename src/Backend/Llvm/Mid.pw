@@ -2319,6 +2319,150 @@ pub impl LlvmCtx {
         }
     }
 
+    // A canonical call has already been instantiated: the target row names a
+    // final CallResolution and its argument range carries the selected ABI
+    // modes.  Read those rows directly; never rebuild MidCallReceiver or an
+    // Array[MidOperand] just to call the draft emitter.
+    inout fn midCanonicalReceiverSupported(c: inout Comp, body: MidBodyNode, receiverId: U64, passing: CallReceiverPassing) -> Bool {
+        if receiverId == 0U64 || receiverId > c.mid.callReceivers.count() { return false }
+        val receiver: MidCallReceiverNode = c.mid.callReceivers[receiverId - 1U64]
+        match passing {
+            CallReceiverPassing.None => { return receiver.tag == 1U64 }
+            CallReceiverPassing.Borrow => {
+                if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
+                val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+                return operand.tag == 3U64 && operand.capability == 1U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
+            }
+            CallReceiverPassing.Inout => {
+                if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
+                val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+                return operand.tag == 3U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
+            }
+            CallReceiverPassing.Move => {
+                if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
+                val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+                return operand.tag == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
+            }
+        }
+    }
+
+    inout fn midCanonicalDirectCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target { CallTarget.Direct => {} _ => { return <MidCallPreflight.Target /> } }
+        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.funcs[selected.callee]
+        if callee.isAsync { return <MidCallPreflight.Async /> }
+        if callee.hasRecv {
+            if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing) { return <MidCallPreflight.Receiver /> }
+        } else if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.Receiver /> }
+        if callee.isExtern && !self.resolvedCCallSupported(c: inout c, selected: selected) { return <MidCallPreflight.Extern /> }
+        if callee.typeParams.count() != selected.calleeTypeArgs.len { return <MidCallPreflight.GenericArguments /> }
+        if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs))) { return <MidCallPreflight.GenericArguments /> }
+        if term.args.len != callee.params.count() || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <MidCallPreflight.ArgumentShape /> }
+        if callee.hasRet {
+            if term.destination == 0U64 || term.destination > c.mid.places.count() || c.mid.places[term.destination - 1U64].projections.len != 0U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Result /> }
+        }
+        mut val argumentI: U64 = 0U64
+        while argumentI < term.args.len {
+            val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
+            if operandId == 0U64 || operandId > c.mid.operands.count() || c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.types.count() { return <MidCallPreflight.ArgumentShape /> }
+            val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+                CallArgumentPassing.Inout => { if operand.tag != 3U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
+                CallArgumentPassing.Move => { if operand.tag != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
+                CallArgumentPassing.Borrow => {
+                    if operand.tag == 3U64 {
+                        if operand.capability != 1U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> }
+                    } else if operand.tag != 5U64 && operand.tag != 6U64 && operand.tag != 7U64 { return <MidCallPreflight.Argument /> }
+                }
+            }
+            argumentI = argumentI + 1U64
+        }
+        return <MidCallPreflight.None />
+    }
+
+    inout fn midCanonicalEmitDirectCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val callee: Func = c.arena.funcs[selected.callee]
+        mut val externalSlot: U64 = self.declId.count()
+        if callee.isExtern { externalSlot = self.declareResolvedCFunction(c: inout c, selected: selected) }
+        mut val methodSlot: U64 = self.genMethK.count()
+        mut val freeSlot: U64 = self.genFnK.count()
+        mut val useMethod: Bool = false
+        if !callee.isExtern {
+            val typeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
+            if callee.hasRecv {
+                if selected.recvTypeRef == 0U64 { return false }
+                val receiverType: TypeRef = c.arena.types[selected.recvTypeRef]
+                val receiverArgCount: U64 = c.recvParamCount(nameStart: receiverType.nameStart, nameLen: receiverType.nameLen)
+                mut val ownArgs: Array[U64] = []
+                mut val typeArgI: U64 = receiverArgCount
+                while typeArgI < typeArgs.count() {
+                    ownArgs.append(typeArgs[typeArgI])
+                    typeArgI = typeArgI + 1U64
+                }
+                methodSlot = self.ensureGenMethodDeclared(c: inout c, mfi: selected.callee, instRef: selected.recvTypeRef, ownArgs: ownArgs, bodyId: selected.calleeBodyId)
+                if methodSlot >= self.genMethK.count() { return false }
+                useMethod = true
+            } else {
+                freeSlot = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: typeArgs, recvInstRef: selected.recvTypeRef)
+                if freeSlot >= self.genFnK.count() { return false }
+            }
+        }
+        mut val values: Array[LLVMValueRef] = []
+        val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+        if receiver.tag == 2U64 {
+            val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+            match selected.receiverPassing {
+                CallReceiverPassing.Inout => { values.append(self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])) }
+                CallReceiverPassing.Borrow => { values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) }
+                CallReceiverPassing.Move => { values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) }
+                _ => { return false }
+            }
+        } else {
+            match selected.receiverPassing {
+                CallReceiverPassing.None => {}
+                _ => { return false }
+            }
+        }
+        mut val argumentI: U64 = 0U64
+        while argumentI < term.args.len {
+            val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
+            val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+            val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+            mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
+            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+                CallArgumentPassing.Inout => { value = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64]) }
+                _ => {
+                    value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)
+                    if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
+                        val parameter: TypeRef = c.arena.types[parameterRef]
+                        value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: parameterRef), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+                    }
+                }
+            }
+            values.append(value)
+            argumentI = argumentI + 1U64
+        }
+        mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
+        if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
+        else if useMethod { result = LLVMBuildCall2(self.b, self.genMethTy[methodSlot], self.genMethVal[methodSlot], arrayCPtr(values), values.count(), anon()) }
+        else { result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon()) }
+        if callee.hasRet {
+            val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
+            LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalLocalPtr(body: body, local: destination.local))
+        }
+        return true
+    }
+
     inout fn midCanonicalEmitDrop(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
@@ -2666,6 +2810,88 @@ pub impl LlvmCtx {
                 _ => { return false }
             }
             block += 1U64
+        }
+        return true
+    }
+
+    // Canonical Mid is the production-shaped LLVM input: its verification,
+    // local layout, statement rows and terminator rows all stay in the arena.
+    // This initial preflight admits the closed direct-call subset only; runtime
+    // intrinsic targets remain fail-closed until their own direct reader is
+    // implemented rather than borrowing the draft call path.
+    inout fn midCanonicalLlvmPreflight(c: inout Comp, canonical: MidCanonicalBody, abiParameterCount: U64 = 0U64) -> MidLlvmPreflight {
+        if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidLlvmPreflight.Terminator /> }
+        val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: canonical)
+        match verification.error { MidVerifyError.None => {} _ => { return <MidLlvmPreflight.Terminator /> } }
+        val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+        if body.entry >= body.blocks.len { return <MidLlvmPreflight.Terminator /> }
+        mut val parameter: U64 = 0U64
+        mut val local: U64 = 0U64
+        while local < body.locals.len {
+            val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
+            if declaration.isParameter {
+                if local != parameter || parameter >= abiParameterCount { return <MidLlvmPreflight.AbiLocals /> }
+                parameter = parameter + 1U64
+            } else if parameter < abiParameterCount { return <MidLlvmPreflight.AbiLocals /> }
+            local = local + 1U64
+        }
+        if parameter != abiParameterCount { return <MidLlvmPreflight.AbiLocals /> }
+        mut val blockI: U64 = 0U64
+        while blockI < body.blocks.len {
+            val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+            mut val statementI: U64 = 0U64
+            while statementI < block.statements.len {
+                val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+                if statement.tag == 1U64 {
+                    if statement.destination == 0U64 || statement.destination > c.mid.places.count() || !self.midCanonicalInitialRvalueSupported(c: inout c, body: body, rvalueId: statement.value) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                } else if statement.tag == 2U64 {
+                    if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return <MidLlvmPreflight.AssignmentProjection /> }
+                } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 5U64 || statement.tag == 7U64 {
+                } else { return <MidLlvmPreflight.ScopeExit /> }
+                statementI = statementI + 1U64
+            }
+            if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidLlvmPreflight.Terminator /> }
+            val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+            if term.tag == 4U64 {
+                val call: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: block.terminator)
+                match call { MidCallPreflight.None => {} _ => { return <MidLlvmPreflight.Call reason=call /> } }
+            } else if term.tag == 2U64 || term.tag == 5U64 || term.tag == 8U64 || term.tag == 9U64 {
+            } else if term.tag == 3U64 {
+                if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: term.discriminant) { return <MidLlvmPreflight.Switch /> }
+            } else if term.tag == 6U64 || term.tag == 7U64 {
+                if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: term.value) { return <MidLlvmPreflight.Terminator /> }
+            } else { return <MidLlvmPreflight.Terminator /> }
+            blockI = blockI + 1U64
+        }
+        return <MidLlvmPreflight.Ready />
+    }
+
+    inout fn genLlvmCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody, abiParameterStart: U64 = 0U64) -> Bool {
+        match self.midCanonicalLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: abiParameterStart) { MidLlvmPreflight.Ready => {} _ => { return false } }
+        val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+        if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
+        mut val blocks: Array[LLVMBasicBlockRef] = []
+        mut val blockI: U64 = 0U64
+        while blockI < body.blocks.len {
+            if blockI == body.entry { blocks.append(LLVMGetInsertBlock(self.b)) }
+            else { blocks.append(LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid"))) }
+            blockI = blockI + 1U64
+        }
+        blockI = 0U64
+        while blockI < body.blocks.len {
+            val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+            LLVMPositionBuilderAtEnd(self.b, blocks[blockI])
+            mut val statementI: U64 = 0U64
+            while statementI < block.statements.len {
+                if !self.midCanonicalEmitStatement(c: inout c, body: body, statementId: block.statements.start + statementI + 1U64) { return false }
+                statementI = statementI + 1U64
+            }
+            val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+            if term.tag == 4U64 {
+                if !self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: block.terminator) || term.target >= blocks.count() { return false }
+                LLVMBuildBr(self.b, blocks[term.target])
+            } else if !self.midCanonicalEmitNonCallTerminator(c: inout c, body: body, terminatorId: block.terminator, blocks: blocks) { return false }
+            blockI = blockI + 1U64
         }
         return true
     }
