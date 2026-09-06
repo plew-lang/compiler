@@ -263,14 +263,19 @@ pub impl Comp {
     // Check.makeFieldType/TypeInfo: those are contextual checking adapters and
     // reopening them while freezing semantic facts changes the recording
     // environment.
-    inout fn aggregateSlotTypeRef(resultRef: U64, isEnum: Bool, variantIndex: U64, fieldIndex: U64) -> U64 {
+    inout fn aggregateSlotTypeRef(resultRef: U64, isEnum: Bool, isArrayLiteral: Bool, variantIndex: U64, fieldIndex: U64) -> U64 {
         if resultRef == 0U64 || resultRef >= self.arena.types.count() { return 0U64 }
         val result: TypeRef = self.arena.types[resultRef]
         if result.isRecord {
             if fieldIndex < result.recordFieldTerms.count() { return result.recordFieldTerms[fieldIndex] }
             return 0U64
         }
-        if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Array") {
+        // `[value]` is the collection literal whose physical slots are values
+        // of Array's element type. `<Array data=buffer />`, however, is an
+        // ordinary named construction whose one physical slot is `Buffer[T]`.
+        // The result head alone cannot distinguish the two; Record supplies
+        // this source-kind fact before Mid freezes the selected slot.
+        if isArrayLiteral {
             if result.args.count() == 1U64 { return result.args[0U64] }
             return 0U64
         }

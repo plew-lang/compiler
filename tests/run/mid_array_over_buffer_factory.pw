@@ -1,0 +1,8 @@
+// `String.bytes()` is the public route to Array.overBuffer. The generic
+// factory must carry its frozen aggregate slot proof through Mid rather than
+// silently falling back to the legacy expression emitter.
+import @Std/Io with { print }
+
+fn main() {
+    print("Plew".bytes().count())
+}

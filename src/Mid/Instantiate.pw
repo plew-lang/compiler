@@ -219,6 +219,14 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if i < resolution.elementTargetRefs.count() && i < resolution.elementConversions.count() {
                         targetTerm = resolution.elementTargetRefs[i]
                         conversion = c.freezeValueConversionProof(proof: resolution.elementConversions[i])
+                        // An identity proof is a concrete frontend claim about
+                        // this exact BodyInstance. Validate it while freezing
+                        // the Mid body; LLVM must only consume the resulting
+                        // checked slot contract, never rediscover it from
+                        // operand/type metadata during preflight.
+                        if c.conversionProofIsIdentity(id: conversion) && !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: targetTerm)) {
+                            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                        }
                     } else {
                         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                     }
