@@ -2388,6 +2388,64 @@ pub impl LlvmCtx {
         return false
     }
 
+    // Emit the non-call portion of the canonical CFG.  `blocks` is transient
+    // LLVM construction state, not an IR carrier: all semantic edges are read
+    // exclusively from the canonical terminator row and its case range.
+    inout fn midCanonicalEmitNonCallTerminator(c: inout Comp, body: MidBodyNode, terminatorId: U64, blocks: Array[LLVMBasicBlockRef]) -> Bool {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return false }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag == 2U64 {
+            if term.target >= blocks.count() { return false }
+            LLVMBuildBr(self.b, blocks[term.target])
+            return true
+        }
+        if term.tag == 3U64 {
+            if term.otherwise >= blocks.count() { return false }
+            val discriminant: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.discriminant)
+            if term.cases.len == 1U64 && c.mid.switchCases[term.cases.start].value == 1I64 && LLVMGetIntTypeWidth(LLVMTypeOf(discriminant)) == 1U32 {
+                val target: U64 = c.mid.switchCases[term.cases.start].target
+                if target >= blocks.count() { return false }
+                LLVMBuildCondBr(self.b, discriminant, blocks[target], blocks[term.otherwise])
+                return true
+            }
+            val switch: LLVMValueRef = LLVMBuildSwitch(self.b, discriminant, blocks[term.otherwise], truncU32(n: term.cases.len))
+            mut val caseI: U64 = 0U64
+            while caseI < term.cases.len {
+                val item: MidSwitchCase = c.mid.switchCases[term.cases.start + caseI]
+                if item.target >= blocks.count() { return false }
+                LLVMAddCase(switch, LLVMConstInt(self.i64ty, bitCastU64(n: item.value), 1I32), blocks[item.target])
+                caseI = caseI + 1U64
+            }
+            return true
+        }
+        if term.tag == 5U64 {
+            if self.curIsMain { LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32)) }
+            else if self.curRetVoid { LLVMBuildRetVoid(self.b) }
+            else { LLVMBuildUnreachable(self.b) }
+            return true
+        }
+        if term.tag == 6U64 {
+            if self.curIsMain || self.curRetVoid { return false }
+            LLVMBuildRet(self.b, self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value))
+            return true
+        }
+        if term.tag == 7U64 {
+            self.emitStrSinkValue(c: inout c, rtName: "plew_panic_raw", rtId: 4U64, value: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value))
+            LLVMBuildUnreachable(self.b)
+            return true
+        }
+        if term.tag == 8U64 || term.tag == 9U64 {
+            LLVMBuildUnreachable(self.b)
+            return true
+        }
+        if term.tag == 10U64 {
+            if term.resume >= blocks.count() { return false }
+            LLVMBuildBr(self.b, blocks[term.resume])
+            return true
+        }
+        return false
+    }
+
     // Allocate each Mid local once in the function entry. Source parameters
     // are bound from the ABI by their checked contiguous Mid-local prefix;
     // globals and receivers deliberately remain distinct Mid forms rather
