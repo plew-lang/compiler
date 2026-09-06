@@ -599,7 +599,7 @@ fn midSemanticAggregateElementsComplete(aggregate: SemanticAggregate) -> Bool {
 }
 
 // Materialize an aggregate before a consuming call or parent aggregate. Child
-// expressions are evaluated in authored order; each child is already either a
+// expressions follow Record's frozen evaluation order; each child is either a
 // selected call, another frozen aggregate, or a closed basic Mid operand.
 fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
     val prior: MidCallValueLookup = midAggregateValueForExpr(state: state, exprId: aggregate.exprId)

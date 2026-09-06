@@ -1,0 +1,42 @@
+import @Std/Io with { print }
+
+fn mark(value: I64) -> I64 {
+    print(value)
+    return value
+}
+
+struct Triple {
+    pub val first: I64 = mark(value: 1I64)
+    pub val second: I64 = mark(value: 2I64)
+    pub val third: I64 = mark(value: 3I64)
+}
+pub impl Triple { factory }
+
+struct Nested {
+    pub val item: Triple
+    pub val last: I64
+}
+pub impl Nested { factory }
+
+fn explicit() {
+    val value = <Triple third=mark(value: 30I64) second=mark(value: 20I64) first=mark(value: 10I64) />
+    print(value.first + value.second + value.third)
+}
+
+fn omitted() {
+    val value = <Triple third=mark(value: 30I64) first=mark(value: 10I64) />
+    print(value.first + value.second + value.third)
+}
+
+fn nested() {
+    val value = <Nested last=mark(value: 40I64) item=<Triple third=mark(value: 30I64) first=mark(value: 10I64) /> />
+    print(value.item.first + value.item.second + value.item.third + value.last)
+}
+
+fn main() {
+    explicit()
+    omitted()
+    nested()
+    val record = (third: mark(value: 30I64), first: mark(value: 10I64))
+    print(record.first + record.third)
+}

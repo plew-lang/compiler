@@ -11,13 +11,18 @@ for source in tests/run/default_args.pw tests/run/default_arg_array.pw \
     tests/run/mid_default_argument_lifetime.pw tests/run/mid_default_argument_generic.pw \
     tests/run/mid_default_argument_result_context.pw \
     tests/run/mid_default_argument_internal_lifetime.pw \
+    tests/run/mid_factory_evaluation_order.pw \
     tests/part/default_argument_provenance/Main.pw; do
     echo "check $source(default-arguments)" >&2
+    names='main|exercise'
+    if [ "$source" = tests/run/mid_factory_evaluation_order.pw ]; then
+        names='main|explicit|omitted|nested'
+    fi
     if ! "$PLEWC" --emit-mid-coverage "$source" >"$directory/input.ll" 2>"$directory/coverage"; then
         cat "$directory/coverage" >&2
         echo "FAIL $source(emit)" >&2
         failed=1
-    elif grep -E 'name=(main|exercise) category=' "$directory/coverage" >&2; then
+    elif grep -E "name=($names) category=" "$directory/coverage" >&2; then
         echo "FAIL $source(legacy-default-argument)" >&2
         failed=1
     else

@@ -672,9 +672,32 @@ pub impl Comp {
                 mut val i: U64 = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    val fieldIndex: U64 = self.semanticAggregateFieldIndex(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                    mut val fieldIndex: U64 = 0U64
+                    if isEnum {
+                        fieldIndex = self.semanticAggregateFieldIndex(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                    } else {
+                        fieldIndex = self.fieldIndexOfReceiver(receiverRef: resultTerm, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                    }
                     elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: isEnum, variantIndex: variantIndex, fieldIndex: fieldIndex) term=self.parametricExprTerm(exprId: field.value) />)
                     i += 1U64
+                }
+                // Named memberwise construction evaluates in declaration
+                // order, regardless of the written attribute order. Freeze
+                // that order here, alongside each selected destination slot.
+                // Structural records have canonical layout slots but retain
+                // their written evaluation order; layout is not evaluation.
+                if !self.arena.types[resultTerm].isRecord {
+                    mut val position: U64 = 1U64
+                    while position < elements.count() {
+                        val element = elements[position]
+                        mut val destination = position
+                        while destination > 0U64 && elements[destination - 1U64].fieldIndex > element.fieldIndex {
+                            elements.set(i: destination, value: elements[destination - 1U64])
+                            destination -= 1U64
+                        }
+                        elements.set(i: destination, value: element)
+                        position += 1U64
+                    }
                 }
                 if isEnum {
                     mut val fieldCount: U64 = 0U64
@@ -682,8 +705,13 @@ pub impl Comp {
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Enum enumIdx=enumIndex variantIndex=variantIndex /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 } else {
                     mut val fieldCount: U64 = 0U64
-                    val structIndex: U64 = self.anyStructIndex(nameStart: typeStart, nameLen: typeLen)
-                    if structIndex < self.arena.structs.count() { fieldCount = self.arena.structs[structIndex].fields.count() }
+                    val result = self.arena.types[resultTerm]
+                    if result.isRecord {
+                        fieldCount = result.recordFieldTerms.count()
+                    } else {
+                        val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+                        if structIndex < self.arena.structs.count() { fieldCount = self.arena.structs[structIndex].fields.count() }
+                    }
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Struct /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 }
             }

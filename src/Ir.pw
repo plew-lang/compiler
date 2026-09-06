@@ -344,7 +344,7 @@ export struct SemanticExprType {
 pub impl SemanticExprType { factory }
 
 // A construction has semantic information that a result TypeTerm alone cannot
-// carry: physical field/variant layout and the authored evaluation order of
+// carry: physical field/variant layout and the language-defined evaluation order of
 // child values. Record freezes it before Mid lowering so neither Mid nor LLVM
 // has to reopen JSX labels, enum spelling, or a collection API.
 export enum SemanticAggregateKind {
@@ -359,7 +359,8 @@ export enum SemanticAggregateKind {
 export struct SemanticAggregateElement {
     // Struct/enum storage uses the frontend-selected physical field slot.
     // Array elements are naturally indexed in source order and use the same
-    // value for this field. `elements` itself remains source-evaluation order.
+    // value for this field. `elements` follows Record's frozen evaluation order:
+    // declaration order for named construction, written order for records/arrays.
     pub val fieldIndex: U64
     // Navigation anchors only. The semantic identity is owner + aggregate
     // record; later Mid lookup may read an already-frozen call/aggregate at
