@@ -464,6 +464,30 @@ fn canonicalMidAppendDropFlagEntry(c: inout Comp, body: MidBodyNode, plan: MidCa
     return c.mid.blocks.count()
 }
 
+fn canonicalMidMovedRoot(c: Comp, operandId: U64) -> U64 {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return 18446744073709551615U64 }
+    val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+    if operand.tag != 2U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return 18446744073709551615U64 }
+    val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+    if place.projections.len == 0U64 { return place.local }
+    return 18446744073709551615U64
+}
+
+fn canonicalMidRvalueMovedRoot(c: Comp, rvalueId: U64) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 18446744073709551615U64 }
+    val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    if value.operand != 0U64 { return canonicalMidMovedRoot(c: c, operandId: value.operand) }
+    if value.tag >= 3U64 && value.tag <= 5U64 {
+        mut val elementI: U64 = 0U64
+        while elementI < value.elements.len {
+            val moved: U64 = canonicalMidMovedRoot(c: c, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand)
+            if moved != 18446744073709551615U64 { return moved }
+            elementI = elementI + 1U64
+        }
+    }
+    return 18446744073709551615U64
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
