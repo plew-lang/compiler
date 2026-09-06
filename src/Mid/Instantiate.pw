@@ -118,6 +118,54 @@ fn instantiateCanonicalClosedRvalue(c: inout Comp, rvalueId: U64, environment: B
     return c.mid.rvalues.count()
 }
 
+fn canonicalMidOperandTypeRef(c: Comp, operandId: U64) -> U64 {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
+    val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+    if operand.tag >= 1U64 && operand.tag <= 4U64 {
+        if operand.place == 0U64 || operand.place > c.mid.places.count() { return 0U64 }
+        return c.mid.places[operand.place - 1U64].typeTerm
+    }
+    if operand.tag >= 5U64 && operand.tag <= 7U64 { return operand.typeTerm }
+    return 0U64
+}
+
+fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    if source.tag != 2U64 { return 0U64 }
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef)
+    val resolutionIndex: U64 = c.finalReturnIndex(bodyId: bodyId, exprId: source.exprId)
+    if resolutionIndex >= c.arena.finalReturns.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingReturnResolution /> }
+        return 0U64
+    }
+    val resolution: FinalReturnResolution = c.arena.finalReturns[resolutionIndex]
+    val expectedTarget: U64 = c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if !(c.typeRefEq(a: resolution.targetTypeRef, b: expectedTarget)) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
+        return 0U64
+    }
+    val conversion: U64 = c.freezeValueConversionProof(proof: resolution.conversion)
+    if c.conversionProofIsIdentity(id: conversion) {
+        if !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: resolution.targetTypeRef)) {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
+            return 0U64
+        }
+        c.mid.rvalues.append(<MidRvalueNode tag=2U64 operand=operand exprId=source.exprId targetTerm=resolution.targetTypeRef />)
+        return c.mid.rvalues.count()
+    }
+    if c.conversionProofIsMissing(id: conversion) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
+        return 0U64
+    }
+    if !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: midConversionSourceRef(c: c, conversion: conversion))) || !(c.typeRefEq(a: resolution.targetTypeRef, b: midConversionTargetRef(c: c, conversion: conversion))) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
+        return 0U64
+    }
+    c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=operand conversion=conversion />)
+    return c.mid.rvalues.count()
+}
+
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
     if !(callee.hasRecv) {
         match passing { CallReceiverPassing.None => { return true } _ => { return false } }
