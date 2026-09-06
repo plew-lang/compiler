@@ -2386,6 +2386,153 @@ pub impl LlvmCtx {
         return <MidCallPreflight.None />
     }
 
+    fn midCanonicalCallArgumentAt(c: Comp, term: MidTerminatorNode, index: U64) -> U64 {
+        if index >= term.args.len || term.args.start + index >= c.mid.callArguments.count() { return 0U64 }
+        return c.mid.callArguments[term.args.start + index]
+    }
+
+    inout fn midCanonicalRuntimeReadOperandSupported(c: inout Comp, body: MidBodyNode, operandId: U64) -> Bool {
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return false }
+        val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+        if operand.tag == 3U64 { return operand.capability == 1U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) }
+        return operand.tag == 5U64 || operand.tag == 6U64 || operand.tag == 7U64
+    }
+
+    inout fn midCanonicalRuntimeProcessIoPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <MidCallPreflight.Target /> } }
+        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.funcs[selected.callee]
+        if !callee.isExtern || callee.isCExtern || callee.hasRecv || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.Process(intrinsic: val process) => {
+                        match process {
+                            ProcessIntrinsic.ArgCount => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            ProcessIntrinsic.ArgAt => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            ProcessIntrinsic.Exit => { if callee.hasRet || term.args.len != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            ProcessIntrinsic.ExecOut => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            ProcessIntrinsic.ExecCode => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                        }
+                    }
+                    RuntimeIntrinsic.Io(intrinsic: val io) => {
+                        match io {
+                            IoIntrinsic.Write => { if callee.hasRet || term.args.len != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.WriteByte => { if callee.hasRet || term.args.len != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.ReadStdin => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.ReadFile => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.ReadFileBytes => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.Eprint => { if callee.hasRet || term.args.len != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            IoIntrinsic.FileExists => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                        }
+                    }
+                    _ => { return <MidCallPreflight.Target /> }
+                }
+            }
+            _ => { return <MidCallPreflight.Target /> }
+        }
+        mut val argumentI: U64 = 0U64
+        while argumentI < term.args.len {
+            if !self.midCanonicalRuntimeReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: argumentI)) { return <MidCallPreflight.Argument /> }
+            argumentI = argumentI + 1U64
+        }
+        return <MidCallPreflight.None />
+    }
+
+    inout fn midCanonicalEmitRuntimeProcessIoCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val callee: Func = c.arena.funcs[selected.callee]
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.Io(intrinsic: val io) => {
+                        match io {
+                            IoIntrinsic.Write => { self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", rtId: 2U64, value: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) }
+                            IoIntrinsic.Eprint => { self.emitStrSinkValue(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, value: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) }
+                            IoIntrinsic.WriteByte => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.i8ty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.coerceInt(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)), target: self.i8ty, unsigned: true))
+                                LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: signature), arrayCPtr(values), 1U64, anon())
+                            }
+                            IoIntrinsic.ReadStdin => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 0U64, 0I32)
+                                val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: signature), arrayCPtr(parameters), 0U64, anon())
+                                LLVMBuildStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            IoIntrinsic.ReadFile => { LLVMBuildStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            IoIntrinsic.ReadFileBytes => { LLVMBuildStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            IoIntrinsic.FileExists => {
+                                val raw: LLVMValueRef = self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)))
+                                LLVMBuildStore(self.b, LLVMBuildICmp(self.b, llvmIntNe(), raw, LLVMConstInt(self.i64ty, 0U64, 0I32), anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                        }
+                        return true
+                    }
+                    RuntimeIntrinsic.Process(intrinsic: val process) => {
+                        match process {
+                            ProcessIntrinsic.ArgCount => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 0U64, 0I32)
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: signature), arrayCPtr(parameters), 0U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            ProcessIntrinsic.ArgAt => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.i64ty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.extendToI64(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)), unsigned: false))
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            ProcessIntrinsic.ExecOut => { LLVMBuildStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            ProcessIntrinsic.ExecCode => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 0U64, 0I32)
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: signature), arrayCPtr(parameters), 0U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            ProcessIntrinsic.Exit => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.i64ty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.extendToI64(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)), unsigned: false))
+                                LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: signature), arrayCPtr(values), 1U64, anon())
+                            }
+                        }
+                        return true
+                    }
+                    _ => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn midCanonicalCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
+        match direct { MidCallPreflight.Target => { return self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return direct } }
+    }
+
+    inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
+            MidCallPreflight.None => { return self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId) }
+            MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeProcessIoCall(c: inout c, body: body, terminatorId: terminatorId) }
+            _ => { return false }
+        }
+    }
+
     inout fn midCanonicalEmitDirectCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
         match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
@@ -2853,7 +3000,7 @@ pub impl LlvmCtx {
             if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidLlvmPreflight.Terminator /> }
             val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
             if term.tag == 4U64 {
-                val call: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: block.terminator)
+                val call: MidCallPreflight = self.midCanonicalCallPreflight(c: inout c, body: body, terminatorId: block.terminator)
                 match call { MidCallPreflight.None => {} _ => { return <MidLlvmPreflight.Call reason=call /> } }
             } else if term.tag == 2U64 || term.tag == 5U64 || term.tag == 8U64 || term.tag == 9U64 {
             } else if term.tag == 3U64 {
@@ -2888,7 +3035,7 @@ pub impl LlvmCtx {
             }
             val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
             if term.tag == 4U64 {
-                if !self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: block.terminator) || term.target >= blocks.count() { return false }
+                if !self.midCanonicalEmitCall(c: inout c, body: body, terminatorId: block.terminator) || term.target >= blocks.count() { return false }
                 LLVMBuildBr(self.b, blocks[term.target])
             } else if !self.midCanonicalEmitNonCallTerminator(c: inout c, body: body, terminatorId: block.terminator, blocks: blocks) { return false }
             blockI = blockI + 1U64
