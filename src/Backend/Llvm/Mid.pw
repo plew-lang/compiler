@@ -2621,12 +2621,73 @@ pub impl LlvmCtx {
         }
     }
 
+    inout fn midCanonicalRuntimeNumericPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
+                        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
+                        val callee: Func = c.arena.funcs[selected.callee]
+                        if !callee.isExtern || callee.isCExtern || callee.hasRecv || !callee.hasRet || term.args.len != self.numericIntrinsicArity(intrinsic: numeric) || term.destination == 0U64 || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
+                        mut val argumentI: U64 = 0U64
+                        while argumentI < term.args.len {
+                            if !self.midCanonicalRuntimeReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: argumentI)) { return <MidCallPreflight.Argument /> }
+                            argumentI = argumentI + 1U64
+                        }
+                        return <MidCallPreflight.None />
+                    }
+                    _ => { return <MidCallPreflight.Target /> }
+                }
+            }
+            _ => { return <MidCallPreflight.Target /> }
+        }
+    }
+
+    inout fn midCanonicalEmitRuntimeNumericCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalRuntimeNumericPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
+                        mut val values: Array[LLVMValueRef] = []
+                        mut val argumentI: U64 = 0U64
+                        while argumentI < term.args.len {
+                            values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: argumentI)))
+                            argumentI = argumentI + 1U64
+                        }
+                        val callee: Func = c.arena.funcs[selected.callee]
+                        val raw: LLVMValueRef = self.genNumericIntrinsicValues(c: inout c, intrinsic: numeric, values: values, errorOffset: callee.nameStart)
+                        LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: raw), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                        return true
+                    }
+                    _ => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
     inout fn midCanonicalCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
         val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
         match direct {
             MidCallPreflight.Target => {
                 val processIo: MidCallPreflight = self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId)
-                match processIo { MidCallPreflight.Target => { return self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return processIo } }
+                match processIo {
+                    MidCallPreflight.Target => {
+                        val coreStringFfi: MidCallPreflight = self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId)
+                        match coreStringFfi { MidCallPreflight.Target => { return self.midCanonicalRuntimeNumericPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return coreStringFfi } }
+                    }
+                    _ => { return processIo }
+                }
             }
             _ => { return direct }
         }
@@ -2638,7 +2699,13 @@ pub impl LlvmCtx {
             MidCallPreflight.Target => {
                 match self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) {
                     MidCallPreflight.None => { return self.midCanonicalEmitRuntimeProcessIoCall(c: inout c, body: body, terminatorId: terminatorId) }
-                    MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId) }
+                    MidCallPreflight.Target => {
+                        match self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId) {
+                            MidCallPreflight.None => { return self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId) }
+                            MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeNumericCall(c: inout c, body: body, terminatorId: terminatorId) }
+                            _ => { return false }
+                        }
+                    }
                     _ => { return false }
                 }
             }
