@@ -433,7 +433,8 @@ pub impl LlvmCtx {
             if ai < args.len {
                 av.append(self.genArgValue(c: inout c, argExpr: c.argAt(args: args, index: ai).expr, p: parameter, parameterTypeRef: parameterTypeRef))
             } else {
-                av.append(self.genArgValue(c: inout c, argExpr: parameter.defaultExpr, p: parameter, parameterTypeRef: parameterTypeRef))
+                c.errorAt(offset: parameter.nameStart, msg: "internal error: call argument missing from the recorded evaluation plan")
+                return
             }
             pi += 1U64
         }

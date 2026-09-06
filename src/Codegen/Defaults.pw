@@ -3,6 +3,32 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    // The frontier is frozen: newly appended zero-argument generator calls
+    // are already complete and must not turn this walk into a growing queue.
+    // Return the incomplete count so the pipeline cannot mistake a partial
+    // completion for readiness to close its call graph.
+    inout fn completeRecordedDefaultCalls() -> U64 {
+        val limit = self.decls.callTemplates.count()
+        mut val incomplete: U64 = 0U64
+        mut val index: U64 = 0U64
+        while index < limit {
+            tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
+            val template = self.decls.callTemplates[index]
+            match template.kind {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                    if !self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm) {
+                        incomplete += 1U64
+                        tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-callee", count: callee)
+                        tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
+                    }
+                }
+                _ => {}
+            }
+            index += 1U64
+        }
+        return incomplete
+    }
+
     // Complete an already selected call after Record has joined its argument
     // and expected-result evidence. `receiverTerm` is the recorded receiver
     // recipe's result in the caller environment, never a fresh name lookup.
@@ -18,7 +44,10 @@ pub impl Comp {
                 // default calls are not reclassified as omitted arguments.
                 if arguments.count() == function.params.count() { return true }
                 if arguments.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return false }
-                if typeArgs.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: typeArgs) { return false }
+                if typeArgs.count() != function.typeParams.count() { return false }
+                // Empty substitutions are complete for a zero-binder callable.
+                // The inference helper also uses empty to mean no inference.
+                if typeArgs.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgs) { return false }
                 if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return false }
                 val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgs, recvInstRef: receiverTerm, selectedProof: proof)
                 val item = self.bodyProvidedItemTerm(f: function, environment: environment)
@@ -35,12 +64,12 @@ pub impl Comp {
                 val previousRecording = self.cur.recordCallTemplates
                 self.cur.checkFn = template.siteKey.ownerFnIdx
                 self.cur.recordCallTemplates = true
-                val completed = self.recordBoundCallArguments(callee: callee, args: arguments, receiver: receiver, calleeTypeArgs: typeArgs, parameterTerms: parameterTerms, proof: proof)
+                val completed = self.recordBoundCallArguments(callee: callee, args: arguments, receiver: receiver, calleeTypeArgs: typeArgs, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm)
                 self.cur.checkFn = previousOwner
                 self.cur.recordCallTemplates = previousRecording
                 match completed {
                     Optional.Some(v: val args) => {
-                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=typeArgs proof=proof /> />)
+                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=typeArgs proof=proof /> />)
                         return true
                     }
                     Optional.None => { return false }
@@ -54,11 +83,14 @@ pub impl Comp {
     // consumed by finalization and Mid. Signature terms/substitutions arrive
     // from the caller's completed parametric selection, not from AST recovery.
     // An incomplete binding/signature does not publish a partial argument list.
-    inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Optional[Array[CallTemplateArgument]] {
+    inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Optional[Array[CallTemplateArgument]] {
         mut val bindings: Array[CallParameterBinding] = []
         match self.bindCallParameters(callee: callee, args: self.templateArgumentRange(arguments: args)) {
             Optional.Some(val v) => { bindings = v }
-            Optional.None => { return <Optional.None /> }
+            Optional.None => {
+                tracePhase(c: inout self, label: "default-call-completion:binding-unresolved")
+                return <Optional.None />
+            }
         }
         if parameterTerms.count() != bindings.count() { return <Optional.None /> }
         // Check all required result terms before creating any call occurrence.
@@ -68,7 +100,10 @@ pub impl Comp {
         while index < bindings.count() {
             match bindings[index] {
                 CallParameterBinding.Default(val generator) => {
-                    if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.types.count() { return <Optional.None /> }
+                    if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.types.count() {
+                        tracePhaseCount(c: inout self, label: "default-call-completion:invalid-parameter-term", count: parameterTerms[index])
+                        return <Optional.None />
+                    }
                     // Every default of this callable shares one lexical binder
                     // environment. Project it once, not once per parameter.
                     if !hasGeneratorArgs {
@@ -112,7 +147,7 @@ pub impl Comp {
                             _ => {}
                         }
                     }
-                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof)
+                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof, receiverTypeTerm: receiverTypeTerm)
                     val parameter: Param = self.funcParamAt(params: parameters, index: index)
                     completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: call) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
                 }
@@ -129,7 +164,7 @@ pub impl Comp {
     // while a different call occurrence allocates a fresh synthetic origin.
     // `resultTerm` and substitutions are already expressed in the caller's
     // parametric environment. This method performs no inference/name lookup.
-    inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> U64 {
+    inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> U64 {
         if !self.cur.recordCallTemplates || generator >= self.arena.funcs.count() {
             self.errorAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record")
             return self.arena.exprs.count()
@@ -158,7 +193,7 @@ pub impl Comp {
             call = self.pushExpr(e: <Expr.Call nameStart=function.nameStart nameLen=function.nameLen args=noArgs />)
             self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
         }
-        self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof)
+        self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof, receiverTypeTerm: receiverTypeTerm)
         return call
     }
 

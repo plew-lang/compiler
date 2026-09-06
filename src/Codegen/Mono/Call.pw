@@ -1159,26 +1159,6 @@ pub impl Comp {
         return out
     }
 
-    // Default arguments are evaluated at the CALL SITE, not inside the callee
-    // body.  Their AST belongs to the parameter declaration, so a body-only
-    // walk misses its nested calls (`fn f(x: T = make())`; `f()`).  Scan every
-    // omitted default under the active caller body instance, recording those
-    // calls in the same final-callee table that LLVM will consult while it
-    // materializes the ABI argument list.
-    inout fn scanOmittedDefaultArgs(f: Func, args: ArgRange) {
-        mut val pi: U64 = 0U64
-        while pi < f.params.count() {
-            val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-            if ai >= args.len {
-                val def: U64 = self.funcParamAt(params: f.params, index: pi).defaultExpr
-                if def != 0U64 {
-                    self.scanExprInsts(exprId: def)
-                }
-            }
-            pi += 1U64
-        }
-    }
-
     // Derive the concrete environment of a selected source-level call and add
     // its callee body to the semantic worklist.  Resolution already happened;
     // this function only preserves that decision and its substitutions.
@@ -1342,7 +1322,6 @@ pub impl Comp {
         if f.isProvided && self.proofIsMissing(proof: calleeProof) {
             calleeProof = self.providedBodyProof(f: f, receiverRef: recvInst)
         }
-        self.scanOmittedDefaultArgs(f: f, args: callArgs)
         if f.typeParams.count() > 0U64 {
             // An associated callable whose complete generic signature is its
             // receiver subject (`Optional[T].empty()` and
@@ -1930,11 +1909,11 @@ pub impl Comp {
         // for calls whose body key has no substitutions or receiver instance.
         if !siteIsStmt && slot == 0U64 && self.cur.bodyEnvironment.params.count() == 0U64 {
             while self.arena.finalExprCallee.count() <= exprId {
-                self.arena.finalExprCallee.append(calleeUnfilled())
+                self.arena.finalExprCallee.append(<CachedCallee.Uncomputed />)
             }
-            self.arena.finalExprCallee.set(i: exprId, value: callee)
+            self.arena.finalExprCallee.set(i: exprId, value: self.calleeCacheEntry(callee: callee))
             if exprId < self.typeCache.callee.count() {
-                self.typeCache.callee.set(i: exprId, value: callee)
+                self.typeCache.callee.set(i: exprId, value: self.calleeCacheEntry(callee: callee))
             }
         }
         // A static descriptor has no meaningful partial state.  Its generic
@@ -2168,12 +2147,18 @@ pub impl Comp {
             return self.arena.funcs.count()
         }
         if exprId < self.typeCache.callee.count() {
-            val cached: U64 = self.typeCache.callee[exprId]
-            if cached != calleeUnfilled() { return cached }
+            match self.typeCache.callee[exprId] {
+                CachedCallee.Selected(val callee) => { return callee }
+                CachedCallee.NoStaticCallee => { return self.arena.funcs.count() }
+                CachedCallee.Uncomputed => {}
+            }
         }
         if exprId < self.arena.finalExprCallee.count() {
-            val cached: U64 = self.arena.finalExprCallee[exprId]
-            if cached != calleeUnfilled() { return cached }
+            match self.arena.finalExprCallee[exprId] {
+                CachedCallee.Selected(val callee) => { return callee }
+                CachedCallee.NoStaticCallee => { return self.arena.funcs.count() }
+                CachedCallee.Uncomputed => {}
+            }
         }
         return self.arena.funcs.count()
     }
@@ -3148,10 +3133,19 @@ pub impl Comp {
         }
         if !(self.proofIsMissing(proof: proof)) && callee < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[callee]
-            if f.originTraitOwner != 0U64 {
+            mut val traitOwner = f.originTraitOwner
+            mut val traitId = f.originTraitId
+            if traitOwner == 0U64 && f.lexicalOwnerFnId != 0U64 {
+                val declaration = self.lexicalFunction(f: f)
+                if self.methodRecvIsTrait(f: declaration) {
+                    traitOwner = declaration.provTraitOwner
+                    traitId = 0U64
+                }
+            }
+            if traitOwner != 0U64 {
                 mut val traitIdx: U64 = 0U64
                 while traitIdx < self.decls.traits.count() {
-                    if self.decls.traits[traitIdx].nameStart == f.originTraitOwner && self.decls.traits[traitIdx].nameId == f.originTraitId {
+                    if self.decls.traits[traitIdx].nameStart == traitOwner && (traitId == 0U64 || self.decls.traits[traitIdx].nameId == traitId) {
                         concreteProof = self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)
                     }
                     traitIdx += 1U64
@@ -3482,13 +3476,17 @@ pub impl Comp {
             bodyIsProvided = self.arena.funcs[self.cur.bodyFnIdx].isProvided
         }
         if !bodyIsProvided && self.cur.bodyEnvironment.params.count() == 0U64 && exprId < self.typeCache.callee.count() {
-            if self.typeCache.callee[exprId] != calleeUnfilled() && self.typeCache.callee[exprId] < self.arena.funcs.count() {
-                val cached: U64 = self.typeCache.callee[exprId]
-                val recvRef: U64 = self.selectedCallReceiverRef(exprId: exprId)
-                val selection: CallSiteSelection = self.selectBodyCall(exprId: exprId, callee: cached, recvRef: recvRef, resultHintRef: self.selectedResultHint(callee: cached))
-                self.recordSelectedBodyCallee(selection: selection)
-                self.enqueueSelectedCallee(selection: selection)
-                return cached
+            match self.typeCache.callee[exprId] {
+                CachedCallee.Selected(callee: val cached) => {
+                    if cached < self.arena.funcs.count() {
+                        val recvRef: U64 = self.selectedCallReceiverRef(exprId: exprId)
+                        val selection: CallSiteSelection = self.selectBodyCall(exprId: exprId, callee: cached, recvRef: recvRef, resultHintRef: self.selectedResultHint(callee: cached))
+                        self.recordSelectedBodyCallee(selection: selection)
+                        self.enqueueSelectedCallee(selection: selection)
+                        return cached
+                    }
+                }
+                _ => {}
             }
         }
         mut val callee: U64 = self.arena.funcs.count()

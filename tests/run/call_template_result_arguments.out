@@ -17,3 +17,7 @@ completed-plan-idempotent
 pre-record-authored-navigation
 consumer-default-navigation
 unresolved-no-publication
+receiver-context-preserved
+frontier-reports-incomplete
+frontier-completes-method-default
+zero-type-arguments-complete

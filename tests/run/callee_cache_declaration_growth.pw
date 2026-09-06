@@ -1,0 +1,22 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Expr, Func }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val name = c.internTmpName(prefix: "internal", n: 0U64)
+    val args = c.pushArgs(args: [])
+    val missing = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    val selected = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.buildExprTyTable()
+    c.recordResolvedMethodCallee(id: missing, callee: c.arena.funcs.count())
+    val params = c.pushFuncParams(params: [])
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen params=params
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    if c.resolvedCallee(id: missing) == c.arena.funcs.count() { write(s: "missing-after-growth\n") }
+    c.recordResolvedMethodCallee(id: selected, callee: 0U64)
+    c.arena.funcs.append(c.arena.funcs[0U64])
+    if c.resolvedCallee(id: missing) == c.arena.funcs.count() { write(s: "missing-after-second-growth\n") }
+    if c.resolvedCallee(id: selected) == 0U64 { write(s: "selected-stable\n") }
+}

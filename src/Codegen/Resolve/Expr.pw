@@ -26,7 +26,7 @@ pub impl Comp {
             self.typeCache.len.append(0)
             self.typeCache.ref.append(0)
             self.typeCache.viewId.append(0)
-            self.typeCache.callee.append(calleeUnfilled())
+            self.typeCache.callee.append(<CachedCallee.Uncomputed />)
             self.typeCache.identBind.append(identUnfilledCode())
             self.typeCache.identTarget.append(identNoTarget())
             i += 1
@@ -41,8 +41,10 @@ pub impl Comp {
     // type recovery and codegen therefore cannot drift by looking it up again.
     inout fn resolvedCallee(id: U64) -> U64 {
         if id < self.typeCache.callee.count() {
-            if self.typeCache.callee[id] != calleeUnfilled() {
-                return self.typeCache.callee[id]
+            match self.typeCache.callee[id] {
+                CachedCallee.Selected(val callee) => { return callee }
+                CachedCallee.NoStaticCallee => { return self.arena.funcs.count() }
+                CachedCallee.Uncomputed => {}
             }
         }
         mut val r: U64 = self.arena.funcs.count()
@@ -88,7 +90,7 @@ pub impl Comp {
         match self.arena.exprs[id] {
             Expr.Call(nameStart: _, nameLen: _, args: _) => {
                 if id < self.typeCache.callee.count() {
-                    self.typeCache.callee.set(i: id, value: r)
+                    self.typeCache.callee.set(i: id, value: self.calleeCacheEntry(callee: r))
                 }
             }
             _ => {}
@@ -98,8 +100,13 @@ pub impl Comp {
 
     inout fn recordResolvedMethodCallee(id: U64, callee: U64) {
         if id < self.typeCache.callee.count() {
-            self.typeCache.callee.set(i: id, value: callee)
+            self.typeCache.callee.set(i: id, value: self.calleeCacheEntry(callee: callee))
         }
+    }
+
+    fn calleeCacheEntry(callee: U64) -> CachedCallee {
+        if callee < self.arena.funcs.count() { return <CachedCallee.Selected callee=callee /> }
+        return <CachedCallee.NoStaticCallee />
     }
 }
 
@@ -441,18 +448,22 @@ pub impl Comp {
         return out
     }
 
-    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) {
+    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) {
         if !(self.cur.recordCallTemplates) { return }
+        mut val receiverTerm = receiverTypeTerm
+        if receiverTerm == 0U64 {
+            match receiver { CallTemplateReceiver.Term(term: val term) => { receiverTerm = term } _ => {} }
+        }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof />, expectedTerm: prior.expectedResultTerm)
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
             return
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> receiverTypeTerm=receiverTerm />)
     }
 
     // A dynamic call is selected at Record too.  It carries the same receiver
@@ -618,7 +629,7 @@ pub impl Comp {
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
         val kind = self.completeCallTemplateResult(kind: prior.kind, expectedTerm: expectedTerm)
-        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm />)
+        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=prior.receiverTypeTerm />)
     }
 
     // Bidirectional completion belongs to Record, before default evaluation
@@ -816,7 +827,7 @@ pub impl Comp {
     // Record selection evidence independently from the expression result
     // TypeTerm.  A later body-instance ground reads the term for type equality
     // and the provenance for CallResolution; neither reader needs AST recovery.
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) {
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />
@@ -847,7 +858,7 @@ pub impl Comp {
                 }
             }
         }
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof)
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
     }
 
     // Record the expected result at a semantic statement boundary.  It is not

@@ -2071,7 +2071,7 @@ export struct Arena {
     pub mut val finalReturnIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
-    pub mut val finalExprCallee: Array[U64] = []
+    pub mut val finalExprCallee: Array[CachedCallee] = []
 }
 pub impl Arena { factory }
 
@@ -2360,6 +2360,10 @@ export struct CallTemplate {
     pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val kind: CallTemplateKind = <CallTemplateKind.Pending />
     pub val expectedResultTerm: U64 = 0U64
+    // The Direct selection's parametric receiver type is a Record fact.
+    // Its value/proof dependency remains in CallTemplateReceiver; completion
+    // must not evaluate that dependency just to recover the type environment.
+    pub val receiverTypeTerm: U64 = 0U64
 }
 pub impl CallTemplate { factory }
 
@@ -2562,6 +2566,14 @@ pub impl MonoWork { factory }
 // marks an uncomputed slot; the fill path holds the recvInstRef==0 invariant (see
 // typeOf). Literal context is stored in SemanticExprType because it is part of
 // the complete semantic expression type, not merely an implementation cache.
+// Persistent absence must survive declaration-arena growth. A transient
+// `funcs.count()` sentinel is never stored as a declaration identity.
+export enum CachedCallee {
+    Uncomputed
+    NoStaticCallee
+    Selected(callee: U64)
+}
+
 export struct TypeCache {
     pub mut val kind: Array[I64] = []
     pub mut val start: Array[U64] = []
@@ -2575,11 +2587,9 @@ export struct TypeCache {
     // re-running overload resolution at emit time. PERSISTENT (unlike kind/…, never
     // cleared per body): which decl a call resolves to is instantiation-invariant —
     // a type parameter is opaque (spec/06), so an overload can never be selected via
-    // a type-parameter arg, hence the result is stable per call-expr id. Sentinel
-    // `calleeUnfilled()` marks an uncomputed slot; a filled slot may legitimately
-    // hold `funcs.count()` ("resolves to no declared function" — a call through a fn
-    // value/local), which is itself stable, so it is cached too.
-    pub mut val callee: Array[U64] = []
+    // a type-parameter arg, hence the result is stable per call-expr id.
+    // Closure/no-static-callee is distinct from both uncomputed and selected.
+    pub mut val callee: Array[CachedCallee] = []
     // resolved binding category per Ident-expr id, recorded by the name-resolution pass
     // (the verify/check Ident walk, where c.cur.locals is valid). PERSISTENT (like callee:
     // which entity a name binds to is lexical, not instantiation-dependent). Codes —

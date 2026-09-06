@@ -47,6 +47,9 @@ fn main() {
     c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
         hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
+        hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
+        hasRecv=true recvStart=array.nameStart recvLen=array.nameLen recvTy=returnTerm selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     c.cur.checkFn = 0U64
     c.cur.recordCallTemplates = true
     val args = c.pushArgs(args: [])
@@ -79,6 +82,13 @@ fn main() {
     val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression))
     val before = c.arena.exprs.count()
     if !c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) && c.arena.exprs.count() == before { write(s: "unprepared-no-publication\n") }
+    val plainCallee = c.arena.funcs.count()
+    val plainParams = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen
+        tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=integerTerm
+        isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=defaultExpr />])
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=c.pushFuncBinds(binds: []) params=plainParams
+        hasRet=true retStart=integer.nameStart retLen=integer.nameLen retIsArray=false retTy=integerTerm body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     c.prepareDefaultArgumentGenerators()
     c.cur.checkFn = 999U64
     c.cur.recordCallTemplates = false
@@ -122,4 +132,23 @@ fn main() {
     val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved))
     val unresolvedCount = c.decls.callTemplates.count()
     if !c.completeRecordedDirectDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64) && c.decls.callTemplates.count() == unresolvedCount { write(s: "unresolved-no-publication\n") }
+    val method = c.pushExpr(e: <Expr.Method recv=expression nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.recordSemanticExprCall(exprId: method, callee: 1U64,
+        receiver: <CallTemplateReceiver.PriorCallResult exprId=expression siteKey=c.templateCallSiteKey(fnIdx: 0U64, exprId: expression) />,
+        args: args, calleeTypeArgs: [callerTerm], resultTerm: expectedTerm, receiverTypeTerm: expectedTerm)
+    c.recordCallTemplateExpectedResult(exprId: method, expectedTerm: expectedTerm)
+    if c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).receiverTypeTerm == expectedTerm { write(s: "receiver-context-preserved\n") }
+    c.cur.recordCallTemplates = false
+    if c.completeRecordedDefaultCalls() == 1U64 { write(s: "frontier-reports-incomplete\n") }
+    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val completed, calleeTypeArgs: _, proof: _) => {
+            if completed.count() == 1U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: c.callArgumentExprId(source: completed[0U64].source)), b: expectedTerm) { write(s: "frontier-completes-method-default\n") }
+        }
+        _ => {}
+    }
+    c.cur.recordCallTemplates = true
+    val plainCall = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.recordCallTemplate(exprId: plainCall, callee: plainCallee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
+    val plainIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall))
+    if c.completeRecordedDirectDefaults(templateIndex: plainIndex, receiverTerm: 0U64) { write(s: "zero-type-arguments-complete\n") }
 }

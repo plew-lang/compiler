@@ -514,12 +514,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, resultTerm: result, proof: proof)
-        // A method selection and its CallTemplate are the same lexical fact.
-        // Free calls already publish both; omitting this counterpart left a
-        // valid `self.field.method(...)` semantic result without the immutable
-        // descriptor that Mono must consume after templates close.
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, proof: proof)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, resultTerm: result, proof: proof, receiverTypeTerm: returnReceiver)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
@@ -1809,7 +1804,9 @@ pub impl Comp {
                 while pi < f.params.count() {
                     val p: Param = self.funcParamAt(params: f.params, index: pi)
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-                    if p.hasDefault {
+                    // After preparation the generator is the sole Record
+                    // owner of this expression and of its lexical locals.
+                    if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
                         self.recordExpr(exprId: p.defaultExpr)
                     }
                     pi += 1
