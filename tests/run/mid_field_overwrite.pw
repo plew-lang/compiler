@@ -18,6 +18,14 @@ pub impl NestedHolder { factory }
 struct OuterHolder { pub mut val nested: NestedHolder }
 pub impl OuterHolder { factory }
 
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+pub impl Counter {
+    inout fn reset() {
+        self.value = 0I64
+    }
+}
+
 fn replaceField() {
     mut val holder: Holder = <Holder value=1I64 />
     holder.value = 42I64
@@ -53,9 +61,16 @@ fn replaceCallOwnedField() {
     print(holder.value)
 }
 
+fn replaceReceiverField() {
+    mut val counter: Counter = <Counter value=7I64 />
+    counter.reset()
+    print(counter.value)
+}
+
 fn main() {
     replaceField()
     replaceOwnedField()
     replaceNestedOwnedField()
     replaceCallOwnedField()
+    replaceReceiverField()
 }
