@@ -715,6 +715,10 @@ pub impl MidCanonicalArena {
     inout fn store(body: MidBody) -> MidCanonicalBody {
         return storeMidCanonicalBody(arena: inout self, body: body)
     }
+
+    fn isWellFormed(body: MidCanonicalBody) -> Bool {
+        return canonicalMidBodyIsWellFormed(arena: self, body: body)
+    }
 }
 
 // This verifier deliberately reads only canonical rows. It is the first

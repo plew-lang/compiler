@@ -7,7 +7,7 @@ import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, Sema
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
-import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ./Ir with { MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -85,6 +85,9 @@ export enum MidBuildError {
 
 export struct MidBodyBuild {
     pub val body: MidBody
+    // The canonical snapshot is the authoritative post-build representation.
+    // `body` remains only until the downstream passes are migrated one by one.
+    pub val canonical: MidCanonicalBody = <MidCanonicalBody body=0U64 />
     pub val error: MidBuildError = <MidBuildError.None />
 }
 pub impl MidBodyBuild { factory }
@@ -1705,5 +1708,12 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }
-    return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> />
+    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val canonical: MidCanonicalBody = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) {
+        // A builder-produced canonical snapshot must be internally closed
+        // before any downstream pass sees either representation.
+        return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
+    }
+    return <MidBodyBuild body=body canonical=canonical />
 }
