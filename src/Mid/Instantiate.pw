@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -36,11 +36,44 @@ export struct MidInstantiation {
 }
 pub impl MidInstantiation { factory }
 
+// Canonical instantiation is append-only: it reads the parametric snapshot
+// from `c.mid` and emits a second scalar-row snapshot there. It intentionally
+// has no MidBody field, preventing callers from thawing back into the draft
+// representation while this path is completed opcode by opcode.
+export struct MidCanonicalInstantiation {
+    pub val body: MidCanonicalBody = <MidCanonicalBody body=0U64 />
+    pub val error: MidInstantiateError = <MidInstantiateError.None />
+}
+pub impl MidCanonicalInstantiation { factory }
+
 fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
     match error {
         MidInstantiateError.None => { return false }
         _ => { return true }
     }
+}
+
+fn instantiateCanonicalPlace(c: inout Comp, placeId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+    if placeId == 0U64 || placeId > c.mid.places.count() { return 0U64 }
+    val source: MidPlaceNode = c.mid.places[placeId - 1U64]
+    val projectionStart: U64 = c.mid.projections.count()
+    mut val i: U64 = 0U64
+    while i < source.projections.len {
+        val projection: MidProjectionNode = c.mid.projections[source.projections.start + i]
+        c.mid.projections.append(<MidProjectionNode tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        i = i + 1U64
+    }
+    c.mid.places.append(<MidPlaceNode local=source.local projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+    return c.mid.places.count()
+}
+
+fn instantiateCanonicalOperand(c: inout Comp, operandId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
+    val source: MidOperandNode = c.mid.operands[operandId - 1U64]
+    mut val place: U64 = 0U64
+    if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) }
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) accessCandidate=source.accessCandidate />)
+    return c.mid.operands.count()
 }
 
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
