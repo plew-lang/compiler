@@ -1771,12 +1771,12 @@ pub impl LlvmCtx {
             mut val elementI: U64 = 0U64
             while elementI < value.elements.len {
                 val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
-                if element.targetTerm == 0U64 || element.targetTerm >= c.arena.types.count() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: element.operand) || c.conversionProofIsMissing(id: element.conversion) { return false }
+                if element.targetTerm == 0U64 || element.targetTerm >= c.arena.types.count() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: element.operand) || !c.conversionProofIsIdentity(id: element.conversion) { return false }
                 elementI = elementI + 1U64
             }
             return true
         }
-        if value.tag == 6U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) && !c.conversionProofIsMissing(id: value.conversion) }
+        if value.tag == 6U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) && c.conversionProofIsIdentity(id: value.conversion) }
         if value.tag == 7U64 { return false }
         if value.tag >= 8U64 && value.tag <= 10U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.types.count() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
         if value.tag >= 11U64 && value.tag <= 15U64 { return value.place != 0U64 && value.place <= c.mid.places.count() && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) && value.resultTerm != 0U64 && value.resultTerm < c.arena.types.count() }
@@ -3241,7 +3241,7 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
-            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 6U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
             mut val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand)
             if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
