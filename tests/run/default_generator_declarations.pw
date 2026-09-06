@@ -1,0 +1,47 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Bind, Expr, Func, FuncBound, Param, Stmt }
+
+fn parameter(hasDefault: Bool) -> Param {
+    return <Param nameStart=0U64 nameLen=1U64 tyStart=0U64 tyLen=1U64
+        tyIsArray=false ty=17U64 isInout=false isMove=false isBorrow=true
+        noLabel=false hasDefault=hasDefault defaultExpr=1U64 />
+}
+
+fn main() {
+    mut val c: Comp = <Comp />
+    c.arena.exprs.append(<Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val params = c.pushFuncParams(params: [parameter(hasDefault: false), parameter(hasDefault: true)])
+    val binds = c.pushFuncBinds(binds: [<Bind nameStart=0U64 nameLen=1U64 nameId=7U64 fieldStart=0U64 fieldLen=0U64 />])
+    val source: Func = <Func nameStart=0U64 nameLen=1U64 typeParams=binds params=params
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=true recvStart=21U64 recvLen=3U64 recvId=12U64 recvTy=19U64
+        selfInout=true selfMove=false isAssoc=false isAsync=false isExtern=false
+        extId=31U64 originConformIdx=4U64 sourceConformIdx=6U64 defOffset=9U64 />
+    c.arena.funcs.append(source)
+    // Distinct owners sharing a parameter range must not share a generator.
+    c.arena.funcs.append(source)
+    c.decls.funcBounds.append(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=23U64 paramNameId=7U64 />)
+    c.prepareDefaultArgumentGenerators()
+    val first = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 1U64)
+    val second = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 1U64)
+    if first != second && first < c.arena.funcs.count() && second < c.arena.funcs.count() { write(s: "owner-identity\n") }
+    val generator: Func = c.arena.funcs[first]
+    if generator.params.count() == 0U64 && !generator.hasRecv && !generator.selfInout && !generator.selfMove { write(s: "no-value-capture\n") }
+    if generator.typeParams.count() == 1U64 && generator.recvTy == 19U64 && generator.extId == 31U64 && generator.defOffset == 9U64 && generator.originConformIdx == 4U64 && generator.sourceConformIdx == 6U64 { write(s: "declaration-environment\n") }
+    if generator.hasRet && generator.retTy == 17U64 {
+        val statement = c.arena.stmts[c.blockStmtAt(blkId: generator.body, index: 0U64)]
+        match statement {
+            Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
+                if hasValue && value == 1U64 { write(s: "ordinary-return\n") }
+            }
+            _ => {}
+        }
+    }
+    if c.decls.funcBounds.count() == 2U64 && c.decls.funcBounds[1U64].fnIdx == first && c.decls.funcBounds[1U64].paramTy == 23U64 { write(s: "bound-identity\n") }
+    if c.decls.callables.count() == 0U64 { write(s: "no-source-surface\n") }
+    if c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64) == c.arena.funcs.count() { write(s: "required-parameter\n") }
+    c.prepareDefaultArgumentGenerators()
+    if c.arena.funcs.count() == 4U64 && c.decls.funcBounds.count() == 2U64 { write(s: "idempotent\n") }
+}

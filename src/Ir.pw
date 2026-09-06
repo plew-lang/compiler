@@ -920,6 +920,14 @@ export struct FuncParamRange {
     pub val start: U64
     pub val len: U64
 }
+// Owner-indexed default generator declarations. Entries are in parameter
+// order; zero means the parameter has no default, otherwise functionId is
+// one-based. This is declaration identity, not a call evaluation cache.
+export struct DefaultGeneratorRange {
+    pub val start: U64 = 0U64
+    pub val len: U64 = 0U64
+}
+pub impl DefaultGeneratorRange { factory }
 pub impl FuncParamRange {
     factory
     fn count() -> U64 { return self.len }
@@ -2405,6 +2413,8 @@ export struct Decls {
     pub mut val funcBindPool: Array[Bind] = []
     pub mut val funcTypePool: Array[U64] = []
     pub mut val funcParamPool: Array[Param] = []
+    pub mut val defaultGeneratorRanges: Array[DefaultGeneratorRange] = []
+    pub mut val defaultGeneratorFunctions: Array[U64] = []
     pub mut val deinits: Array[Bind] = []
     pub mut val assocBindings: Array[AssocBinding] = []
     pub mut val pubFactories: Array[U64] = []

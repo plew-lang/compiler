@@ -1,0 +1,91 @@
+// Default expressions are independent full expressions (spec/04). Their
+// implementation declarations share the owner's lexical type/proof environment,
+// but take no value parameters and never capture `self` or another argument.
+// They are deliberately absent from the source callable surface.
+pub impl Comp {
+    fn defaultArgumentGenerator(ownerFnIdx: U64, parameterIndex: U64) -> U64 {
+        if ownerFnIdx >= self.decls.defaultGeneratorRanges.count() { return self.arena.funcs.count() }
+        val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[ownerFnIdx]
+        if parameterIndex >= range.len { return self.arena.funcs.count() }
+        val functionId: U64 = self.decls.defaultGeneratorFunctions[range.start + parameterIndex]
+        if functionId == 0U64 { return self.arena.funcs.count() }
+        return functionId - 1U64
+    }
+
+    // Prepare before semantic recording, after checking the authored defaults.
+    // The caller must transfer default-expression ownership to these bodies
+    // when enabling this phase; recording the same expression as both a parent
+    // default and a generator body would give it conflicting local identities.
+    inout fn prepareDefaultArgumentGenerators() {
+        if self.decls.defaultGeneratorRanges.count() != 0U64 { return }
+        val declarationLimit: U64 = self.arena.funcs.count()
+        val boundLimit: U64 = self.decls.funcBounds.count()
+        mut val owner: U64 = 0U64
+        while owner < declarationLimit {
+            val source: Func = self.arena.funcs[owner]
+            val start: U64 = self.decls.defaultGeneratorFunctions.count()
+            mut val parameterIndex: U64 = 0U64
+            while parameterIndex < source.params.count() {
+                val parameter: Param = self.funcParamAt(params: source.params, index: parameterIndex)
+                mut val functionId: U64 = 0U64
+                if parameter.hasDefault {
+                    val generator: U64 = self.createDefaultArgumentGenerator(source: source, parameter: parameter)
+                    functionId = generator + 1U64
+                }
+                self.decls.defaultGeneratorFunctions.append(functionId)
+                parameterIndex += 1U64
+            }
+            self.decls.defaultGeneratorRanges.append(<DefaultGeneratorRange start=start len=source.params.count() />)
+            owner += 1U64
+        }
+        self.copyDefaultGeneratorBounds(boundLimit: boundLimit)
+    }
+
+    // Walk authored bounds once, not once per generator. Each relevant row is
+    // copied to the generator's function identity, retaining canonical binders.
+    inout fn copyDefaultGeneratorBounds(boundLimit: U64) {
+        mut val index: U64 = 0U64
+        while index < boundLimit {
+            val bound: FuncBound = self.decls.funcBounds[index]
+            if bound.fnIdx < self.decls.defaultGeneratorRanges.count() {
+                val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[bound.fnIdx]
+                mut val parameterIndex: U64 = 0U64
+                while parameterIndex < range.len {
+                    val functionId: U64 = self.decls.defaultGeneratorFunctions[range.start + parameterIndex]
+                    if functionId != 0U64 {
+                        self.decls.funcBounds.append(<FuncBound fnIdx=functionId - 1U64 paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint />)
+                    }
+                    parameterIndex += 1U64
+                }
+            }
+            index += 1U64
+        }
+    }
+
+    inout fn createDefaultArgumentGenerator(source: Func, parameter: Param) -> U64 {
+        val functionIdx: U64 = self.arena.funcs.count()
+        // This spelling is diagnostic/mangling only. Selection uses the
+        // owner/parameter table above, never a source-visible name lookup.
+        val name: Bind = self.internTmpName(prefix: "$defaultArgument", n: functionIdx)
+        val returned: U64 = self.pushStmt(s: <Stmt.Return value=parameter.defaultExpr hasValue=true offset=parameter.nameStart />)
+        val body: U64 = self.pushBlock(stmts: [returned])
+        val generator: Func = <Func
+            nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+            typeParams=source.typeParams
+            hasRet=true retStart=parameter.tyStart retLen=parameter.tyLen
+            retIsArray=parameter.tyIsArray retTy=parameter.ty body=body
+            hasRecv=false recvStart=source.recvStart recvLen=source.recvLen
+            recvId=source.recvId recvTy=source.recvTy
+            recvPatternParams=source.recvPatternParams recvTraitArgs=source.recvTraitArgs
+            selfInout=false selfMove=false isAssoc=source.hasRecv || source.isAssoc
+            isAsync=false isExtern=false
+            extId=source.extId srcTraitId=source.srcTraitId srcTraitOwner=source.srcTraitOwner
+            originTraitId=source.originTraitId originTraitOwner=source.originTraitOwner
+            originTraitArity=source.originTraitArity originConformIdx=source.originConformIdx
+            sourceConformIdx=source.sourceConformIdx providedOwnerMod=source.providedOwnerMod
+            provTraitArity=source.provTraitArity provTraitOwner=source.provTraitOwner
+            defOffset=source.defOffset />
+        self.arena.funcs.append(generator)
+        return functionIdx
+    }
+}
