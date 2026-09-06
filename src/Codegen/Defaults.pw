@@ -3,6 +3,38 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    // Bind only after selecting the declaration. Keep the authored arguments
+    // intact, but produce one entry per parameter in evaluation order. A single
+    // monotone walk also rejects leftover/duplicate/out-of-order arguments.
+    // None is an incomplete decision, never permission for a consumer to fill
+    // missing operands by reopening the default expression in caller scope.
+    inout fn bindCallParameters(callee: U64, args: ArgRange) -> Optional[Array[CallParameterBinding]] {
+        if callee >= self.arena.funcs.count() { return <Optional.None /> }
+        val parameters: FuncParamRange = self.arena.funcs[callee].params
+        mut val bindings: Array[CallParameterBinding] = []
+        mut val argumentIndex: U64 = 0U64
+        mut val parameterIndex: U64 = 0U64
+        while parameterIndex < parameters.count() {
+            val parameter: Param = self.funcParamAt(params: parameters, index: parameterIndex)
+            mut val explicit: Bool = false
+            if argumentIndex < args.len {
+                explicit = self.argMatchesParamLabel(param: parameter, arg: self.argAt(args: args, index: argumentIndex))
+            }
+            if explicit {
+                bindings.append(<CallParameterBinding.Explicit argumentIndex=argumentIndex />)
+                argumentIndex += 1U64
+            } else {
+                if !parameter.hasDefault { return <Optional.None /> }
+                val generator: U64 = self.defaultArgumentGenerator(ownerFnIdx: callee, parameterIndex: parameterIndex)
+                if generator >= self.arena.funcs.count() { return <Optional.None /> }
+                bindings.append(<CallParameterBinding.Default generator=generator />)
+            }
+            parameterIndex += 1U64
+        }
+        if argumentIndex != args.len { return <Optional.None /> }
+        return <Optional.Some v=bindings />
+    }
+
     fn defaultArgumentGenerator(ownerFnIdx: U64, parameterIndex: U64) -> U64 {
         if ownerFnIdx >= self.decls.defaultGeneratorRanges.count() { return self.arena.funcs.count() }
         val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[ownerFnIdx]

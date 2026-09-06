@@ -928,6 +928,13 @@ export struct DefaultGeneratorRange {
     pub val len: U64 = 0U64
 }
 pub impl DefaultGeneratorRange { factory }
+// The selected declaration's parameter order, before values/type conversions
+// are recorded. An explicit index refers to the authored ArgRange; a default
+// refers to a declaration, never to a cached evaluation or a caller expression.
+export enum CallParameterBinding {
+    Explicit(argumentIndex: U64)
+    Default(generator: U64)
+}
 pub impl FuncParamRange {
     factory
     fn count() -> U64 { return self.len }

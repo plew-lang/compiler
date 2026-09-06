@@ -1,0 +1,119 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Arg, CallParameterBinding, Func, Param }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    mut val parameters: Array[Param] = []
+    mut val arguments: Array[Arg] = []
+    mut val index: U64 = 0U64
+    while index < 3U64 {
+        val name = c.internTmpName(prefix: "parameter", n: index)
+        parameters.append(<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+            tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64
+            isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=0U64 />)
+        arguments.append(<Arg expr=index isInout=false labelStart=name.nameStart labelLen=name.nameLen hasLabel=true />)
+        index += 1U64
+    }
+    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: parameters)
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />)
+    val required: Param = <Param nameStart=0U64 nameLen=0U64 tyStart=0U64 tyLen=0U64
+        tyIsArray=false ty=0U64 isInout=false isMove=false isBorrow=false
+        noLabel=true hasDefault=false defaultExpr=0U64 />
+    val mixedParameters = c.pushFuncParams(params: [required, parameters[2U64]])
+    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 params=mixedParameters
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />)
+    val empty = c.pushArgs(args: [])
+    // A missing generator must not silently become an inline default.
+    match c.bindCallParameters(callee: 0U64, args: empty) {
+        Optional.None => { write(s: "unprepared-rejected\n") }
+        _ => {}
+    }
+    val complete = c.pushArgs(args: arguments)
+    match c.bindCallParameters(callee: 0U64, args: complete) {
+        Optional.Some(v: val bindings) => {
+            if bindings.count() == 3U64 { write(s: "explicit-needs-no-generator\n") }
+        }
+        _ => {}
+    }
+    c.prepareDefaultArgumentGenerators()
+    mut val combinations: U64 = 0U64
+    mut val mask: U64 = 0U64
+    while mask < 8U64 {
+        mut val supplied: Array[Arg] = []
+        mut val bits: U64 = mask
+        index = 0U64
+        while index < 3U64 {
+            if bits % 2U64 == 1U64 { supplied.append(arguments[index]) }
+            bits /= 2U64
+            index += 1U64
+        }
+        val args = c.pushArgs(args: supplied)
+        match c.bindCallParameters(callee: 0U64, args: args) {
+            Optional.Some(v: val bindings) => {
+                mut val correct: Bool = bindings.count() == 3U64
+                mut val suppliedIndex: U64 = 0U64
+                bits = mask
+                index = 0U64
+                while index < bindings.count() {
+                    match bindings[index] {
+                        CallParameterBinding.Explicit(val argumentIndex) => {
+                            if bits % 2U64 != 1U64 || argumentIndex != suppliedIndex { correct = false }
+                            suppliedIndex += 1U64
+                        }
+                        CallParameterBinding.Default(val generator) => {
+                            if bits % 2U64 != 0U64 || generator != c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: index) { correct = false }
+                        }
+                    }
+                    bits /= 2U64
+                    index += 1U64
+                }
+                if correct { combinations += 1U64 }
+            }
+            _ => {}
+        }
+        mask += 1U64
+    }
+    if combinations == 8U64 { write(s: "all-omission-combinations\n") }
+    val reversed = c.pushArgs(args: [arguments[2U64], arguments[0U64]])
+    match c.bindCallParameters(callee: 0U64, args: reversed) {
+        Optional.None => { write(s: "order-rejected\n") }
+        _ => {}
+    }
+    val duplicate = c.pushArgs(args: [arguments[0U64], arguments[0U64]])
+    match c.bindCallParameters(callee: 0U64, args: duplicate) {
+        Optional.None => { write(s: "duplicate-rejected\n") }
+        _ => {}
+    }
+    match c.bindCallParameters(callee: c.arena.funcs.count(), args: empty) {
+        Optional.None => { write(s: "unknown-owner-rejected\n") }
+        _ => {}
+    }
+    match c.bindCallParameters(callee: 1U64, args: empty) {
+        Optional.None => { write(s: "required-rejected\n") }
+        _ => {}
+    }
+    val positional = c.pushArgs(args: [<Arg expr=0U64 isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />])
+    match c.bindCallParameters(callee: 1U64, args: positional) {
+        Optional.Some(v: val bindings) => {
+            if bindings.count() == 2U64 {
+                match bindings[0U64] {
+                    CallParameterBinding.Explicit(val argumentIndex) => {
+                        match bindings[1U64] {
+                            CallParameterBinding.Default(val generator) => {
+                                if argumentIndex == 0U64 && generator == c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 1U64) { write(s: "positional-with-default\n") }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
