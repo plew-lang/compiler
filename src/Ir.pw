@@ -1412,9 +1412,18 @@ export enum BufferIntrinsic {
 export enum RuntimeIntrinsic {
     Io(intrinsic: IoIntrinsic)
     Process(intrinsic: ProcessIntrinsic)
+    CoreString(intrinsic: CoreStringIntrinsic)
     Ffi(intrinsic: FfiIntrinsic)
     Numeric(intrinsic: NumericIntrinsic)
     Buffer(intrinsic: BufferIntrinsic)
+}
+
+// Core operations that create a String buffer from an owned byte/floating
+// value.  Reference-cell and scalar-conversion floors intentionally remain
+// separate families: they have different ownership and ABI contracts.
+export enum CoreStringIntrinsic {
+    FromBytesUnchecked
+    FloatToString
 }
 
 export enum ProcessIntrinsic {

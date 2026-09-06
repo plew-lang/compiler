@@ -50,6 +50,10 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
         if owner == self.modules.coreModule {
+            mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
+            if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) {
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.CoreString intrinsic=coreString /> />
+            }
             mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
             if self.classifyCoreNumericIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout numeric) {
                 return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Numeric intrinsic=numeric /> />
@@ -93,6 +97,8 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
         if owner == self.modules.coreModule {
+            mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
+            if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.CoreString intrinsic=coreString /> /> }
             mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
             if self.classifyCoreNumericIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout numeric) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Numeric intrinsic=numeric /> /> }
             mut val buffer: BufferIntrinsic = <BufferIntrinsic.New />
@@ -115,6 +121,12 @@ pub impl Comp {
         }
         if self.classifyCoreFloatIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic) { return true }
         return self.classifyCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic)
+    }
+
+    inout fn classifyCoreStringIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout CoreStringIntrinsic) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") { intrinsic = <CoreStringIntrinsic.FromBytesUnchecked /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") { intrinsic = <CoreStringIntrinsic.FloatToString /> return true }
+        return false
     }
 
     inout fn classifyCoreBufferIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout BufferIntrinsic) -> Bool {

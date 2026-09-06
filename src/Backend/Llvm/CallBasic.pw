@@ -236,6 +236,25 @@ pub impl LlvmCtx {
         }
     }
 
+    inout fn genCoreStringRuntimeIntrinsic(c: inout Comp, intrinsic: CoreStringIntrinsic, args: ArgRange) -> LLVMValueRef {
+        match intrinsic {
+            CoreStringIntrinsic.FromBytesUnchecked => {
+                val source: U64 = c.argAt(args: args, index: 0U64).expr
+                val array: LLVMValueRef = self.genLlvmExpr(c: inout c, id: source)
+                val owned: LLVMValueRef = self.shareArrayIfPlace(c: inout c, arrVal: array, elemTy: self.i8ty, valueExpr: source)
+                return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: owned), count: self.arrValCount(c: inout c, arr: owned), aggTy: self.stringLlvmTy(c: inout c))
+            }
+            CoreStringIntrinsic.FloatToString => {
+                mut val p: Array[LLVMTypeRef] = []
+                p.append(self.f64ty)
+                val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+            }
+        }
+    }
+
     // The legacy AST emitter still evaluates source operands, but the selected
     // FFI operation is a frozen enum. This is the compatibility counterpart of
     // Mid's Ffi lowering, not a source-name dispatch.
@@ -304,6 +323,7 @@ pub impl LlvmCtx {
                     match intrinsic {
                         RuntimeIntrinsic.Io(intrinsic: val io) => { return self.genIoRuntimeIntrinsic(c: inout c, intrinsic: io, args: args) }
                         RuntimeIntrinsic.Process(intrinsic: val process) => { return self.genProcessRuntimeIntrinsic(c: inout c, intrinsic: process, args: args) }
+                        RuntimeIntrinsic.CoreString(intrinsic: val coreString) => { return self.genCoreStringRuntimeIntrinsic(c: inout c, intrinsic: coreString, args: args) }
                         RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
                             return self.genFfiRuntimeIntrinsic(c: inout c, intrinsic: ffi, args: args)
                         }
@@ -534,35 +554,6 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
             // an array's storage base as CPtr[T]: the data pointer (field 0).
             return self.arrValData(c: inout c, arr: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") {
-            // an (assumed-valid) UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild
-            // the strty aggregate from the array's data + count. The validated public path is
-            // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
-            val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
-            // the returned String shares the source Array[U8]'s buffer (same {ptr,len}, no
-            // copy) and outlives this call. Take ownership the SAME way any by-value array
-            // bind does (shareArrayIfPlace): when the source is a PLACE still owned elsewhere
-            // — a local reused later, a struct field (`self.bytes` in `Src.finish`), an
-            // element — RETAIN the shared buffer so the owner's own release does not free the
-            // bytes out from under the String (true CoW; the copy is deferred to first
-            // mutation). A non-place (literal / call result) already owns its lone reference
-            // and passes through — the String just inherits it. (Previously this only marked
-            // a local Ident source moved, so a field/element source left the String dangling
-            // once its owner dropped.)
-            val owned: LLVMValueRef = self.shareArrayIfPlace(c: inout c, arrVal: arr, elemTy: self.i8ty, valueExpr: c.argAt(args: args, index: 0U64).expr)
-            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: owned), count: self.arrValCount(c: inout c, arr: owned), aggTy: self.stringLlvmTy(c: inout c))
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
-            // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
-            val fv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
-            mut val ftys: Array[LLVMTypeRef] = []
-            ftys.append(self.f64ty)
-            val ffty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ftys), 1U64, 0I32)
-            val fcallee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
-            mut val fav: Array[LLVMValueRef] = []
-            fav.append(fv)
-            return LLVMBuildCall2(self.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "assert") {
             // assert(cond): branch to a panic block when the condition is false.

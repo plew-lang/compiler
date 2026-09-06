@@ -1,0 +1,7 @@
+// Runtime selection is declaration identity, never the spelling at a call site.
+// This ordinary user function must not acquire Core.floatToString's C runtime ABI.
+fn floatToString(value~: F64) -> String { return "ordinary Plew call" }
+
+fn main() {
+    val copied = floatToString(1.25F64)
+}

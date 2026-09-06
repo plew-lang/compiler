@@ -554,6 +554,11 @@ pub impl LlvmCtx {
                                 i += 1U64
                             }
                         }
+                        RuntimeIntrinsic.CoreString(intrinsic: val coreString) => {
+                            if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
+                            if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                            match coreString { CoreStringIntrinsic.FromBytesUnchecked => {} CoreStringIntrinsic.FloatToString => {} }
+                        }
                         RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
                             match ffi {
                                 FfiIntrinsic.CString => {
@@ -982,6 +987,34 @@ pub impl LlvmCtx {
                             mut val values: Array[LLVMValueRef] = []
                             values.append(self.extendToI64(v: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]), unsigned: false))
                             LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                        }
+                    }
+                    return true
+                }
+                RuntimeIntrinsic.CoreString(intrinsic: val coreString) => {
+                    match coreString {
+                        CoreStringIntrinsic.FromBytesUnchecked => {
+                            val array: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+                            // Array[U8] and String share the raw-buffer ABI, but this is
+                            // still a value conversion: the argument's owned share remains
+                            // subject to its scheduled Mid drop, while the String result must
+                            // own an independent share.  Merely rebuilding `{ptr}` would make
+                            // the result dangle when that argument is released.
+                            val arrayTerm: U64 = self.midOperandTypeTerm(operand: args[0U64])
+                            if arrayTerm != 0U64 && arrayTerm < c.arena.types.count() && c.arcNeedsRelease(ref: arrayTerm) {
+                                self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true)
+                            }
+                            val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.stringLlvmTy(c: inout c))
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        CoreStringIntrinsic.FloatToString => {
+                            mut val p: Array[LLVMTypeRef] = []
+                            p.append(self.f64ty)
+                            val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(self.midEmitOperand(c: inout c, body: body, operand: args[0U64]))
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                         }
                     }
                     return true

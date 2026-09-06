@@ -1,0 +1,20 @@
+// Core string-floor calls construct owned String results. Their ABI is selected
+// by the bundled declaration, not by a backend spelling check.
+import @Std/Core with { stringFromBytesUnchecked, floatToString }
+import @Std/Io with { write }
+
+fn fromBytes() -> String {
+    val bytes: Array[U8] = [65U8]
+    return stringFromBytesUnchecked(bytes)
+}
+
+fn fromFloat() -> String {
+    return floatToString(1.25F64)
+}
+
+fn main() {
+    write(s: fromBytes())
+    write(s: "\n")
+    write(s: fromFloat())
+    write(s: "\n")
+}
