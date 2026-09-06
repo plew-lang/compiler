@@ -358,6 +358,62 @@ fn canonicalMidIsAccessibilityCliff(c: Comp, canonical: MidCanonicalBody, owners
     return !sawPredecessor
 }
 
+// Planning is deliberately separate from row emission: a flag exists only
+// when conditional ownership reaches a cliff or scope cleanup.  The arrays
+// are pass-local analysis state, not part of the canonical body schema.
+struct MidCanonicalDropPlan {
+    pub val needsFlag: Array[Bool] = []
+    pub val cliffAtEntry: Array[Array[Bool]] = []
+}
+pub impl MidCanonicalDropPlan { factory }
+
+fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidCanonicalDropPlan {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidCanonicalDropPlan /> }
+    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    mut val needsFlag: Array[Bool] = []
+    mut val localI: U64 = 0U64
+    while localI < body.locals.len {
+        needsFlag.append(false)
+        localI = localI + 1U64
+    }
+    mut val cliffs: Array[Array[Bool]] = []
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        mut val blockCliffs: Array[Bool] = []
+        localI = 0U64
+        while localI < body.locals.len {
+            val cliff: Bool = canonicalMidIsAccessibilityCliff(c: c, canonical: canonical, ownership: ownership, accessibility: accessibility, blockI: blockI, local: localI)
+            blockCliffs.append(cliff)
+            if blockI < ownership.count() && blockI < accessibility.count() && localI < ownership[blockI].count() && localI < accessibility[blockI].count() {
+                match ownership[blockI][localI] {
+                    MidOwnership.MaybeOwned => {
+                        match accessibility[blockI][localI] { MidAccessibility.Unavailable => { needsFlag.set(i: localI, value: true) } _ => {} }
+                    }
+                    _ => {}
+                }
+            }
+            localI = localI + 1U64
+        }
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        mut val statementI: U64 = 0U64
+        while statementI < block.statements.len {
+            val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+            if statement.tag == 6U64 && statement.scope < body.scopes.len && blockI < ownership.count() {
+                val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
+                localI = scope.firstLocal
+                while localI < scope.firstLocal + scope.localCount && localI < body.locals.len && localI < ownership[blockI].count() {
+                    match ownership[blockI][localI] { MidOwnership.MaybeOwned => { needsFlag.set(i: localI, value: true) } _ => {} }
+                    localI = localI + 1U64
+                }
+            }
+            statementI = statementI + 1U64
+        }
+        cliffs.append(blockCliffs)
+        blockI = blockI + 1U64
+    }
+    return <MidCanonicalDropPlan needsFlag=needsFlag cliffAtEntry=cliffs />
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
