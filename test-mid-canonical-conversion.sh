@@ -10,18 +10,22 @@ source=src/Backend/Llvm/Mid.pw
 canonical=$(sed -n '/fn midCanonicalPlaceTy/,$p' "$source")
 reader=$(sed -n '/fn midCanonicalConversionProofSupported/,/fn midCanonicalEmitValueConversion/p' "$source")
 
-for symbol in midCanonicalConversionProofSupported midCanonicalEmitValueConversion; do
+for symbol in midCanonicalConversionProofSupported midCanonicalEmitValueConversion midCanonicalEmitBorrowedConversion midCanonicalEmitArrayRepack; do
     if ! printf '%s\n' "$canonical" | rg -q "\b$symbol\b"; then
         echo "canonical conversion reader is missing $symbol" >&2
         exit 1
     fi
 done
 
-if ! printf '%s\n' "$canonical" | rg -q 'node\.tag != 2U64'; then
+if ! printf '%s\n' "$canonical" | rg -q 'node\.tag == 2U64'; then
     echo "canonical conversion reader does not admit existential boxing" >&2
     exit 1
 fi
-if ! printf '%s\n' "$canonical" | rg -q 'node\.staticProof == 0U64'; then
+if ! printf '%s\n' "$canonical" | rg -q 'node\.tag == 3U64'; then
+    echo "canonical conversion reader does not admit array repacking" >&2
+    exit 1
+fi
+if ! printf '%s\n' "$canonical" | rg -q 'node\.staticProof != 0U64'; then
     echo "canonical conversion reader does not reject a missing frozen proof" >&2
     exit 1
 fi

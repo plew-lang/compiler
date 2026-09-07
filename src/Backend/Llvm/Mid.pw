@@ -1736,17 +1736,37 @@ pub impl LlvmCtx {
     // rebuilding ValueConversionProof or searching for a conformance again.
     // The first direct slice is an existential box; structural repacks join
     // this same reader once their owned loops are represented canonically.
-    inout fn midCanonicalConversionProofSupported(c: Comp, proofId: U64) -> Bool {
+    inout fn midCanonicalConversionProofSupported(c: inout Comp, proofId: U64) -> Bool {
         if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return true }
-        if node.tag != 2U64 { return false }
-        if node.sourceRef == 0U64 || node.sourceRef >= c.arena.types.count() || node.targetRef == 0U64 || node.targetRef >= c.arena.types.count() || node.traitIdx >= c.decls.traits.count() { return false }
-        // StaticProofNode.tag=0 is the frozen Missing sentinel.  The backend
-        // does not interpret the witness path, but must not erase a value
-        // through an absent proof.
-        if node.staticProof == 0U64 || node.staticProof > c.arena.staticProofs.count() || c.arena.staticProofs[node.staticProof - 1U64].tag == 0U64 { return false }
-        return true
+        if node.tag == 2U64 {
+            if node.sourceRef == 0U64 || node.sourceRef >= c.arena.types.count() || node.targetRef == 0U64 || node.targetRef >= c.arena.types.count() || node.traitIdx >= c.decls.traits.count() { return false }
+            // StaticProofNode.tag=0 is the frozen Missing sentinel.  The
+            // backend does not interpret the witness path, but must not erase
+            // a value through an absent proof.
+            return node.staticProof != 0U64 && node.staticProof <= c.arena.staticProofs.count() && c.arena.staticProofs[node.staticProof - 1U64].tag != 0U64
+        }
+        if node.tag == 3U64 { return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId) }
+        return false
+    }
+
+    // A structural conversion reads an already-borrowed source element.  The
+    // expected source/target terms are carried by its parent proof row, so a
+    // malformed child cannot silently become a compatible conversion.
+    inout fn midCanonicalBorrowedConversionSupported(c: inout Comp, sourceRef: U64, targetRef: U64, proofId: U64) -> Bool {
+        if sourceRef == 0U64 || sourceRef >= c.arena.types.count() || targetRef == 0U64 || targetRef >= c.arena.types.count() || proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
+        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        if node.tag == 0U64 { return c.typeRefEq(a: sourceRef, b: targetRef) }
+        if node.tag == 2U64 { return c.typeRefEq(a: sourceRef, b: node.sourceRef) && c.typeRefEq(a: targetRef, b: node.targetRef) && self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId) }
+        if node.tag == 3U64 {
+            if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) { return false }
+            val source: TypeRef = c.arena.types[sourceRef]
+            val target: TypeRef = c.arena.types[targetRef]
+            if source.args.count() != 1U64 || target.args.count() != 1U64 || node.element == 0U64 { return false }
+            return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: source.args[0U64], targetRef: target.args[0U64], proofId: node.element)
+        }
+        return false
     }
 
     // Materialize an already-selected frozen existential conversion.  Copy
@@ -1754,16 +1774,79 @@ pub impl LlvmCtx {
     // transfers its existing share.  boxIntoAny takes that share, so this
     // boundary neither re-retains nor consults the legacy proof vocabulary.
     inout fn midCanonicalEmitValueConversion(c: inout Comp, body: MidBodyNode, operandId: U64, proofId: U64) -> LLVMValueRef {
-        if !self.midCanonicalConversionProofSupported(c: c, proofId: proofId) || operandId == 0U64 || operandId > c.mid.operands.count() { return LLVMConstNull(self.anyTy) }
+        if !self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId) || operandId == 0U64 || operandId > c.mid.operands.count() { return LLVMConstNull(self.anyTy) }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId) }
-        if operand.tag != 1U64 && operand.tag != 2U64 { return LLVMConstNull(self.anyTy) }
-        if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.anyTy) }
-        val source: TypeRef = c.arena.types[node.sourceRef]
-        val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
-        if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
-        return self.boxIntoAny(c: inout c, v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
+        if node.tag == 2U64 {
+            if operand.tag != 1U64 && operand.tag != 2U64 { return LLVMConstNull(self.anyTy) }
+            if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.anyTy) }
+            val source: TypeRef = c.arena.types[node.sourceRef]
+            val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
+            if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+            return self.boxIntoAny(c: inout c, v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
+        }
+        if node.tag == 3U64 {
+            if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.ptrty) }
+            return self.midCanonicalEmitArrayRepack(c: inout c, source: self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64]), sourceRef: node.sourceRef, targetRef: node.targetRef, elementProof: node.element)
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    // Convert one element borrowed from an immutable source container.  The
+    // new destination owns the result: identity gains one share; a box or
+    // nested repack creates its own owned representation.
+    inout fn midCanonicalEmitBorrowedConversion(c: inout Comp, value: LLVMValueRef, sourceRef: U64, targetRef: U64, proofId: U64) -> LLVMValueRef {
+        if !self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: sourceRef, targetRef: targetRef, proofId: proofId) { return LLVMConstNull(self.ptrty) }
+        val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
+        if node.tag == 0U64 {
+            self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
+            return value
+        }
+        if node.tag == 2U64 {
+            val source: TypeRef = c.arena.types[sourceRef]
+            val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
+            if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+            self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
+            return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
+        }
+        if node.tag == 3U64 { return self.midCanonicalEmitArrayRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, elementProof: node.element) }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    // Repack Array[S] into Array[T] from the frozen element proof.  It never
+    // asks the type checker whether S converts to T: all recursive choices
+    // were published by the frontend before Mid was built.
+    inout fn midCanonicalEmitArrayRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, elementProof: U64) -> LLVMValueRef {
+        if sourceRef == 0U64 || sourceRef >= c.arena.types.count() || targetRef == 0U64 || targetRef >= c.arena.types.count() { return LLVMConstNull(self.ptrty) }
+        val sourceType: TypeRef = c.arena.types[sourceRef]
+        val targetType: TypeRef = c.arena.types[targetRef]
+        if sourceType.args.count() != 1U64 || targetType.args.count() != 1U64 { return LLVMConstNull(self.ptrty) }
+        val sourceElementRef: U64 = sourceType.args[0U64]
+        val targetElementRef: U64 = targetType.args[0U64]
+        if !self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: sourceElementRef, targetRef: targetElementRef, proofId: elementProof) { return LLVMConstNull(self.ptrty) }
+        val sourceElementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: sourceElementRef)
+        val targetElementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: targetElementRef)
+        val sourceData: LLVMValueRef = self.arrValData(c: inout c, arr: source)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: sourceData)
+        val targetData: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(targetElementTy), cap: count)
+        val indexSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
+        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), indexSlot)
+        val condition: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.cond"))
+        val loop: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.body"))
+        val done: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.done"))
+        LLVMBuildBr(self.b, condition)
+        LLVMPositionBuilderAtEnd(self.b, condition)
+        val index: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, indexSlot, anon())
+        LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), index, count, anon()), loop, done)
+        LLVMPositionBuilderAtEnd(self.b, loop)
+        val sourceElement: LLVMValueRef = LLVMBuildLoad2(self.b, sourceElementTy, self.arrElemPtr(elemTy: sourceElementTy, data: sourceData, idx: index), anon())
+        val converted: LLVMValueRef = self.midCanonicalEmitBorrowedConversion(c: inout c, value: sourceElement, sourceRef: sourceElementRef, targetRef: targetElementRef, proofId: elementProof)
+        LLVMBuildStore(self.b, self.coerceElem(v: converted, elemTy: targetElementTy), self.arrElemPtr(elemTy: targetElementTy, data: targetData, idx: index))
+        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), indexSlot)
+        LLVMBuildBr(self.b, condition)
+        LLVMPositionBuilderAtEnd(self.b, done)
+        return self.arrValMake(c: inout c, data: targetData, count: count, aggTy: self.arrayInstTy(c: inout c, elemRef: targetElementRef))
     }
 
     inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
@@ -1813,10 +1896,11 @@ pub impl LlvmCtx {
             return true
         }
         if value.tag == 6U64 {
-            if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) || !self.midCanonicalConversionProofSupported(c: c, proofId: value.conversion) || value.operand == 0U64 || value.operand > c.mid.operands.count() { return false }
+            if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) || !self.midCanonicalConversionProofSupported(c: inout c, proofId: value.conversion) || value.operand == 0U64 || value.operand > c.mid.operands.count() { return false }
             val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
             val proof: ConversionProofNode = c.arena.conversionProofs[value.conversion - 1U64]
             if proof.tag == 0U64 { return true }
+            if proof.tag == 3U64 { return operand.tag == 1U64 }
             return operand.tag == 1U64 || operand.tag == 2U64
         }
         if value.tag == 7U64 { return false }
