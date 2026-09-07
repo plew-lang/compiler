@@ -2,6 +2,12 @@ import @Std/Io with { print }
 
 enum Choice { First Second }
 
+struct Box { pub val value: I64 }
+
+pub impl Box { factory }
+
+fn passthrough(value: I64) -> I64 { return value }
+
 // A value-position match still has a result type when every arm leaves the
 // enclosing function. Mid must leave its join unreachable rather than create
 // an uninitialized result path.
@@ -13,10 +19,37 @@ fn choose(input: Choice) -> I64 {
     return unreachable
 }
 
+// A diverging value match can be nested in a call argument. The Call
+// terminator must not be emitted after its argument has closed the path.
+fn throughCall(input: Choice) -> I64 {
+    return passthrough(value: match input {
+        Choice.First => { return 7I64 }
+        Choice.Second => { return 9I64 }
+    })
+}
+
+// The same rule applies to a frozen aggregate element: the aggregate is not
+// constructed if its value-match element never reaches its write point.
+fn throughAggregate(input: Choice) -> I64 {
+    val unreachable: Box = <Box value=match input {
+        Choice.First => { return 7I64 }
+        Choice.Second => { return 9I64 }
+    } />
+    return unreachable.value
+}
+
 fn main() {
     print(choose(input: <Choice.First />))
     print(choose(input: <Choice.Second />))
+    print(throughCall(input: <Choice.First />))
+    print(throughCall(input: <Choice.Second />))
+    print(throughAggregate(input: <Choice.First />))
+    print(throughAggregate(input: <Choice.Second />))
 }
 
+// expected: 7
+// expected: 9
+// expected: 7
+// expected: 9
 // expected: 7
 // expected: 9

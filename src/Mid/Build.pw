@@ -313,6 +313,13 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
 fn midAppendStatement(state: inout MidBuildState, statement: MidStatement) {
     if state.currentBlock >= state.blocks.count() { return }
     val current: MidBlock = state.blocks[state.currentBlock]
+    // A nested value expression may terminate the current source path (for
+    // example, a value match whose every arm returns). Its enclosing source
+    // expression has no continuation on that path, so it must not append an
+    // operation after the terminator just because it has a syntactic result
+    // type. The caller will observe the closed block and stop building the
+    // enclosing statement.
+    if !midTerminatorIsOpen(terminator: current.terminator) { return }
     mut val statements: Array[MidStatement] = current.statements
     statements.append(statement)
     state.blocks.set(i: state.currentBlock, value: <MidBlock statements=statements terminator=current.terminator />)
@@ -321,11 +328,19 @@ fn midAppendStatement(state: inout MidBuildState, statement: MidStatement) {
 fn midSetTerminator(state: inout MidBuildState, terminator: MidTerminator) {
     if state.currentBlock >= state.blocks.count() { return }
     val current: MidBlock = state.blocks[state.currentBlock]
+    // Terminators are write-once. In particular, a parent call/return must
+    // never overwrite an Unreachable produced by a diverging child value.
+    if !midTerminatorIsOpen(terminator: current.terminator) { return }
     state.blocks.set(i: state.currentBlock, value: <MidBlock statements=current.statements terminator=terminator />)
 }
 
 fn midTerminatorIsOpen(terminator: MidTerminator) -> Bool {
     match terminator { MidTerminator.Open => { return true } _ => { return false } }
+}
+
+fn midCurrentBlockIsOpen(state: MidBuildState) -> Bool {
+    if state.currentBlock >= state.blocks.count() { return false }
+    return midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator)
 }
 
 fn midOperandIsTrue(operand: MidOperand) -> Bool {
@@ -742,6 +757,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
             operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: element.exprId, typeTerm: element.term, allowAccessMarker: false)
         }
         match operand.error { MidBuildError.None => {} _ => { return operand } }
+        if !midCurrentBlockIsOpen(state: state) { return operand }
         elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand.operand targetTerm=element.targetTerm isBoxed=element.isBoxed />)
         i += 1U64
     }
@@ -767,6 +783,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
 fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U64, rhs: U64, typeTerm: U64, isAnd: Bool) -> MidOperandBuild {
     val left: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: lhs, typeTerm: c.semanticExprTerm(exprId: lhs), allowAccessMarker: false)
     match left.error { MidBuildError.None => {} _ => { return left } }
+    if !midCurrentBlockIsOpen(state: state) { return left }
     val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
     val result: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
     val rhsTarget: U64 = midNewBlock(state: inout state)
@@ -790,11 +807,15 @@ fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U6
     val rhsScope: U64 = midOpenScope(state: inout state)
     val right: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: rhs, typeTerm: c.semanticExprTerm(exprId: rhs), allowAccessMarker: false)
     match right.error { MidBuildError.None => {} _ => { return right } }
-    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=right.operand /> />)
+    if midCurrentBlockIsOpen(state: state) {
+        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=right.operand /> />)
+    }
     midFinishEvaluationScope(state: inout state, scope: rhsScope)
     state.callValues = parentCalls
     state.aggregateValues = parentAggregates
-    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    if midCurrentBlockIsOpen(state: state) {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    }
     state.currentBlock = joinTarget
     return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
 }
@@ -1158,11 +1179,13 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     val sources: Array[CallTemplateArgument] = midTemplateArguments(template: template)
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
+    if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
     mut val args: Array[MidOperand] = []
     mut val i: U64 = 0U64
     while i < sources.count() {
         val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i])
         match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+        if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
         args.append(argument.operand)
         i += 1U64
     }
@@ -1493,6 +1516,7 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                         return value.error
                     }
                 }
+                if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
                 scrutineeScope = midOpenScope(state: inout state)
                 hasScrutineeScope = true
                 val temporary: U64 = addMidTemporary(state: inout state, typeTerm: semantic.scrutineeTerm)
@@ -1611,6 +1635,7 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
             if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
             val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+            if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
             val thenTarget: U64 = midNewBlock(state: inout state)
             val elseTarget: U64 = midNewBlock(state: inout state)
             val joinTarget: U64 = midNewBlock(state: inout state)
@@ -1663,12 +1688,13 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
         Stmt.While(cond: val cond, body: val body) => {
             if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
             val headerTarget: U64 = midNewBlock(state: inout state)
-            val bodyTarget: U64 = midNewBlock(state: inout state)
-            val exitTarget: U64 = midNewBlock(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=headerTarget />)
             state.currentBlock = headerTarget
             val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+            if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+            val bodyTarget: U64 = midNewBlock(state: inout state)
+            val exitTarget: U64 = midNewBlock(state: inout state)
             if midOperandIsTrue(operand: condition.operand) {
                 // A literal true has no false control edge. Keep the exit block
                 // for an authored `break`, but do not invent an unreachable

@@ -1,0 +1,38 @@
+import @Std/Io with { print }
+
+enum Choice { First(value: I64) Second(value: I64) }
+
+struct Box { pub val value: I64 }
+
+pub impl Box { factory }
+
+fn addTen(value: I64) -> I64 { return value + 10I64 }
+
+// A value match is itself one evaluation. Its arm result may be a call, may
+// become an aggregate element, or may be returned directly. Mid must retain
+// that single evaluation boundary while each arm writes the same result place.
+fn fromCall(input: Choice) -> I64 {
+    return match input {
+        Choice.First(value: val value) => { give addTen(value: value) }
+        Choice.Second(value: val value) => { give addTen(value: value + 1I64) }
+    }
+}
+
+fn intoBox(input: Choice) -> Box {
+    return <Box value=match input {
+        Choice.First(value: val value) => { give value + 2I64 }
+        Choice.Second(value: val value) => { give value + 3I64 }
+    } />
+}
+
+fn main() {
+    print(fromCall(input: <Choice.First value=1I64 />))
+    print(fromCall(input: <Choice.Second value=2I64 />))
+    print(intoBox(input: <Choice.First value=4I64 />).value)
+    print(intoBox(input: <Choice.Second value=5I64 />).value)
+}
+
+// expected: 11
+// expected: 13
+// expected: 6
+// expected: 8
