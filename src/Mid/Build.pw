@@ -44,13 +44,20 @@ pub impl MidIndexLocalBuild { factory }
 // statement and operand work as one bucket.
 export enum MidUnsupportedBuild {
     ExpressionStatement
-    Operand
+    MakeWithoutAggregate
     FieldPlace
     UniqueAggregate
     IncompleteAggregate
     ShortCircuit
     FieldProjection
     FieldBase
+    UnloweredView
+    UnloweredValueControl
+    UnloweredReference
+    UnloweredClosure
+    UnloweredAwait
+    IndexPlace
+    UnexpectedOperand
 }
 
 // Assignment fallback is not one semantic limitation. A target that cannot be
@@ -548,6 +555,27 @@ fn midDirectArrayIndexPlace(c: inout Comp, state: inout MidBuildState, exprId: U
     }
 }
 
+// These forms have already been parsed and typed; Mid never retries their
+// resolution.  The reason says which *Mid operation* is still absent, rather
+// than collapsing every non-scalar expression into one un-actionable bucket.
+fn midUnsupportedOperandForExpr(c: Comp, exprId: U64) -> MidUnsupportedBuild {
+    if exprId >= c.arena.exprs.count() { return <MidUnsupportedBuild.UnexpectedOperand /> }
+    match c.arena.exprs[exprId] {
+        Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return <MidUnsupportedBuild.MakeWithoutAggregate /> }
+        Expr.ExtView(recv: _, source: _, strip: _) => { return <MidUnsupportedBuild.UnloweredView /> }
+        Expr.OptChain(base: _, cont: _) => { return <MidUnsupportedBuild.UnloweredView /> }
+        Expr.ChainHole => { return <MidUnsupportedBuild.UnloweredView /> }
+        Expr.MatchExpr(scrut: _, arms: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.Try(expr: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
+        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
+        Expr.Deref(base: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return <MidUnsupportedBuild.UnloweredClosure /> }
+        Expr.Await(operand: _) => { return <MidUnsupportedBuild.UnloweredAwait /> }
+        _ => { return <MidUnsupportedBuild.UnexpectedOperand /> }
+    }
+}
+
 fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
@@ -582,7 +610,7 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
         Expr.Float(start: val start, len: val len, tyStart: _, tyLen: _) => {
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.FloatLiteral start=start len=len typeTerm=typeTerm /> /> />
         }
-        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> /> }
+        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=midUnsupportedOperandForExpr(c: c, exprId: exprId) /> /> }
     }
 }
 
@@ -704,7 +732,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     while i < aggregate.elements.count() {
         val element: SemanticAggregateElement = aggregate.elements[i]
         val nested: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: element.exprId)
-        mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=element.term /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+        mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=element.term /> /> />
         if nested.found {
             operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: nested.aggregate)
         } else if midExprIsCall(c: c, exprId: element.exprId) {
@@ -785,7 +813,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
     if !allowAccessMarker && directPlaceExpr < c.arena.exprs.count() {
         val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
         if !lookup.found {
-            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IndexPlace /> /> />
         }
         return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
     }
@@ -842,7 +870,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.Index(base: _, index: _) => {
             val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
             if !lookup.found {
-                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IndexPlace /> /> />
             }
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
@@ -1162,7 +1190,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
                 return result
             }
             val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
-            mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+            mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
             if aggregate.found {
                 operandResult = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
             } else {

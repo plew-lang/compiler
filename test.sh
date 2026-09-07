@@ -162,6 +162,11 @@ if sh ./test-mid-assign-diagnostics.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-assign-diagnostics"
 fi
+if sh ./test-mid-operand-diagnostics.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-operand-diagnostics"
+fi
 if sh ./test-mid-numeric-cast.sh; then
     :
 else

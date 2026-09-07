@@ -15,13 +15,20 @@ pub impl LlvmCtx {
     fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
         match reason {
             MidUnsupportedBuild.ExpressionStatement => { return 0U64 }
-            MidUnsupportedBuild.Operand => { return 1U64 }
+            MidUnsupportedBuild.MakeWithoutAggregate => { return 1U64 }
             MidUnsupportedBuild.FieldPlace => { return 2U64 }
             MidUnsupportedBuild.UniqueAggregate => { return 3U64 }
             MidUnsupportedBuild.IncompleteAggregate => { return 4U64 }
             MidUnsupportedBuild.ShortCircuit => { return 5U64 }
             MidUnsupportedBuild.FieldProjection => { return 6U64 }
             MidUnsupportedBuild.FieldBase => { return 7U64 }
+            MidUnsupportedBuild.UnloweredView => { return 8U64 }
+            MidUnsupportedBuild.UnloweredValueControl => { return 9U64 }
+            MidUnsupportedBuild.UnloweredReference => { return 10U64 }
+            MidUnsupportedBuild.UnloweredClosure => { return 11U64 }
+            MidUnsupportedBuild.UnloweredAwait => { return 12U64 }
+            MidUnsupportedBuild.IndexPlace => { return 13U64 }
+            MidUnsupportedBuild.UnexpectedOperand => { return 14U64 }
         }
     }
 
@@ -253,10 +260,14 @@ pub impl LlvmCtx {
 
     fn emitMidCoverageUnsupportedBuild(detail: U64) {
         match detail {
-            0U64 => { eprint(text: "expression-statement") } 1U64 => { eprint(text: "operand") }
+            0U64 => { eprint(text: "expression-statement") } 1U64 => { eprint(text: "make-without-aggregate") }
             2U64 => { eprint(text: "field-place") } 3U64 => { eprint(text: "unique-aggregate") }
             4U64 => { eprint(text: "incomplete-aggregate") } 5U64 => { eprint(text: "short-circuit") }
             6U64 => { eprint(text: "field-projection") } 7U64 => { eprint(text: "field-base") }
+            8U64 => { eprint(text: "unlowered-view") } 9U64 => { eprint(text: "unlowered-value-control") }
+            10U64 => { eprint(text: "unlowered-reference") } 11U64 => { eprint(text: "unlowered-closure") }
+            12U64 => { eprint(text: "unlowered-await") } 13U64 => { eprint(text: "index-place") }
+            14U64 => { eprint(text: "unexpected-operand") }
             _ => { eprint(text: "unknown") }
         }
     }
