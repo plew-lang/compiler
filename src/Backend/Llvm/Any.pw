@@ -824,6 +824,7 @@ pub impl LlvmCtx {
         // joins this path.
         mut val midReady: Bool = false
         mut val canonicalMid: MidCanonicalBody = <MidCanonicalBody body=0U64 />
+        mut val midAbiParameterCount: U64 = 0U64
         mut val midEligible: Bool = true
         if f.isAsync {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Async />)
@@ -963,6 +964,7 @@ pub impl LlvmCtx {
                                         match self.midCanonicalLlvmPreflight(c: inout c, canonical: elaborated, abiParameterCount: abiParameterCount) {
                                             MidLlvmPreflight.Ready => {
                                                 canonicalMid = elaborated
+                                                midAbiParameterCount = abiParameterCount
                                                 midReady = true
                                                 if c.traceCodegen {
                                                     eprint(text: "[trace-codegen] Mid function ready name=")
@@ -1041,7 +1043,7 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            if !(self.genLlvmCanonicalMidBody(c: inout c, canonical: canonicalMid)) {
+            if !(self.genLlvmCanonicalMidBody(c: inout c, canonical: canonicalMid, abiParameterCount: midAbiParameterCount)) {
                 c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering")
             }
             if c.traceCodegen {

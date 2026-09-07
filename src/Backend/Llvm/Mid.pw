@@ -4004,8 +4004,12 @@ pub impl LlvmCtx {
         return <MidLlvmPreflight.Ready />
     }
 
-    inout fn genLlvmCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody, abiParameterStart: U64 = 0U64) -> Bool {
-        match self.midCanonicalLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: abiParameterStart) { MidLlvmPreflight.Ready => {} _ => { return false } }
+    inout fn genLlvmCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody, abiParameterStart: U64 = 0U64, abiParameterCount: U64 = 0U64) -> Bool {
+        // `start` is the LLVM ABI offset of Mid local 0; `count` is the
+        // number of source ABI locals. They are deliberately independent:
+        // a closure reserves LLVM argument 0 for its environment while its
+        // Mid parameter prefix still starts at local 0.
+        match self.midCanonicalLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: abiParameterCount) { MidLlvmPreflight.Ready => {} _ => { return false } }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
         if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
         mut val blocks: Array[LLVMBasicBlockRef] = []

@@ -25,6 +25,20 @@ for entry in $entries; do
     done
 done
 
+# LLVM ABI argument position and the number of Mid source parameters are
+# separate facts. They coincide for ordinary functions only accidentally;
+# closures reserve ABI argument 0 for their environment.
+for needle in 'abiParameterCount: U64 = 0U64' 'abiParameterCount: abiParameterCount'; do
+    if ! grep -F "$needle" src/Backend/Llvm/Mid.pw >/dev/null; then
+        echo "canonical Mid ABI contract is missing $needle" >&2
+        exit 1
+    fi
+done
+if ! grep -F 'abiParameterCount: midAbiParameterCount' src/Backend/Llvm/Any.pw >/dev/null; then
+    echo "ordinary Mid emission does not carry its preflight ABI count" >&2
+    exit 1
+fi
+
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a
 # second AST-to-LLVM path that happens to run before `main`.
