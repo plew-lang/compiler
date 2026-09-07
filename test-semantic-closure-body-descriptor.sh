@@ -22,5 +22,9 @@ require 'Expr.Closure' src/Codegen/Mono/Call.pw
 require 'SemanticClosureParameter bindingTarget=parameter.nameStart' src/Codegen/Mono/Call.pw
 require 'parameters=frozenParameters' src/Codegen/Mono/Call.pw
 require 'bodyBlock=body' src/Codegen/Mono/Call.pw
+# A closure body is lexically inside its enclosing generic body. Its synthetic
+# body key distinguishes call rows, but it must retain the enclosing instance
+# environment which grounds the captured type terms and body templates.
+require 'self.cur.bodyEnvironment = savedBodyEnvironment' src/Codegen/Mono/Call.pw
 
 echo 'PASS semantic closure body descriptor' >&2

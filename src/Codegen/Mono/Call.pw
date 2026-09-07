@@ -4964,7 +4964,14 @@ pub impl Comp {
                 self.cur.inClosure = true
                 self.cur.captureMark = enclMark
                 self.cur.bodyFnIdx = self.closureBodyKey(closureId: exprId)
-                self.cur.bodyEnvironment = <InstanceEnvironment />
+                // The closure has its own synthetic body identity, but its
+                // type terms remain lexically nested in this body. Dropping
+                // the enclosing BodyInstance environment here made `T` in a
+                // closure inside `fn f[T]` appear ungrounded while finalizing
+                // its calls. Rust monomorphizes a closure with its enclosing
+                // substitution and Swift carries the generic context through
+                // the closure function; preserve the same semantic fact.
+                self.cur.bodyEnvironment = savedBodyEnvironment
                 self.cur.bodyId = 0U64
                 mut val pi: U64 = 0
                 while pi < params.count() {
