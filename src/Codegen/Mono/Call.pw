@@ -4067,7 +4067,14 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Ident(start: _, len: _) => {
                 if exprId >= self.typeCache.identTarget.count() { return 0U64 }
-                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=1U64 declarationTarget=self.typeCache.identTarget[exprId] typeTerm=term />)
+                match self.recordedGlobalAddress(exprId: exprId) {
+                    Optional.Some(v: val global) => {
+                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=5U64 declarationTarget=global.declarationTarget globalMutable=global.mutable typeTerm=global.typeTerm />)
+                    }
+                    _ => {
+                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=1U64 declarationTarget=self.typeCache.identTarget[exprId] typeTerm=term />)
+                    }
+                }
             }
             Expr.Int(value: val value, offset: _, isBool: val isBool, tyStart: _, tyLen: _, isNeg: val isNegative) => {
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=2U64 integerValue=value integerNegative=isNegative integerBool=isBool typeTerm=term />)

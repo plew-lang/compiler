@@ -55,6 +55,14 @@ fn canonicalAccessLocalPlace(c: inout Comp, body: MidBodyNode, declarationTarget
     return 0U64
 }
 
+fn canonicalAccessGlobalPlace(c: inout Comp, declarationTarget: U64, typeTerm: U64, mutable: Bool) -> U64 {
+    // `declarationTarget` is the frozen semantic identity; mapping it to the
+    // emitted storage row is LLVM's responsibility. Access must not turn it
+    // into a synthetic local or recover source spelling.
+    c.mid.places.append(<MidPlaceNode rootTag=2U64 local=0U64 globalTarget=declarationTarget globalMutable=mutable typeTerm=typeTerm />)
+    return c.mid.places.count()
+}
+
 // Materialize a selected semantic input without looking at Expr/TypeCache.
 // Root is nonzero only for the getter-value projection passed to a parent.
 fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, root: U64) -> U64 {
@@ -62,6 +70,7 @@ fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, roo
     val input: SemanticAccessInput = c.arena.semanticAccessInputs[inputId - 1U64]
     match input.tag {
         1U64 => { return canonicalAccessLocalPlace(c: inout c, body: body, declarationTarget: input.declarationTarget, typeTerm: input.typeTerm) }
+        5U64 => { return canonicalAccessGlobalPlace(c: inout c, declarationTarget: input.declarationTarget, typeTerm: input.typeTerm, mutable: input.globalMutable) }
         3U64 => {
             val base: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: input.base, root: root)
             if base == 0U64 || base > c.mid.places.count() { return 0U64 }
@@ -73,7 +82,7 @@ fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, roo
                 projectionI = projectionI + 1U64
             }
             c.mid.projections.append(<MidProjectionNode tag=1U64 index=input.fieldIndex typeTerm=input.typeTerm />)
-            c.mid.places.append(<MidPlaceNode local=parent.local projections=<MidRange start=projectionStart len=parent.projections.len + 1U64 /> typeTerm=input.typeTerm />)
+            c.mid.places.append(<MidPlaceNode rootTag=parent.rootTag local=parent.local globalTarget=parent.globalTarget globalMutable=parent.globalMutable projections=<MidRange start=projectionStart len=parent.projections.len + 1U64 /> typeTerm=input.typeTerm />)
             return c.mid.places.count()
         }
         4U64 => { return root }
