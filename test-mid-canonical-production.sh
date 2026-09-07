@@ -24,3 +24,24 @@ for entry in $entries; do
         fi
     done
 done
+
+# Module initialization is also executable Plew code.  It has no user Func
+# row, so keep its synthetic body explicit rather than letting Entry.pw grow a
+# second AST-to-LLVM path that happens to run before `main`.
+global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midCanonicalLlvmPreflight genLlvmCanonicalMidBody'
+for symbol in $global_canonical; do
+    if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
+        echo "global initializer Mid pipeline is missing $symbol" >&2
+        exit 1
+    fi
+done
+
+# `--require-mid` is a soundness gate, not a preference.  Every synthetic-body
+# failure shape must enter the same closed coverage table that makes the driver
+# reject a legacy fallback.
+for symbol in recordMidMissingBodyInstance recordMidBuildError recordMidInstantiate recordMidAccess recordMidVerify recordMidPreflight; do
+    if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
+        echo "global initializer fallback is not covered by $symbol" >&2
+        exit 1
+    fi
+done
