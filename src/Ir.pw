@@ -392,6 +392,15 @@ export struct SemanticAggregate {
 }
 pub impl SemanticAggregate { factory }
 
+// The frontend identity of a pattern match. Statement and value-position
+// matches share every semantic layout fact, but their arena IDs live in
+// different domains; keeping that distinction in the key prevents a later
+// Mid consumer from treating an ExprId as a StmtId (or re-resolving syntax).
+export enum MatchSource {
+    Statement(stmtId: U64)
+    Expression(exprId: U64)
+}
+
 // One selected payload projection in an enum-match arm.  `bindTarget` is the
 // declaration identity that Record/Verify gives the arm local; the physical
 // field slot and its parametric TypeTerm are frozen beside it so Mid never
