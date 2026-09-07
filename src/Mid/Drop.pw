@@ -6,12 +6,24 @@
 import ../Frontend with { Comp }
 import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
+// Ownership state is function-local. A Global place denotes a stable storage
+// address whose owner is the module lifetime, so reads and borrows never
+// change this dataflow vector and a Move is rejected by verification before
+// this analysis is used for emission.
+fn canonicalMidIsLocalRoot(place: MidPlaceNode) -> Bool {
+    return place.rootTag == 1U64
+}
+
+fn midIsLocalRoot(place: MidPlace) -> Bool {
+    return place.rootTag == 1U64
+}
+
 fn canonicalMidConsumeOperand(c: Comp, states: inout Array[MidOwnership], operandId: U64) {
     if operandId == 0U64 || operandId > c.mid.operands.count() { return }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag != 2U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
-    if place.projections.len == 0U64 && place.local < states.count() {
+    if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() {
         states.set(i: place.local, value: <MidOwnership.Consumed />)
     }
 }
@@ -39,23 +51,23 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
             canonicalMidConsumeRvalue(c: c, states: inout out, rvalueId: statement.value)
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !c.mid.locals[body.locals.start + destination.local].isBorrowed { out.set(i: destination.local, value: <MidOwnership.Owned />) }
+                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !c.mid.locals[body.locals.start + destination.local].isBorrowed { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
         if statement.tag == 2U64 {
             if statement.source != 0U64 && statement.source <= c.mid.places.count() {
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
+                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
             }
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
+                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
         if statement.tag == 3U64 || statement.tag == 4U64 {
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidOwnership.Consumed />) }
+                if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidOwnership.Consumed />) }
             }
         }
         if statement.tag == 6U64 && statement.scope < body.scopes.len {
@@ -469,7 +481,7 @@ fn canonicalMidMovedRoot(c: Comp, operandId: U64) -> U64 {
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag != 2U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return 18446744073709551615U64 }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
-    if place.projections.len == 0U64 { return place.local }
+    if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 { return place.local }
     return 18446744073709551615U64
 }
 
@@ -702,12 +714,12 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                 canonicalMidAppendMovedFlagClears(c: inout c, rvalueId: statement.value, sourceLocalCount: source.locals.len, plan: plan)
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
                 }
                 canonicalMidConsumeRvalue(c: c, states: inout currentOwnership, rvalueId: statement.value)
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                         if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                     }
@@ -715,7 +727,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
             } else if statement.tag == 2U64 {
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
                         match currentOwnership[destination.local] {
                             MidOwnership.Owned => {
                                 c.mid.statements.append(<MidStatementNode tag=3U64 destination=statement.destination />)
@@ -723,14 +735,14 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                             }
                             _ => {}
                         }
-                    } else if canonicalMidPhysicalFieldPlace(c: c, placeId: statement.destination) {
+                    } else if destination.rootTag == 2U64 || canonicalMidPhysicalFieldPlace(c: c, placeId: statement.destination) {
                         c.mid.statements.append(<MidStatementNode tag=3U64 destination=statement.destination />)
                     }
                 }
                 c.mid.statements.append(statement)
                 if statement.source != 0U64 && statement.source <= c.mid.places.count() {
                     val sourcePlace: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                    if sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
+                    if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
                         currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
                         if sourcePlace.local < currentAccessibility.count() { currentAccessibility.set(i: sourcePlace.local, value: <MidAccessibility.Unavailable />) }
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
@@ -738,7 +750,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                 }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                         if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                         if destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
@@ -786,7 +798,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                 }
                 if term.destination != 0U64 && term.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
                 }
             }
             if term.tag == 6U64 {
@@ -867,7 +879,7 @@ fn midConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand) {
             // v1 has no partial unique move. Keeping the projection test here
             // makes a malformed Mid body fail its later verifier rather than
             // silently treating a field move as a root consume.
-            if place.projections.count() == 0U64 {
+            if midIsLocalRoot(place: place) && place.projections.count() == 0U64 {
                 if place.local < states.count() {
                     states.set(i: place.local, value: <MidOwnership.Consumed />)
                 }
@@ -916,21 +928,21 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
         match block.statements[si] {
             MidStatement.Assign(destination: val destination, value: val value) => {
                 midConsumeRvalue(states: inout out, value: value)
-                if destination.projections.count() == 0U64 && destination.local < out.count() && !(body.locals[destination.local].isBorrowed) {
+                if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() && !(body.locals[destination.local].isBorrowed) {
                     out.set(i: destination.local, value: <MidOwnership.Owned />)
                 }
             }
             MidStatement.Overwrite(destination: val destination, source: val source) => {
-                if source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
-                if destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
+                if midIsLocalRoot(place: source) && source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
+                if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
             MidStatement.Drop(place: val place) => {
-                if place.projections.count() == 0U64 && place.local < out.count() {
+                if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     out.set(i: place.local, value: <MidOwnership.Consumed />)
                 }
             }
             MidStatement.ConditionalDrop(place: val place, flag: _) => {
-                if place.projections.count() == 0U64 && place.local < out.count() {
+                if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     // True drops the value; false proves an earlier Move. Either
                     // way no source owner remains after this operation.
                     out.set(i: place.local, value: <MidOwnership.Consumed />)
@@ -1094,7 +1106,7 @@ fn midAccessibilityStateChanged(before: Array[MidAccessibility], after: Array[Mi
 fn midMakeOperandUnavailable(states: inout Array[MidAccessibility], operand: MidOperand) {
     match operand {
         MidOperand.Move(place: val place) => {
-            if place.projections.count() == 0U64 && place.local < states.count() {
+            if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < states.count() {
                 states.set(i: place.local, value: <MidAccessibility.Unavailable />)
             }
         }
@@ -1130,25 +1142,25 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                     MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {}
                     MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { midMakeOperandUnavailable(states: inout out, operand: error) }
                 }
-                if destination.projections.count() == 0U64 && destination.local < out.count() {
+                if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
                 }
             }
             MidStatement.Overwrite(destination: val destination, source: val source) => {
-                if source.projections.count() == 0U64 && source.local < out.count() {
+                if midIsLocalRoot(place: source) && source.projections.count() == 0U64 && source.local < out.count() {
                     out.set(i: source.local, value: <MidAccessibility.Unavailable />)
                 }
-                if destination.projections.count() == 0U64 && destination.local < out.count() {
+                if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
                 }
             }
             MidStatement.Drop(place: val place) => {
-                if place.projections.count() == 0U64 && place.local < out.count() {
+                if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     out.set(i: place.local, value: <MidAccessibility.Unavailable />)
                 }
             }
             MidStatement.ConditionalDrop(place: val place, flag: _) => {
-                if place.projections.count() == 0U64 && place.local < out.count() {
+                if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     out.set(i: place.local, value: <MidAccessibility.Unavailable />)
                 }
             }

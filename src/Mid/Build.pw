@@ -69,6 +69,7 @@ export enum MidUnsupportedAssign {
     IndexBaseNotPlace
     OtherNotPlace
     IndexProjection
+    ImmutableGlobal
 }
 
 export enum MidBuildError {
@@ -250,19 +251,27 @@ export fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> Mi
 // declaration target are both required: target numeric domains overlap (for
 // example, a function index can equal a local declaration offset), so the
 // binding table alone must not reinterpret a callable as a local. `self`,
-// locals, and parameters are value bindings; globals remain absent from this
-// body's table. No source spelling, scope scan, or AST pattern match is
-// permitted here.
-export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+// locals, and parameters are value bindings. A resolver-recorded global is a
+// separate typed address root, never a synthetic local. No source spelling,
+// scope scan, or AST pattern match is permitted here.
+export fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
     if exprId >= c.typeCache.identBind.count() || exprId >= c.typeCache.identTarget.count() {
         return <MidPlaceLookup />
     }
     if c.typeCache.identBind[exprId] != identValueCode() { return <MidPlaceLookup /> }
     val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: c.typeCache.identTarget[exprId])
-    if !local.found { return <MidPlaceLookup /> }
+    if !local.found {
+        match c.recordedGlobalAddress(exprId: exprId) {
+            Optional.Some(v: val global) => {
+                if global.typeTerm != typeTerm { return <MidPlaceLookup /> }
+                return <MidPlaceLookup found=true place=<MidPlace rootTag=2U64 local=0U64 globalTarget=global.declarationTarget globalMutable=global.mutable typeTerm=global.typeTerm /> />
+            }
+            _ => { return <MidPlaceLookup /> }
+        }
+    }
     if local.local >= state.locals.count() { return <MidPlaceLookup /> }
     // The lexical binding's declared TypeTerm is the authoritative type of a
-    // root place.  An expression slot can legitimately be absent for a Lower
+    // root place. An expression slot can legitimately be absent for a Lower
     // synthesized node; letting that transient slot overwrite the local type
     // would make a typed place lose its storage ABI on the Mid boundary.
     return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=state.locals[local.local].typeTerm /> />
@@ -277,7 +286,7 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
     if exprId >= c.arena.exprs.count() { return <MidPlaceLookup /> }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
-            return midPlaceForRecordedIdent(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            return midPlaceForRecordedIdent(c: inout c, state: state, exprId: exprId, typeTerm: typeTerm)
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             if exprId >= c.arena.semanticExprTypes.count() { return <MidPlaceLookup /> }
@@ -294,7 +303,7 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             if !basePlace.found { return <MidPlaceLookup /> }
             mut val projections: Array[MidProjection] = basePlace.place.projections
             projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
-            return <MidPlaceLookup found=true place=<MidPlace local=basePlace.place.local projections=projections typeTerm=typeTerm /> />
+            return <MidPlaceLookup found=true place=<MidPlace rootTag=basePlace.place.rootTag local=basePlace.place.local globalTarget=basePlace.place.globalTarget globalMutable=basePlace.place.globalMutable projections=projections typeTerm=typeTerm /> />
         }
         Expr.Index(base: val base, index: val index) => {
             val baseTerm: U64 = c.semanticExprTerm(exprId: base)
@@ -306,7 +315,7 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             match evaluated.error { MidBuildError.None => {} _ => { return <MidPlaceLookup /> } }
             mut val projections: Array[MidProjection] = basePlace.place.projections
             projections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
-            return <MidPlaceLookup found=true place=<MidPlace local=basePlace.place.local projections=projections typeTerm=typeTerm /> />
+            return <MidPlaceLookup found=true place=<MidPlace rootTag=basePlace.place.rootTag local=basePlace.place.local globalTarget=basePlace.place.globalTarget globalMutable=basePlace.place.globalMutable projections=projections typeTerm=typeTerm /> />
         }
         _ => { return <MidPlaceLookup /> }
     }
@@ -615,7 +624,7 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
         Expr.Move(operand: val operand, isBorrow: val isBorrow) => {
-            val lookup: MidPlaceLookup = midPlaceForRecordedIdent(c: c, state: state, exprId: operand, typeTerm: typeTerm)
+            val lookup: MidPlaceLookup = midPlaceForRecordedIdent(c: inout c, state: state, exprId: operand, typeTerm: typeTerm)
             if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnboundLocalIdentifier /> /> }
             if isBorrow { return <MidOperandBuild operand=<MidOperand.Borrow place=lookup.place capability=<MidBorrowCapability.Read /> /> /> }
             return <MidOperandBuild operand=<MidOperand.Move place=lookup.place /> />
@@ -1398,6 +1407,9 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             }
             if !physicalFieldPath {
                 return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.IndexProjection /> />
+            }
+            if destinationLookup.place.rootTag == 2U64 && !destinationLookup.place.globalMutable {
+                return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.ImmutableGlobal /> />
             }
             val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
             val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />

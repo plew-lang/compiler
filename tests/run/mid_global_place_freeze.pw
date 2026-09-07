@@ -1,0 +1,25 @@
+import @Std/Io with { write }
+import /Mid with { MidBlock, MidBody, MidCanonicalArena, MidCanonicalBody, MidLocalDecl, MidOperand, MidPlace, MidRvalue, MidScope, MidStatement, MidTerminator, canonicalMidBodyIsWellFormed }
+
+// Canonical storage must preserve a global declaration identity as an address
+// root; a global-array position or a local sentinel would make later LLVM
+// lowering depend on incidental backend state.
+fn main() {
+    val global: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=91U64 globalMutable=true typeTerm=7U64 />
+    val destination: MidPlace = <MidPlace local=0U64 typeTerm=7U64 />
+    val read = <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=<MidOperand.Copy place=global /> /> />
+    val draft = <MidBody locals=[<MidLocalDecl typeTerm=7U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=[read] terminator=<MidTerminator.Return /> />] entry=0U64 />
+    mut val arena: MidCanonicalArena = <MidCanonicalArena />
+    val frozen: MidCanonicalBody = arena.store(body: draft)
+    val body = arena.bodies[frozen.body - 1U64]
+    val block = arena.blocks[body.blocks.start]
+    val statement = arena.statements[block.statements.start]
+    val rvalue = arena.rvalues[statement.value - 1U64]
+    val operand = arena.operands[rvalue.operand - 1U64]
+    val place = arena.places[operand.place - 1U64]
+    if canonicalMidBodyIsWellFormed(arena: arena, body: frozen) && place.rootTag == 2U64 && place.globalTarget == 91U64 {
+        write(s: "global-place-freeze\n")
+    } else {
+        write(s: "wrong-global-place-freeze\n")
+    }
+}

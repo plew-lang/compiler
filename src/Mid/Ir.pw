@@ -36,7 +36,13 @@ export struct MidBodyNode {
 pub impl MidBodyNode { factory }
 
 export struct MidPlaceNode {
+    // 1=Local(local), 2=Global(declarationTarget).  Keep the root scalar so
+    // canonical rows remain direct, typed-pool data rather than an embedded
+    // draft enum.
+    pub val rootTag: U64 = 1U64
     pub val local: U64
+    pub val globalTarget: U64 = 0U64
+    pub val globalMutable: Bool = false
     pub val projections: MidRange = <MidRange start=0U64 len=0U64 />
     pub val typeTerm: U64 = 0U64
 }
@@ -226,9 +232,15 @@ export enum MidProjection {
 }
 
 export struct MidPlace {
-    // Index into MidBody.locals.  It is never an AST Local or a backend stack
-    // slot: lowering maps source bindings to this stable IR identity once.
+    // 1=Local(local), 2=Global(globalTarget). A Global target is a frontend
+    // declaration identity, never a global-array index or backend symbol.
+    pub val rootTag: U64 = 1U64
+    // Index into MidBody.locals for a Local root. It is never an AST Local or
+    // a backend stack slot: lowering maps source bindings to this stable IR
+    // identity once.
     pub val local: U64
+    pub val globalTarget: U64 = 0U64
+    pub val globalMutable: Bool = false
     pub val projections: Array[MidProjection] = []
     // Canonical frontend TypeTerm. It may contain lexical ParamIds while this
     // body is parametric; instantiation substitutes it once into a concrete
@@ -547,7 +559,7 @@ fn midFreezePlace(arena: inout MidCanonicalArena, place: MidPlace) -> U64 {
         midFreezeProjection(arena: inout arena, projection: place.projections[projectionI])
         projectionI = projectionI + 1U64
     }
-    arena.places.append(<MidPlaceNode local=place.local projections=<MidRange start=projectionStart len=place.projections.count() /> typeTerm=place.typeTerm />)
+    arena.places.append(<MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=projectionStart len=place.projections.count() /> typeTerm=place.typeTerm />)
     return arena.places.count()
 }
 
@@ -805,6 +817,7 @@ fn midCanonicalOperandIsWellFormed(arena: MidCanonicalArena, operand: U64) -> Bo
 fn midCanonicalPlaceIsWellFormed(arena: MidCanonicalArena, place: U64) -> Bool {
     if place == 0U64 || place > arena.places.count() { return false }
     val node: MidPlaceNode = arena.places[place - 1U64]
+    if node.rootTag != 1U64 && node.rootTag != 2U64 { return false }
     if !midRangeFits(range: node.projections, count: arena.projections.count()) { return false }
     mut val i: U64 = 0U64
     while i < node.projections.len {

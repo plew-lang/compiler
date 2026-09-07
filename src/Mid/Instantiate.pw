@@ -76,7 +76,7 @@ fn instantiateCanonicalPlace(c: inout Comp, placeId: U64, environment: BodyInsta
         c.mid.projections.append(<MidProjectionNode tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         i = i + 1U64
     }
-    c.mid.places.append(<MidPlaceNode local=source.local projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+    c.mid.places.append(<MidPlaceNode rootTag=source.rootTag local=source.local globalTarget=source.globalTarget globalMutable=source.globalMutable projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
     return c.mid.places.count()
 }
 
@@ -909,7 +909,7 @@ fn instantiateMidPlace(c: inout Comp, place: MidPlace, environment: BodyInstance
         projections.append(instantiateMidProjection(c: inout c, projection: place.projections[i], environment: environment, itemRef: itemRef))
         i += 1U64
     }
-    return <MidPlace local=place.local projections=projections typeTerm=c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+    return <MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
 }
 
 fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyInstance, itemRef: U64) -> MidOperand {
@@ -1365,7 +1365,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                                 if declaration.typeTerm != resultType { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidLocalResultType /> } }
                             } else {
                                 locals.set(i: destination.local, value: midWithTypeTerm(local: declaration, typeTerm: resultType))
-                                statement = <MidStatement.Assign destination=<MidPlace local=destination.local projections=destination.projections typeTerm=resultType /> value=value />
+                                statement = <MidStatement.Assign destination=<MidPlace rootTag=destination.rootTag local=destination.local globalTarget=destination.globalTarget globalMutable=destination.globalMutable projections=destination.projections typeTerm=resultType /> value=value />
                             }
                         }
                     }

@@ -162,6 +162,15 @@ else
     fail=$((fail + 1)); failed="$failed mid-unique-aggregate"
 fi
 
+# Global places are declaration-target addresses, not legacy seeded locals.
+# Keep reads, mutable replacement, and global initializer provenance on the
+# Mid migration gate once every consumer can interpret that root directly.
+if sh ./test-mid-global-access.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-global-access"
+fi
+
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.

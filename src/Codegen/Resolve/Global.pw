@@ -2,6 +2,29 @@
 // ordering and import-alias / factory-construction rewriting.
 
 pub impl Comp {
+    // Map a frozen global declaration identity to the current storage row.
+    // Dependency ordering may reorder `arena.globals`, so callers must never
+    // persist or reconstruct this row index as their semantic identity.
+    // `nameStart == 0` is a valid declaration identity, hence the explicit
+    // out-of-range sentinel rather than zero.
+    inout fn globalIndexForDeclarationTarget(target: U64) -> U64 {
+        mut val index: U64 = 0U64
+        while index < self.arena.globals.count() {
+            if self.arena.globals[index].nameStart == target { return index }
+            index += 1U64
+        }
+        return self.arena.globals.count()
+    }
+
+    // The global's type is a frontend fact established for its initializer.
+    // Mid uses this only to validate its frozen typed address; it does not
+    // re-resolve a source identifier or infer a type from backend layout.
+    inout fn globalTypeForDeclarationTarget(target: U64) -> U64 {
+        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+        if index >= self.arena.globals.count() { return 0U64 }
+        return self.semanticExprTerm(exprId: self.globalInitExpr(g: self.arena.globals[index]))
+    }
+
     // Consume the existing identifier decision. In particular, do not seed
     // source locals or search names after Record has closed the lexical scope.
     inout fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {

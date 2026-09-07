@@ -27,6 +27,22 @@ export struct MidVerification {
 }
 pub impl MidVerification { factory }
 
+// A global root is a typed address selected by the frontend.  It is not an
+// implicit local: only Copy/Borrow may read it, and the sole write protocol is
+// a mutable Global Drop immediately followed by Overwrite.  The ownership
+// vector intentionally has no entry for it.
+fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
+    if place.rootTag != 2U64 { return false }
+    if place.typeTerm == 0U64 { return false }
+    mut val index: U64 = 0U64
+    while index < c.arena.globals.count() {
+        val global = c.arena.globals[index]
+        if global.nameStart == place.globalTarget { return global.mutable == place.globalMutable }
+        index += 1U64
+    }
+    return false
+}
+
 fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], operandId: U64, block: U64) -> MidVerification {
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
@@ -34,6 +50,7 @@ fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], 
     if operand.tag != 2U64 { return <MidVerification /> }
     if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+    if place.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     if place.projections.len != 0U64 { return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local /> }
     if place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     match states[place.local] {
@@ -216,19 +233,24 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if destination.projections.len == 0U64 && destination.local < states.count() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                    if destination.rootTag == 1U64 && destination.projections.len == 0U64 && destination.local < states.count() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
                 }
             }
             if statement.tag == 2U64 {
                 if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if !canonicalMidPhysicalFieldPath(c: c, place: destination) || source.projections.len != 0U64 || destination.local >= states.count() || source.local >= states.count() || destination.local == source.local || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if !canonicalMidPhysicalFieldPath(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 }
-                if destination.projections.len == 0U64 {
+                if destination.rootTag == 2U64 { }
+                else if destination.projections.len == 0U64 {
                     match states[destination.local] {
                         MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                         _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
@@ -243,8 +265,12 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if statement.tag == 3U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if !canonicalMidPhysicalFieldPath(c: c, place: place) || place.local >= states.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
-                if place.projections.len == 0U64 {
+                if !canonicalMidPhysicalFieldPath(c: c, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if place.rootTag == 2U64 {
+                    if !place.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                } else if place.rootTag != 1U64 || place.local >= states.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if place.rootTag == 2U64 { }
+                else if place.projections.len == 0U64 {
                     match states[place.local] {
                         MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
                         _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
@@ -259,7 +285,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if statement.tag == 4U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if place.projections.len != 0U64 || place.local >= states.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 if statement.flag >= body.locals.len || !c.mid.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
                 match states[place.local] {
                     MidOwnership.MaybeOwned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
@@ -315,6 +341,9 @@ fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperan
             return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block />
         }
         MidOperand.Move(place: val place) => {
+            if place.rootTag != 1U64 {
+                return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local />
+            }
             if place.projections.count() != 0U64 {
                 return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local />
             }
@@ -502,7 +531,8 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 MidStatement.Assign(destination: val destination, value: val value) => {
                     val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
                     match result.error { MidVerifyError.None => {} _ => { return result } }
-                    if destination.projections.count() == 0U64 && destination.local < states.count() {
+                    if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
+                    if destination.rootTag == 1U64 && destination.projections.count() == 0U64 && destination.local < states.count() {
                         states.set(i: destination.local, value: <MidOwnership.Owned />)
                     }
                 }
@@ -516,14 +546,24 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                         }
                         projection += 1U64
                     }
-                    if !physicalFieldPath || source.projections.count() != 0U64 || destination.local >= states.count() || source.local >= states.count() || destination.local == source.local || destination.typeTerm == 0U64 || destination.typeTerm != body.locals[source.local].typeTerm {
+                    if !physicalFieldPath || source.rootTag != 1U64 || source.projections.count() != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != body.locals[source.local].typeTerm {
                         return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
+                    }
+                    if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) {
+                        return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
+                    }
+                    if destination.rootTag == 2U64 && !destination.globalMutable {
+                        return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local />
+                    }
+                    if destination.rootTag != 1U64 && destination.rootTag != 2U64 {
+                        return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=destination.local />
                     }
                     match states[source.local] {
                         MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
                         _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local /> }
                     }
-                    if destination.projections.count() == 0U64 {
+                    if destination.rootTag == 2U64 { }
+                    else if destination.projections.count() == 0U64 {
                         match states[destination.local] {
                             MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
                             _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
@@ -549,10 +589,18 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                         }
                         projection += 1U64
                     }
-                    if !physicalFieldPath || place.local >= states.count() {
+                    if !physicalFieldPath {
                         return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
                     }
-                    if place.projections.count() == 0U64 {
+                    if place.rootTag == 2U64 {
+                        if !place.globalMutable {
+                            return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
+                        }
+                    } else if place.rootTag != 1U64 || place.local >= states.count() {
+                        return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
+                    }
+                    if place.rootTag == 2U64 { }
+                    else if place.projections.count() == 0U64 {
                         match states[place.local] {
                             MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
                             _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
@@ -568,7 +616,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     }
                 }
                 MidStatement.ConditionalDrop(place: val place, flag: val flag) => {
-                    if place.projections.count() != 0U64 || place.local >= states.count() {
+                    if place.rootTag != 1U64 || place.projections.count() != 0U64 || place.local >= states.count() {
                         return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
                     }
                     if flag >= body.locals.count() || !(body.locals[flag].isDropFlag) {

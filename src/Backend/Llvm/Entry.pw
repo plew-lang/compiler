@@ -109,15 +109,17 @@ pub impl LlvmCtx {
         self.curFn = mainFn
         self.curIsMain = true
         self.curRetVoid = false
-        // Build and freeze a Mid body before LLVM emission begins.  This first
-        // production slice admits only a closed main with no module globals:
-        // globals, ABI parameters, calls and aggregate values gain explicit
-        // Mid forms rather than being recovered through legacy backend state.
+        // Build and freeze a Mid body before LLVM emission begins. Global
+        // reads/writes carry explicit Global(declarationTarget) place roots;
+        // they are never recovered through legacy seeded locals.
         mut val midReady: Bool = false
         mut val canonicalMid: MidCanonicalBody = <MidCanonicalBody body=0U64 />
         val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
         val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
-        if c.arena.globals.count() == 0U64 {
+        // Global LLVM storage is emitted before every function body. Refuse
+        // Mid rather than fabricate a local root if that initialization ever
+        // failed to produce the complete declaration-target map.
+        if self.gvalRef.count() == c.arena.globals.count() {
             val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
             match parametric.error {
                 MidBuildError.None => {

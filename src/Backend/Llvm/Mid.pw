@@ -38,6 +38,7 @@ pub impl LlvmCtx {
             MidUnsupportedAssign.IndexBaseNotPlace => { return 2U64 }
             MidUnsupportedAssign.OtherNotPlace => { return 3U64 }
             MidUnsupportedAssign.IndexProjection => { return 4U64 }
+            MidUnsupportedAssign.ImmutableGlobal => { return 5U64 }
         }
     }
 
@@ -1686,16 +1687,47 @@ pub impl LlvmCtx {
         return self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)
     }
 
+    // Global storage is addressed through its frozen frontend declaration
+    // target. The row lookup is deliberately local to LLVM materialization:
+    // dependency ordering may move global rows, but neither Mid nor LLVM ever
+    // derives this identity from a source name or legacy seeded local.
+    inout fn midCanonicalGlobalIndex(c: inout Comp, place: MidPlaceNode) -> U64 {
+        if place.rootTag != 2U64 { return c.arena.globals.count() }
+        return c.globalIndexForDeclarationTarget(target: place.globalTarget)
+    }
+
+    inout fn midCanonicalGlobalTy(c: inout Comp, place: MidPlaceNode) -> LLVMTypeRef {
+        val index: U64 = self.midCanonicalGlobalIndex(c: inout c, place: place)
+        if index >= self.gvalLty.count() { return self.i64ty }
+        return self.gvalLty[index]
+    }
+
+    inout fn midCanonicalGlobalPtr(c: inout Comp, place: MidPlaceNode) -> LLVMValueRef {
+        val index: U64 = self.midCanonicalGlobalIndex(c: inout c, place: place)
+        if index >= self.gvalRef.count() { return LLVMConstNull(self.ptrty) }
+        return self.gvalRef[index]
+    }
+
     inout fn midCanonicalPlaceTy(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMTypeRef {
-        if place.projections.len == 0U64 { return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local) }
+        if place.projections.len == 0U64 {
+            if place.rootTag == 2U64 { return self.midCanonicalGlobalTy(c: inout c, place: place) }
+            return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+        }
         if place.typeTerm != 0U64 && place.typeTerm < c.arena.types.count() { return self.llvmTypeOfRef(c: inout c, ref: place.typeTerm) }
         return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
     }
 
     inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMValueRef {
-        if place.local >= body.locals.len { return LLVMConstNull(self.ptrty) }
-        mut val pointer: LLVMValueRef = self.midCanonicalLocalPtr(body: body, local: place.local)
-        mut val currentTy: LLVMTypeRef = self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+        mut val pointer: LLVMValueRef = LLVMConstNull(self.ptrty)
+        mut val currentTy: LLVMTypeRef = self.i64ty
+        if place.rootTag == 1U64 {
+            if place.local >= body.locals.len { return LLVMConstNull(self.ptrty) }
+            pointer = self.midCanonicalLocalPtr(body: body, local: place.local)
+            currentTy = self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+        } else if place.rootTag == 2U64 {
+            pointer = self.midCanonicalGlobalPtr(c: inout c, place: place)
+            currentTy = self.midCanonicalGlobalTy(c: inout c, place: place)
+        } else { return LLVMConstNull(self.ptrty) }
         mut val projectionI: U64 = 0U64
         while projectionI < place.projections.len {
             val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
@@ -1965,14 +1997,24 @@ pub impl LlvmCtx {
     inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
-        if place.local >= body.locals.len { return false }
+        mut val currentTerm: U64 = 0U64
+        if place.rootTag == 1U64 {
+            if place.local >= body.locals.len { return false }
+            currentTerm = c.mid.locals[body.locals.start + place.local].typeTerm
+        } else if place.rootTag == 2U64 {
+            val global: U64 = self.midCanonicalGlobalIndex(c: inout c, place: place)
+            if global >= c.arena.globals.count() || global >= self.gvalRef.count() || global >= self.gvalTref.count() || c.arena.globals[global].mutable != place.globalMutable || place.typeTerm == 0U64 || !c.typeRefEq(a: self.gvalTref[global], b: place.typeTerm) { return false }
+            currentTerm = self.gvalTref[global]
+        } else { return false }
         mut val projectionI: U64 = 0U64
         while projectionI < place.projections.len {
             val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
             if projection.tag == 1U64 {
                 if projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.types.count() { return false }
+                currentTerm = projection.typeTerm
             } else if projection.tag == 2U64 {
-                if projection.indexLocal >= body.locals.len || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.types.count() { return false }
+                if projection.indexLocal >= body.locals.len || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.types.count() || currentTerm == 0U64 { return false }
+                currentTerm = projection.typeTerm
             } else { return false }
             projectionI = projectionI + 1U64
         }
@@ -3416,7 +3458,7 @@ pub impl LlvmCtx {
         else { result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon()) }
         if callee.hasRet {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
-            LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalLocalPtr(body: body, local: destination.local))
+            LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
         }
         return true
     }
@@ -3424,7 +3466,11 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitDrop(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
-        if place.local >= body.locals.len { return false }
+        if place.rootTag == 1U64 {
+            if place.local >= body.locals.len { return false }
+        } else if place.rootTag == 2U64 {
+            if !place.globalMutable || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: placeId) { return false }
+        } else { return false }
         mut val projectionI: U64 = 0U64
         while projectionI < place.projections.len {
             if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
