@@ -949,6 +949,9 @@ pub impl LlvmCtx {
                             _ => {}
                         }
                     }
+                    MidStatement.InitializeCaptureCell(destination: _, value: _) => {
+                        return <MidLlvmPreflight.UnsupportedRvalue />
+                    }
                     MidStatement.Overwrite(destination: val destination, source: val source) => {
                         mut val physicalFieldPath: Bool = true
                         mut val projection: U64 = 0U64
@@ -980,6 +983,7 @@ pub impl LlvmCtx {
                         }
                         if !physicalFieldPath { return <MidLlvmPreflight.DropProjection /> }
                     }
+                    MidStatement.ReleaseCaptureCell(place: _) => { return <MidLlvmPreflight.DropProjection /> }
                     MidStatement.ConditionalDrop(place: val place, flag: _) => {
                         if place.projections.count() != 0U64 { return <MidLlvmPreflight.DropProjection /> }
                     }
@@ -1765,6 +1769,14 @@ pub impl LlvmCtx {
             if place.local >= body.locals.len { return LLVMConstNull(self.ptrty) }
             pointer = self.midCanonicalLocalPtr(body: body, local: place.local)
             currentTy = self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+            // A capture-cell local's backend local is a ptr holder. Places are
+            // nevertheless places of its logical T, so all ordinary reads,
+            // drops, and overwrites dereference the explicit cell first.
+            // LLVM does not infer this from names or closure syntax: it reads
+            // the frozen MidLocalDecl storage class only.
+            if c.mid.locals[body.locals.start + place.local].isCaptureCell {
+                pointer = LLVMBuildLoad2(self.b, self.ptrty, pointer, anon())
+            }
         } else if place.rootTag == 2U64 {
             pointer = self.midCanonicalGlobalPtr(c: inout c, place: place)
             currentTy = self.midCanonicalGlobalTy(c: inout c, place: place)
@@ -2672,6 +2684,12 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            // Draft Mid is not a closure backend. Capture cells are admitted
+            // only by the canonical reader above; keeping this loud prevents
+            // a fallback from silently reconstructing closure ownership.
+            MidStatement.InitializeCaptureCell(destination: _, value: _) => {
+                LLVMBuildUnreachable(self.b)
+            }
             MidStatement.Overwrite(destination: val destination, source: val source) => {
                 val ty: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: destination)
                 val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
@@ -2683,6 +2701,7 @@ pub impl LlvmCtx {
                 LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
             }
             MidStatement.Drop(place: val place) => { self.midEmitDrop(c: inout c, body: body, place: place) }
+            MidStatement.ReleaseCaptureCell(place: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.ConditionalDrop(place: val place, flag: val flag) => { self.midEmitConditionalDrop(c: inout c, body: body, place: place, flag: flag) }
             MidStatement.SetDropFlag(local: val local, isSet: val isSet) => {
                 mut val bit: U64 = 0U64
@@ -3657,7 +3676,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitStatement(c: inout Comp, body: MidBodyNode, statementId: U64) -> Bool {
         if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
         val statement: MidStatementNode = c.mid.statements[statementId - 1U64]
-        if statement.tag == 1U64 {
+        if statement.tag == 1U64 || statement.tag == 9U64 {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
@@ -3676,7 +3695,14 @@ pub impl LlvmCtx {
             }
             val targetTy: LLVMTypeRef = self.midCanonicalPlaceTy(c: inout c, body: body, place: destination)
             if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: targetTy, unsigned: false) }
-            LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            if statement.tag == 9U64 {
+                if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len || !c.mid.locals[body.locals.start + destination.local].isCaptureCell { return false }
+                val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(targetTy), cap: 1U64)
+                LLVMBuildStore(self.b, cell, self.midCanonicalLocalPtr(body: body, local: destination.local))
+                LLVMBuildStore(self.b, value, cell)
+            } else {
+                LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            }
             return true
         }
         if statement.tag == 2U64 || statement.tag == 8U64 {
@@ -3687,6 +3713,13 @@ pub impl LlvmCtx {
             return true
         }
         if statement.tag == 3U64 { return self.midCanonicalEmitDrop(c: inout c, body: body, placeId: statement.destination) }
+        if statement.tag == 10U64 {
+            if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return false }
+            val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+            if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= body.locals.len || !c.mid.locals[body.locals.start + place.local].isCaptureCell { return false }
+            self.emitCellRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.midCanonicalLocalPtr(body: body, local: place.local), anon()), ref: place.typeTerm)
+            return true
+        }
         if statement.tag == 4U64 { return self.midCanonicalEmitConditionalDrop(c: inout c, body: body, placeId: statement.destination, flag: statement.flag) }
         if statement.tag == 5U64 {
             if statement.flag >= body.locals.len { return false }
@@ -3821,6 +3854,7 @@ pub impl LlvmCtx {
             val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
             val ty: LLVMTypeRef = self.midCanonicalLocalTy(c: inout c, body: body, local: local)
             mut val slot: LLVMValueRef = self.entryAlloca(ty: ty)
+            if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
             if declaration.isParameter {
                 val abiIndex: U64 = abiParameterStart + local
                 if declaration.isInout { slot = LLVMGetParam(self.curFn, abiIndex) }
@@ -3938,10 +3972,18 @@ pub impl LlvmCtx {
             mut val statementI: U64 = 0U64
             while statementI < block.statements.len {
                 val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
-                if statement.tag == 1U64 {
+                if statement.tag == 1U64 || statement.tag == 9U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || !self.midCanonicalInitialRvalueSupported(c: inout c, body: body, rvalueId: statement.value) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    if statement.tag == 9U64 {
+                        val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                        if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len || !c.mid.locals[body.locals.start + destination.local].isCaptureCell { return <MidLlvmPreflight.AssignmentProjection /> }
+                    }
                 } else if statement.tag == 2U64 || statement.tag == 8U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return <MidLlvmPreflight.AssignmentProjection /> }
+                } else if statement.tag == 10U64 {
+                    if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidLlvmPreflight.DropProjection /> }
+                    val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= body.locals.len || !c.mid.locals[body.locals.start + place.local].isCaptureCell { return <MidLlvmPreflight.DropProjection /> }
                 } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 5U64 || statement.tag == 7U64 {
                 } else { return <MidLlvmPreflight.ScopeExit /> }
                 statementI = statementI + 1U64

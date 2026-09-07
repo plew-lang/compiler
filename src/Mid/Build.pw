@@ -1426,7 +1426,19 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             // only its initializer dependencies belong to this full expression.
             val evaluation: U64 = midOpenScope(state: inout state)
             if midExprIsCall(c: c, exprId: init) {
-                val result: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: destination)
+                // A direct call terminator cannot initialize a capture cell:
+                // it writes a logical T, while the cell allocation is an
+                // explicit Mid operation. Materialize the result first so the
+                // cell's first owner and value boundary stay visible.
+                mut val callDestination: MidPlace = destination
+                if state.locals[destinationLocal].isCaptureCell {
+                    val temporary: U64 = addMidTemporary(state: inout state, typeTerm: term)
+                    callDestination = <MidPlace local=temporary typeTerm=term />
+                }
+                val result: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: callDestination)
+                if state.locals[destinationLocal].isCaptureCell {
+                    midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.Use operand=<MidOperand.Move place=callDestination /> /> />)
+                }
                 midFinishEvaluationScope(state: inout state, scope: evaluation)
                 return result
             }
@@ -1444,7 +1456,11 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
                     return operandResult.error
                 }
             }
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            if state.locals[destinationLocal].isCaptureCell {
+                midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            } else {
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            }
             midFinishEvaluationScope(state: inout state, scope: evaluation)
             return <MidBuildError.None />
         }

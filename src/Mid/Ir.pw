@@ -450,6 +450,11 @@ export enum MidStatement {
     // rvalue. Source lowering uses this for `let`; overwrite uses a separate
     // temporary and must not be conflated with initialization.
     Assign(destination: MidPlace, value: MidRvalue)
+    // The sole initialization operation for a mutable binding that a frozen
+    // SemanticClosure captures by cell. It allocates the shared cell and
+    // stores the initial logical value. Ordinary Assign is forbidden for that
+    // root, so LLVM never has to infer whether a store creates a cell.
+    InitializeCaptureCell(destination: MidPlace, value: MidRvalue)
     // Consumes an owned temporary after the old destination has been dropped.
     // The explicit source place preserves RHS-before-destroy ordering for
     // `x = x` and `x = f(x)` without relying on backend evaluation order.
@@ -459,6 +464,11 @@ export enum MidStatement {
     // to destroy, and immutable globals may be initialized exactly here.
     InitializeGlobal(destination: MidPlace, source: MidPlace)
     Drop(place: MidPlace)
+    // Releases the lexical binding's owner count of a capture cell. This is
+    // distinct from Drop(place): the latter destroys the logical T currently
+    // stored in the cell and is therefore valid immediately before Overwrite.
+    // Drop elaboration alone emits this at lexical cleanup.
+    ReleaseCaptureCell(place: MidPlace)
     // Elaborated conditional drop for a MaybeOwned root. `flag` is a generated
     // boolean local: initialization/Assign set it and Move clears it.
     ConditionalDrop(place: MidPlace, flag: U64)
@@ -761,9 +771,11 @@ fn midFreezeCallReceiver(arena: inout MidCanonicalArena, receiver: MidCallReceiv
 fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
     match statement {
         MidStatement.Assign(destination: val destination, value: val value) => { arena.statements.append(<MidStatementNode tag=1U64 destination=midFreezePlace(arena: inout arena, place: destination) value=midFreezeRvalue(arena: inout arena, value: value) />) }
+        MidStatement.InitializeCaptureCell(destination: val destination, value: val value) => { arena.statements.append(<MidStatementNode tag=9U64 destination=midFreezePlace(arena: inout arena, place: destination) value=midFreezeRvalue(arena: inout arena, value: value) />) }
         MidStatement.Overwrite(destination: val destination, source: val source) => { arena.statements.append(<MidStatementNode tag=2U64 destination=midFreezePlace(arena: inout arena, place: destination) source=midFreezePlace(arena: inout arena, place: source) />) }
         MidStatement.InitializeGlobal(destination: val destination, source: val source) => { arena.statements.append(<MidStatementNode tag=8U64 destination=midFreezePlace(arena: inout arena, place: destination) source=midFreezePlace(arena: inout arena, place: source) />) }
         MidStatement.Drop(place: val place) => { arena.statements.append(<MidStatementNode tag=3U64 destination=midFreezePlace(arena: inout arena, place: place) />) }
+        MidStatement.ReleaseCaptureCell(place: val place) => { arena.statements.append(<MidStatementNode tag=10U64 destination=midFreezePlace(arena: inout arena, place: place) />) }
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { arena.statements.append(<MidStatementNode tag=4U64 destination=midFreezePlace(arena: inout arena, place: place) flag=flag />) }
         MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { arena.statements.append(<MidStatementNode tag=5U64 flag=local isSet=isSet />) }
         MidStatement.ScopeExit(scope: val scope) => { arena.statements.append(<MidStatementNode tag=6U64 scope=scope />) }
