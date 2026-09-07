@@ -199,6 +199,8 @@ pub impl LlvmCtx {
             MidInstantiateError.MissingFinalResolution => { return 10U64 }
             MidInstantiateError.InvalidFinalResolution => { return 11U64 }
             MidInstantiateError.InvalidLocalResultType => { return 12U64 }
+            MidInstantiateError.MissingTryResolution => { return 14U64 }
+            MidInstantiateError.InvalidTryResolution => { return 15U64 }
         }
     }
 
@@ -218,6 +220,8 @@ pub impl LlvmCtx {
             10U64 => { eprint(text: "missing-final-resolution") }
             11U64 => { eprint(text: "invalid-final-resolution") }
             12U64 => { eprint(text: "invalid-local-result-type") }
+            14U64 => { eprint(text: "missing-try-resolution") }
+            15U64 => { eprint(text: "invalid-try-resolution") }
             _ => { eprint(text: "unknown") }
         }
     }
@@ -494,6 +498,12 @@ pub impl LlvmCtx {
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
+            // These rows are introduced by the in-progress `try` lowering.
+            // Keep the legacy draft preflight fail-closed until the canonical
+            // emitter owns their ARC copy/repack operations.
+            MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return false }
+            MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return false }
+            MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: _) => { return false }
         }
     }
 
@@ -2027,6 +2037,25 @@ pub impl LlvmCtx {
             if value.tag == 12U64 && c.fieldIsBoxed(f: c.arena.enums[value.enumIndex].variants[value.variantIndex].fields[value.fieldIndex]) { return false }
             return true
         }
+        if value.tag == 16U64 || value.tag == 17U64 {
+            if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.types.count() || value.enumIndex >= c.arena.enums.count() { return false }
+            val place: MidPlaceNode = c.mid.places[value.place - 1U64]
+            if place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+            val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+            if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
+            if value.tag == 16U64 { return true }
+            // The field declaration may mention the enum's generic parameter;
+            // its concrete equality was checked during canonical grounding.
+            return value.variantIndex < c.arena.enums[value.enumIndex].variants.count() && c.arena.enums[value.enumIndex].variants[value.variantIndex].fields.count() == 1U64
+        }
+        if value.tag == 18U64 {
+            if value.operand == 0U64 || value.operand > c.mid.operands.count() || value.resultTerm == 0U64 || value.resultTerm >= c.arena.types.count() || value.targetTerm == 0U64 || value.targetTerm >= c.arena.types.count() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return false }
+            val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
+            if operand.tag != 2U64 || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) { return false }
+            if c.arena.enums[value.enumIndex].variants[value.variantIndex].fields.count() != 1U64 { return false }
+            val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: value.resultTerm)
+            return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == value.enumIndex && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm)
+        }
         return false
     }
 
@@ -2543,6 +2572,18 @@ pub impl LlvmCtx {
                         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
                         val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
                         LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: resultTerm), cell, anon()), self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    // `try` is emitted through canonical Mid only.  The draft
+                    // emitter deliberately remains fail-closed until that
+                    // representation is removed.
+                    MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {
+                        LLVMBuildUnreachable(self.b)
+                    }
+                    MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {
+                        LLVMBuildUnreachable(self.b)
+                    }
+                    MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: _) => {
+                        LLVMBuildUnreachable(self.b)
                     }
                 }
             }
@@ -3485,7 +3526,7 @@ pub impl LlvmCtx {
         val place: MidPlaceNode = c.mid.places[value.place - 1U64]
         val enumTy: LLVMTypeRef = self.midCanonicalPlaceTy(c: inout c, body: body, place: place)
         val enumSlot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: place)
-        if value.tag == 11U64 {
+        if value.tag == 11U64 || value.tag == 16U64 {
             val tagPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, enumTy, enumSlot, 0U64, anon())
             return LLVMBuildLoad2(self.b, self.i64ty, tagPtr, anon())
         }
@@ -3495,6 +3536,25 @@ pub impl LlvmCtx {
         val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, value.fieldIndex, anon())
         if value.tag == 14U64 || value.tag == 15U64 { return LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: value.resultTerm), field, anon()) }
         return field
+    }
+
+    // `try`'s Err edge owns its payload at this point (the operand is Move),
+    // so repacking it is a pure aggregate construction.  The Result enum and
+    // its concrete Err slot have already been frozen by FinalTryResolution;
+    // LLVM receives no source-level type or trait lookup responsibility.
+    inout fn midCanonicalEmitTryErrResult(c: inout Comp, body: MidBodyNode, destination: MidPlaceNode, value: MidRvalueNode) -> LLVMValueRef {
+        if value.operand == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.types.count() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return LLVMConstNull(self.ptrty) }
+        val result: TypeRef = c.arena.types[value.resultTerm]
+        val savedParams: Array[Bind] = c.cur.typeParams
+        val savedArgs: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = c.arena.enums[value.enumIndex].typeParams
+        c.cur.typeArgs = result.args
+        mut val payloads: Array[LLVMValueRef] = []
+        payloads.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: value.operand))
+        val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: value.enumIndex, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: payloads)
+        c.cur.typeParams = savedParams
+        c.cur.typeArgs = savedArgs
+        return built
     }
 
     // The first direct statement slice deliberately covers the scalar rows
@@ -3507,12 +3567,14 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
-            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 6U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 && rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 { return false }
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 6U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 && rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { return false }
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
             if rvalue.tag == 6U64 { value = self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: rvalue.operand, proofId: rvalue.conversion) }
-            else { value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand) }
+            else if rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand) }
             if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
-            if rvalue.tag >= 11U64 && rvalue.tag <= 15U64 { value = self.midCanonicalEmitEnumLayoutRvalue(c: inout c, body: body, value: rvalue) }
+            if rvalue.tag >= 11U64 && rvalue.tag <= 17U64 { value = self.midCanonicalEmitEnumLayoutRvalue(c: inout c, body: body, value: rvalue) }
+            if rvalue.tag == 17U64 && c.arcNeedsRelease(ref: rvalue.resultTerm) { self.valueArc(c: inout c, v: value, typeRef: rvalue.resultTerm, retain: true) }
+            if rvalue.tag == 18U64 { value = self.midCanonicalEmitTryErrResult(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
             if rvalue.tag == 9U64 {
                 if rvalue.kindTag == 1U64 { value = LLVMBuildSIToFP(self.b, value, self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), anon()) }

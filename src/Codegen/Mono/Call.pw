@@ -1486,10 +1486,17 @@ pub impl Comp {
                 // Verify owns the user diagnostic for a missing conversion.
                 return
             }
-            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=factory receiverRef=returnErr resultHintRef=returnErr />
+            // This is a real, selected call with one semantic argument, even
+            // though source syntax spells it as `try` rather than `E.from`.
+            // Give it a distinct site slot and a frozen source term.  Reusing
+            // the `try` expression's ordinary slot left the final descriptor
+            // arity-zero, forcing later Mid/LLVM consumers to recover the
+            // missing argument from AST/type names.
+            val conversionArgument: CallTemplateArgument = <CallTemplateArgument source=<CallArgumentSource.Term exprId=exprId term=operandErr /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />
+            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId slot=1U64 callee=factory receiverRef=returnErr argumentSources=[conversionArgument] resultHintRef=returnErr resultRef=returnErr />
             self.recordSelectedBodyCallee(selection: selection)
             self.enqueueSelectedCallee(selection: selection)
-            conversionResolution = self.bodyCalleeIndex(exprId: exprId)
+            conversionResolution = self.bodyCalleeIndex(exprId: exprId, slot: 1U64)
             if conversionResolution >= self.arena.finalCallees.count() { return }
         }
         self.putFinalTry(fact: <FinalTryResolution bodyId=self.currentBodyInstanceId() exprId=exprId operandResultTypeRef=operandRef returnResultTypeRef=returnRef resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant okPayloadTypeRef=operandResult.args[0U64] sourceErrorTypeRef=operandErr targetErrorTypeRef=returnErr hasErrorConversion=hasConversion errorConversionResolution=conversionResolution />)
@@ -2684,12 +2691,49 @@ pub impl Comp {
         self.arena.finalReturnIndexSlots.set(i: slot, value: self.arena.finalReturns.count())
     }
 
-    inout fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.arena.finalTries.count() {
-            val fact: FinalTryResolution = self.arena.finalTries[i]
-            if fact.bodyId == bodyId && fact.exprId == exprId { return i }
-            i += 1U64
+    // `finalTries` is keyed exactly like final aggregates and returns.  It is
+    // frontend semantic output, but its derived lookup index must still scale
+    // with generic body instances; a linear scan here would make each `try`
+    // site depend on every earlier monomorphization.
+    inout fn rebuildFinalTryIndex(capacity: U64) {
+        self.arena.finalTryIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.arena.finalTryIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.arena.finalTries.count() {
+            val fact: FinalTryResolution = self.arena.finalTries[entry]
+            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            while self.arena.finalTryIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.arena.finalTryIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalTryIndex(nextCount: U64) {
+        if self.arena.finalTryIndexSlots.count() == 0U64 {
+            self.rebuildFinalTryIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.arena.finalTryIndexSlots.count() * 7U64 {
+            self.rebuildFinalTryIndex(capacity: self.arena.finalTryIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Returns the table-count sentinel when the active body has no frozen
+    // `try` propagation fact for this source expression.
+    fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
+        val capacity: U64 = self.arena.finalTryIndexSlots.count()
+        if capacity == 0U64 { return self.arena.finalTries.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        while self.arena.finalTryIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.arena.finalTryIndexSlots[slot] - 1U64
+            val fact: FinalTryResolution = self.arena.finalTries[entry]
+            if fact.bodyId == bodyId && fact.exprId == exprId { return entry }
+            slot = (slot + 1U64) % capacity
         }
         return self.arena.finalTries.count()
     }
@@ -2698,9 +2742,16 @@ pub impl Comp {
         val prior: U64 = self.finalTryIndex(bodyId: fact.bodyId, exprId: fact.exprId)
         if prior < self.arena.finalTries.count() {
             self.arena.finalTries.set(i: prior, value: fact)
-        } else {
-            self.arena.finalTries.append(fact)
+            return
         }
+        self.ensureFinalTryIndex(nextCount: self.arena.finalTries.count() + 1U64)
+        self.arena.finalTries.append(fact)
+        val capacity: U64 = self.arena.finalTryIndexSlots.count()
+        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        while self.arena.finalTryIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.arena.finalTryIndexSlots.set(i: slot, value: self.arena.finalTries.count())
     }
 
     // Freeze one aggregate only after its children have been finalized in the

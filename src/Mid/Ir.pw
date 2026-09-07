@@ -125,6 +125,10 @@ export struct MidCallTargetNode {
     pub val originEnd: U64 = 0U64
     pub val originSerial: U64 = 0U64
     pub val slot: U64 = 0U64
+    // An implicit `try` conversion is a semantic call occurrence, but has no
+    // authored CallTemplate.  Its source ExprId navigates only to the frozen
+    // FinalTryResolution during instantiation.
+    pub val exprId: U64 = 0U64
 }
 pub impl MidCallTargetNode { factory }
 
@@ -166,6 +170,9 @@ export struct MidTerminatorNode {
     // embedded in this terminator row.
     pub val callTarget: U64 = 0U64
     pub val callReceiver: U64 = 0U64
+    // Source `try` identity for the parametric TryBranch form. It is consumed
+    // by instantiation into an ordinary closed Switch.
+    pub val exprId: U64 = 0U64
 }
 pub impl MidTerminatorNode { factory }
 
@@ -352,6 +359,16 @@ export enum MidRvalue {
     // layout query remains in LLVM.
     EnumPayloadBoxedCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
     EnumPayloadBoxedBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
+    // `try` is Result-specific control flow, not a source `match`: these
+    // rvalues navigate to FinalTryResolution rather than SemanticMatch.
+    // The complete Result value has a stable owned home while either edge is
+    // active, so extracting either payload is an ordinary value-semantic copy.
+    TryTag(place: MidPlace, exprId: U64, resultTerm: U64)
+    TryPayloadCopy(place: MidPlace, exprId: U64, variantIndex: U64, resultTerm: U64)
+    // Re-pack the selected Err payload into the enclosing function's Result
+    // before lexical cleanup. The optional conversion is represented by the
+    // preceding explicit Mid Call, never by this rvalue or LLVM lookup.
+    TryErrResult(exprId: U64, resultTerm: U64, error: MidOperand)
 }
 
 // Closed representation operation selected from the frozen, grounded source
@@ -370,6 +387,9 @@ export enum MidCastKind {
 export enum MidCallTarget {
     Template(site: CallSiteKey)
     Resolved(resolution: U64)
+    // Frozen `targetError.from(sourceError:)` selected for one `try` site.
+    // Instantiation replaces this with Resolved using FinalTryResolution.
+    TryConversion(exprId: U64)
 }
 
 // The receiver is ABI input with a distinct source/ownership role from a
@@ -420,6 +440,10 @@ export enum MidTerminator {
     // their two's-complement bit pattern when materializing the literal for
     // the discriminant's concrete integer representation.
     Switch(discriminant: MidOperand, values: Array[I64], targets: Array[U64], otherwise: U64)
+    // Result's concrete tag slot is a per-BodyInstance frontend fact. Keeping
+    // this distinct from Switch prevents the builder from guessing `Ok == 0`.
+    // Instantiation validates FinalTryResolution then emits an ordinary Switch.
+    TryBranch(discriminant: MidOperand, exprId: U64, okTarget: U64, errTarget: U64)
     Call(callee: MidCallTarget, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace, target: U64)
     Return
     ReturnValue(value: MidOperand)
@@ -634,6 +658,15 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
             arena.rvalues.append(<MidRvalueNode tag=15U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
+        MidRvalue.TryTag(place: val place, exprId: val exprId, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=16U64 place=midFreezePlace(arena: inout arena, place: place) exprId=exprId resultTerm=resultTerm />)
+        }
+        MidRvalue.TryPayloadCopy(place: val place, exprId: val exprId, variantIndex: val variantIndex, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=17U64 place=midFreezePlace(arena: inout arena, place: place) exprId=exprId variantIndex=variantIndex resultTerm=resultTerm />)
+        }
+        MidRvalue.TryErrResult(exprId: val exprId, resultTerm: val resultTerm, error: val error) => {
+            arena.rvalues.append(<MidRvalueNode tag=18U64 exprId=exprId resultTerm=resultTerm operand=midFreezeOperand(arena: inout arena, operand: error) />)
+        }
     }
     return arena.rvalues.count()
 }
@@ -642,6 +675,7 @@ fn midFreezeCallTarget(arena: inout MidCanonicalArena, target: MidCallTarget) ->
     match target {
         MidCallTarget.Template(site: val site) => { arena.callTargets.append(<MidCallTargetNode tag=1U64 ownerFnIdx=site.ownerFnIdx originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />) }
         MidCallTarget.Resolved(resolution: val resolution) => { arena.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />) }
+        MidCallTarget.TryConversion(exprId: val exprId) => { arena.callTargets.append(<MidCallTargetNode tag=3U64 exprId=exprId />) }
     }
     return arena.callTargets.count()
 }
@@ -678,6 +712,9 @@ fn midFreezeTerminator(arena: inout MidCanonicalArena, terminator: MidTerminator
                 i = i + 1U64
             }
             arena.terminators.append(<MidTerminatorNode tag=3U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) cases=<MidRange start=start len=values.count() /> otherwise=otherwise />)
+        }
+        MidTerminator.TryBranch(discriminant: val discriminant, exprId: val exprId, okTarget: val okTarget, errTarget: val errTarget) => {
+            arena.terminators.append(<MidTerminatorNode tag=11U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) exprId=exprId target=okTarget otherwise=errTarget />)
         }
         MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
             val start: U64 = arena.callArguments.count()

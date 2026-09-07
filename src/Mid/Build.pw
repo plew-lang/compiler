@@ -372,6 +372,9 @@ fn midBlockHasIncoming(state: MidBuildState, target: U64) -> Bool {
                     edgeIndex += 1U64
                 }
             }
+            MidTerminator.TryBranch(discriminant: _, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => {
+                if okTarget == target || errTarget == target { return true }
+            }
             MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val edge) => { if edge == target { return true } }
             MidTerminator.Suspend(state: _, resume: val edge) => { if edge == target { return true } }
             _ => {}
@@ -820,6 +823,93 @@ fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U6
     return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
 }
 
+// `try` is Result control flow, not a disguised source match.  The builder
+// records only the parametric shape: a stable input home, a role-labelled
+// tag/payload read, and an explicit conversion call edge.  Instantiation is
+// the sole point that reads FinalTryResolution to select the concrete Result
+// slots and either resolve `from` or erase the identity conversion.
+fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
+    val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
+    if operandResultTerm == 0U64 || operandResultTerm >= c.arena.types.count() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    val operandResult: TypeRef = c.arena.types[operandResultTerm]
+    if operandResult.args.count() != 2U64 || state.sourceFunction >= c.arena.funcs.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
+    val returnResultTerm: U64 = c.arena.funcs[state.sourceFunction].retTy
+    if returnResultTerm == 0U64 || returnResultTerm >= c.arena.types.count() || c.arena.types[returnResultTerm].args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.InvalidFunction /> /> }
+
+    // The yielded Ok value crosses the nested evaluation scope; all Result
+    // storage and Err temporaries remain inside it and are cleaned on either
+    // edge.  Allocating the result before opening that scope makes this
+    // ownership boundary explicit in Mid rather than implicit in LLVM.
+    val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: resultTerm)
+    val result: MidPlace = <MidPlace local=resultLocal typeTerm=resultTerm />
+    val parentCalls: Array[MidCallValue] = state.callValues
+    val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
+    state.callValues = []
+    state.aggregateValues = []
+    val evaluation: U64 = midOpenScope(state: inout state)
+    val input: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: operandExpr, typeTerm: operandResultTerm, allowAccessMarker: false)
+    match input.error {
+        MidBuildError.None => {}
+        _ => {
+            midCloseScope(state: inout state, scope: evaluation)
+            state.callValues = parentCalls
+            state.aggregateValues = parentAggregates
+            return input
+        }
+    }
+    if !midCurrentBlockIsOpen(state: state) {
+        midCloseScope(state: inout state, scope: evaluation)
+        state.callValues = parentCalls
+        state.aggregateValues = parentAggregates
+        return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
+    }
+    val inputLocal: U64 = addMidTemporary(state: inout state, typeTerm: operandResultTerm)
+    val inputPlace: MidPlace = <MidPlace local=inputLocal typeTerm=operandResultTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=inputPlace value=<MidRvalue.Use operand=input.operand /> />)
+    val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
+    val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
+    if tagTerm == 0U64 {
+        midCloseScope(state: inout state, scope: evaluation)
+        state.callValues = parentCalls
+        state.aggregateValues = parentAggregates
+        return <MidOperandBuild operand=<MidOperand.Copy place=result /> error=<MidBuildError.MissingSemanticType /> />
+    }
+    val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)
+    val tag: MidPlace = <MidPlace local=tagLocal typeTerm=tagTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tag value=<MidRvalue.TryTag place=inputPlace exprId=exprId resultTerm=tagTerm /> />)
+    val okTarget: U64 = midNewBlock(state: inout state)
+    val errTarget: U64 = midNewBlock(state: inout state)
+    val joinTarget: U64 = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.TryBranch discriminant=<MidOperand.Copy place=tag /> exprId=exprId okTarget=okTarget errTarget=errTarget />)
+
+    state.currentBlock = okTarget
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.TryPayloadCopy place=inputPlace exprId=exprId variantIndex=0U64 resultTerm=resultTerm /> />)
+    midEmitScopeExit(state: inout state, scope: evaluation)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+
+    state.currentBlock = errTarget
+    val sourceErrorTerm: U64 = operandResult.args[1U64]
+    val targetErrorTerm: U64 = c.arena.types[returnResultTerm].args[1U64]
+    val sourceErrorLocal: U64 = addMidTemporary(state: inout state, typeTerm: sourceErrorTerm)
+    val sourceError: MidPlace = <MidPlace local=sourceErrorLocal typeTerm=sourceErrorTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=sourceError value=<MidRvalue.TryPayloadCopy place=inputPlace exprId=exprId variantIndex=1U64 resultTerm=sourceErrorTerm /> />)
+    val convertedErrorLocal: U64 = addMidTemporary(state: inout state, typeTerm: targetErrorTerm)
+    val convertedError: MidPlace = <MidPlace local=convertedErrorLocal typeTerm=targetErrorTerm />
+    val afterConversion: U64 = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.TryConversion exprId=exprId /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Copy place=sourceError />] destination=convertedError target=afterConversion />)
+    state.currentBlock = afterConversion
+    val returnPlace: MidPlace = <MidPlace local=state.returnPlace typeTerm=returnResultTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=returnPlace value=<MidRvalue.TryErrResult exprId=exprId resultTerm=returnResultTerm error=<MidOperand.Move place=convertedError /> /> />)
+    midEmitAllScopeExits(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=returnPlace /> />)
+
+    midCloseScope(state: inout state, scope: evaluation)
+    state.callValues = parentCalls
+    state.aggregateValues = parentAggregates
+    state.currentBlock = joinTarget
+    return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
+}
+
 // Reify any already-resolved expression as a Mid value. The boolean is not a
 // source-level heuristic: callers pass it only from the frozen selected ABI
 // mode of an inout receiver/argument. A read-only index is materialized as its
@@ -909,6 +999,9 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
             }
+        }
+        Expr.Try(expr: val operandExpr) => {
+            return materializeMidTry(c: inout c, state: inout state, exprId: exprId, operandExpr: operandExpr, resultTerm: typeTerm)
         }
         Expr.Index(base: _, index: _) => {
             val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
