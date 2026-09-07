@@ -64,6 +64,15 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
                 if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
+        // InitializeGlobal consumes its temporary local into the program-lifetime
+        // root. Unlike Overwrite, that root has no prior value to destroy and
+        // therefore never becomes a locally-owned value in this body.
+        if statement.tag == 8U64 {
+            if statement.source != 0U64 && statement.source <= c.mid.places.count() {
+                val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
+                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
+            }
+        }
         if statement.tag == 3U64 || statement.tag == 4U64 {
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -230,6 +239,12 @@ fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlock
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
+            }
+        }
+        if statement.tag == 8U64 {
+            if statement.source != 0U64 && statement.source <= c.mid.places.count() {
+                val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
+                if source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidAccessibility.Unavailable />) }
             }
         }
         if statement.tag == 3U64 || statement.tag == 4U64 {
@@ -754,6 +769,19 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                         if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                         if destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    }
+                }
+            } else if statement.tag == 8U64 {
+                // A fresh global has no old ownership to release. Transfer only
+                // the temporary source and leave the destination outside local
+                // drop-flag accounting.
+                c.mid.statements.append(statement)
+                if statement.source != 0U64 && statement.source <= c.mid.places.count() {
+                    val sourcePlace: MidPlaceNode = c.mid.places[statement.source - 1U64]
+                    if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
+                        currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
+                        if sourcePlace.local < currentAccessibility.count() { currentAccessibility.set(i: sourcePlace.local, value: <MidAccessibility.Unavailable />) }
+                        if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
             } else if statement.tag == 6U64 {

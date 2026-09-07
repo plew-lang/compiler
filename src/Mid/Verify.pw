@@ -264,6 +264,10 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             }
             if statement.tag == 8U64 {
                 if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
+                // InitializeGlobal is only meaningful in the compiler-created
+                // module initializer body. User function bodies may overwrite
+                // mutable globals but cannot create a second initial root.
+                if body.sourceFunction != 18446744073709551615U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
                 if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }

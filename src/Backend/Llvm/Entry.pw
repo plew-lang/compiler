@@ -7,15 +7,59 @@
 
 pub impl LlvmCtx {
 
+    // Global storage is declared from the frontend's selected TypeTerm, before
+    // its initializer body runs.  This is the same separation as a local
+    // alloca from the value later stored into it: backend storage metadata is
+    // not an observation made by legacy expression emission.
+    inout fn declareGlobalStorage(c: inout Comp) -> Bool {
+        mut val gi: U64 = 0U64
+        while gi < c.arena.globals.count() {
+            val global = c.arena.globals[gi]
+            if global.letStmt >= c.arena.stmts.count() { return false }
+            mut val term: U64 = 0U64
+            match c.arena.stmts[global.letStmt] {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => { term = c.semanticExprTerm(exprId: init) }
+                _ => { return false }
+            }
+            if term == 0U64 || term >= c.arena.types.count() { return false }
+            val typeRef = c.arena.types[term]
+            val lty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: term)
+            val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
+            LLVMSetInitializer(gv, LLVMConstNull(lty))
+            mut val isArray: Bool = rangeEquals(bytes: c.arena.bytes, start: typeRef.nameStart, len: typeRef.nameLen, kw: "Array") && typeRef.args.count() == 1U64
+            mut val elementTerm: U64 = 0U64
+            if isArray { elementTerm = typeRef.args[0U64] }
+            mut val elementTy: LLVMTypeRef = self.i64ty
+            mut val elementKind: U64 = 0U64
+            if elementTerm != 0U64 && elementTerm < c.arena.types.count() {
+                elementTy = self.llvmTypeOfRef(c: inout c, ref: elementTerm)
+                elementKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[elementTerm].nameStart, tyLen: c.arena.types[elementTerm].nameLen)
+            }
+            mut val structIndex: U64 = self.localStructIdxFor(c: inout c, start: typeRef.nameStart, len: typeRef.nameLen)
+            if c.isGenericInst(ref: term) {
+                val genericSlot: U64 = self.genStructSlot(c: inout c, ref: term)
+                if genericSlot < self.genStructDefs.count() { structIndex = self.genStructDefs[genericSlot] }
+            }
+            self.gvalRef.append(gv)
+            self.gvalLty.append(lty)
+            if isArray { self.gvalKind.append(elementKind) }
+            else { self.gvalKind.append(kindFromTySpan(c: inout c, tyStart: typeRef.nameStart, tyLen: typeRef.nameLen)) }
+            self.gvalSidx.append(structIndex)
+            self.gvalIsArr.append(isArray)
+            self.gvalElemTy.append(elementTy)
+            self.gvalElemKind.append(elementKind)
+            self.gvalTref.append(term)
+            self.gvalElemTypeRef.append(elementTerm)
+            gi += 1U64
+        }
+        return self.gvalRef.count() == c.arena.globals.count()
+    }
+
     // Emit `void @plew_init_globals()` (spec/15): one body that runs each module-level
-    // variable's initializer in lowering (= declaration) order and stores the result into
-    // its LLVM global. Each initializer is the same `Stmt.Let` a local binding produces,
-    // so we emit it through the normal statement path (which pushes a fully-typed local +
-    // alloca), then copy that local's recovered value into a fresh LLVM global and record
-    // its metadata in `gval*` so `seedGlobals` can re-bind it at every body entry. A later
-    // global's initializer can reference an earlier one (resolved as the alloca-local just
-    // pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
-    // drop here — the same leak level as a top-level array/String value).
+    // variable's initializer in lowering (= declaration) order and moves each
+    // fully-evaluated temporary into predeclared storage through the synthetic
+    // canonical Mid body. Global storage is process-lifetime, so this is an
+    // initialization transfer, not an overwrite or a scope-exit drop.
     inout fn genLlvmInitGlobals(c: inout Comp) {
         if c.arena.globals.count() == 0U64 {
             return
@@ -48,25 +92,56 @@ pub impl LlvmCtx {
         self.locOwned = []
         self.locMoved = []
         self.locCellHome = []
-        mut val gi: U64 = 0
-        while gi < c.arena.globals.count() {
-            self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
-            val li: U64 = self.nLocals - 1U64
-            val lty: LLVMTypeRef = self.locTy[li]
-            val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
-            LLVMSetInitializer(gv, LLVMConstNull(lty))
-            val cur: LLVMValueRef = LLVMBuildLoad2(self.b, lty, self.locPtr[li], anon())
-            LLVMBuildStore(self.b, cur, gv)
-            self.gvalRef.append(gv)
-            self.gvalLty.append(lty)
-            self.gvalKind.append(self.locKind[li])
-            self.gvalSidx.append(self.locStructIdx[li])
-            self.gvalIsArr.append(self.locIsArr[li])
-            self.gvalElemTy.append(self.locElemTy[li])
-            self.gvalElemKind.append(self.locElemKind[li])
-            self.gvalTref.append(self.locTypeRef[li])
-            self.gvalElemTypeRef.append(self.locElemTypeRef[li])
-            gi += 1
+        val storageReady: Bool = self.declareGlobalStorage(c: inout c)
+        val globalOwner: U64 = 18446744073709551615U64
+        val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
+        mut val midReady: Bool = false
+        if storageReady && bodyId != 0U64 {
+            val parametric: MidBodyBuild = buildParametricMidGlobalInit(c: inout c)
+            match parametric.error {
+                MidBuildError.None => {
+                    val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: parametric.canonical, bodyId: bodyId)
+                    match instantiated.error {
+                        MidInstantiateError.None => {
+                            val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
+                            match accesses.error {
+                                MidAccessError.None => {
+                                    val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: accesses.body)
+                                    match verifyCanonicalMidBody(c: c, canonical: dropped).error {
+                                        MidVerifyError.None => {
+                                            // Preflight before emission so an unsupported
+                                            // Mid shape cannot leave a half-emitted global
+                                            // initializer before the legacy compatibility path.
+                                            match self.midCanonicalLlvmPreflight(c: inout c, canonical: dropped) {
+                                                MidLlvmPreflight.Ready => { midReady = self.genLlvmCanonicalMidBody(c: inout c, canonical: dropped) }
+                                                _ => {}
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !midReady {
+            if c.requireMid {
+                c.errorAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer body is not representable in Mid")
+            } else {
+                mut val gi: U64 = 0U64
+                while gi < c.arena.globals.count() {
+                    self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
+                    val li: U64 = self.nLocals - 1U64
+                    val cur: LLVMValueRef = LLVMBuildLoad2(self.b, self.gvalLty[gi], self.locPtr[li], anon())
+                    LLVMBuildStore(self.b, cur, self.gvalRef[gi])
+                    gi += 1U64
+                }
+            }
         }
         LLVMBuildRetVoid(self.b)
         c.cur.bodyFnIdx = savedBodyFn
