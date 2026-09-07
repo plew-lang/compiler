@@ -928,6 +928,11 @@ pub impl LlvmCtx {
                             return <MidLlvmPreflight.AssignmentProjection />
                         }
                     }
+                    MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
+                        if destination.rootTag != 2U64 || destination.projections.count() != 0U64 || source.rootTag != 1U64 || source.projections.count() != 0U64 || source.local >= body.locals.count() || destination.typeTerm == 0U64 || destination.typeTerm != body.locals[source.local].typeTerm {
+                            return <MidLlvmPreflight.AssignmentProjection />
+                        }
+                    }
                     MidStatement.Drop(place: val place) => {
                         mut val physicalFieldPath: Bool = true
                         mut val projection: U64 = 0U64
@@ -2634,6 +2639,11 @@ pub impl LlvmCtx {
                 val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
                 LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
             }
+            MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
+                val ty: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: destination)
+                val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
+                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
+            }
             MidStatement.Drop(place: val place) => { self.midEmitDrop(c: inout c, body: body, place: place) }
             MidStatement.ConditionalDrop(place: val place, flag: val flag) => { self.midEmitConditionalDrop(c: inout c, body: body, place: place, flag: flag) }
             MidStatement.SetDropFlag(local: val local, isSet: val isSet) => {
@@ -3631,7 +3641,7 @@ pub impl LlvmCtx {
             LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
             return true
         }
-        if statement.tag == 2U64 {
+        if statement.tag == 2U64 || statement.tag == 8U64 {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
@@ -3892,7 +3902,7 @@ pub impl LlvmCtx {
                 val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
                 if statement.tag == 1U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || !self.midCanonicalInitialRvalueSupported(c: inout c, body: body, rvalueId: statement.value) { return <MidLlvmPreflight.UnsupportedRvalue /> }
-                } else if statement.tag == 2U64 {
+                } else if statement.tag == 2U64 || statement.tag == 8U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return <MidLlvmPreflight.AssignmentProjection /> }
                 } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 5U64 || statement.tag == 7U64 {
                 } else { return <MidLlvmPreflight.ScopeExit /> }

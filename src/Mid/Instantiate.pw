@@ -387,6 +387,7 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, environment: B
             c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=value />)
         }
         2U64 => { c.mid.statements.append(<MidStatementNode tag=2U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, placeId: source.source, environment: environment, itemRef: itemRef) />) }
+        8U64 => { c.mid.statements.append(<MidStatementNode tag=8U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, placeId: source.source, environment: environment, itemRef: itemRef) />) }
         3U64 => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
         4U64 => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) flag=source.flag />) }
         5U64 => { c.mid.statements.append(<MidStatementNode tag=5U64 flag=source.flag isSet=source.isSet />) }
@@ -787,8 +788,12 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
     }
     val source: MidBodyNode = c.mid.bodies[body.body - 1U64]
     val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
-    if environment.fnIdx >= c.arena.funcs.count() { return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> /> }
-    val itemRef: U64 = c.bodyProvidedItemTerm(f: c.arena.funcs[environment.fnIdx], environment: environment.environment)
+    mut val itemRef: U64 = 0U64
+    if environment.fnIdx < c.arena.funcs.count() {
+        itemRef = c.bodyProvidedItemTerm(f: c.arena.funcs[environment.fnIdx], environment: environment.environment)
+    } else if environment.fnIdx != source.sourceFunction {
+        return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
+    }
     val scopeStart: U64 = c.mid.scopes.count()
     mut val scopeI: U64 = 0U64
     while scopeI < source.scopes.len {
@@ -1195,6 +1200,9 @@ fn instantiateMidStatement(c: inout Comp, statement: MidStatement, environment: 
         }
         MidStatement.Overwrite(destination: val destination, source: val source) => {
             return <MidStatement.Overwrite destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, place: source, environment: environment, itemRef: itemRef) />
+        }
+        MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
+            return <MidStatement.InitializeGlobal destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, place: source, environment: environment, itemRef: itemRef) />
         }
         MidStatement.Drop(place: val place) => { return <MidStatement.Drop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { return <MidStatement.ConditionalDrop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) flag=flag /> }

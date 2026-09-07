@@ -1940,3 +1940,57 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     }
     return <MidBodyBuild body=body canonical=canonical />
 }
+
+// Module globals have one synthetic lexical body.  Their frontend facts use
+// the same sentinel owner as Mono, so calls and aggregates remain keyed by
+// their recorded source identity rather than being re-resolved from names.
+// Each RHS first receives a normal temporary home.  InitializeGlobal then
+// consumes that home exactly once into the process-lifetime root; it must not
+// be confused with either local Assign or destructive Overwrite.
+export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
+    val globalOwner: U64 = 18446744073709551615U64
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=globalOwner />
+    mut val globalI: U64 = 0U64
+    while globalI < c.arena.globals.count() {
+        val global = c.arena.globals[globalI]
+        if global.letStmt >= c.arena.stmts.count() { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
+        match c.arena.stmts[global.letStmt] {
+            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, mutable: _) => {
+                val term: U64 = c.semanticExprTerm(exprId: init)
+                if term == 0U64 { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingSemanticType /> /> }
+                val evaluation: U64 = midOpenScope(state: inout state)
+                val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
+                val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
+                mut val result: MidBuildError = <MidBuildError.None />
+                if midExprIsCall(c: c, exprId: init) {
+                    result = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: temporary)
+                } else {
+                    val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
+                    mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
+                    if aggregate.found { operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate) }
+                    else { operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: term, allowAccessMarker: false) }
+                    match operand.error {
+                        MidBuildError.None => { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.Use operand=operand.operand /> />) }
+                        _ => { result = operand.error }
+                    }
+                }
+                match result {
+                    MidBuildError.None => {
+                        val destination: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=global.nameStart globalMutable=global.mutable typeTerm=term />
+                        midAppendStatement(state: inout state, statement: <MidStatement.InitializeGlobal destination=destination source=temporary />)
+                        midFinishEvaluationScope(state: inout state, scope: evaluation)
+                    }
+                    _ => { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }
+                }
+            }
+            _ => { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
+        }
+        globalI += 1U64
+    }
+    midEmitScopeExit(state: inout state, scope: 0U64)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
+    val body: MidBody = <MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val canonical: MidCanonicalBody = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
+    return <MidBodyBuild body=body canonical=canonical />
+}

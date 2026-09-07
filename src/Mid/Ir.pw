@@ -425,6 +425,10 @@ export enum MidStatement {
     // The explicit source place preserves RHS-before-destroy ordering for
     // `x = x` and `x = f(x)` without relying on backend evaluation order.
     Overwrite(destination: MidPlace, source: MidPlace)
+    // The one permitted first write to a process-lifetime global root.  It is
+    // deliberately distinct from Overwrite: an initializer has no old value
+    // to destroy, and immutable globals may be initialized exactly here.
+    InitializeGlobal(destination: MidPlace, source: MidPlace)
     Drop(place: MidPlace)
     // Elaborated conditional drop for a MaybeOwned root. `flag` is a generated
     // boolean local: initialization/Assign set it and Move clears it.
@@ -704,6 +708,7 @@ fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
     match statement {
         MidStatement.Assign(destination: val destination, value: val value) => { arena.statements.append(<MidStatementNode tag=1U64 destination=midFreezePlace(arena: inout arena, place: destination) value=midFreezeRvalue(arena: inout arena, value: value) />) }
         MidStatement.Overwrite(destination: val destination, source: val source) => { arena.statements.append(<MidStatementNode tag=2U64 destination=midFreezePlace(arena: inout arena, place: destination) source=midFreezePlace(arena: inout arena, place: source) />) }
+        MidStatement.InitializeGlobal(destination: val destination, source: val source) => { arena.statements.append(<MidStatementNode tag=8U64 destination=midFreezePlace(arena: inout arena, place: destination) source=midFreezePlace(arena: inout arena, place: source) />) }
         MidStatement.Drop(place: val place) => { arena.statements.append(<MidStatementNode tag=3U64 destination=midFreezePlace(arena: inout arena, place: place) />) }
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { arena.statements.append(<MidStatementNode tag=4U64 destination=midFreezePlace(arena: inout arena, place: place) flag=flag />) }
         MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { arena.statements.append(<MidStatementNode tag=5U64 flag=local isSet=isSet />) }
@@ -862,7 +867,7 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
             if statement.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.destination) { return false }
             if statement.source != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.source) { return false }
             if statement.value != 0U64 && !midCanonicalRvalueIsWellFormed(arena: arena, rvalue: statement.value) { return false }
-            if statement.tag < 1U64 || statement.tag > 7U64 { return false }
+            if statement.tag < 1U64 || statement.tag > 8U64 { return false }
             statementI = statementI + 1U64
         }
         val terminator: MidTerminatorNode = arena.terminators[block.terminator - 1U64]

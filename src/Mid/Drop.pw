@@ -936,6 +936,9 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
                 if midIsLocalRoot(place: source) && source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
                 if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
+            MidStatement.InitializeGlobal(destination: _, source: val source) => {
+                if midIsLocalRoot(place: source) && source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
+            }
             MidStatement.Drop(place: val place) => {
                 if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     out.set(i: place.local, value: <MidOwnership.Consumed />)
@@ -1153,6 +1156,9 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                 if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
                 }
+            }
+            MidStatement.InitializeGlobal(destination: _, source: val source) => {
+                if midIsLocalRoot(place: source) && source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidAccessibility.Unavailable />) }
             }
             MidStatement.Drop(place: val place) => {
                 if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
@@ -1555,6 +1561,14 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         if destination.local < originalCount && needsFlag[destination.local] {
                             statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
                         }
+                    }
+                }
+                MidStatement.InitializeGlobal(destination: _, source: val source) => {
+                    statements.append(statement)
+                    if source.projections.count() == 0U64 && source.local < currentOwnership.count() {
+                        currentOwnership.set(i: source.local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: source.local, value: <MidAccessibility.Unavailable />)
+                        if source.local < originalCount && needsFlag[source.local] { statements.append(<MidStatement.SetDropFlag local=flagFor[source.local] isSet=false />) }
                     }
                 }
                 MidStatement.ScopeExit(scope: val scope) => {
