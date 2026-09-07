@@ -15,6 +15,7 @@ for source in \
     tests/run/try_from_generic_convert.pw \
     tests/run/try_from_generic_arg_match.pw \
     tests/run/try_err_unwind_arc.pw \
+    tests/run/try_expression_statement.pw \
     tests/run/try_place_operand_arc.pw \
     tests/run/try_struct_receiver.pw; do
     echo "check $source(try Mid CFG)" >&2

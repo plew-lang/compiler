@@ -1492,15 +1492,13 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
             }
             Stmt.ExprStmt(expr: val expr) => {
                 val evaluation: U64 = midOpenScope(state: inout state)
-                if midExprIsCall(c: c, exprId: expr) {
-                    val destinationLocal: U64 = addMidTemporary(state: inout state, typeTerm: c.semanticExprTerm(exprId: expr))
-                    result = buildMidCallInto(c: inout c, state: inout state, exprId: expr, destination: <MidPlace local=destinationLocal typeTerm=c.semanticExprTerm(exprId: expr) />)
-                } else if midExprIsShortCircuit(c: c, exprId: expr) {
-                    val discarded: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, typeTerm: c.semanticExprTerm(exprId: expr), allowAccessMarker: false)
-                    result = discarded.error
-                } else {
-                    result = <MidBuildError.Unsupported reason=<MidUnsupportedBuild.ExpressionStatement /> />
-                }
+                // An expression statement has the same evaluation semantics
+                // as a value position, followed by lexical disposal of its
+                // result.  In particular `try f()` must retain its Err edge
+                // and discard only the normal Ok value; special-casing calls
+                // here used to make that source form lose its CFG meaning.
+                val discarded: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, typeTerm: c.semanticExprTerm(exprId: expr), allowAccessMarker: false)
+                result = discarded.error
                 midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
             Stmt.Assign(target: _, value: _) => {

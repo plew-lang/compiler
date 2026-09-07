@@ -1,0 +1,19 @@
+import @Std/Core
+import @Std/Io with { print }
+
+fn step(ok: Bool) -> Result[I64, I64] {
+    if ok { return <Result.Ok value=1I64 /> }
+    return <Result.Err error=9I64 />
+}
+
+// A discarded `try` still owns Result early-return control flow. Its Ok value
+// is unused; its Err must leave `run` before the following return executes.
+fn run(ok: Bool) -> Result[I64, I64] {
+    try step(ok: ok)
+    return <Result.Ok value=42I64 />
+}
+
+fn main() {
+    print(run(ok: true).unwrapOr(fallback: 0I64))
+    print(run(ok: false).unwrapOr(fallback: -1I64))
+}
