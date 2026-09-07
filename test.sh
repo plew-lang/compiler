@@ -183,6 +183,14 @@ else
     fail=$((fail + 1)); failed="$failed mid-canonical-production"
 fi
 
+# Frozen conversion facts must stay canonical all the way through LLVM
+# lowering; a draft proof thaw here would reintroduce the migration bridge.
+if sh ./test-mid-canonical-conversion.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-canonical-conversion"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as
