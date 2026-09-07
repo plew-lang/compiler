@@ -1,0 +1,31 @@
+// Declaration-shaped macro inputs must materialize from the direct rows too:
+// impl members, trait signatures, and extern opaque-type directive groups each
+// exercise a distinct nested scalar pool.
+import @Plew/Syntax with { MemberKind, TopItemAst, parseItem }
+import @Std/Io with { print }
+
+fn main() {
+    match parseItem(source: "impl Box { type Item = U8 }", start: 0U64, end: 27U64) {
+        TopItemAst.Impl(im: val im) => {
+            match im.members[0U64].kind {
+                MemberKind.AssocType => { print(1U64) }
+                _ => { print(0U64) }
+            }
+        }
+        _ => { print(0U64) }
+    }
+
+    match parseItem(source: "trait Sample { fn item() -> U8 }", start: 0U64, end: 31U64) {
+        TopItemAst.Trait(t: val t) => { print(t.reqs.count()) }
+        _ => { print(0U64) }
+    }
+
+    match parseItem(source: "extern(plewIntrinsic) { @[Eq] struct Buffer[sendable T] }", start: 0U64, end: 58U64) {
+        TopItemAst.Extern(e: val e) => {
+            print(e.structNames.count())
+            print(e.structTypeParams[0U64].count())
+            print(e.structDirectives[0U64].reqs.count())
+        }
+        _ => { print(0U64) print(0U64) print(0U64) }
+    }
+}

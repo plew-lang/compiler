@@ -1,0 +1,42 @@
+// The macro-facing value APIs are all views over the canonical SyntaxFile
+// parser.  Cover an annotated/exported item, whole program, expression, and
+// block independently so a legacy grammar cannot be reintroduced behind one
+// compatible value result.
+import @Plew/Syntax with { ExprAst, Lexer, P, StmtAst, TopItemAst, lex, parseBlockFrom, parseExprFrom, parseItem, parseProgramAst }
+import @Std/Io with { print }
+
+fn main() {
+    // The source slice begins at an original-file offset; materialization must
+    // subtract that base before recovering spellings from the slice bytes.
+    val item = parseItem(source: "@[Eq]\nexport struct Box { val value: U8 }", start: 17U64, end: 60U64)
+    match item {
+        TopItemAst.Decl(d: val d) => { print(d.name.bytes().count()) }
+        _ => { print(0U64) }
+    }
+
+    val source = "newtype Bytes = Array[U8]\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    print(parseProgramAst(p: inout parser).count())
+
+    match parseExprFrom(source: "1U8 as U64", start: 0U64) {
+        ExprAst.Cast(operand: _, ty: _, span: _) => { print(1U64) }
+        _ => { print(0U64) }
+    }
+
+    val block = parseBlockFrom(source: "{ val value = 1U8 as U64 }", start: 0U64)
+    if block.stmts.count() > 0U64 {
+        match block.stmts[0U64] {
+            StmtAst.Let(mutable: _, name: _, nameSpan: _, hasTy: _, ty: _, init: val init, span: _) => {
+                match init {
+                    ExprAst.Cast(operand: _, ty: _, span: _) => { print(1U64) }
+                    _ => { print(0U64) }
+                }
+            }
+            _ => { print(0U64) }
+        }
+    } else {
+        print(0U64)
+    }
+}

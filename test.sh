@@ -247,6 +247,15 @@ else
     fail=$((fail + 1)); failed="$failed syntax-direct-builder"
 fi
 
+# Macro-facing value APIs are adapters over the same direct SyntaxFile parser;
+# this prevents a second recursive-descent parser from surviving behind a
+# compatible TopItemAst / ExprAst result.
+if sh ./test-syntax-value-materializer.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed syntax-value-materializer"
+fi
+
 # Frozen conversion facts must stay canonical all the way through LLVM
 # lowering; a draft proof thaw here would reintroduce the migration bridge.
 if sh ./test-mid-canonical-conversion.sh; then
