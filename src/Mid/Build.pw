@@ -584,7 +584,6 @@ fn midUnsupportedOperandForExpr(c: Comp, exprId: U64) -> MidUnsupportedBuild {
         Expr.ChainHole => { return <MidUnsupportedBuild.UnloweredView /> }
         Expr.MatchExpr(scrut: _, arms: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
-        Expr.Try(expr: _) => { return <MidUnsupportedBuild.UnloweredValueControl /> }
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
         Expr.Deref(base: _) => { return <MidUnsupportedBuild.UnloweredReference /> }
         Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return <MidUnsupportedBuild.UnloweredClosure /> }
