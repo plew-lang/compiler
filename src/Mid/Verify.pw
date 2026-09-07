@@ -594,6 +594,12 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     }
                 }
                 MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
+                    // This is the one initialization transfer for the compiler
+                    // created module body, never an alternate assignment form
+                    // available to ordinary source functions.
+                    if body.sourceFunction != 18446744073709551615U64 {
+                        return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
+                    }
                     if destination.rootTag != 2U64 || destination.projections.count() != 0U64 || source.rootTag != 1U64 || source.projections.count() != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != body.locals[source.local].typeTerm {
                         return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
                     }

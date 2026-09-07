@@ -1,0 +1,31 @@
+import @Std/Io with { write }
+import /Mid with { MidBlock, MidBody, MidBuildError, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateMidDrops, verifyMidBody }
+import /Mid/Verify with { MidVerifyError }
+
+// InitializeGlobal is the one transfer into a process-lifetime root.  It is
+// not a spelling of assignment available to an ordinary user body.
+fn globalInitBody(owner: U64) -> MidBody {
+    val source: MidPlace = <MidPlace local=0U64 typeTerm=1U64 />
+    val destination: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=77U64 globalMutable=false typeTerm=1U64 />
+    return <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=[<MidStatement.InitializeGlobal destination=destination source=source />] terminator=<MidTerminator.Return /> />] entry=0U64 />
+}
+
+fn main() {
+    val synthetic: MidBody = globalInitBody(owner: 18446744073709551615U64)
+    match verifyMidBody(body: synthetic).error {
+        MidVerifyError.None => { write(s: "synthetic:accepted\n") }
+        _ => { write(s: "synthetic:rejected\n") }
+    }
+    val elaborated: MidBody = elaborateMidDrops(body: synthetic)
+    match elaborated.blocks[0U64].statements[0U64] {
+        MidStatement.InitializeGlobal(destination: _, source: _) => { write(s: "no-pre-drop\n") }
+        _ => { write(s: "unexpected-pre-drop\n") }
+    }
+
+    val ordinary: MidBody = globalInitBody(owner: 0U64)
+    match verifyMidBody(body: ordinary).error {
+        MidVerifyError.MoveUnavailable => { write(s: "ordinary:rejected\n") }
+        MidVerifyError.None => { write(s: "ordinary:accepted\n") }
+        _ => { write(s: "ordinary:wrong-error\n") }
+    }
+}
