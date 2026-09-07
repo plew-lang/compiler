@@ -238,6 +238,15 @@ else
     fail=$((fail + 1)); failed="$failed mid-canonical-production"
 fi
 
+# The compiler parser must not hide the old value-AST → freeze path behind the
+# immutable syntax arena.  This is a structural complement to the runtime
+# SyntaxFile accessor corpus.
+if sh ./test-syntax-direct-builder.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed syntax-direct-builder"
+fi
+
 # Frozen conversion facts must stay canonical all the way through LLVM
 # lowering; a draft proof thaw here would reintroduce the migration bridge.
 if sh ./test-mid-canonical-conversion.sh; then
