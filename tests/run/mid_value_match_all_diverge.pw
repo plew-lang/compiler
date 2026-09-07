@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+enum Choice { First Second }
+
+// A value-position match still has a result type when every arm leaves the
+// enclosing function. Mid must leave its join unreachable rather than create
+// an uninitialized result path.
+fn choose(input: Choice) -> I64 {
+    val unreachable: I64 = match input {
+        Choice.First => { return 7I64 }
+        Choice.Second => { return 9I64 }
+    }
+    return unreachable
+}
+
+fn main() {
+    print(choose(input: <Choice.First />))
+    print(choose(input: <Choice.Second />))
+}
+
+// expected: 7
+// expected: 9

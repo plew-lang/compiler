@@ -456,14 +456,14 @@ pub impl LlvmCtx {
             MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
                 return targetTerm != 0U64 && targetTerm < c.arena.types.count() && self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
             }
-            MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: _, resultTerm: val resultTerm) => {
+            MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
-            MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+            MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
@@ -473,21 +473,21 @@ pub impl LlvmCtx {
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
-            MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+            MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
-            MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+            MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
-            MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+            MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
@@ -2508,12 +2508,12 @@ pub impl LlvmCtx {
                         }
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
-                    MidRvalue.EnumTag(place: val place, enumIndex: _, sourceStmt: _, resultTerm: _) => {
+                    MidRvalue.EnumTag(place: val place, enumIndex: _, matchSource: _, resultTerm: _) => {
                         val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
                         val tagPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, enumTy, self.midPlacePtr(c: inout c, body: body, place: place), 0U64, anon())
                         LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.i64ty, tagPtr, anon()), self.midLocalPtr(body: body, local: destination.local))
                     }
-                    MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: _) => {
+                    MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: _) => {
                         val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
                         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
                         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
@@ -2521,14 +2521,14 @@ pub impl LlvmCtx {
                         val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
                         LLVMBuildStore(self.b, field, self.midLocalPtr(body: body, local: destination.local))
                     }
-                    MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: _) => {
+                    MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: _) => {
                         val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
                         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
                         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
                         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
                         LLVMBuildStore(self.b, LLVMBuildExtractValue(self.b, payload, fieldIndex, anon()), self.midLocalPtr(body: body, local: destination.local))
                     }
-                    MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                    MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                         val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
                         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
                         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
@@ -2536,7 +2536,7 @@ pub impl LlvmCtx {
                         val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
                         LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: resultTerm), cell, anon()), self.midLocalPtr(body: body, local: destination.local))
                     }
-                    MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                    MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                         val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
                         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
                         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)

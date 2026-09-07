@@ -8,7 +8,7 @@
 // Copy / Move / Drop operations on places; raw retain/release is not an IR
 // escape hatch.
 
-import ../Ir with { CallSiteKey }
+import ../Ir with { CallSiteKey, MatchSource }
 
 // Canonical Mid storage is deliberately separate from the builder vocabulary
 // below.  A Mid body is read by instantiation, drop elaboration, verification,
@@ -336,22 +336,22 @@ export enum MidRvalue {
     // Read an enum tag from an already-evaluated place.  The enum declaration
     // slot comes from SemanticMatch; this is a read-only layout operation and
     // never owns/copies the complete enum value.
-    EnumTag(place: MidPlace, enumIndex: U64, sourceStmt: U64, resultTerm: U64)
+    EnumTag(place: MidPlace, enumIndex: U64, matchSource: MatchSource, resultTerm: U64)
     // Copy exactly one selected enum payload field into an arm-local place.
     // This is intentionally not a general Field projection: enum payload
     // layout depends on the selected variant, and all three declaration slots
     // are frozen by SemanticMatch rather than rediscovered by LLVM.
-    EnumPayloadCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    EnumPayloadCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
     // Bind an ARC payload as a read-only alias of the live scrutinee. The
     // destination local is marked borrowed, so this operation neither creates
     // ownership nor a drop obligation; an eventual Copy(place) is the sole
     // operation that obtains an independent value-semantic share.
-    EnumPayloadBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    EnumPayloadBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
     // The corresponding operations for a recursive field stored in an owning
     // cell. The logical resultTerm is loaded from that selected cell; no enum
     // layout query remains in LLVM.
-    EnumPayloadBoxedCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
-    EnumPayloadBoxedBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    EnumPayloadBoxedCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
+    EnumPayloadBoxedBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, matchSource: MatchSource, resultTerm: U64)
 }
 
 // Closed representation operation selected from the frozen, grounded source
@@ -565,6 +565,20 @@ fn midFreezeAggregateElement(arena: inout MidCanonicalArena, element: MidAggrega
     arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=element.fieldIndex operand=midFreezeOperand(arena: inout arena, operand: element.operand) targetTerm=element.targetTerm isBoxed=element.isBoxed conversion=element.conversion />)
 }
 
+fn midFreezeMatchSourceTag(matchSource: MatchSource) -> U64 {
+    match matchSource {
+        MatchSource.Statement(stmtId: _) => { return 0U64 }
+        MatchSource.Expression(exprId: _) => { return 1U64 }
+    }
+}
+
+fn midFreezeMatchSourceId(matchSource: MatchSource) -> U64 {
+    match matchSource {
+        MatchSource.Statement(stmtId: val stmtId) => { return stmtId }
+        MatchSource.Expression(exprId: val exprId) => { return exprId }
+    }
+}
+
 fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
     match value {
         MidRvalue.Use(operand: val operand) => {
@@ -605,20 +619,20 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
                 MidCastKind.IdentityRetag => { arena.rvalues.append(<MidRvalueNode tag=10U64 operand=midFreezeOperand(arena: inout arena, operand: operand) targetTerm=targetTerm />) }
             }
         }
-        MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=11U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex sourceStmt=sourceStmt resultTerm=resultTerm />)
+        MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=11U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
-        MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=12U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=12U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
-        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=13U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=13U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
-        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=14U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=14U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
-        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=15U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=15U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
     }
     return arena.rvalues.count()

@@ -5,8 +5,7 @@ enum Choice { First(value: I64) Second(value: I64) }
 // Value-position match must produce one owned result local. Each `give` arm
 // writes that local before joining; the pattern binding remains scoped to its
 // arm and is not reconstructed by LLVM.
-fn choose(flag: Bool) -> I64 {
-    val input: Choice = if flag { give <Choice.First value=7I64 /> } else { give <Choice.Second value=9I64 /> }
+fn choose(input: Choice) -> I64 {
     val result: I64 = match input {
         Choice.First(value: val value) => { give value + 1I64 }
         Choice.Second(value: val value) => { give value + 2I64 }
@@ -15,8 +14,8 @@ fn choose(flag: Bool) -> I64 {
 }
 
 fn main() {
-    print(choose(flag: true))
-    print(choose(flag: false))
+    print(choose(input: <Choice.First value=7I64 />))
+    print(choose(input: <Choice.Second value=9I64 />))
 }
 
 // expected: 8

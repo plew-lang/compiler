@@ -2695,9 +2695,9 @@ pub impl Comp {
         self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=self.groundTermForBody(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) elementTargetRefs=targets elementConversions=conversions />)
     }
 
-    fn finalMatchHash(bodyId: U64, source: MatchSource) -> U64 {
+    fn finalMatchHash(bodyId: U64, matchSource: MatchSource) -> U64 {
         val modulus: U64 = 4294967291U64
-        val encoded: U64 = match source { MatchSource.Statement(stmtId: val id) => { give id * 2U64 } MatchSource.Expression(exprId: val id) => { give id * 2U64 + 1U64 } }
+        val encoded: U64 = match matchSource { MatchSource.Statement(stmtId: val id) => { give id * 2U64 } MatchSource.Expression(exprId: val id) => { give id * 2U64 + 1U64 } }
         return (((bodyId % modulus + encoded % modulus) * 65537U64) + 31U64) % modulus
     }
 
@@ -2711,7 +2711,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalMatches.count() {
             val fact: FinalMatchResolution = self.arena.finalMatches[entry]
-            mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, source: fact.source) % capacity
+            mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, matchSource: fact.matchSource) % capacity
             while self.arena.finalMatchIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -2730,22 +2730,22 @@ pub impl Comp {
     }
 
     // Returns the table-count sentinel when the active body has no frozen
-    // enum-match layout for this source statement.
-    inout fn finalMatchIndex(bodyId: U64, source: MatchSource) -> U64 {
+    // enum-match layout for this source site.
+    inout fn finalMatchIndex(bodyId: U64, matchSource: MatchSource) -> U64 {
         val capacity: U64 = self.arena.finalMatchIndexSlots.count()
         if capacity == 0U64 { return self.arena.finalMatches.count() }
-        mut val slot: U64 = self.finalMatchHash(bodyId: bodyId, source: source) % capacity
+        mut val slot: U64 = self.finalMatchHash(bodyId: bodyId, matchSource: matchSource) % capacity
         while self.arena.finalMatchIndexSlots[slot] != 0U64 {
             val entry: U64 = self.arena.finalMatchIndexSlots[slot] - 1U64
             val fact: FinalMatchResolution = self.arena.finalMatches[entry]
-            if fact.bodyId == bodyId && self.sameMatchSource(a: fact.source, b: source) { return entry }
+            if fact.bodyId == bodyId && self.sameMatchSource(a: fact.matchSource, b: matchSource) { return entry }
             slot = (slot + 1U64) % capacity
         }
         return self.arena.finalMatches.count()
     }
 
     inout fn putFinalMatch(fact: FinalMatchResolution) {
-        val prior: U64 = self.finalMatchIndex(bodyId: fact.bodyId, source: fact.source)
+        val prior: U64 = self.finalMatchIndex(bodyId: fact.bodyId, matchSource: fact.matchSource)
         if prior < self.arena.finalMatches.count() {
             self.arena.finalMatches.set(i: prior, value: fact)
             return
@@ -2753,7 +2753,7 @@ pub impl Comp {
         self.ensureFinalMatchIndex(nextCount: self.arena.finalMatches.count() + 1U64)
         self.arena.finalMatches.append(fact)
         val capacity: U64 = self.arena.finalMatchIndexSlots.count()
-        mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, source: fact.source) % capacity
+        mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, matchSource: fact.matchSource) % capacity
         while self.arena.finalMatchIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -2765,7 +2765,7 @@ pub impl Comp {
     inout fn finalizeCurrentBodyMatch(matchSource: MatchSource) {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return }
-        val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, source: matchSource)
+        val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, matchSource: matchSource)
         if sourceIndex >= self.decls.semanticMatches.count() { return }
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
         val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
@@ -2786,7 +2786,7 @@ pub impl Comp {
             arms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloads=payloads />)
             armIndex += 1U64
         }
-        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId source=matchSource scrutineeTypeRef=scrutineeTypeRef enumIndex=source.enumIndex arms=arms />)
+        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef enumIndex=source.enumIndex arms=arms />)
     }
 
     // A return is a source-level value boundary just like a call argument. The
@@ -4947,7 +4947,7 @@ pub impl Comp {
                 // under the ACTIVE env — every fn instance grounds the stage anew (the
                 // AST rewrite is shared; the groundings are not).
                 self.registerChainSiteInsts(exprId: exprId)
-                self.finalizeCurrentBodyMatch(matchSource=<MatchSource.Expression exprId=exprId />)
+                self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Expression exprId=exprId />)
                 self.scanExprInsts(exprId: scrut)
                 mut val scrutTi: TypeInfo = self.typeOf(id: scrut)
                 val groundedScrut: U64 = self.groundedTypeOf(id: scrut)
@@ -5292,7 +5292,7 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
-                self.finalizeCurrentBodyMatch(matchSource=<MatchSource.Statement stmtId=stmtId />)
+                self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Statement stmtId=stmtId />)
                 // Match-arm bindings are typed from the concrete scrutinee
                 // instance.  `typeOf` is AST-global and loses `Optional[I64]`
                 // for a local loop item; use the body-local/grounded recovery

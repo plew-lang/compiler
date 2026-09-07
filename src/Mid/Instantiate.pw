@@ -258,7 +258,7 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
         return 0U64
     }
     val sourcePlace = c.mid.places[source.place - 1U64]
-    val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=canonicalMatchSource(sourceTag: source.sourceTag, sourceId: source.sourceStmt))
+    val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: canonicalMatchSource(sourceTag: source.sourceTag, sourceId: source.sourceStmt))
     if matchIndex >= c.arena.finalMatches.count() {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
         return 0U64
@@ -953,8 +953,8 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
         MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
             return <MidRvalue.Cast operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) kind=kind targetTerm=targetTerm />
         }
-        MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=<MatchSource.Statement stmtId=sourceStmt />)
+        MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
@@ -963,10 +963,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumTag place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex sourceStmt=sourceStmt resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+            return <MidRvalue.EnumTag place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex matchSource=matchSource resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
-        MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=<MatchSource.Statement stmtId=sourceStmt />)
+        MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
             val groundedResult: U64 = c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
@@ -992,10 +992,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !found && !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+            return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
         }
-        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=<MatchSource.Statement stmtId=sourceStmt />)
+        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
             val groundedResult: U64 = c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
@@ -1021,25 +1021,25 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !found && !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+            return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
         }
         // Boxed payload reads have identical declaration identity and logical
         // type requirements. Delegate their grounding/validation to the
         // ordinary variants, then preserve only the physical cell-read opcode.
-        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadCopy place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadCopy place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
             match checked {
-                MidRvalue.EnumPayloadCopy(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val groundedResult) => {
-                    return <MidRvalue.EnumPayloadBoxedCopy place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+                MidRvalue.EnumPayloadCopy(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val groundedResult) => {
+                    return <MidRvalue.EnumPayloadBoxedCopy place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
                 }
                 _ => { return checked }
             }
         }
-        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadBorrow place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
+            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadBorrow place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
             match checked {
-                MidRvalue.EnumPayloadBorrow(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val groundedResult) => {
-                    return <MidRvalue.EnumPayloadBoxedBorrow place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+                MidRvalue.EnumPayloadBorrow(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val groundedResult) => {
+                    return <MidRvalue.EnumPayloadBoxedBorrow place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
                 }
                 _ => { return checked }
             }
@@ -1154,11 +1154,11 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
         }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: val targetTerm, operand: _) => { return targetTerm }
         MidRvalue.Cast(operand: _, kind: _, targetTerm: val targetTerm) => { return targetTerm }
-        MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
-        MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
-        MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
-        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
-        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
     }
 }
 
