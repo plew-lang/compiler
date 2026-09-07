@@ -171,6 +171,15 @@ else
     fail=$((fail + 1)); failed="$failed mid-global-access"
 fi
 
+# Global initializers are executable source bodies.  They must use the same
+# frozen Mid/call facts as functions rather than merely allowing functions to
+# read a legacy-initialized global address.
+if sh ./test-mid-global-init.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-global-init"
+fi
+
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.

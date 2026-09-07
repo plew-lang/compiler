@@ -1,0 +1,18 @@
+// Global initialization is executable program code, not an exception to Mid.
+// The later initializer reads the earlier process-lifetime root, while the
+// generic call proves that finalized call identities are available from the
+// synthetic global body as well as an ordinary function body.
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+fn box[T](value: T) -> Box[T] { return <Box[T] value=value /> }
+
+val seed: I64 = 40I64
+val answer = seed + 2I64
+val boxed = box(value: answer)
+
+fn main() {
+    print(boxed.value)
+}
