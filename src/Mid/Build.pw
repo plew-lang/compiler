@@ -7,7 +7,7 @@ import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, Sema
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
-import ./Ir with { MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ./Ir with { MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -796,6 +796,15 @@ fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggre
 fn materializeMidClosureValue(c: inout Comp, state: inout MidBuildState, closure: SemanticClosure, expectedType: U64) -> MidOperandBuild {
     if closure.functionTypeTerm == 0U64 || expectedType == 0U64 || !(c.typeRefEq(a: closure.functionTypeTerm, b: expectedType)) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=expectedType /> /> error=<MidBuildError.MissingSemanticType /> />
+    }
+    // Register the closure's frozen parametric body at the same semantic
+    // boundary that creates its MakeClosure rvalue.  Codegen will instantiate
+    // this canonical body later; it never gets permission to reconstruct one
+    // from Expr.Closure.
+    val closureBody: MidBodyBuild = ensureParametricMidClosureBody(c: inout c, closure: closure)
+    match closureBody.error {
+        MidBuildError.None => {}
+        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=expectedType /> /> error=closureBody.error /> }
     }
     val local: U64 = addMidTemporary(state: inout state, typeTerm: expectedType)
     val destination: MidPlace = <MidPlace local=local typeTerm=expectedType />
@@ -2103,6 +2112,33 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
     }
     return <MidBodyBuild body=body canonical=canonical />
+}
+
+// The semantic closure index is frontend-owned.  This adjacent Mid registry
+// records only the one-way lowering boundary: a synthetic body key has one
+// canonical parametric Mid body, shared by every closure value using it.
+// Returning an empty draft for a cached entry is intentional: consumers must
+// use its canonical ID and cannot accidentally reopen a mutable body.
+export fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+    mut val i: U64 = 0U64
+    while i < c.mid.closureBodies.count() {
+        val prior: MidClosureBody = c.mid.closureBodies[i]
+        if prior.bodyKey == closure.bodyKey {
+            val canonical: MidCanonicalBody = <MidCanonicalBody body=prior.parametricBody />
+            if !c.mid.isWellFormed(body: canonical) {
+                return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) canonical=canonical error=<MidBuildError.InvalidBlock /> />
+            }
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) canonical=canonical />
+        }
+        i += 1U64
+    }
+    val built: MidBodyBuild = buildParametricMidClosureBody(c: inout c, closure: closure)
+    match built.error {
+        MidBuildError.None => {}
+        _ => { return built }
+    }
+    c.mid.closureBodies.append(<MidClosureBody bodyKey=closure.bodyKey parametricBody=built.canonical.body />)
+    return built
 }
 
 // Module globals have one synthetic lexical body.  Their frontend facts use

@@ -4973,6 +4973,11 @@ pub impl Comp {
                 // the closure function; preserve the same semantic fact.
                 self.cur.bodyEnvironment = savedBodyEnvironment
                 self.cur.bodyId = 0U64
+                // A closure body is a genuine semantic body, not merely an
+                // AST region revisited by LLVM. Intern its synthetic identity
+                // before scanning so every CallTemplate written below belongs
+                // to the same BodyInstance that the Mid body key denotes.
+                self.cur.bodyId = self.currentBodyInstanceId()
                 mut val pi: U64 = 0
                 while pi < params.count() {
                     val p: Param = params[pi]

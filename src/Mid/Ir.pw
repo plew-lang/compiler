@@ -204,6 +204,16 @@ export struct MidBlockNode {
 }
 pub impl MidBlockNode { factory }
 
+// A closure body is keyed by the frontend's synthetic body identity and owns
+// one frozen parametric Mid body.  The scalar ID deliberately points into the
+// same canonical body pool as ordinary functions: closure code is not a
+// backend-only side table or an AST-shaped exception.
+export struct MidClosureBody {
+    pub val bodyKey: U64 = 0U64
+    pub val parametricBody: U64 = 0U64
+}
+pub impl MidClosureBody { factory }
+
 export struct MidCanonicalArena {
     pub mut val bodies: Array[MidBodyNode] = []
     pub mut val locals: Array[MidLocalDecl] = []
@@ -217,6 +227,7 @@ export struct MidCanonicalArena {
     pub mut val rvalues: Array[MidRvalueNode] = []
     pub mut val aggregateElements: Array[MidAggregateElementNode] = []
     pub mut val closureCaptures: Array[MidClosureCaptureNode] = []
+    pub mut val closureBodies: Array[MidClosureBody] = []
     pub mut val switchCases: Array[MidSwitchCase] = []
     pub mut val callArguments: Array[U64] = []
     pub mut val callTargets: Array[MidCallTargetNode] = []
