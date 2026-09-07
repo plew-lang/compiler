@@ -5,11 +5,11 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -31,6 +31,8 @@ export enum MidInstantiateError {
     InvalidLocalResultType
     MissingTryResolution
     InvalidTryResolution
+    MissingSemanticClosure
+    InvalidSemanticClosure
 }
 
 export struct MidInstantiation {
@@ -350,7 +352,56 @@ fn instantiateCanonicalTryRvalue(c: inout Comp, rvalueId: U64, environment: Body
     return 0U64
 }
 
-fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+// A closure is grounded from its already-published lexical fact, never from
+// the closure Expr or the backend's local stack.  The parametric row stores
+// the exact capture operands selected by Build; this pass only grounds their
+// terms and proves that the row still agrees with the immutable fact.
+fn instantiateCanonicalMakeClosure(c: inout Comp, rvalueId: U64, environment: BodyInstance, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val source: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    if source.tag != 19U64 {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
+        return 0U64
+    }
+    val closureIndex: U64 = c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: source.exprId)
+    if closureIndex >= c.decls.semanticClosures.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
+        return 0U64
+    }
+    val closure: SemanticClosure = c.decls.semanticClosures[closureIndex]
+    val functionType: U64 = c.groundTermForBody(ref: closure.functionTypeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if closure.bodyKey != source.closureBodyKey || source.elements.len != closure.captures.count() || functionType == 0U64 || !(c.typeRefEq(a: functionType, b: c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
+        return 0U64
+    }
+    val captureStart: U64 = c.mid.closureCaptures.count()
+    mut val captureI: U64 = 0U64
+    while captureI < source.elements.len {
+        if source.elements.start + captureI >= c.mid.closureCaptures.count() {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
+            return 0U64
+        }
+        val raw: MidClosureCaptureNode = c.mid.closureCaptures[source.elements.start + captureI]
+        val expected = closure.captures[captureI]
+        val expectedType: U64 = c.groundTermForBody(ref: expected.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        mut val expectedMode: U64 = 0U64
+        match expected.mode {
+            SemanticClosureCaptureMode.ValueCopy => { expectedMode = 1U64 }
+            SemanticClosureCaptureMode.CellBorrow => { expectedMode = 2U64 }
+        }
+        val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: raw.operand, environment: environment, itemRef: itemRef)
+        if raw.bindingTarget != expected.bindingTarget || raw.mode != expectedMode || expectedType == 0U64 || operand == 0U64 || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: expectedType)) {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
+            return 0U64
+        }
+        c.mid.closureCaptures.append(<MidClosureCaptureNode bindingTarget=raw.bindingTarget typeTerm=expectedType mode=raw.mode operand=operand />)
+        captureI += 1U64
+    }
+    c.mid.rvalues.append(<MidRvalueNode tag=19U64 exprId=source.exprId closureBodyKey=source.closureBodyKey resultTerm=functionType elements=<MidRange start=captureStart len=source.elements.len /> />)
+    return c.mid.rvalues.count()
+}
+
+fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val tag: U64 = c.mid.rvalues[rvalueId - 1U64].tag
     match tag {
@@ -372,17 +423,18 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
         16U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         17U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         18U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        19U64 => { return instantiateCanonicalMakeClosure(c: inout c, rvalueId: rvalueId, environment: environment, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error) }
         _ => { return 0U64 }
     }
 }
 
-fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
+fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, environment: BodyInstance, bodyId: U64, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
     if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
     val source = c.mid.statements[statementId - 1U64]
     match source.tag {
         1U64 => {
             val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef)
-            val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+            val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
             if destination == 0U64 || value == 0U64 { return false }
             c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=value />)
         }
@@ -495,6 +547,7 @@ fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
         16U64 => { return value.resultTerm }
         17U64 => { return value.resultTerm }
         18U64 => { return value.resultTerm }
+        19U64 => { return value.resultTerm }
         _ => { return 0U64 }
     }
 }
@@ -810,7 +863,7 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
         val statementStart: U64 = c.mid.statements.count()
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
-            if !instantiateCanonicalStatement(c: inout c, statementId: block.statements.start + statementI + 1U64, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) {
+            if !instantiateCanonicalStatement(c: inout c, statementId: block.statements.start + statementI + 1U64, environment: environment, bodyId: bodyId, sourceFunction: source.sourceFunction, itemRef: itemRef, error: inout error) {
                 return <MidCanonicalInstantiation error=error />
             }
             statementI = statementI + 1U64
@@ -1183,6 +1236,16 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if tryIndex >= c.arena.finalTries.count() { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
             return <MidRvalue.TryErrResult exprId=exprId resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) error=instantiateMidOperand(c: inout c, operand: errorOperand, environment: environment, itemRef: itemRef) />
         }
+        MidRvalue.MakeClosure(exprId: val exprId, bodyKey: val bodyKey, functionTypeTerm: val functionTypeTerm, captures: val captures) => {
+            mut val grounded: Array[MidClosureCapture] = []
+            mut val i: U64 = 0U64
+            while i < captures.count() {
+                val capture = captures[i]
+                grounded.append(<MidClosureCapture bindingTarget=capture.bindingTarget typeTerm=c.groundTermForBody(ref: capture.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) mode=capture.mode operand=instantiateMidOperand(c: inout c, operand: capture.operand, environment: environment, itemRef: itemRef) />)
+                i += 1U64
+            }
+            return <MidRvalue.MakeClosure exprId=exprId bodyKey=bodyKey functionTypeTerm=c.groundTermForBody(ref: functionTypeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) captures=grounded />
+        }
     }
 }
 
@@ -1317,6 +1380,7 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.TryErrResult(exprId: _, resultTerm: val resultTerm, error: _) => { return resultTerm }
+        MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: val functionTypeTerm, captures: _) => { return functionTypeTerm }
     }
 }
 

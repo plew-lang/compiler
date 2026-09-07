@@ -228,6 +228,8 @@ pub impl LlvmCtx {
             MidInstantiateError.InvalidLocalResultType => { return 12U64 }
             MidInstantiateError.MissingTryResolution => { return 14U64 }
             MidInstantiateError.InvalidTryResolution => { return 15U64 }
+            MidInstantiateError.MissingSemanticClosure => { return 16U64 }
+            MidInstantiateError.InvalidSemanticClosure => { return 17U64 }
         }
     }
 
@@ -249,6 +251,8 @@ pub impl LlvmCtx {
             12U64 => { eprint(text: "invalid-local-result-type") }
             14U64 => { eprint(text: "missing-try-resolution") }
             15U64 => { eprint(text: "invalid-try-resolution") }
+            16U64 => { eprint(text: "missing-semantic-closure") }
+            17U64 => { eprint(text: "invalid-semantic-closure") }
             _ => { eprint(text: "unknown") }
         }
     }
@@ -488,6 +492,9 @@ pub impl LlvmCtx {
             MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
                 return targetTerm != 0U64 && targetTerm < c.arena.types.count() && self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
             }
+            // The draft path intentionally stays fail-closed until the
+            // canonical MakeClosure emitter owns the environment ABI.
+            MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: _) => { return false }
             MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
@@ -532,6 +539,7 @@ pub impl LlvmCtx {
             MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return false }
             MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return false }
             MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: _) => { return false }
+            MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: _) => { return false }
         }
     }
 
@@ -2657,6 +2665,9 @@ pub impl LlvmCtx {
                         LLVMBuildUnreachable(self.b)
                     }
                     MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: _) => {
+                        LLVMBuildUnreachable(self.b)
+                    }
+                    MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: _) => {
                         LLVMBuildUnreachable(self.b)
                     }
                 }

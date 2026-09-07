@@ -3,7 +3,7 @@
 // lowering once Mid bodies become the production input.
 
 import ../Frontend with { Comp }
-import ./Ir with { MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
+import ./Ir with { MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership, analyzeCanonicalMidOwnership, midSuccessors }
 
 export enum MidVerifyError {
@@ -72,6 +72,18 @@ fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], r
             val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             elementI = elementI + 1U64
+        }
+        return <MidVerification />
+    }
+    if value.tag == 19U64 {
+        if !isGrounded || value.resultTerm == 0U64 || value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+        mut val captureI: U64 = 0U64
+        while captureI < value.elements.len {
+            val capture: MidClosureCaptureNode = c.mid.closureCaptures[value.elements.start + captureI]
+            if (capture.mode != 1U64 && capture.mode != 2U64) || capture.typeTerm == 0U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: capture.operand, block: block)
+            match verified.error { MidVerifyError.None => {} _ => { return verified } }
+            captureI += 1U64
         }
         return <MidVerification />
     }
@@ -437,6 +449,15 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { return midVerifyConsumeOperand(states: inout states, operand: error, block: block) }
+        MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
+            mut val i: U64 = 0U64
+            while i < captures.count() {
+                val checked = midVerifyConsumeOperand(states: inout states, operand: captures[i].operand, block: block)
+                match checked.error { MidVerifyError.None => {} _ => { return checked } }
+                i += 1U64
+            }
+            return <MidVerification />
+        }
     }
 }
 

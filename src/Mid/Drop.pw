@@ -4,7 +4,7 @@
 // always-on verifier.
 
 import ../Frontend with { Comp }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 // Ownership state is function-local. A Global place denotes a stable storage
 // address whose owner is the module lifetime, so reads and borrows never
@@ -38,6 +38,13 @@ fn canonicalMidConsumeRvalue(c: Comp, states: inout Array[MidOwnership], rvalueI
             val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
             canonicalMidConsumeOperand(c: c, states: inout states, operandId: element.operand)
             elementI = elementI + 1U64
+        }
+    }
+    if value.tag == 19U64 {
+        mut val captureI: U64 = 0U64
+        while captureI < value.elements.len {
+            canonicalMidConsumeOperand(c: c, states: inout states, operandId: c.mid.closureCaptures[value.elements.start + captureI].operand)
+            captureI += 1U64
         }
     }
 }
@@ -215,6 +222,13 @@ fn canonicalMidMakeRvalueUnavailable(c: Comp, states: inout Array[MidAccessibili
         while elementI < value.elements.len {
             canonicalMidMakeOperandUnavailable(c: c, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand)
             elementI = elementI + 1U64
+        }
+    }
+    if value.tag == 19U64 {
+        mut val captureI: U64 = 0U64
+        while captureI < value.elements.len {
+            canonicalMidMakeOperandUnavailable(c: c, states: inout states, operandId: c.mid.closureCaptures[value.elements.start + captureI].operand)
+            captureI += 1U64
         }
     }
 }
@@ -517,6 +531,14 @@ fn canonicalMidAppendMovedFlagClears(c: inout Comp, rvalueId: U64, sourceLocalCo
             val moved: U64 = canonicalMidMovedRoot(c: c, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand)
             if moved < sourceLocalCount && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: sourceLocalCount, local: moved) isSet=false />) }
             elementI = elementI + 1U64
+        }
+    }
+    if value.tag == 19U64 {
+        mut val captureI: U64 = 0U64
+        while captureI < value.elements.len {
+            val moved: U64 = canonicalMidMovedRoot(c: c, operandId: c.mid.closureCaptures[value.elements.start + captureI].operand)
+            if moved < sourceLocalCount && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: sourceLocalCount, local: moved) isSet=false />) }
+            captureI += 1U64
         }
     }
 }
@@ -939,6 +961,13 @@ fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {}
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {}
         MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { midConsumeOperand(states: inout states, operand: error) }
+        MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
+            mut val i: U64 = 0U64
+            while i < captures.count() {
+                midConsumeOperand(states: inout states, operand: captures[i].operand)
+                i += 1U64
+            }
+        }
     }
 }
 
@@ -1172,6 +1201,13 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                     MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {}
                     MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {}
                     MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { midMakeOperandUnavailable(states: inout out, operand: error) }
+                    MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
+                        mut val capture: U64 = 0U64
+                        while capture < captures.count() {
+                            midMakeOperandUnavailable(states: inout out, operand: captures[capture].operand)
+                            capture += 1U64
+                        }
+                    }
                 }
                 if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
@@ -1348,6 +1384,14 @@ fn midAppendMovedFlagClears(value: MidRvalue, originalCount: U64, needsFlag: Arr
         MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => {
             val moved: U64 = midOperandMovedRoot(operand: error)
             if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
+            mut val capture: U64 = 0U64
+            while capture < captures.count() {
+                val moved: U64 = midOperandMovedRoot(operand: captures[capture].operand)
+                if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+                capture += 1U64
+            }
         }
         _ => {}
     }

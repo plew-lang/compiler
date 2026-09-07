@@ -8,7 +8,7 @@
 // Copy / Move / Drop operations on places; raw retain/release is not an IR
 // escape hatch.
 
-import ../Ir with { CallSiteKey, MatchSource }
+import ../Ir with { CallSiteKey, MatchSource, SemanticClosureCaptureMode }
 
 // Canonical Mid storage is deliberately separate from the builder vocabulary
 // below.  A Mid body is read by instantiation, drop elaboration, verification,
@@ -70,6 +70,18 @@ export struct MidAggregateElementNode {
 }
 pub impl MidAggregateElementNode { factory }
 
+// One frozen capture in a closure environment. `operand` owns the exact
+// source evaluation chosen by Mid; `bindingTarget` remains available for the
+// synthetic closure body's environment binding but is never a spelling to be
+// resolved again. `mode` is 1=ValueCopy, 2=CellBorrow.
+export struct MidClosureCaptureNode {
+    pub val bindingTarget: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val mode: U64 = 0U64
+    pub val operand: U64 = 0U64
+}
+pub impl MidClosureCaptureNode { factory }
+
 export struct MidSwitchCase {
     pub val value: I64
     pub val target: U64
@@ -117,6 +129,10 @@ export struct MidRvalueNode {
     pub val bindTarget: U64 = 0U64
     pub val sourceTerm: U64 = 0U64
     pub val targetTerm: U64 = 0U64
+    // Synthetic closure-body identity for MakeClosure.  This is deliberately
+    // distinct from exprId: the latter navigates to the source value fact,
+    // while this key names the callable body that receives its environment.
+    pub val closureBodyKey: U64 = 0U64
 }
 pub impl MidRvalueNode { factory }
 
@@ -200,6 +216,7 @@ export struct MidCanonicalArena {
     pub mut val operands: Array[MidOperandNode] = []
     pub mut val rvalues: Array[MidRvalueNode] = []
     pub mut val aggregateElements: Array[MidAggregateElementNode] = []
+    pub mut val closureCaptures: Array[MidClosureCaptureNode] = []
     pub mut val switchCases: Array[MidSwitchCase] = []
     pub mut val callArguments: Array[U64] = []
     pub mut val callTargets: Array[MidCallTargetNode] = []
@@ -328,6 +345,14 @@ export struct MidAggregateElement {
 }
 pub impl MidAggregateElement { factory }
 
+export struct MidClosureCapture {
+    pub val bindingTarget: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
+    pub val operand: MidOperand
+}
+pub impl MidClosureCapture { factory }
+
 export enum MidRvalue {
     Use(operand: MidOperand)
     // The ABI return boundary is distinct from an ordinary assignment. Its
@@ -381,6 +406,10 @@ export enum MidRvalue {
     // before lexical cleanup. The optional conversion is represented by the
     // preceding explicit Mid Call, never by this rvalue or LLVM lookup.
     TryErrResult(exprId: U64, resultTerm: U64, error: MidOperand)
+    // A closure is a normal owned value producer.  The body key and capture
+    // descriptors were frozen by frontend/Mono; Mid never derives either from
+    // Expr.Closure or from the LLVM local stack.
+    MakeClosure(exprId: U64, bodyKey: U64, functionTypeTerm: U64, captures: Array[MidClosureCapture])
 }
 
 // Closed representation operation selected from the frozen, grounded source
@@ -605,6 +634,17 @@ fn midFreezeAggregateElement(arena: inout MidCanonicalArena, element: MidAggrega
     arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=element.fieldIndex operand=midFreezeOperand(arena: inout arena, operand: element.operand) targetTerm=element.targetTerm isBoxed=element.isBoxed conversion=element.conversion />)
 }
 
+fn midFreezeClosureCaptureMode(mode: SemanticClosureCaptureMode) -> U64 {
+    match mode {
+        SemanticClosureCaptureMode.ValueCopy => { return 1U64 }
+        SemanticClosureCaptureMode.CellBorrow => { return 2U64 }
+    }
+}
+
+fn midFreezeClosureCapture(arena: inout MidCanonicalArena, capture: MidClosureCapture) {
+    arena.closureCaptures.append(<MidClosureCaptureNode bindingTarget=capture.bindingTarget typeTerm=capture.typeTerm mode=midFreezeClosureCaptureMode(mode: capture.mode) operand=midFreezeOperand(arena: inout arena, operand: capture.operand) />)
+}
+
 fn midFreezeMatchSourceTag(matchSource: MatchSource) -> U64 {
     match matchSource {
         MatchSource.Statement(stmtId: _) => { return 0U64 }
@@ -682,6 +722,15 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         }
         MidRvalue.TryErrResult(exprId: val exprId, resultTerm: val resultTerm, error: val error) => {
             arena.rvalues.append(<MidRvalueNode tag=18U64 exprId=exprId resultTerm=resultTerm operand=midFreezeOperand(arena: inout arena, operand: error) />)
+        }
+        MidRvalue.MakeClosure(exprId: val exprId, bodyKey: val bodyKey, functionTypeTerm: val functionTypeTerm, captures: val captures) => {
+            val start: U64 = arena.closureCaptures.count()
+            mut val i: U64 = 0U64
+            while i < captures.count() {
+                midFreezeClosureCapture(arena: inout arena, capture: captures[i])
+                i += 1U64
+            }
+            arena.rvalues.append(<MidRvalueNode tag=19U64 exprId=exprId closureBodyKey=bodyKey resultTerm=functionTypeTerm elements=<MidRange start=start len=captures.count() /> />)
         }
     }
     return arena.rvalues.count()
