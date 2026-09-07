@@ -1050,7 +1050,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                 MidOperand.Copy(place: val place) => {
                     mut val projections: Array[MidProjection] = place.projections
                     projections.append(<MidProjection.Field index=field.fieldProjectionIndex typeTerm=typeTerm />)
-                    return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace local=place.local projections=projections typeTerm=typeTerm /> /> />
+                    return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=typeTerm /> /> />
                 }
                 MidOperand.Access(candidate: val candidate) => {
                     if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
