@@ -2036,6 +2036,75 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     return <MidBodyBuild body=body canonical=canonical />
 }
 
+// A closure body has the same parametric-to-grounded Mid path as a Func body,
+// but its ABI is `(environment, source parameters...)`. The environment is not
+// a source local: its fields are bound by the closure LLVM entry from the
+// frozen capture range. Consequently this builder creates only the source
+// parameter prefix and capture locals, all from SemanticClosure; it never
+// re-matches Expr.Closure to recover a signature or body.
+export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+    if closure.bodyKey == 0U64 || closure.bodyBlock >= c.arena.blocks.count() || closure.functionTypeTerm == 0U64 {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.InvalidFunction /> />
+    }
+    if closure.hasReturn && closure.returnTypeTerm == 0U64 {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.MissingSemanticType /> />
+    }
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=closure.bodyKey />
+    // Source parameters are the contiguous Mid ABI prefix. The closure LLVM
+    // emitter adds its environment pointer before this prefix; representing it
+    // as an ordinary Mid parameter would shift every source ABI index.
+    mut val parameterI: U64 = 0U64
+    while parameterI < closure.parameters.count() {
+        val parameter = closure.parameters[parameterI]
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: parameter.bindingTarget, typeTerm: parameter.typeTerm, isUnique: midTermIsUnique(c: inout c, term: parameter.typeTerm), isParameter: true, ownsAtEntry: parameter.isMove, isInout: parameter.isInout)
+        parameterI += 1U64
+    }
+    // Environment entries are available for the activation but owned by the
+    // closure environment. Value captures are borrowed values; cell captures
+    // are writable logical places backed by an environment-owned cell. The
+    // latter start logically live so overwrite emits the value Drop, while the
+    // borrowed marker prevents scope exit from releasing the environment cell.
+    mut val captureI: U64 = 0U64
+    while captureI < closure.captures.count() {
+        val capture = closure.captures[captureI]
+        match capture.mode {
+            SemanticClosureCaptureMode.ValueCopy => {
+                val captureLocal: U64 = addMidLocal(state: inout state, declarationTarget: capture.bindingTarget, typeTerm: capture.typeTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: true)
+            }
+            SemanticClosureCaptureMode.CellBorrow => {
+                val captureLocal: U64 = addMidLocal(state: inout state, declarationTarget: capture.bindingTarget, typeTerm: capture.typeTerm, isUnique: false, isParameter: false, ownsAtEntry: true, isBorrowed: true, isCaptureCell: true)
+            }
+        }
+        captureI += 1U64
+    }
+    // Root scope is exactly the ABI parameters plus the environment bindings;
+    // body locals belong to the child scope opened by buildMidBlock.
+    val root: MidScope = state.scopes[0U64]
+    state.scopes.set(i: 0U64, value: <MidScope parent=root.parent firstLocal=root.firstLocal localCount=state.locals.count() - root.firstLocal />)
+    if closure.hasReturn {
+        val resultLocal: U64 = state.locals.count()
+        state.locals.append(<MidLocalDecl typeTerm=closure.returnTypeTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: closure.returnTypeTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
+        state.hasReturnPlace = true
+        state.returnPlace = resultLocal
+    }
+    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: closure.bodyBlock)
+    match result {
+        MidBuildError.None => {}
+        _ => { return <MidBodyBuild body=<MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }
+    }
+    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+        if closure.hasReturn { return <MidBodyBuild body=<MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingTerminator /> /> }
+        midEmitScopeExit(state: inout state, scope: 0U64)
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
+    }
+    val body: MidBody = <MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val canonical: MidCanonicalBody = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) {
+        return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
+    }
+    return <MidBodyBuild body=body canonical=canonical />
+}
+
 // Module globals have one synthetic lexical body.  Their frontend facts use
 // the same sentinel owner as Mono, so calls and aggregates remain keyed by
 // their recorded source identity rather than being re-resolved from names.

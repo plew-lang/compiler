@@ -820,7 +820,9 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                                 // cell; an overwrite elsewhere still uses
                                 // tag=3 to drop only the current logical T.
                                 MidOwnership.Owned => {
-                                    if c.mid.locals[source.locals.start + local].isCaptureCell { c.mid.statements.append(<MidStatementNode tag=10U64 destination=place />) }
+                                    val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
+                                    if declaration.isBorrowed { }
+                                    else if declaration.isCaptureCell { c.mid.statements.append(<MidStatementNode tag=10U64 destination=place />) }
                                     else { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
                                 }
                                 MidOwnership.MaybeOwned => {
@@ -1695,7 +1697,8 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         if local < originalCount && local < currentOwnership.count() {
                             match currentOwnership[local] {
                                 MidOwnership.Owned => {
-                                    if body.locals[local].isCaptureCell { statements.append(<MidStatement.ReleaseCaptureCell place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
+                                    if body.locals[local].isBorrowed { }
+                                    else if body.locals[local].isCaptureCell { statements.append(<MidStatement.ReleaseCaptureCell place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
                                     else { statements.append(<MidStatement.Drop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
                                 }
                                 MidOwnership.MaybeOwned => {

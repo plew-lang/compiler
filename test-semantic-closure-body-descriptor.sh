@@ -26,5 +26,13 @@ require 'bodyBlock=body' src/Codegen/Mono/Call.pw
 # body key distinguishes call rows, but it must retain the enclosing instance
 # environment which grounds the captured type terms and body templates.
 require 'self.cur.bodyEnvironment = savedBodyEnvironment' src/Codegen/Mono/Call.pw
+# The Mid closure-body builder consumes the frozen descriptor; it must not
+# reopen Expr.Closure. Environment-bound captures are usable inside a closure
+# but are not lexical owners of the environment's value/cell.
+require 'buildParametricMidClosureBody' src/Mid/Build.pw
+require 'closure.parameters' src/Mid/Build.pw
+require 'closure.captures' src/Mid/Build.pw
+require 'closure.bodyBlock' src/Mid/Build.pw
+require 'if body.locals[local].isBorrowed { }' src/Mid/Drop.pw
 
 echo 'PASS semantic closure body descriptor' >&2
