@@ -43,7 +43,6 @@ pub impl MidIndexLocalBuild { factory }
 // can select one semantic lowering slice rather than treating unrelated
 // statement and operand work as one bucket.
 export enum MidUnsupportedBuild {
-    ExpressionStatement
     MakeWithoutAggregate
     FieldPlace
     UniqueAggregate

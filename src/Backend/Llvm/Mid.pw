@@ -14,7 +14,6 @@ pub impl LlvmCtx {
     // couples diagnostics to ARC layout of every evolving error enum.
     fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
         match reason {
-            MidUnsupportedBuild.ExpressionStatement => { return 0U64 }
             MidUnsupportedBuild.MakeWithoutAggregate => { return 1U64 }
             MidUnsupportedBuild.FieldPlace => { return 2U64 }
             MidUnsupportedBuild.UniqueAggregate => { return 3U64 }
