@@ -16,24 +16,12 @@
 // moduleOf works). The returned tree drives import/part discovery and is then lowered in the
 // same file order once loading is complete.
 pub impl Comp {
-    inout fn parseFile(fileBytes: Array[U8], fileStart: U64) -> Array[TopItemAst] {
-        mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
-        lex(lx: inout lx)
-        mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
-        val items: Array[TopItemAst] = parseProgramAst(p: inout p)
-        if p.hasErr {
-            self.errorAt(offset: p.errOff, msg: p.errMsg)
-        }
-        return items
-    }
-
-    // New compiler path: append to Comp's one syntax store and retain only the
-    // root range for this source file.  The legacy value path stays temporarily
-    // while import scan and lowering are migrated together.
+    // Append to Comp's one syntax store and retain only the root range for this
+    // file.  Import scan and lowering consume those immutable IDs directly.
     inout fn parseFileSyntax(fileBytes: Array[U8], fileStart: U64) -> SyntaxSlice {
-        mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
+        mut val lx: Lexer = <Lexer bytes=fileBytes pos=0U64 toks=[] depth=0I64 />
         lex(lx: inout lx)
-        mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
+        mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0U64 base=fileStart />
         val roots: SyntaxSlice = parseProgramSyntaxInto(p: inout p, file: inout self.syntax)
         if p.hasErr {
             self.errorAt(offset: p.errOff, msg: p.errMsg)
@@ -41,9 +29,9 @@ pub impl Comp {
         return roots
     }
 
-    // ID-only counterpart of checkPartImplOnly.  It deliberately needs no
-    // declaration/statement materialization: the top-level tag, source span,
-    // and Export's nested TopItemId completely determine this rule.
+    // This deliberately needs no declaration/statement materialization: the
+    // top-level tag, source span, and Export's nested TopItemId completely
+    // determine this rule.
     inout fn checkPartSyntaxOnly(roots: SyntaxSlice) {
         mut val i: U64 = 0U64
         while i < roots.count {
@@ -62,43 +50,6 @@ pub impl Comp {
             }
             _ => {
                 self.partItemError(offset: syntaxTopItemSpan(file: self.syntax, item: item).start)
-            }
-        }
-    }
-
-    // spec/15 ("part の唯一の用途＝無名 impl の配置・part に書けるのは impl だけ"): a
-    // `part` file may contain only `impl` blocks plus the structural directives
-    // `import`/`part`/`@[...]`. A free function, type (struct/enum/trait/newtype),
-    // `extern` block, top-level `val`, or re-export belongs at the module root or
-    // another module — reject it so `part` cannot be abused as a generic "split a big
-    // module across files" mechanism (the role split is `import`=layer, `part`=impl).
-    inout fn checkPartImplOnly(items: Array[TopItemAst]) {
-        mut val i: U64 = 0
-        while i < items.count() {
-            self.rejectNonImplPartItem(item: items[i])
-            i += 1
-        }
-    }
-
-    inout fn rejectNonImplPartItem(item: TopItemAst) {
-        match item {
-            // allowed in a part: anonymous-impl placement + structural directives.
-            TopItemAst.Impl(im: _) => {}
-            TopItemAst.Import(imp: _) => {}
-            TopItemAst.Directive(dir: _) => {}
-            // `export <item>`: legal only if the wrapped item is itself part-legal.
-            TopItemAst.Export(val inner) => { self.rejectNonImplPartItem(item: inner) }
-            // forbidden: definitions that belong at the module root or another module.
-            TopItemAst.Decl(val d) => { self.partItemError(offset: d.nameSpan.start) }
-            TopItemAst.Trait(val t) => { self.partItemError(offset: t.nameSpan.start) }
-            TopItemAst.Extern(val e) => { self.partItemError(offset: e.abiSpan.start) }
-            TopItemAst.ReExport(val imp) => { self.partItemError(offset: imp.pathSpan.start) }
-            TopItemAst.NewType(name: _, nameSpan: _, ty: _, isPub: _, val span) => { self.partItemError(offset: span.start) }
-            TopItemAst.GlobalVal(val s) => {
-                match s {
-                    StmtAst.Let(mutable: _, name: _, nameSpan: _, hasTy: _, ty: _, init: _, val span) => { self.partItemError(offset: span.start) }
-                    _ => { self.partItemError(offset: 0) }
-                }
             }
         }
     }
