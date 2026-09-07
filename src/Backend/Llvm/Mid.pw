@@ -3,7 +3,7 @@
 // places, semantic constants, and explicit ownership operations.
 
 import @Std/Core with { truncU32, bitCastU64 }
-import ../../Ir with { ConversionProofNode }
+import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion }
 
 pub impl LlvmCtx {
 
@@ -1747,7 +1747,7 @@ pub impl LlvmCtx {
             // a value through an absent proof.
             return node.staticProof != 0U64 && node.staticProof <= c.arena.staticProofs.count() && c.arena.staticProofs[node.staticProof - 1U64].tag != 0U64
         }
-        if node.tag == 3U64 { return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId) }
+        if node.tag == 3U64 || node.tag == 4U64 { return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId) }
         return false
     }
 
@@ -1765,6 +1765,26 @@ pub impl LlvmCtx {
             val target: TypeRef = c.arena.types[targetRef]
             if source.args.count() != 1U64 || target.args.count() != 1U64 || node.element == 0U64 { return false }
             return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: source.args[0U64], targetRef: target.args[0U64], proofId: node.element)
+        }
+        if node.tag == 4U64 {
+            if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) || node.enumIdx >= c.arena.enums.count() { return false }
+            val source: TypeRef = c.arena.types[sourceRef]
+            val target: TypeRef = c.arena.types[targetRef]
+            if source.args.count() != target.args.count() || node.payloads > c.arena.conversionPayloadPool.count() || node.payloadCount > c.arena.conversionPayloadPool.count() - node.payloads { return false }
+            mut val expected: U64 = 0U64
+            mut val variant: U64 = 0U64
+            while variant < c.arena.enums[node.enumIdx].variants.count() {
+                expected += c.arena.enums[node.enumIdx].variants[variant].fields.count()
+                variant += 1U64
+            }
+            if expected != node.payloadCount { return false }
+            mut val i: U64 = 0U64
+            while i < node.payloadCount {
+                val payload: FrozenEnumPayloadConversion = c.arena.conversionPayloadPool[node.payloads + i]
+                if !self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: payload.sourceRef, targetRef: payload.targetRef, proofId: payload.conversion) { return false }
+                i += 1U64
+            }
+            return true
         }
         return false
     }
@@ -1790,6 +1810,10 @@ pub impl LlvmCtx {
             if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.ptrty) }
             return self.midCanonicalEmitArrayRepack(c: inout c, source: self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64]), sourceRef: node.sourceRef, targetRef: node.targetRef, elementProof: node.element)
         }
+        if node.tag == 4U64 {
+            if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.ptrty) }
+            return self.midCanonicalEmitEnumRepack(c: inout c, source: self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64]), sourceRef: node.sourceRef, targetRef: node.targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount)
+        }
         return LLVMConstNull(self.ptrty)
     }
 
@@ -1811,6 +1835,7 @@ pub impl LlvmCtx {
             return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
         }
         if node.tag == 3U64 { return self.midCanonicalEmitArrayRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, elementProof: node.element) }
+        if node.tag == 4U64 { return self.midCanonicalEmitEnumRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount) }
         return LLVMConstNull(self.ptrty)
     }
 
@@ -1847,6 +1872,68 @@ pub impl LlvmCtx {
         LLVMBuildBr(self.b, condition)
         LLVMPositionBuilderAtEnd(self.b, done)
         return self.arrValMake(c: inout c, data: targetData, count: count, aggTy: self.arrayInstTy(c: inout c, elemRef: targetElementRef))
+    }
+
+    // Rebuild an enum from its physical payload proof range.  The range is in
+    // declaration variant/field order, so this emitter uses enum metadata
+    // only for layout and never infers a conversion from generic arguments.
+    inout fn midCanonicalEmitEnumRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, enumIdx: U64, payloadStart: U64, payloadCount: U64) -> LLVMValueRef {
+        if sourceRef == 0U64 || sourceRef >= c.arena.types.count() || targetRef == 0U64 || targetRef >= c.arena.types.count() || enumIdx >= c.arena.enums.count() || payloadStart > c.arena.conversionPayloadPool.count() || payloadCount > c.arena.conversionPayloadPool.count() - payloadStart { return LLVMConstNull(self.ptrty) }
+        val sourceSlot: U64 = self.genEnumSlot(c: inout c, ref: sourceRef)
+        val targetSlot: U64 = self.genEnumSlot(c: inout c, ref: targetRef)
+        if sourceSlot >= self.genEnumRefs.count() || targetSlot >= self.genEnumRefs.count() || self.genEnumDefs[sourceSlot] != enumIdx || self.genEnumDefs[targetSlot] != enumIdx { return LLVMConstNull(self.ptrty) }
+        val sourceType: TypeRef = c.arena.types[sourceRef]
+        val targetType: TypeRef = c.arena.types[targetRef]
+        if sourceType.args.count() != targetType.args.count() { return LLVMConstNull(self.ptrty) }
+        val sourceLlvmType: LLVMTypeRef = self.genEnumTys[sourceSlot]
+        val targetLlvmType: LLVMTypeRef = self.genEnumTys[targetSlot]
+        val sourceSlotPtr: LLVMValueRef = self.entryAlloca(ty: sourceLlvmType)
+        LLVMBuildStore(self.b, source, sourceSlotPtr)
+        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sourceLlvmType, sourceSlotPtr, 0U64, anon()), anon())
+        val sourcePayloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, sourceLlvmType, sourceSlotPtr, 1U64, anon())
+        val resultSlot: LLVMValueRef = self.entryAlloca(ty: targetLlvmType)
+        val end: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.end"))
+        val savedParams: Array[Bind] = c.cur.typeParams
+        val savedArgs: Array[U64] = c.cur.typeArgs
+        mut val payloadIndex: U64 = 0U64
+        mut val variant: U64 = 0U64
+        while variant < c.arena.enums[enumIdx].variants.count() {
+            val matched: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.variant"))
+            val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.next"))
+            LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
+            LLVMPositionBuilderAtEnd(self.b, matched)
+            val fields: Array[FieldDef] = c.arena.enums[enumIdx].variants[variant].fields
+            mut val values: Array[LLVMValueRef] = []
+            if fields.count() > 0U64 {
+                c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+                c.cur.typeArgs = sourceType.args
+                val sourcePayloadType: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIdx, vi: variant)
+                val payload: LLVMValueRef = LLVMBuildLoad2(self.b, sourcePayloadType, sourcePayloadPtr, anon())
+                c.cur.typeParams = savedParams
+                c.cur.typeArgs = savedArgs
+                mut val field: U64 = 0U64
+                while field < fields.count() {
+                    if payloadIndex >= payloadCount { return LLVMConstNull(targetLlvmType) }
+                    val plan: FrozenEnumPayloadConversion = c.arena.conversionPayloadPool[payloadStart + payloadIndex]
+                    values.append(self.midCanonicalEmitBorrowedConversion(c: inout c, value: LLVMBuildExtractValue(self.b, payload, field, anon()), sourceRef: plan.sourceRef, targetRef: plan.targetRef, proofId: plan.conversion))
+                    payloadIndex += 1U64
+                    field += 1U64
+                }
+            }
+            c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+            c.cur.typeArgs = targetType.args
+            LLVMBuildStore(self.b, self.buildEnumFromValues(c: inout c, eid: enumIdx, ety: targetLlvmType, vi: variant, payloadVals: values), resultSlot)
+            c.cur.typeParams = savedParams
+            c.cur.typeArgs = savedArgs
+            LLVMBuildBr(self.b, end)
+            LLVMPositionBuilderAtEnd(self.b, next)
+            variant += 1U64
+        }
+        if payloadIndex != payloadCount { return LLVMConstNull(targetLlvmType) }
+        LLVMBuildStore(self.b, LLVMConstNull(targetLlvmType), resultSlot)
+        LLVMBuildBr(self.b, end)
+        LLVMPositionBuilderAtEnd(self.b, end)
+        return LLVMBuildLoad2(self.b, targetLlvmType, resultSlot, anon())
     }
 
     inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
@@ -1900,7 +1987,7 @@ pub impl LlvmCtx {
             val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
             val proof: ConversionProofNode = c.arena.conversionProofs[value.conversion - 1U64]
             if proof.tag == 0U64 { return true }
-            if proof.tag == 3U64 { return operand.tag == 1U64 }
+            if proof.tag == 3U64 || proof.tag == 4U64 { return operand.tag == 1U64 }
             return operand.tag == 1U64 || operand.tag == 2U64
         }
         if value.tag == 7U64 { return false }
