@@ -1977,7 +1977,14 @@ pub impl LlvmCtx {
             mut val elementI: U64 = 0U64
             while elementI < value.elements.len {
                 val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
-                if element.targetTerm == 0U64 || element.targetTerm >= c.arena.types.count() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: element.operand) || !c.conversionProofIsIdentity(id: element.conversion) { return false }
+                if element.targetTerm == 0U64 || element.targetTerm >= c.arena.types.count() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: element.operand) { return false }
+                if !c.conversionProofIsIdentity(id: element.conversion) {
+                    if !self.midCanonicalConversionProofSupported(c: inout c, proofId: element.conversion) || element.operand == 0U64 || element.operand > c.mid.operands.count() { return false }
+                    val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]
+                    val proof: ConversionProofNode = c.arena.conversionProofs[element.conversion - 1U64]
+                    if proof.tag == 2U64 && operand.tag != 1U64 && operand.tag != 2U64 { return false }
+                    if (proof.tag == 3U64 || proof.tag == 4U64) && operand.tag != 1U64 { return false }
+                }
                 elementI = elementI + 1U64
             }
             return true
@@ -3389,7 +3396,9 @@ pub impl LlvmCtx {
         // never repackage this operand into MidOperand merely to reuse draft
         // lowering.  The direct aggregate path admits the identity boundary
         // first and remains fail-closed for the rest.
-        if !c.conversionProofIsIdentity(id: element.conversion) { return LLVMConstNull(self.ptrty) }
+        if !c.conversionProofIsIdentity(id: element.conversion) {
+            return self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: element.operand, proofId: element.conversion)
+        }
         val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: element.operand)
         if element.operand != 0U64 && element.operand <= c.mid.operands.count() {
             val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]

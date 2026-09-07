@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 source=src/Backend/Llvm/Mid.pw
 canonical=$(sed -n '/fn midCanonicalPlaceTy/,$p' "$source")
 conversion=$(sed -n '/fn midCanonicalConversionProofSupported/,/fn midCanonicalPlaceLlvmSupported/p' "$source")
+aggregate=$(sed -n '/fn midCanonicalEmitAggregateElement/,/fn midCanonicalEmitAggregate/p' "$source")
 
 for symbol in midCanonicalConversionProofSupported midCanonicalEmitValueConversion midCanonicalEmitBorrowedConversion midCanonicalEmitArrayRepack midCanonicalEmitEnumRepack; do
     if ! printf '%s\n' "$canonical" | rg -q "\b$symbol\b"; then
@@ -39,5 +40,9 @@ if ! printf '%s\n' "$canonical" | rg -q '\bboxIntoAny\b'; then
 fi
 if printf '%s\n' "$conversion" | rg -q '\bthawValueConversionProof\b'; then
     echo "canonical conversion reader thawed a draft conversion proof" >&2
+    exit 1
+fi
+if ! printf '%s\n' "$aggregate" | rg -q '\bmidCanonicalEmitValueConversion\b'; then
+    echo "canonical aggregate elements do not use the frozen conversion emitter" >&2
     exit 1
 fi
