@@ -473,19 +473,25 @@ fn canonicalMidMovedRoot(c: Comp, operandId: U64) -> U64 {
     return 18446744073709551615U64
 }
 
-fn canonicalMidRvalueMovedRoot(c: Comp, rvalueId: U64) -> U64 {
-    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 18446744073709551615U64 }
+// An aggregate can transfer more than one unique child. Clear every matching
+// conditional-drop flag at the transfer point; choosing only the first moved
+// root leaves a later loop/cliff cleanup able to destroy a value whose owner
+// already moved into the aggregate.
+fn canonicalMidAppendMovedFlagClears(c: inout Comp, rvalueId: U64, sourceLocalCount: U64, plan: MidCanonicalDropPlan) {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
-    if value.operand != 0U64 { return canonicalMidMovedRoot(c: c, operandId: value.operand) }
+    if value.operand != 0U64 {
+        val moved: U64 = canonicalMidMovedRoot(c: c, operandId: value.operand)
+        if moved < sourceLocalCount && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: sourceLocalCount, local: moved) isSet=false />) }
+    }
     if value.tag >= 3U64 && value.tag <= 5U64 {
         mut val elementI: U64 = 0U64
         while elementI < value.elements.len {
             val moved: U64 = canonicalMidMovedRoot(c: c, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand)
-            if moved != 18446744073709551615U64 { return moved }
+            if moved < sourceLocalCount && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: sourceLocalCount, local: moved) isSet=false />) }
             elementI = elementI + 1U64
         }
     }
-    return 18446744073709551615U64
 }
 
 // A planned accessibility-cliff cleanup changes the ownership state seen by
@@ -693,8 +699,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
             if statement.tag == 1U64 {
                 c.mid.statements.append(statement)
-                val moved: U64 = canonicalMidRvalueMovedRoot(c: c, rvalueId: statement.value)
-                if moved < source.locals.len && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: moved) isSet=false />) }
+                canonicalMidAppendMovedFlagClears(c: inout c, rvalueId: statement.value, sourceLocalCount: source.locals.len, plan: plan)
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                     if destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
@@ -1264,30 +1269,41 @@ fn midOperandMovedRoot(operand: MidOperand) -> U64 {
     return 18446744073709551615U64
 }
 
-fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
+fn midAppendMovedFlagClears(value: MidRvalue, originalCount: U64, needsFlag: Array[Bool], flagFor: Array[U64], statements: inout Array[MidStatement]) {
     match value {
-        MidRvalue.Use(operand: val operand) => { return midOperandMovedRoot(operand: operand) }
-        MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { return midOperandMovedRoot(operand: operand) }
         MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
             mut val i: U64 = 0U64
             while i < elements.count() {
                 val moved: U64 = midOperandMovedRoot(operand: elements[i].operand)
-                if moved != 18446744073709551615U64 { return moved }
+                if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
                 i += 1U64
             }
-            return 18446744073709551615U64
         }
-        MidRvalue.Convert(operand: val operand, conversion: _) => { return midOperandMovedRoot(operand: operand) }
-        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { return midOperandMovedRoot(operand: operand) }
-        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { return midOperandMovedRoot(operand: operand) }
-        MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return 18446744073709551615U64 }
-        MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { return midOperandMovedRoot(operand: error) }
+        MidRvalue.Use(operand: val operand) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.Convert(operand: val operand, conversion: _) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => {
+            val moved: U64 = midOperandMovedRoot(operand: error)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        _ => {}
     }
 }
 
@@ -1474,10 +1490,7 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
             match statement {
                 MidStatement.Assign(destination: val destination, value: val value) => {
                     statements.append(statement)
-                    val moved: U64 = midRvalueMovedRoot(value: value)
-                    if moved < originalCount && needsFlag[moved] {
-                        statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
-                    }
+                    midAppendMovedFlagClears(value: value, originalCount: originalCount, needsFlag: needsFlag, flagFor: flagFor, statements: inout statements)
                     if destination.projections.count() == 0U64 && destination.local < originalCount && needsFlag[destination.local] {
                         statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
                     }

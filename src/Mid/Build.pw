@@ -220,9 +220,12 @@ export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTe
     return local
 }
 
-fn addMidTemporary(state: inout MidBuildState, typeTerm: U64) -> U64 {
+// Temporaries normally hold copyable evaluation results. A temporary that is
+// the owner of a unique aggregate must retain that fact too: it can only leave
+// the evaluation as Move, and drop elaboration must account for the transfer.
+fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=false isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
     return local
 }
 
@@ -706,7 +709,15 @@ fn midSemanticAggregateElementsComplete(aggregate: SemanticAggregate) -> Bool {
 // selected call, another frozen aggregate, or a closed basic Mid operand.
 fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
     val prior: MidCallValueLookup = midAggregateValueForExpr(state: state, exprId: aggregate.exprId)
-    if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    // A cached aggregate is one completed source evaluation, not permission to
+    // duplicate it. Copyable constructions may feed more than one already
+    // recorded consumer; a unique construction must transfer its sole owner.
+    if prior.found {
+        if midAggregateHasUniqueValue(c: inout c, aggregate: aggregate) {
+            return <MidOperandBuild operand=<MidOperand.Move place=prior.place /> />
+        }
+        return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> />
+    }
     val parentCalls: Array[MidCallValue] = state.callValues
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
@@ -717,6 +728,9 @@ fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggre
     match built.error { MidBuildError.None => {} _ => { return built } }
     match built.operand {
         MidOperand.Copy(place: val place) => {
+            state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=place />)
+        }
+        MidOperand.Move(place: val place) => {
             state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=place />)
         }
         _ => {}
@@ -731,9 +745,11 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     if !(midSemanticAggregateElementsComplete(aggregate: aggregate)) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IncompleteAggregate /> /> />
     }
-    if midAggregateHasUniqueValue(c: inout c, aggregate: aggregate) {
-        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UniqueAggregate /> /> />
-    }
+    // Aggregate elements are ordinary owned destinations. A Move transfers
+    // its existing unique owner into the selected slot; Copy retains a new
+    // share as usual. This is not a special aggregate opcode or an LLVM-side
+    // exception. The only difference is the result temporary's ownership.
+    val ownsUnique: Bool = midAggregateHasUniqueValue(c: inout c, aggregate: aggregate)
     // An aggregate slot is not merely raw storage.  For example,
     // [circle] as Array[any Drawable] needs the frontend-selected
     // Circle-to-existential boxing conversion.  Path 1 has no conversion
@@ -741,7 +757,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     // Record.  Instantiation freezes the corresponding ValueConversionProof;
     // do not pre-reject contextual existential elements here merely because
     // their source term differs from the selected slot term.
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm)
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm, isUnique: ownsUnique)
     val writeDestination: MidPlace = <MidPlace local=local typeTerm=aggregate.resultTerm />
     mut val elements: Array[MidAggregateElement] = []
     mut val i: U64 = 0U64
@@ -773,6 +789,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Array /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
         }
     }
+    if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=writeDestination /> /> }
     return <MidOperandBuild operand=<MidOperand.Copy place=writeDestination /> />
 }
 
@@ -1833,10 +1850,10 @@ fn midTermIsUnique(c: inout Comp, term: U64) -> Bool {
     return c.typeIsUnique(start: t.nameStart, len: t.nameLen)
 }
 
-// Aggregate construction currently copies its child operands into a fresh
-// destination. That is sound only for copyable values. A unique aggregate or
-// a unique child requires a consuming aggregate operation (and exact
-// drop-flag transfer), which Path 1 has not represented yet.
+// A unique aggregate owns either its own nominal representation or one of
+// its child slots. This is a property of the already typed construction, not
+// a backend layout query; Mid uses it only to choose the result operand's
+// ownership mode and temporary declaration.
 fn midAggregateHasUniqueValue(c: inout Comp, aggregate: SemanticAggregate) -> Bool {
     if midTermIsUnique(c: inout c, term: aggregate.resultTerm) { return true }
     mut val i: U64 = 0U64

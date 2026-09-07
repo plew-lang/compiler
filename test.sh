@@ -154,6 +154,14 @@ else
     fail=$((fail + 1)); failed="$failed mid-field-overwrite"
 fi
 
+# Moving a unique value into a freshly constructed aggregate is an ordinary
+# Mid ownership transfer, never a reason to fall back to legacy lowering.
+if sh ./test-mid-unique-aggregate.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-unique-aggregate"
+fi
+
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.
