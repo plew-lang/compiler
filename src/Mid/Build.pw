@@ -888,6 +888,19 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.CastBoundary exprId=exprId sourceTerm=sourceTerm targetTerm=selectedTarget operand=source.operand /> />)
             return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
         }
+        Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+            // Value `if` uses the same ordinary CFG as statement `if`. Each
+            // normally completing arm writes this one place; all-diverging
+            // arms leave the retained join Unreachable, so no enclosing
+            // consumer may materialize an uninitialized result.
+            val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
+            val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
+            val lowered: MidBuildError = buildMidIfCfg(c: inout c, state: inout state, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk, hasElse: true, hasGiveDestination: true, giveDestination: resultPlace)
+            match lowered {
+                MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
+                _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
+            }
+        }
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
@@ -1625,6 +1638,44 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
     }
 }
 
+// Statement and value-position `if` have the same CFG: the only distinction
+// is whether normal arm completion assigns a single result Place. Keeping the
+// shape here avoids giving value `if` a legacy PHI/AST path that statement
+// `if` does not have.
+fn buildMidIfCfg(c: inout Comp, state: inout MidBuildState, cond: U64, thenBlk: U64, elseBlk: U64, hasElse: Bool, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
+    if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
+    val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
+    match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+    if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+    val thenTarget: U64 = midNewBlock(state: inout state)
+    val elseTarget: U64 = midNewBlock(state: inout state)
+    val joinTarget: U64 = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[thenTarget] otherwise=elseTarget />)
+    state.currentBlock = thenTarget
+    val thenResult: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: thenBlk, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+    match thenResult { MidBuildError.None => {} _ => { return thenResult } }
+    if midCurrentBlockIsOpen(state: state) {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    }
+    state.currentBlock = elseTarget
+    if hasElse {
+        val elseResult: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: elseBlk, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+        match elseResult { MidBuildError.None => {} _ => { return elseResult } }
+    }
+    if midCurrentBlockIsOpen(state: state) {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    }
+    state.currentBlock = joinTarget
+    // A retained post-if cursor with no incoming edge is real LLVM
+    // `unreachable`, not an implicit source fallthrough. This covers return,
+    // panic, and every future diverging terminator without syntax special
+    // cases.
+    if !midBlockHasIncoming(state: state, target: joinTarget) {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+    }
+    return <MidBuildError.None />
+}
+
 // A statement `if` becomes a normal Switch plus then/else/join blocks. There
 // is no conditional-move special case: a Move emitted by `buildMidLet` in one
 // branch reaches the join through the same CFG used by every other statement.
@@ -1632,41 +1683,7 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
-            if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
-            val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
-            match condition.error { MidBuildError.None => {} _ => { return condition.error } }
-            if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
-            val thenTarget: U64 = midNewBlock(state: inout state)
-            val elseTarget: U64 = midNewBlock(state: inout state)
-            val joinTarget: U64 = midNewBlock(state: inout state)
-            midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[thenTarget] otherwise=elseTarget />)
-            state.currentBlock = thenTarget
-            val thenResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: thenBlk)
-            match thenResult { MidBuildError.None => {} _ => { return thenResult } }
-            if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
-            }
-            state.currentBlock = elseTarget
-            if hasElse {
-                val elseResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: elseBlk)
-                match elseResult { MidBuildError.None => {} _ => { return elseResult } }
-            }
-            if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
-            }
-            state.currentBlock = joinTarget
-            // Like an exhaustive match or literal-true loop exit, an `if`
-            // whose two successors both diverge still needs a builder cursor
-            // after the statement. That cursor has no predecessor, however:
-            // leaving it Open would make a function that has already returned
-            // on every source path look as though it were missing a return.
-            // CFG reachability, rather than a syntactic "both arms return"
-            // special case, also covers panic/abort and future diverging
-            // terminators.
-            if !midBlockHasIncoming(state: state, target: joinTarget) {
-                midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
-            }
-            return <MidBuildError.None />
+            return buildMidIfCfg(c: inout c, state: inout state, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk, hasElse: hasElse, hasGiveDestination: false, giveDestination: <MidPlace local=0U64 typeTerm=0U64 />)
         }
         _ => { return <MidBuildError.InvalidStatement /> }
     }

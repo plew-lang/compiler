@@ -167,6 +167,11 @@ if sh ./test-mid-value-match.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-value-match"
 fi
+if sh ./test-mid-value-if.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-value-if"
+fi
 if sh ./test-mid-operand-diagnostics.sh; then
     :
 else

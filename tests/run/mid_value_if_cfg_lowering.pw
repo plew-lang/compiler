@@ -1,0 +1,53 @@
+import @Std/Io with { print }
+
+struct Box { pub val value: I64 }
+
+pub impl Box { factory }
+
+fn passthrough(value: I64) -> I64 { return value }
+
+// Both arms assign the one result place of a value-position if.
+fn choose(flag: Bool) -> I64 {
+    return if flag { give 7I64 } else { give 9I64 }
+}
+
+// The completed value if may feed a call or a frozen aggregate without
+// reopening either arm or re-evaluating the condition.
+fn throughCall(flag: Bool) -> I64 {
+    return passthrough(value: if flag { give 11I64 } else { give 13I64 })
+}
+
+fn throughAggregate(flag: Bool) -> I64 {
+    return <Box value=if flag { give 17I64 } else { give 19I64 } />.value
+}
+
+// A typed value if can still have no normal successor. Its retained join must
+// be Unreachable; neither the binding nor a later return may read `doomed`.
+fn allDiverge(flag: Bool) -> I64 {
+    val doomed: I64 = if flag {
+        return 23I64
+    } else {
+        return 29I64
+    }
+    return doomed
+}
+
+fn main() {
+    print(choose(flag: true))
+    print(choose(flag: false))
+    print(throughCall(flag: true))
+    print(throughCall(flag: false))
+    print(throughAggregate(flag: true))
+    print(throughAggregate(flag: false))
+    print(allDiverge(flag: true))
+    print(allDiverge(flag: false))
+}
+
+// expected: 7
+// expected: 9
+// expected: 11
+// expected: 13
+// expected: 17
+// expected: 19
+// expected: 23
+// expected: 29
