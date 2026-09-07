@@ -7,7 +7,7 @@ import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, Sema
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
-import ./Ir with { MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ./Ir with { MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -199,6 +199,12 @@ struct MidAggregateLookup {
     pub val aggregate: SemanticAggregate = <SemanticAggregate />
 }
 pub impl MidAggregateLookup { factory }
+
+struct MidClosureLookup {
+    pub val found: Bool = false
+    pub val closure: SemanticClosure = <SemanticClosure />
+}
+pub impl MidClosureLookup { factory }
 
 export struct MidAggregateValue {
     pub val exprId: U64
@@ -682,6 +688,15 @@ fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId:
     return <MidAggregateLookup />
 }
 
+// Closure meaning is keyed by its lexical body and literal ExprId, exactly as
+// a semantic aggregate is. The lookup exposes only Mono's frozen descriptor;
+// no nested-body scan or source-name recovery is permitted below this point.
+fn midSemanticClosureForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> MidClosureLookup {
+    val index: U64 = c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: exprId)
+    if index < c.decls.semanticClosures.count() { return <MidClosureLookup found=true closure=c.decls.semanticClosures[index] /> }
+    return <MidClosureLookup />
+}
+
 // `bindingTarget` is the frontend's lexical identity of the storage, so it is
 // also the stable identity of the shared mutable capture cell. Build does not
 // inspect closure syntax or rescan a nested body here: Mono already published
@@ -771,6 +786,40 @@ fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggre
         _ => {}
     }
     return built
+}
+
+// Closure construction is a value producer just like aggregate construction,
+// but the layout is the frontend-published capture range rather than field
+// declarations. A source literal occurs at one evaluation point; its captures
+// are materialized in the recorded source order and are never inferred from
+// the AST or backend locals.
+fn materializeMidClosureValue(c: inout Comp, state: inout MidBuildState, closure: SemanticClosure, expectedType: U64) -> MidOperandBuild {
+    if closure.functionTypeTerm == 0U64 || expectedType == 0U64 || !(c.typeRefEq(a: closure.functionTypeTerm, b: expectedType)) {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=expectedType /> /> error=<MidBuildError.MissingSemanticType /> />
+    }
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: expectedType)
+    val destination: MidPlace = <MidPlace local=local typeTerm=expectedType />
+    mut val captures: Array[MidClosureCapture] = []
+    mut val captureI: U64 = 0U64
+    while captureI < closure.captures.count() {
+        val capture = closure.captures[captureI]
+        val binding: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: capture.bindingTarget)
+        if !binding.found || binding.local >= state.locals.count() || !(c.typeRefEq(a: state.locals[binding.local].typeTerm, b: capture.typeTerm)) {
+            return <MidOperandBuild operand=<MidOperand.Copy place=destination /> error=<MidBuildError.UnboundLocalIdentifier /> />
+        }
+        match capture.mode {
+            SemanticClosureCaptureMode.CellBorrow => {
+                if !(state.locals[binding.local].isCaptureCell) {
+                    return <MidOperandBuild operand=<MidOperand.Copy place=destination /> error=<MidBuildError.MissingSemanticType /> />
+                }
+            }
+            _ => {}
+        }
+        captures.append(<MidClosureCapture bindingTarget=capture.bindingTarget typeTerm=capture.typeTerm mode=capture.mode operand=<MidOperand.Copy place=<MidPlace local=binding.local typeTerm=capture.typeTerm /> /> />)
+        captureI += 1U64
+    }
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.MakeClosure exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm captures=captures /> />)
+    return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
 }
 
 // Children belong to this construction's evaluation. In particular, an
@@ -987,6 +1036,10 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
     val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId)
     if aggregate.found {
         return materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
+    }
+    val closure: MidClosureLookup = midSemanticClosureForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId)
+    if closure.found {
+        return materializeMidClosureValue(c: inout c, state: inout state, closure: closure.closure, expectedType: typeTerm)
     }
     match c.arena.exprs[exprId] {
         Expr.Call(nameStart: _, nameLen: _, args: _) => {
