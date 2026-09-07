@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -4500,7 +4500,7 @@ pub impl Comp {
         self.decls.semanticClosureIndexSlots.set(i: slot, value: self.decls.semanticClosures.count())
     }
 
-    inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64) {
+    inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) {
         mut val captures: Array[SemanticClosureCapture] = []
         mut val i: U64 = 0U64
         while i < self.monoWork.captures.count() {
@@ -4512,7 +4512,14 @@ pub impl Comp {
             }
             i += 1U64
         }
-        self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=ownerFnIdx exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) captures=captures />)
+        mut val frozenParameters: Array[SemanticClosureParameter] = []
+        mut val parameterI: U64 = 0U64
+        while parameterI < parameters.count() {
+            val parameter: Param = parameters[parameterI]
+            frozenParameters.append(<SemanticClosureParameter bindingTarget=parameter.nameStart typeTerm=parameter.ty isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
+            parameterI += 1U64
+        }
+        self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=ownerFnIdx exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
     }
 
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
@@ -4966,7 +4973,7 @@ pub impl Comp {
                     pi += 1
                 }
                 self.scanBlockInsts(blkId: body)
-                self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId)
+                self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
                 self.popLocals(mark: enclMark)
                 self.cur.closureId = savedId
                 self.cur.inClosure = savedIn

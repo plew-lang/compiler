@@ -409,16 +409,38 @@ export struct SemanticClosureCapture {
 }
 pub impl SemanticClosureCapture { factory }
 
+// One source parameter of a closure body.  The declaration target and
+// parametric term are frozen at the frontend boundary so Mid can create the
+// closure's ABI locals without recovering a Param from Expr.Closure.  This is
+// intentionally distinct from a function's FuncParamRange: a closure has a
+// synthetic BodyInstance key and an environment parameter which is not a
+// source-level parameter.
+export struct SemanticClosureParameter {
+    pub val bindingTarget: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val isInout: Bool = false
+    pub val isMove: Bool = false
+    pub val isBorrow: Bool = false
+}
+pub impl SemanticClosureParameter { factory }
+
 // The frozen parametric meaning of one closure literal.  `ownerFnIdx` is the
 // lexical body containing the literal; `bodyKey` identifies the synthetic
 // closure body which is instantiated through the normal BodyInstance path.
 // `captures` is source ordered and is the single authority for environment
-// layout, ownership mode, and eventual drop glue.
+// layout, ownership mode, and eventual drop glue. `bodyBlock`, source
+// parameters, and the result contract are navigation/ABI facts owned by the
+// same record: downstream Mid may navigate the block but must not reopen the
+// closure expression to rediscover its signature.
 export struct SemanticClosure {
     pub val ownerFnIdx: U64 = 0U64
     pub val exprId: U64 = 0U64
     pub val bodyKey: U64 = 0U64
     pub val functionTypeTerm: U64 = 0U64
+    pub val bodyBlock: U64 = 0U64
+    pub val parameters: Array[SemanticClosureParameter] = []
+    pub val hasReturn: Bool = false
+    pub val returnTypeTerm: U64 = 0U64
     pub val captures: Array[SemanticClosureCapture] = []
 }
 pub impl SemanticClosure { factory }
