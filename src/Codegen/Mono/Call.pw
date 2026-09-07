@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1468,18 +1468,31 @@ pub impl Comp {
         }
         val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
         val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
-        if operandErr == 0U64 || returnErr == 0U64 || self.typeRefEq(a: operandErr, b: returnErr) {
-            return
+        if operandErr == 0U64 || returnErr == 0U64 || operandRef >= self.arena.types.count() || returnRef >= self.arena.types.count() { return }
+        val operandResult: TypeRef = self.arena.types[operandRef]
+        if operandResult.args.count() < 2U64 { return }
+        val enumIndex: U64 = self.genericEnumIndex(nameStart: operandResult.nameStart, nameLen: operandResult.nameLen)
+        if enumIndex >= self.arena.enums.count() { return }
+        val okName: Bind = self.kwSpan(kw: "Ok", kwLen: 2U64)
+        val errName: Bind = self.kwSpan(kw: "Err", kwLen: 3U64)
+        val okVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: okName.nameStart, variantLen: okName.nameLen)
+        val errVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: errName.nameStart, variantLen: errName.nameLen)
+        if okVariant >= self.arena.enums[enumIndex].variants.count() || errVariant >= self.arena.enums[enumIndex].variants.count() { return }
+        mut val hasConversion: Bool = !self.typeRefEq(a: operandErr, b: returnErr)
+        mut val conversionResolution: U64 = 0U64
+        if hasConversion {
+            val factory: U64 = self.typeRefFromFactoryIdx(errRef: returnErr, srcRef: operandErr)
+            if factory >= self.arena.funcs.count() {
+                // Verify owns the user diagnostic for a missing conversion.
+                return
+            }
+            val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=factory receiverRef=returnErr resultHintRef=returnErr />
+            self.recordSelectedBodyCallee(selection: selection)
+            self.enqueueSelectedCallee(selection: selection)
+            conversionResolution = self.bodyCalleeIndex(exprId: exprId)
+            if conversionResolution >= self.arena.finalCallees.count() { return }
         }
-        val factory: U64 = self.typeRefFromFactoryIdx(errRef: returnErr, srcRef: operandErr)
-        if factory >= self.arena.funcs.count() {
-            // Verify owns the user diagnostic for a missing conversion. Mono
-            // deliberately does not invent a fallback callable.
-            return
-        }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=factory receiverRef=returnErr resultHintRef=returnErr />
-        self.recordSelectedBodyCallee(selection: selection)
-        self.enqueueSelectedCallee(selection: selection)
+        self.putFinalTry(fact: <FinalTryResolution bodyId=self.currentBodyInstanceId() exprId=exprId operandResultTypeRef=operandRef returnResultTypeRef=returnRef resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant okPayloadTypeRef=operandResult.args[0U64] sourceErrorTypeRef=operandErr targetErrorTypeRef=returnErr hasErrorConversion=hasConversion errorConversionResolution=conversionResolution />)
     }
 
     // Ground one explicitly-recorded call argument. This is intentionally
@@ -2669,6 +2682,25 @@ pub impl Comp {
             slot = (slot + 1U64) % capacity
         }
         self.arena.finalReturnIndexSlots.set(i: slot, value: self.arena.finalReturns.count())
+    }
+
+    inout fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.arena.finalTries.count() {
+            val fact: FinalTryResolution = self.arena.finalTries[i]
+            if fact.bodyId == bodyId && fact.exprId == exprId { return i }
+            i += 1U64
+        }
+        return self.arena.finalTries.count()
+    }
+
+    inout fn putFinalTry(fact: FinalTryResolution) {
+        val prior: U64 = self.finalTryIndex(bodyId: fact.bodyId, exprId: fact.exprId)
+        if prior < self.arena.finalTries.count() {
+            self.arena.finalTries.set(i: prior, value: fact)
+        } else {
+            self.arena.finalTries.append(fact)
+        }
     }
 
     // Freeze one aggregate only after its children have been finalized in the
