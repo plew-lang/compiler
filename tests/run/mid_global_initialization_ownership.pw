@@ -1,5 +1,7 @@
 import @Std/Io with { write }
-import /Mid with { MidBlock, MidBody, MidBuildError, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateMidDrops, verifyMidBody }
+import /Frontend with { Comp }
+import /Ir with { Global }
+import /Mid with { MidBlock, MidBody, MidBuildError, MidCanonicalBody, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateMidDrops, verifyCanonicalMidBody, verifyMidBody }
 import /Mid/Verify with { MidVerifyError }
 
 // InitializeGlobal is the one transfer into a process-lifetime root.  It is
@@ -27,5 +29,21 @@ fn main() {
         MidVerifyError.MoveUnavailable => { write(s: "ordinary:rejected\n") }
         MidVerifyError.None => { write(s: "ordinary:accepted\n") }
         _ => { write(s: "ordinary:wrong-error\n") }
+    }
+
+    // The production verifier consumes frozen rows, so assert the same owner
+    // restriction after the draft-to-canonical boundary as well.
+    mut val c: Comp = <Comp />
+    c.arena.globals.append(<Global nameStart=77U64 nameLen=1U64 letStmt=0U64 mutable=false />)
+    val canonicalSynthetic: MidCanonicalBody = c.mid.store(body: synthetic)
+    val canonicalOrdinary: MidCanonicalBody = c.mid.store(body: ordinary)
+    match verifyCanonicalMidBody(c: c, canonical: canonicalSynthetic).error {
+        MidVerifyError.None => { write(s: "canonical-synthetic:accepted\n") }
+        _ => { write(s: "canonical-synthetic:rejected\n") }
+    }
+    match verifyCanonicalMidBody(c: c, canonical: canonicalOrdinary).error {
+        MidVerifyError.MoveUnavailable => { write(s: "canonical-ordinary:rejected\n") }
+        MidVerifyError.None => { write(s: "canonical-ordinary:accepted\n") }
+        _ => { write(s: "canonical-ordinary:wrong-error\n") }
     }
 }

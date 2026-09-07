@@ -1,3 +1,5 @@
 synthetic:accepted
 no-pre-drop
 ordinary:rejected
+canonical-synthetic:accepted
+canonical-ordinary:rejected
