@@ -4,7 +4,9 @@
 # This is intentionally observational: it invokes the chosen existing carrier
 # with --trace-phases, copies its stderr verbatim, and returns its exact exit
 # status.  The timestamped trace is sufficient for P0's coarse phase split;
-# it does not add compiler counters or change generated LLVM.
+# it does not add compiler counters or change generated LLVM.  Set
+# TRACE_CODEGEN=1 only to map generated LLVM symbols back to semantic bodies;
+# that diagnostic run is not a wall-time performance sample.
 
 set -u
 
@@ -14,6 +16,7 @@ PLEWC="${PLEWC:?set PLEWC to an explicit existing carrier, for example ./plewc-m
 SOURCE="${SOURCE:-src/_.pw}"
 OUT_DIR="${OUT_DIR:-tmp/perf/$(date +%Y%m%d-%H%M%S)}"
 LLVM_CONFIG="${LLVM_CONFIG:-llvm-config}"
+TRACE_CODEGEN="${TRACE_CODEGEN:-0}"
 
 if [ ! -x "$PLEWC" ]; then
     echo "measure-self-compile: carrier is not executable: $PLEWC" >&2
@@ -44,6 +47,7 @@ mkdir -p "$OUT_DIR"
 export PLEW_PERF_CARRIER="$PLEWC"
 export PLEW_PERF_SOURCE="$SOURCE"
 export PLEW_PERF_OUT_DIR="$OUT_DIR"
+export PLEW_PERF_TRACE_CODEGEN="$TRACE_CODEGEN"
 
 python3 - <<'PY'
 import os
@@ -55,6 +59,7 @@ import time
 carrier = os.environ["PLEW_PERF_CARRIER"]
 source = os.environ["PLEW_PERF_SOURCE"]
 out_dir = os.environ["PLEW_PERF_OUT_DIR"]
+trace_codegen = os.environ["PLEW_PERF_TRACE_CODEGEN"] == "1"
 trace_path = os.path.join(out_dir, "trace.tsv")
 stderr_path = os.path.join(out_dir, "stderr.log")
 llvm_path = os.path.join(out_dir, "compiler.ll")
@@ -65,8 +70,12 @@ last_event = "(no trace event yet)"
 event_count = 0
 with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as trace, open(stderr_path, "wb") as stderr_log:
     trace.write("elapsed_seconds\tstderr\n")
+    command = [carrier, "--trace-phases"]
+    if trace_codegen:
+        command.append("--trace-codegen")
+    command.append(source)
     process = subprocess.Popen(
-        [carrier, "--trace-phases", source],
+        command,
         stdout=llvm,
         stderr=subprocess.PIPE,
         bufsize=0,
