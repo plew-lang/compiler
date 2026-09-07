@@ -7,7 +7,7 @@ pub impl Comp {
     // persist or reconstruct this row index as their semantic identity.
     // `nameStart == 0` is a valid declaration identity, hence the explicit
     // out-of-range sentinel rather than zero.
-    inout fn globalIndexForDeclarationTarget(target: U64) -> U64 {
+    fn globalIndexForDeclarationTarget(target: U64) -> U64 {
         mut val index: U64 = 0U64
         while index < self.arena.globals.count() {
             if self.arena.globals[index].nameStart == target { return index }
@@ -16,22 +16,14 @@ pub impl Comp {
         return self.arena.globals.count()
     }
 
-    // The global's type is a frontend fact established for its initializer.
-    // Mid uses this only to validate its frozen typed address; it does not
-    // re-resolve a source identifier or infer a type from backend layout.
-    inout fn globalTypeForDeclarationTarget(target: U64) -> U64 {
-        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
-        if index >= self.arena.globals.count() { return 0U64 }
-        return self.semanticExprTerm(exprId: self.globalInitExpr(g: self.arena.globals[index]))
-    }
-
     // Consume the existing identifier decision. In particular, do not seed
     // source locals or search names after Record has closed the lexical scope.
-    inout fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
+    fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
         if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
         if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
         val target = self.typeCache.identTarget[exprId]
-        val term = self.semanticExprTerm(exprId: exprId)
+        if exprId >= self.arena.semanticExprTypes.count() { return <Optional.None /> }
+        val term = self.arena.semanticExprTypes[exprId].term
         if term == 0U64 || term >= self.arena.types.count() { return <Optional.None /> }
         mut val index: U64 = 0U64
         while index < self.arena.globals.count() {

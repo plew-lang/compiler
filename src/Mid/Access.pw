@@ -736,7 +736,23 @@ fn midAccessLocalOperand(c: Comp, body: MidBody, exprId: U64) -> MidOperand {
         if body.locals[i].sourceNameStart == target { return <MidOperand.Copy place=<MidPlace local=i typeTerm=body.locals[i].typeTerm /> /> }
         i += 1U64
     }
+    match c.recordedGlobalAddress(exprId: exprId) {
+        Optional.Some(v: val global) => { return <MidOperand.Copy place=<MidPlace rootTag=2U64 local=0U64 globalTarget=global.declarationTarget globalMutable=global.mutable typeTerm=global.typeTerm /> /> }
+        _ => {}
+    }
     return <MidOperand.Access candidate=body.locals.count() />
+}
+
+fn midAccessPlaceIsValid(body: MidBody, place: MidPlace) -> Bool {
+    if place.rootTag == 2U64 { return true }
+    return place.rootTag == 1U64 && place.local < body.locals.count()
+}
+
+fn midAccessSameRoot(left: MidPlace, right: MidPlace) -> Bool {
+    if left.rootTag != right.rootTag { return false }
+    if left.rootTag == 1U64 { return left.local == right.local }
+    if left.rootTag == 2U64 { return left.globalTarget == right.globalTarget }
+    return false
 }
 
 // Reconstruct only a frozen local/field place after instantiation. Unlike the
@@ -754,16 +770,22 @@ fn midAccessPlace(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidPlace {
                 if body.locals[i].sourceNameStart == target { return <MidPlace local=i typeTerm=term /> }
                 i += 1U64
             }
+            match c.recordedGlobalAddress(exprId: exprId) {
+                Optional.Some(v: val global) => {
+                    if global.typeTerm == term { return <MidPlace rootTag=2U64 local=0U64 globalTarget=global.declarationTarget globalMutable=global.mutable typeTerm=term /> }
+                }
+                _ => {}
+            }
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             if exprId >= c.arena.semanticExprTypes.count() || base >= c.arena.semanticExprTypes.count() { return <MidPlace local=body.locals.count() typeTerm=term /> }
             val semantic: SemanticExprType = c.arena.semanticExprTypes[exprId]
             if !(semantic.hasFieldProjection) { return <MidPlace local=body.locals.count() typeTerm=term /> }
             val basePlace: MidPlace = midAccessPlace(c: c, body: body, exprId: base, term: c.arena.semanticExprTypes[base].term)
-            if basePlace.local >= body.locals.count() { return basePlace }
+            if !midAccessPlaceIsValid(body: body, place: basePlace) { return basePlace }
             mut val projections: Array[MidProjection] = basePlace.projections
             projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=term />)
-            return <MidPlace local=basePlace.local projections=projections typeTerm=term />
+            return <MidPlace rootTag=basePlace.rootTag local=basePlace.local globalTarget=basePlace.globalTarget globalMutable=basePlace.globalMutable projections=projections typeTerm=term />
         }
         _ => {}
     }
@@ -776,7 +798,7 @@ fn midAccessInput(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidOperand 
         Expr.Ident(start: _, len: _) => { return midAccessLocalOperand(c: c, body: body, exprId: exprId) }
         Expr.Field(base: _, nameStart: _, nameLen: _) => {
             val place: MidPlace = midAccessPlace(c: c, body: body, exprId: exprId, term: term)
-            if place.local < body.locals.count() { return <MidOperand.Copy place=place /> }
+            if midAccessPlaceIsValid(body: body, place: place) { return <MidOperand.Copy place=place /> }
             return <MidOperand.Access candidate=body.locals.count() />
         }
         Expr.Int(value: val value, offset: _, isBool: val isBool, tyStart: _, tyLen: _, isNeg: val isNegative) => {
@@ -804,23 +826,23 @@ fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
 // future value transform must publish its own Mid projection rather than make
 // access elaboration rediscover it from spelling.
 fn midAccessProjectedValuePlace(c: Comp, rootExpr: U64, accessExpr: U64, accessTerm: U64, root: MidPlace) -> MidPlace {
-    if accessExpr == rootExpr { return <MidPlace local=root.local projections=root.projections typeTerm=accessTerm /> }
+    if accessExpr == rootExpr { return <MidPlace rootTag=root.rootTag local=root.local globalTarget=root.globalTarget globalMutable=root.globalMutable projections=root.projections typeTerm=accessTerm /> }
     if accessExpr >= c.arena.exprs.count() || accessExpr >= c.arena.semanticExprTypes.count() {
-        return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm />
+        return <MidPlace rootTag=0U64 local=0U64 typeTerm=root.typeTerm />
     }
     match c.arena.exprs[accessExpr] {
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             val basePlace: MidPlace = midAccessProjectedValuePlace(c: c, rootExpr: rootExpr, accessExpr: base, accessTerm: root.typeTerm, root: root)
-            if basePlace.local != root.local { return basePlace }
+            if !midAccessSameRoot(left: basePlace, right: root) { return basePlace }
             val semantic: SemanticExprType = c.arena.semanticExprTypes[accessExpr]
-            if !(semantic.hasFieldProjection) { return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm /> }
+            if !(semantic.hasFieldProjection) { return <MidPlace rootTag=0U64 local=0U64 typeTerm=root.typeTerm /> }
             mut val projections: Array[MidProjection] = basePlace.projections
             projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=semantic.term />)
-            return <MidPlace local=root.local projections=projections typeTerm=semantic.term />
+            return <MidPlace rootTag=root.rootTag local=root.local globalTarget=root.globalTarget globalMutable=root.globalMutable projections=projections typeTerm=semantic.term />
         }
         _ => {}
     }
-    return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm />
+    return <MidPlace rootTag=0U64 local=0U64 typeTerm=root.typeTerm />
 }
 
 // The returned order is outermost to innermost.  An inner access is used by
