@@ -392,6 +392,37 @@ export struct SemanticAggregate {
 }
 pub impl SemanticAggregate { factory }
 
+// A closure environment is selected before Mid lowering, just like an
+// aggregate layout.  `bindingTarget` is the source identity of the enclosing
+// declaration, not the identifier spelling at a use site.  That makes a
+// shadowed capture unambiguous without asking LLVM to reconstruct a local
+// stack from the AST.
+export enum SemanticClosureCaptureMode {
+    ValueCopy
+    CellBorrow
+}
+
+export struct SemanticClosureCapture {
+    pub val bindingTarget: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
+}
+pub impl SemanticClosureCapture { factory }
+
+// The frozen parametric meaning of one closure literal.  `ownerFnIdx` is the
+// lexical body containing the literal; `bodyKey` identifies the synthetic
+// closure body which is instantiated through the normal BodyInstance path.
+// `captures` is source ordered and is the single authority for environment
+// layout, ownership mode, and eventual drop glue.
+export struct SemanticClosure {
+    pub val ownerFnIdx: U64 = 0U64
+    pub val exprId: U64 = 0U64
+    pub val bodyKey: U64 = 0U64
+    pub val functionTypeTerm: U64 = 0U64
+    pub val captures: Array[SemanticClosureCapture] = []
+}
+pub impl SemanticClosure { factory }
+
 // The frontend identity of a pattern match. Statement and value-position
 // matches share every semantic layout fact, but their arena IDs live in
 // different domains; keeping that distinction in the key prevents a later
@@ -2597,6 +2628,11 @@ export struct Decls {
     // semanticAggregates indices and are rebuilt solely from (ownerFnIdx,
     // exprId); this is lookup structure, never a second semantic source.
     pub mut val semanticAggregateIndexSlots: Array[U64] = []
+    // Closure facts are published once by Mono, where capture mode (value
+    // copy versus mutable capture cell) is known.  As with aggregates, the
+    // index is a rebuildable reader and never another semantic source.
+    pub mut val semanticClosures: Array[SemanticClosure] = []
+    pub mut val semanticClosureIndexSlots: Array[U64] = []
     // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []

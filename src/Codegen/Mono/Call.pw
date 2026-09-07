@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -4428,6 +4428,93 @@ pub impl Comp {
         self.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
     }
 
+    // Mono discovers capture modes while walking the lexical closure body.
+    // Freeze that one result into Decls before Mid sees the literal: later
+    // stages receive declaration identities and TypeTerms, never local-stack
+    // positions, type spellings, or an invitation to repeat this walk.
+    fn semanticClosureHash(ownerFnIdx: U64, exprId: U64) -> U64 {
+        val modulus: U64 = 4294967291U64
+        mut val h: U64 = ownerFnIdx % modulus
+        h = ((h + exprId % modulus) * 65537U64) % modulus
+        return h
+    }
+
+    inout fn rebuildSemanticClosureIndex(capacity: U64) {
+        self.decls.semanticClosureIndexSlots = []
+        mut val zeroI: U64 = 0U64
+        while zeroI < capacity {
+            self.decls.semanticClosureIndexSlots.append(0U64)
+            zeroI += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.decls.semanticClosures.count() {
+            val closure: SemanticClosure = self.decls.semanticClosures[entry]
+            mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
+            while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.decls.semanticClosureIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureSemanticClosureIndex(nextCount: U64) {
+        if self.decls.semanticClosureIndexSlots.count() == 0U64 {
+            self.rebuildSemanticClosureIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.decls.semanticClosureIndexSlots.count() * 7U64 {
+            self.rebuildSemanticClosureIndex(capacity: self.decls.semanticClosureIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Return the canonical array index, or count() when absent.  The table is
+    // keyed by the lexical source body because one ExprId is only meaningful
+    // in that body; closure `bodyKey` deliberately identifies the body it
+    // creates, not the body which owns the literal.
+    inout fn semanticClosureIndex(ownerFnIdx: U64, exprId: U64) -> U64 {
+        val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
+        if capacity == 0U64 { return self.decls.semanticClosures.count() }
+        mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
+        while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.decls.semanticClosureIndexSlots[slot] - 1U64
+            val prior: SemanticClosure = self.decls.semanticClosures[entry]
+            if prior.ownerFnIdx == ownerFnIdx && prior.exprId == exprId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.decls.semanticClosures.count()
+    }
+
+    inout fn putSemanticClosure(closure: SemanticClosure) {
+        val prior: U64 = self.semanticClosureIndex(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId)
+        if prior < self.decls.semanticClosures.count() {
+            self.decls.semanticClosures.set(i: prior, value: closure)
+            return
+        }
+        self.ensureSemanticClosureIndex(nextCount: self.decls.semanticClosures.count() + 1U64)
+        self.decls.semanticClosures.append(closure)
+        val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
+        mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
+        while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.decls.semanticClosureIndexSlots.set(i: slot, value: self.decls.semanticClosures.count())
+    }
+
+    inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64) {
+        mut val captures: Array[SemanticClosureCapture] = []
+        mut val i: U64 = 0U64
+        while i < self.monoWork.captures.count() {
+            val capture: CaptureEntry = self.monoWork.captures[i]
+            if capture.closureId == closureId {
+                mut val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
+                if capture.boxed { mode = <SemanticClosureCaptureMode.CellBorrow /> }
+                captures.append(<SemanticClosureCapture bindingTarget=capture.nameStart typeTerm=capture.ty mode=mode />)
+            }
+            i += 1U64
+        }
+        self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=ownerFnIdx exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) captures=captures />)
+    }
+
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
     // spine) with a reference to the match-bound value `__chainVal`, anchored at the
     // `?.member` source token. `cont` is `hole.b.c` -> `__chainVal.b.c`.
@@ -4879,6 +4966,7 @@ pub impl Comp {
                     pi += 1
                 }
                 self.scanBlockInsts(blkId: body)
+                self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId)
                 self.popLocals(mark: enclMark)
                 self.cur.closureId = savedId
                 self.cur.inClosure = savedIn
