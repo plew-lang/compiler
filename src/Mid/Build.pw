@@ -58,7 +58,10 @@ export enum MidUnsupportedBuild {
 // contains Index storage: the latter has a selected getter/setter writeback
 // contract and must go through Mid/Access rather than become a raw store.
 export enum MidUnsupportedAssign {
-    NotPlace
+    IdentifierNotLocal
+    FieldBaseNotPlace
+    IndexBaseNotPlace
+    OtherNotPlace
     IndexProjection
 }
 
@@ -1205,7 +1208,12 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 projection += 1U64
             }
             if !destinationLookup.found {
-                return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.NotPlace /> />
+                match c.arena.exprs[target] {
+                    Expr.Ident(start: _, len: _) => { return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.IdentifierNotLocal /> /> }
+                    Expr.Field(base: _, nameStart: _, nameLen: _) => { return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.FieldBaseNotPlace /> /> }
+                    Expr.Index(base: _, index: _) => { return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.IndexBaseNotPlace /> /> }
+                    _ => { return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.OtherNotPlace /> /> }
+                }
             }
             if !physicalFieldPath {
                 return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.IndexProjection /> />
@@ -1217,7 +1225,7 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 match call { MidBuildError.None => {} _ => { return call } }
             } else {
                 val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: value)
-                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.NotPlace /> /> />
+                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.OtherNotPlace /> /> />
                 if aggregate.found {
                     operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
                 } else {

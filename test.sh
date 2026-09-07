@@ -153,6 +153,15 @@ if sh ./test-mid-field-overwrite.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-field-overwrite"
 fi
+
+# Mid must retain the semantic reason when an assignment target is not a
+# physical place. This gate is source-structural while fresh candidates cannot
+# yet collect the resulting coverage rows.
+if sh ./test-mid-assign-diagnostics.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-assign-diagnostics"
+fi
 if sh ./test-mid-numeric-cast.sh; then
     :
 else

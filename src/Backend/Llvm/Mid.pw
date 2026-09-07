@@ -27,8 +27,11 @@ pub impl LlvmCtx {
 
     fn midUnsupportedAssignCoverageDetail(reason: MidUnsupportedAssign) -> U64 {
         match reason {
-            MidUnsupportedAssign.NotPlace => { return 0U64 }
-            MidUnsupportedAssign.IndexProjection => { return 1U64 }
+            MidUnsupportedAssign.IdentifierNotLocal => { return 0U64 }
+            MidUnsupportedAssign.FieldBaseNotPlace => { return 1U64 }
+            MidUnsupportedAssign.IndexBaseNotPlace => { return 2U64 }
+            MidUnsupportedAssign.OtherNotPlace => { return 3U64 }
+            MidUnsupportedAssign.IndexProjection => { return 4U64 }
         }
     }
 
