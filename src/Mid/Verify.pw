@@ -3,7 +3,7 @@
 // lowering once Mid bodies become the production input.
 
 import ../Frontend with { Comp }
-import ./Ir with { MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
+import ./Ir with { MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership, analyzeCanonicalMidOwnership, midSuccessors }
 
 export enum MidVerifyError {
@@ -101,6 +101,26 @@ fn canonicalMidPhysicalFieldPath(c: Comp, place: MidPlaceNode) -> Bool {
     mut val projectionI: U64 = 0U64
     while projectionI < place.projections.len {
         if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
+        projectionI = projectionI + 1U64
+    }
+    return true
+}
+
+// Freeze deliberately stores each occurrence of a draft Place as a fresh row,
+// so an explicit Drop and its following Overwrite do not share a place ID.
+// Compare the closed rows instead of relying on arena identity.  This stays in
+// the canonical verifier: draft Mid is intentionally pre-drop-elaboration and
+// therefore cannot yet require the compiler-generated Drop.
+fn canonicalMidSamePlace(c: Comp, leftId: U64, rightId: U64) -> Bool {
+    if leftId == 0U64 || rightId == 0U64 || leftId > c.mid.places.count() || rightId > c.mid.places.count() { return false }
+    val left: MidPlaceNode = c.mid.places[leftId - 1U64]
+    val right: MidPlaceNode = c.mid.places[rightId - 1U64]
+    if left.rootTag != right.rootTag || left.local != right.local || left.globalTarget != right.globalTarget || left.globalMutable != right.globalMutable || left.typeTerm != right.typeTerm || left.projections.len != right.projections.len { return false }
+    mut val projectionI: U64 = 0U64
+    while projectionI < left.projections.len {
+        val leftProjection: MidProjectionNode = c.mid.projections[left.projections.start + projectionI]
+        val rightProjection: MidProjectionNode = c.mid.projections[right.projections.start + projectionI]
+        if leftProjection.tag != rightProjection.tag || leftProjection.index != rightProjection.index || leftProjection.indexLocal != rightProjection.indexLocal || leftProjection.typeTerm != rightProjection.typeTerm { return false }
         projectionI = projectionI + 1U64
     }
     return true
@@ -245,6 +265,15 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
+                // Global storage has no local ownership state.  Its old value
+                // is nevertheless observable through ARC/deinit, so the
+                // completed body must prove the lowering's explicit release
+                // immediately before transferring the replacement.
+                if destination.rootTag == 2U64 {
+                    if statementI == 0U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                    val previous: MidStatementNode = c.mid.statements[block.statements.start + statementI - 1U64]
+                    if previous.tag != 3U64 || !canonicalMidSamePlace(c: c, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }

@@ -12,6 +12,18 @@ fn globalInitBody(owner: U64) -> MidBody {
     return <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=[<MidStatement.InitializeGlobal destination=destination source=source />] terminator=<MidTerminator.Return /> />] entry=0U64 />
 }
 
+// A mutable global replacement has a prior process-lifetime owner.  The
+// completed Mid body must make its destruction explicit; accepting an
+// Overwrite on its own would let a canonical consumer silently leak it.
+fn globalReplaceBody(withDrop: Bool) -> MidBody {
+    val source: MidPlace = <MidPlace local=0U64 typeTerm=1U64 />
+    val destination: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=78U64 globalMutable=true typeTerm=1U64 />
+    mut val statements: Array[MidStatement] = []
+    if withDrop { statements.append(<MidStatement.Drop place=destination />) }
+    statements.append(<MidStatement.Overwrite destination=destination source=source />)
+    return <MidBody sourceFunction=0U64 locals=[<MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] entry=0U64 />
+}
+
 fn main() {
     val synthetic: MidBody = globalInitBody(owner: 18446744073709551615U64)
     match verifyMidBody(body: synthetic).error {
@@ -35,6 +47,7 @@ fn main() {
     // restriction after the draft-to-canonical boundary as well.
     mut val c: Comp = <Comp />
     c.arena.globals.append(<Global nameStart=77U64 nameLen=1U64 letStmt=0U64 mutable=false />)
+    c.arena.globals.append(<Global nameStart=78U64 nameLen=1U64 letStmt=0U64 mutable=true />)
     val canonicalSynthetic: MidCanonicalBody = c.mid.store(body: synthetic)
     val canonicalOrdinary: MidCanonicalBody = c.mid.store(body: ordinary)
     match verifyCanonicalMidBody(c: c, canonical: canonicalSynthetic).error {
@@ -45,5 +58,17 @@ fn main() {
         MidVerifyError.MoveUnavailable => { write(s: "canonical-ordinary:rejected\n") }
         MidVerifyError.None => { write(s: "canonical-ordinary:accepted\n") }
         _ => { write(s: "canonical-ordinary:wrong-error\n") }
+    }
+
+    val missingDrop: MidCanonicalBody = c.mid.store(body: globalReplaceBody(withDrop: false))
+    match verifyCanonicalMidBody(c: c, canonical: missingDrop).error {
+        MidVerifyError.DropUnavailable => { write(s: "global-overwrite-without-drop:rejected\n") }
+        MidVerifyError.None => { write(s: "global-overwrite-without-drop:accepted\n") }
+        _ => { write(s: "global-overwrite-without-drop:wrong-error\n") }
+    }
+    val explicitDrop: MidCanonicalBody = c.mid.store(body: globalReplaceBody(withDrop: true))
+    match verifyCanonicalMidBody(c: c, canonical: explicitDrop).error {
+        MidVerifyError.None => { write(s: "global-overwrite-after-drop:accepted\n") }
+        _ => { write(s: "global-overwrite-after-drop:rejected\n") }
     }
 }

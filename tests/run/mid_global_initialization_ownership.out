@@ -3,3 +3,5 @@ no-pre-drop
 ordinary:rejected
 canonical-synthetic:accepted
 canonical-ordinary:rejected
+global-overwrite-without-drop:rejected
+global-overwrite-after-drop:accepted
