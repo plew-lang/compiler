@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 build=src/Mid/Build.pw
 llvm=src/Backend/Llvm/Mid.pw
 
-for reason in IdentifierNotLocal FieldBaseNotPlace IndexBaseNotPlace OtherNotPlace IndexProjection; do
+for reason in IdentifierNotLocal FieldBaseNotPlace IndexBaseNotPlace OtherNotPlace IndexProjection ImmutableGlobal; do
     if ! rg -q "MidUnsupportedAssign\.$reason|    $reason" "$build"; then
         echo "assign diagnostic is missing $reason" >&2
         exit 1
@@ -33,12 +33,12 @@ if ! rg -q 'if !physicalFieldPath' "$build" || ! rg -q 'IndexProjection' "$build
     exit 1
 fi
 
-if ! rg -q 'detail >= 20U64 && detail < 25U64' "$llvm"; then
+if ! rg -q 'detail >= 20U64 && detail < 26U64' "$llvm"; then
     echo "assign coverage range does not include every closed reason" >&2
     exit 1
 fi
 
-for label in identifier-not-local field-base-not-place index-base-not-place other-not-place index-projection; do
+for label in identifier-not-local field-base-not-place index-base-not-place other-not-place index-projection immutable-global; do
     if ! rg -q "text: \"$label\"" "$llvm"; then
         echo "assign coverage renderer is missing $label" >&2
         exit 1

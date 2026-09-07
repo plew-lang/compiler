@@ -233,7 +233,7 @@ pub impl LlvmCtx {
             self.emitMidCoverageUnsupportedBuild(detail: detail - 100U64)
             return
         }
-        if detail >= 20U64 && detail < 25U64 {
+        if detail >= 20U64 && detail < 26U64 {
             eprint(text: "assign:")
             self.emitMidCoverageAssign(detail: detail - 20U64)
             return
@@ -258,6 +258,7 @@ pub impl LlvmCtx {
             2U64 => { eprint(text: "index-base-not-place") }
             3U64 => { eprint(text: "other-not-place") }
             4U64 => { eprint(text: "index-projection") }
+            5U64 => { eprint(text: "immutable-global") }
             _ => { eprint(text: "unknown") }
         }
     }
