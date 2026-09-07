@@ -36,7 +36,18 @@ SEED_RT=plewc.seed.runtime.c
 # package's Plew.toml + Plew.lock (findPkgDir walks up from the entry), which is
 # robust no matter the current directory.
 PW="$(pwd)/src/_.pw"
-LDLIBS="$("$LC" --ldflags --libs core)"
+# The compiler uses LLVM's C API from the unversioned libLLVM dylib.  On
+# Homebrew/macOS, llvm-config --ldflags may name the Cellar directory; recent
+# linkers then fail to resolve the API even though the logical opt-prefix dylib
+# succeeds. Prefer the selected llvm-config's logical prefix when it exposes
+# libLLVM, with llvm-config --libdir as the portable fallback.
+LLVM_LIBDIR="${LLVM_LIBDIR:-$("$LC" --libdir)}"
+LLVM_CONFIG_PATH="$(command -v "$LC")"
+LLVM_PREFIX="$(dirname "$(dirname "$LLVM_CONFIG_PATH")")"
+if [ -f "$LLVM_PREFIX/lib/libLLVM.dylib" ]; then
+    LLVM_LIBDIR="$LLVM_PREFIX/lib"
+fi
+LDLIBS="-L$LLVM_LIBDIR -lLLVM"
 # Optimize the built compiler: plewc is run (not just produced) on every
 # self-compile, so -O2 roughly halves self-compile time (measured 89s -> 45s).
 # The emitted IR is plewc's deterministic output, independent of this flag, so

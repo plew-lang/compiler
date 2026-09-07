@@ -24,7 +24,15 @@ command -v "$LC" >/dev/null 2>&1 || {
 command -v "$LC" >/dev/null 2>&1 || { echo "llvm-config not found (set LLVM_CONFIG)" >&2; exit 1; }
 [ -x plewc ] || { echo "plewc missing — run ./bootstrap.sh first" >&2; exit 1; }
 
-LDLIBS="$("$LC" --ldflags --libs core)"
+# See bootstrap.sh: prefer the selected llvm-config's logical libLLVM path
+# over a Homebrew Cellar path, retaining llvm-config --libdir as a fallback.
+LLVM_LIBDIR="${LLVM_LIBDIR:-$("$LC" --libdir)}"
+LLVM_CONFIG_PATH="$(command -v "$LC")"
+LLVM_PREFIX="$(dirname "$(dirname "$LLVM_CONFIG_PATH")")"
+if [ -f "$LLVM_PREFIX/lib/libLLVM.dylib" ]; then
+    LLVM_LIBDIR="$LLVM_PREFIX/lib"
+fi
+LDLIBS="-L$LLVM_LIBDIR -lLLVM"
 # -O2 to match bootstrap.sh: plewc is run on every self-compile, so optimizing
 # the binary roughly halves rebuild/compile time (the emitted IR is unaffected).
 OPT="-O2"
