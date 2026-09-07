@@ -96,7 +96,11 @@ pub impl LlvmCtx {
         val globalOwner: U64 = 18446744073709551615U64
         val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
         mut val midReady: Bool = false
-        if storageReady && bodyId != 0U64 {
+        if !storageReady {
+            self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: <MidLlvmPreflight.Terminator />)
+        } else if bodyId == 0U64 {
+            self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: globalOwner)
+        } else {
             val parametric: MidBodyBuild = buildParametricMidGlobalInit(c: inout c)
             match parametric.error {
                 MidBuildError.None => {
@@ -107,26 +111,28 @@ pub impl LlvmCtx {
                             match accesses.error {
                                 MidAccessError.None => {
                                     val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: accesses.body)
-                                    match verifyCanonicalMidBody(c: c, canonical: dropped).error {
+                                    val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: dropped)
+                                    match verification.error {
                                         MidVerifyError.None => {
                                             // Preflight before emission so an unsupported
                                             // Mid shape cannot leave a half-emitted global
                                             // initializer before the legacy compatibility path.
-                                            match self.midCanonicalLlvmPreflight(c: inout c, canonical: dropped) {
+                                            val preflight: MidLlvmPreflight = self.midCanonicalLlvmPreflight(c: inout c, canonical: dropped)
+                                            match preflight {
                                                 MidLlvmPreflight.Ready => { midReady = self.genLlvmCanonicalMidBody(c: inout c, canonical: dropped) }
-                                                _ => {}
+                                                _ => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: preflight) }
                                             }
                                         }
-                                        _ => {}
+                                        _ => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: verification.error) }
                                     }
                                 }
-                                _ => {}
+                                _ => { self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: globalOwner) }
                             }
                         }
-                        _ => {}
+                        _ => { self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: instantiated.error) }
                     }
                 }
-                _ => {}
+                _ => { self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: globalOwner, error: parametric.error) }
             }
         }
         if !midReady {

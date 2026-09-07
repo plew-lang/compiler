@@ -131,6 +131,33 @@ pub impl LlvmCtx {
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 0U64, detail: detail)
     }
 
+    // Every production-shaped body, including the synthetic global initializer,
+    // reports the same closed Build error vocabulary.  Keeping this conversion
+    // next to the coverage encoding prevents a new caller from silently
+    // treating a fallback as require-Mid success.
+    inout fn recordMidBuildError(c: inout Comp, bodyId: U64, fnIdx: U64, error: MidBuildError) {
+        match error {
+            MidBuildError.None => {}
+            MidBuildError.InvalidStatement => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 1U64) }
+            MidBuildError.InvalidBlock => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 2U64) }
+            MidBuildError.InvalidFunction => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 3U64) }
+            MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 4U64) }
+            MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 5U64) }
+            MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
+            MidBuildError.UnsupportedAssign(reason: val reason) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 20U64 + self.midUnsupportedAssignCoverageDetail(reason: reason)) }
+            MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 7U64) }
+            MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 8U64) }
+            MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 9U64) }
+            MidBuildError.UnsupportedPanic => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 10U64) }
+            MidBuildError.UnsupportedGive => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 11U64) }
+            MidBuildError.UnsupportedBreak => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 12U64) }
+            MidBuildError.UnsupportedContinue => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 13U64) }
+            MidBuildError.MissingTerminator => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 14U64) }
+            MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 15U64) }
+            MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 16U64) }
+        }
+    }
+
     inout fn recordMidMissingBodyInstance(c: inout Comp, bodyId: U64, fnIdx: U64) {
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 1U64, detail: 0U64)
     }
