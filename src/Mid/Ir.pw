@@ -523,6 +523,11 @@ export struct MidLocalDecl {
     // An inout parameter's Place is supplied directly by the caller ABI; it
     // is not a value copied into a callee-owned local slot.
     pub val isInout: Bool = false
+    // A mutable lexical binding captured by a closure is represented by one
+    // reference-counted cell. The binding target remains this local's stable
+    // source identity; MakeClosure retains the cell rather than copying the
+    // current value, so outer and closure accesses observe the same storage.
+    pub val isCaptureCell: Bool = false
     // Whether this root has a live owned value at body entry. A by-value/borrow
     // parameter starts false; a move parameter starts true. An initialized local
     // becomes owned only at its explicit Assign statement.

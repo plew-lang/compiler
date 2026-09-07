@@ -599,7 +599,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, source: MidBodyNode, blockSt
                 blockI = blockI + 1U64
             }
         }
-        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart />)
+        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart />)
         localI = localI + 1U64
     }
     return <MidRange start=localStart len=localCount />
@@ -1385,7 +1385,7 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
 }
 
 fn midWithTypeTerm(local: MidLocalDecl, typeTerm: U64) -> MidLocalDecl {
-    return <MidLocalDecl typeTerm=typeTerm sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />
+    return <MidLocalDecl typeTerm=typeTerm sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />
 }
 
 // Ground a parametric Mid body exactly once for one frontend BodyInstance.
@@ -1405,7 +1405,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
     mut val localI: U64 = 0U64
     while localI < body.locals.count() {
         val local: MidLocalDecl = body.locals[localI]
-        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
+        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
         localI += 1U64
     }
     mut val blocks: Array[MidBlock] = []

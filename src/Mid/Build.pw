@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -214,9 +214,9 @@ export fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false) -> U64 {
+export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -680,6 +680,32 @@ fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId:
         return <MidAggregateLookup found=true aggregate=c.decls.semanticAggregates[index] />
     }
     return <MidAggregateLookup />
+}
+
+// `bindingTarget` is the frontend's lexical identity of the storage, so it is
+// also the stable identity of the shared mutable capture cell. Build does not
+// inspect closure syntax or rescan a nested body here: Mono already published
+// the complete capture mode in SemanticClosure.
+fn midBindingNeedsCaptureCell(c: Comp, sourceFunction: U64, bindingTarget: U64) -> Bool {
+    mut val closureI: U64 = 0U64
+    while closureI < c.decls.semanticClosures.count() {
+        val closure: SemanticClosure = c.decls.semanticClosures[closureI]
+        if closure.ownerFnIdx == sourceFunction {
+            mut val captureI: U64 = 0U64
+            while captureI < closure.captures.count() {
+                val capture = closure.captures[captureI]
+                match capture.mode {
+                    SemanticClosureCaptureMode.CellBorrow => {
+                        if capture.bindingTarget == bindingTarget { return true }
+                    }
+                    _ => {}
+                }
+                captureI += 1U64
+            }
+        }
+        closureI += 1U64
+    }
+    return false
 }
 
 fn midAggregateValueForExpr(state: MidBuildState, exprId: U64) -> MidCallValueLookup {
@@ -1341,7 +1367,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
                 val t: TypeRef = c.arena.types[term]
                 isUnique = c.typeIsUnique(start: t.nameStart, len: t.nameLen)
             }
-            val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false)
+            val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;
             // only its initializer dependencies belong to this full expression.
@@ -1708,7 +1734,7 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                     // every pattern binding would make the representation
                     // needlessly expensive and duplicate the source owner.
                     val isBorrowed: Bool = c.arcNeedsRelease(ref: payload.fieldTerm)
-                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed)
+                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if isBorrowed {
                         if payload.isBoxed {
@@ -1900,12 +1926,12 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // place supplied by the caller, not a copied value or a special LLVM
         // side channel.  `midPrepareLocals` binds this declaration directly to
         // ABI parameter zero when `isInout` is true.
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout)
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
         val param: Param = c.funcParamAt(params: f.params, index: paramI)
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove, isInout: param.isInout)
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: param.nameStart))
         paramI += 1U64
     }
     // Scope zero is the lifetime of receiver/parameters only. Its range must
