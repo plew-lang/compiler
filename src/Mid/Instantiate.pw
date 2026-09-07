@@ -244,12 +244,21 @@ fn instantiateCanonicalCastBoundary(c: inout Comp, rvalueId: U64, environment: B
     return 0U64
 }
 
+fn canonicalMatchSource(sourceTag: U64, sourceId: U64) -> MatchSource {
+    if sourceTag == 0U64 { return <MatchSource.Statement stmtId=sourceId /> }
+    return <MatchSource.Expression exprId=sourceId />
+}
+
 fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
     if source.tag < 11U64 || source.tag > 15U64 || source.place == 0U64 || source.place > c.mid.places.count() { return 0U64 }
+    if source.sourceTag > 1U64 {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+        return 0U64
+    }
     val sourcePlace = c.mid.places[source.place - 1U64]
-    val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=<MatchSource.Statement stmtId=source.sourceStmt />)
+    val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, source=canonicalMatchSource(sourceTag: source.sourceTag, sourceId: source.sourceStmt))
     if matchIndex >= c.arena.finalMatches.count() {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
         return 0U64
@@ -282,7 +291,7 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
         }
     }
     val place: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef)
-    c.mid.rvalues.append(<MidRvalueNode tag=source.tag place=place enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=resultTerm />)
+    c.mid.rvalues.append(<MidRvalueNode tag=source.tag place=place enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceTag=source.sourceTag sourceStmt=source.sourceStmt resultTerm=resultTerm />)
     return c.mid.rvalues.count()
 }
 
