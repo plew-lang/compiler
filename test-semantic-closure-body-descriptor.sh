@@ -38,6 +38,11 @@ require 'closure.parameters' src/Mid/Build.pw
 require 'closure.captures' src/Mid/Build.pw
 require 'closure.bodyBlock' src/Mid/Build.pw
 require 'if body.locals[local].isBorrowed { }' src/Mid/Drop.pw
+# A Mid body owns its ABI return contract. Synthetic closure body keys are not
+# Func indices, so shared return lowering must never rediscover a return type
+# through arena.funcs[sourceFunction].
+require 'pub mut val returnTypeTerm: U64 = 0U64' src/Mid/Build.pw
+require 'typeTerm=state.returnTypeTerm' src/Mid/Build.pw
 # Closure construction registers exactly one parametric body in the canonical
 # arena. LLVM will later instantiate that registered body; it must not create
 # an ad-hoc body by walking the AST.

@@ -143,6 +143,10 @@ export struct MidBuildState {
     pub mut val currentScope: U64 = 0U64
     pub mut val hasReturnPlace: Bool = false
     pub mut val returnPlace: U64 = 0U64
+    // ABI result contract for this Mid body.  It belongs to the body builder,
+    // not to `sourceFunction`: closure/global synthetic body identities are
+    // valid semantic owners but are not Func-array indices.
+    pub mut val returnTypeTerm: U64 = 0U64
     // Lexical function identity of this parametric source body. It is used
     // solely to read its already-recorded CallTemplate by CallSiteKey.
     pub val sourceFunction: U64 = 0U64
@@ -1568,7 +1572,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 val callDestination: MidPlace = <MidPlace local=resultLocal typeTerm=term />
                 val callResult: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: callDestination)
                 match callResult { MidBuildError.None => {} _ => { return callResult } }
-                val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=c.arena.funcs[state.sourceFunction].retTy />
+                val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
                 mut val resultOperand: MidOperand = <MidOperand.Copy place=callDestination />
                 if midTermIsUnique(c: inout c, term: term) {
                     resultOperand = <MidOperand.Move place=callDestination />
@@ -1583,7 +1587,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             // Copy retains into the ABI result place and Move transfers there;
             // only then may lexical cleanup destroy the source locals.
             if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
-            val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=c.arena.funcs[state.sourceFunction].retTy />
+            val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.funcs[state.sourceFunction].retTy operand=operand.operand /> />)
             midEmitAllScopeExits(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
@@ -2024,6 +2028,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         state.locals.append(<MidLocalDecl typeTerm=f.retTy sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: f.retTy) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
         state.hasReturnPlace = true
         state.returnPlace = resultLocal
+        state.returnTypeTerm = f.retTy
     }
     val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: f.body)
     match result {
@@ -2095,6 +2100,7 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
         state.locals.append(<MidLocalDecl typeTerm=closure.returnTypeTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: closure.returnTypeTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
         state.hasReturnPlace = true
         state.returnPlace = resultLocal
+        state.returnTypeTerm = closure.returnTypeTerm
     }
     val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: closure.bodyBlock)
     match result {
