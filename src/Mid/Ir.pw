@@ -102,6 +102,10 @@ export struct MidRvalueNode {
     pub val fieldCount: U64 = 0U64
     pub val elements: MidRange = <MidRange start=0U64 len=0U64 />
     pub val conversion: U64 = 0U64
+    // MatchSource discriminant for enum tag/payload rvalues: 0=Statement,
+    // 1=Expression. `sourceStmt` remains the compact source-node ID in the
+    // scalar canonical row.
+    pub val sourceTag: U64 = 0U64
     pub val sourceStmt: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val bindTarget: U64 = 0U64
