@@ -76,7 +76,7 @@ clang -w $OPT plew-resolve.ll plew-resolve.runtime.c -o plew-resolve
 rm -f plew-resolve.ll plew-resolve.runtime.c
 
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
-./plewc0 "$PW" > plewc.ll
+./plewc0 --trace-phases "$PW" > plewc.ll
 ./plewc0 --runtime > plewc.runtime.c
 clang -w $OPT plewc.ll plewc.runtime.c $LDLIBS -o plewc
 
@@ -90,7 +90,7 @@ if [ "$1" = "--reseed" ]; then
 fi
 
 echo "[4/4] fixpoint: does the freshly built plewc reproduce the seed?"
-./plewc "$PW" > plewc.check.ll
+./plewc --trace-phases "$PW" > plewc.check.ll
 ./plewc --runtime > plewc.check.runtime.c
 if cmp -s "$SEED_LL" plewc.check.ll && cmp -s "$SEED_RT" plewc.check.runtime.c; then
     rm -f plewc0 plewc.ll plewc.runtime.c \
