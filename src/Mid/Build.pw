@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -1439,7 +1439,7 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Match(scrut: val scrut, arms: val sourceArms) => {
-            val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, stmtId: stmtId)
+            val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, source=<MatchSource.Statement stmtId=stmtId />)
             if semanticIndex >= c.decls.semanticMatches.count() {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "missing-semantic-match")
                 return <MidBuildError.UnsupportedMatch />

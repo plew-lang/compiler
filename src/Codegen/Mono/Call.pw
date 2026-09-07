@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2764,7 +2764,7 @@ pub impl Comp {
     inout fn finalizeCurrentBodyMatch(stmtId: U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return }
-        val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, stmtId: stmtId)
+        val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, source=<MatchSource.Statement stmtId=stmtId />)
         if sourceIndex >= self.decls.semanticMatches.count() { return }
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
         val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)

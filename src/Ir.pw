@@ -432,7 +432,7 @@ pub impl SemanticMatchArm { factory }
 // into FinalMatchResolution for the concrete BodyInstance.
 export struct SemanticMatch {
     pub val ownerFnIdx: U64 = 0U64
-    pub val stmtId: U64 = 0U64
+    pub val source: MatchSource
     pub val scrutineeTerm: U64 = 0U64
     pub val enumIndex: U64 = 0U64
     pub val arms: Array[SemanticMatchArm] = []
