@@ -1694,6 +1694,30 @@ export struct FinalReturnResolution {
 }
 pub impl FinalReturnResolution { factory }
 
+// Concrete control-flow meaning of one `try` expression in one canonical
+// BodyInstance. The frontend, not Mid/LLVM, identifies Result's physical enum
+// layout and the already-selected implicit `From` conversion. `try` is an
+// early Result return, so both the operand and enclosing return Result types
+// remain explicit even though only their Err payload crosses the error edge.
+export struct FinalTryResolution {
+    pub val bodyId: U64
+    pub val exprId: U64
+    pub val operandResultTypeRef: U64
+    pub val returnResultTypeRef: U64
+    pub val resultEnumIndex: U64
+    pub val okVariantIndex: U64
+    pub val errVariantIndex: U64
+    pub val okPayloadTypeRef: U64
+    pub val sourceErrorTypeRef: U64
+    pub val targetErrorTypeRef: U64
+    // When false, the source Err payload is transferred directly into the
+    // enclosing Result.Err. When true, this is a zero-based FinalCallee row
+    // selected by Mono for `targetError.from(sourceError:)`.
+    pub val hasErrorConversion: Bool = false
+    pub val errorConversionResolution: U64 = 0U64
+}
+pub impl FinalTryResolution { factory }
+
 // Frontend-owned input to final call construction.  It intentionally carries
 // semantic facts selected at the source/implicit/control-flow boundary rather
 // than asking the finalizer to reopen a shared AST node. `resultHintRef` is the
@@ -2161,6 +2185,11 @@ export struct Arena {
     // Derived open-addressed index for finalReturns; slots are one-based table
     // positions and are rebuilt whenever the semantic table changes.
     pub mut val finalReturnIndexSlots: Array[U64] = []
+    // Concrete `try` propagation facts, keyed by (BodyInstance, source ExprId).
+    // This is frontend semantic output; Mid must not reconstruct Result or
+    // From details from source names.
+    pub mut val finalTries: Array[FinalTryResolution] = []
+    pub mut val finalTryIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
     pub mut val finalExprCallee: Array[CachedCallee] = []

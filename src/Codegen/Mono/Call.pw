@@ -4103,6 +4103,8 @@ pub impl Comp {
         self.arena.finalAggregateIndexSlots = []
         self.arena.finalReturns = []
         self.arena.finalReturnIndexSlots = []
+        self.arena.finalTries = []
+        self.arena.finalTryIndexSlots = []
         self.monoWork.bodyInstances = []
         // `collectFnInsts` predates final-callable construction and may have
         // registered a generic body from an AST-global / parametric type
