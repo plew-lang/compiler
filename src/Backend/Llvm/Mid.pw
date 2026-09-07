@@ -222,7 +222,7 @@ pub impl LlvmCtx {
             self.emitMidCoverageUnsupportedBuild(detail: detail - 100U64)
             return
         }
-        if detail >= 20U64 && detail < 22U64 {
+        if detail >= 20U64 && detail < 25U64 {
             eprint(text: "assign:")
             self.emitMidCoverageAssign(detail: detail - 20U64)
             return
@@ -242,8 +242,11 @@ pub impl LlvmCtx {
 
     fn emitMidCoverageAssign(detail: U64) {
         match detail {
-            0U64 => { eprint(text: "not-place") }
-            1U64 => { eprint(text: "index-projection") }
+            0U64 => { eprint(text: "identifier-not-local") }
+            1U64 => { eprint(text: "field-base-not-place") }
+            2U64 => { eprint(text: "index-base-not-place") }
+            3U64 => { eprint(text: "other-not-place") }
+            4U64 => { eprint(text: "index-projection") }
             _ => { eprint(text: "unknown") }
         }
     }

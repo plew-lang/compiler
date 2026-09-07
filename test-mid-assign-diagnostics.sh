@@ -32,3 +32,15 @@ if ! rg -q 'if !physicalFieldPath' "$build" || ! rg -q 'IndexProjection' "$build
     echo "assign lowering no longer keeps found index projections out of raw stores" >&2
     exit 1
 fi
+
+if ! rg -q 'detail >= 20U64 && detail < 25U64' "$llvm"; then
+    echo "assign coverage range does not include every closed reason" >&2
+    exit 1
+fi
+
+for label in identifier-not-local field-base-not-place index-base-not-place other-not-place index-projection; do
+    if ! rg -q "text: \"$label\"" "$llvm"; then
+        echo "assign coverage renderer is missing $label" >&2
+        exit 1
+    fi
+done
