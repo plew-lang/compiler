@@ -1675,7 +1675,7 @@ pub impl FinalMatchArmResolution { factory }
 
 export struct FinalMatchResolution {
     pub val bodyId: U64 = 0U64
-    pub val stmtId: U64 = 0U64
+    pub val source: MatchSource
     pub val scrutineeTypeRef: U64 = 0U64
     pub val enumIndex: U64 = 0U64
     pub val arms: Array[FinalMatchArmResolution] = []
