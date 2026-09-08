@@ -37,8 +37,14 @@ mkdir -p "$OUT_DIR"
     echo "carrier=$PLEWC"
     shasum -a 256 "$PLEWC"
     echo "source=$SOURCE"
-    git rev-parse HEAD
-    git -C ../syntax rev-parse HEAD
+    shasum -a 256 "$SOURCE"
+    echo "compiler_head=$(git rev-parse HEAD)"
+    echo "compiler_worktree=$(git diff --no-ext-diff --binary HEAD | shasum -a 256 | awk '{print $1}')"
+    echo "syntax_head=$(git -C ../syntax rev-parse HEAD)"
+    echo "syntax_worktree=$(git -C ../syntax diff --no-ext-diff --binary HEAD | shasum -a 256 | awk '{print $1}')"
+    echo "syntax_status_begin"
+    git -C ../syntax status --short
+    echo "syntax_status_end"
     uname -a
     "$LLVM_CONFIG" --version 2>&1 || true
     clang --version 2>&1 | sed -n '1p'
@@ -111,8 +117,12 @@ with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as t
                 print(f"[perf] t={elapsed:.3f}s {last_event}", file=sys.stderr)
                 last_visible = time.monotonic()
         else:
-            sys.stderr.write(text)
-            sys.stderr.flush()
+            # Codegen identity tracing is intentionally dense (one line per
+            # emitted instance).  Preserve it in stderr.log, while phase and
+            # counter rows remain the terminal's bounded progress contract.
+            if not trace_codegen:
+                sys.stderr.write(text)
+                sys.stderr.flush()
     status = process.wait()
 elapsed = time.monotonic() - started
 
