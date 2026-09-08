@@ -2853,23 +2853,23 @@ pub impl Comp {
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
         val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         if scrutineeTypeRef == 0U64 { return }
-        mut val arms: Array[FinalMatchArmResolution] = []
+        val armStart: U64 = self.arena.finalMatchArms.count()
         mut val armIndex: U64 = 0U64
         while armIndex < source.arms.count() {
             val sourceArm: SemanticMatchArm = source.arms[armIndex]
-            mut val payloads: Array[FinalMatchPayloadResolution] = []
+            val payloadStart: U64 = self.arena.finalMatchPayloads.count()
             mut val payloadIndex: U64 = 0U64
             while payloadIndex < sourceArm.payloads.count() {
                 val sourcePayload: SemanticMatchPayload = sourceArm.payloads[payloadIndex]
                 val fieldTypeRef: U64 = self.groundTermForBody(ref: sourcePayload.fieldTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                 if fieldTypeRef == 0U64 { return }
-                payloads.append(<FinalMatchPayloadResolution bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
+                self.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
                 payloadIndex += 1U64
             }
-            arms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloads=payloads />)
+            self.arena.finalMatchArms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloadStart=payloadStart payloadCount=self.arena.finalMatchPayloads.count() - payloadStart />)
             armIndex += 1U64
         }
-        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef enumIndex=source.enumIndex arms=arms />)
+        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef enumIndex=source.enumIndex armStart=armStart armCount=self.arena.finalMatchArms.count() - armStart />)
     }
 
     // A return is a source-level value boundary just like a call argument. The
@@ -4060,10 +4060,38 @@ pub impl Comp {
     // Freeze the narrow value vocabulary accepted by Mid access elaboration.
     // This is semantic provenance, not a second expression-lowering pass:
     // locals carry their resolver identity, fields their selected physical
-    // slot, and integer literals their already-selected term.
-    inout fn freezeFinalAccessInput(exprId: U64) -> U64 {
+    // slot, integer literals their already-selected term, and an indexed
+    // value carries its already-selected getter plus recursively frozen
+    // receiver/key recipes.  In particular, a key may itself be an indexed
+    // value; treating only the receiver as nestable loses ordinary programs
+    // such as `rows[order[0]][0]`.
+    inout fn freezeFinalAccessInput(bodyId: U64, parent: CallResolution, exprId: U64) -> U64 {
         if exprId >= self.arena.exprs.count() { return 0U64 }
         val term: U64 = self.semanticExprTerm(exprId: exprId)
+        // A lowered Index.index call is the value result of the candidate,
+        // never a raw place.  Freeze its selected read call and both input
+        // recipes here.  The candidate's detached setter is deliberately not
+        // part of this value node: only an enclosing inout access decides
+        // whether this value belongs to a reverse writeback chain.
+        mut val candidateI: U64 = 0U64
+        while candidateI < self.decls.accessCandidates.count() {
+            val candidate = self.decls.accessCandidates[candidateI]
+            if candidate.readExpr == exprId {
+                val readResolution: U64 = self.finalAccessReadResolution(bodyId: bodyId, candidateIndex: candidateI, parent: parent)
+                if readResolution >= self.finalCalleeCount() { return 0U64 }
+                match self.arena.exprs[candidate.placeExpr] {
+                    Expr.Index(base: val baseExpr, index: val keyExpr) => {
+                        val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: baseExpr)
+                        val keyInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: keyExpr)
+                        if baseInput == 0U64 || keyInput == 0U64 { return 0U64 }
+                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=6U64 base=baseInput key=keyInput readResolution=readResolution candidateIndex=candidateI typeTerm=term />)
+                        return self.arena.semanticAccessInputs.count()
+                    }
+                    _ => { return 0U64 }
+                }
+            }
+            candidateI += 1U64
+        }
         match self.arena.exprs[exprId] {
             Expr.Ident(start: _, len: _) => {
                 if exprId >= self.typeCache.identTarget.count() { return 0U64 }
@@ -4083,7 +4111,7 @@ pub impl Comp {
                 if exprId >= self.arena.semanticExprTypes.count() { return 0U64 }
                 val semantic: SemanticExprType = self.arena.semanticExprTypes[exprId]
                 if !semantic.hasFieldProjection { return 0U64 }
-                val baseInput: U64 = self.freezeFinalAccessInput(exprId: base)
+                val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)
                 if baseInput == 0U64 { return 0U64 }
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex typeTerm=term />)
             }
@@ -4162,9 +4190,9 @@ pub impl Comp {
                                     self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=baseTerm />)
                                     baseInput = self.arena.semanticAccessInputs.count()
                                 } else {
-                                    baseInput = self.freezeFinalAccessInput(exprId: baseExpr)
+                                    baseInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: baseExpr)
                                 }
-                                val keyInput: U64 = self.freezeFinalAccessInput(exprId: keyExpr)
+                                val keyInput: U64 = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: keyExpr)
                                 val accessInput: U64 = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
                                 if baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64 {
                                     self.errorAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate has no frozen Mid input recipe")
@@ -5157,7 +5185,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: scrutTi)
+                    self.scanAddFinalMatchArmBinds(a: a, scrutTi: scrutTi, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -5195,7 +5223,56 @@ pub impl Comp {
         }
     }
 
+    // This declaration-time helper is shared by Record and generic-body
+    // checking.  Those consumers operate before a BodyInstance exists, so
+    // they deliberately recover an abstract field type from the declaration.
+    // Mono must use scanAddFinalMatchArmBinds below instead.
     inout fn scanAddArmBinds(a: MatchArm, scrutTi: TypeInfo) {
+        if a.isStruct {
+            self.addForStructBinds(et: scrutTi, binds: a.binds)
+            return
+        }
+        val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
+        mut val bi: U64 = 0U64
+        while bi < a.binds.len {
+            val bd: Bind = self.bindAt(binds: a.binds, index: bi)
+            if bd.nameLen != 0U64 {
+                if genericMatch {
+                    val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                    self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
+                } else {
+                    self.addBindLocal(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                }
+            }
+            bi += 1U64
+        }
+    }
+
+    // Match payload bindings are declaration locals whose types have already
+    // been selected by Record and grounded for this BodyInstance.  Do not
+    // recover them by looking up the authored variant/field spelling here:
+    // apart from duplicating frontend resolution, doing so loses a concrete
+    // generic argument when a cache-shaped TypeInfo is reconstructed.
+    inout fn finalMatchPayloadTypeRef(matchSource: MatchSource, armIndex: U64, bindTarget: U64) -> U64 {
+        val bodyId: U64 = self.currentBodyInstanceId()
+        if bodyId == 0U64 { return 0U64 }
+        val matchIndex: U64 = self.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
+        if matchIndex >= self.arena.finalMatches.count() { return 0U64 }
+        // These are scalar arena rows. The arm and payload pools keep this
+        // lookup independent of any ARC-owned enclosing descriptor.
+        val fact: FinalMatchResolution = self.arena.finalMatches[matchIndex]
+        if armIndex >= fact.armCount { return 0U64 }
+        val arm: FinalMatchArmResolution = self.arena.finalMatchArms[fact.armStart + armIndex]
+        mut val payloadIndex: U64 = 0U64
+        while payloadIndex < arm.payloadCount {
+            val payload: FinalMatchPayloadResolution = self.arena.finalMatchPayloads[arm.payloadStart + payloadIndex]
+            if payload.bindTarget == bindTarget { return payload.fieldTypeRef }
+            payloadIndex += 1U64
+        }
+        return 0U64
+    }
+
+    inout fn scanAddFinalMatchArmBinds(a: MatchArm, scrutTi: TypeInfo, matchSource: MatchSource, armIndex: U64) {
         // a struct-destructure arm `S { val x }`: bind each field from the scrutinee
         // struct (mirrors codegen's addForStructBinds), so a generic call on a bound
         // field (`print(items.count())`) recovers its type.
@@ -5203,7 +5280,6 @@ pub impl Comp {
             self.addForStructBinds(et: scrutTi, binds: a.binds)
             return
         }
-        val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -5211,23 +5287,15 @@ pub impl Comp {
                 bi += 1
                 continue
             }
-            if genericMatch {
-                val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                if self.traceCodegen {
-                    eprint(text: "[trace-codegen] match binding scrutinee=")
-                    self.traceMonoTypeHead(ref: scrutTi.ref)
-                    eprint(text: " payload-ref=")
-                    eprintU64(n: bti.ref)
-                    eprint(text: " payload-type=")
-                    self.traceMonoTypeHead(ref: bti.ref)
-                    eprint(text: "\n")
-                }
-                // carry the payload's STRUCTURED ref (a generic payload `Pong[I64]`
-                // loses its args as a bare name; an array payload reconstructs its
-                // `Array[E]` form) so reads of the bind recover the full type.
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
+            val payloadRef: U64 = self.finalMatchPayloadTypeRef(matchSource: matchSource, armIndex: armIndex, bindTarget: bd.nameStart)
+            // A missing entry is an internal finalization invariant failure.
+            // Do not silently fall back to source spelling and invent a
+            // potentially wrong payload type.
+            if payloadRef == 0U64 {
+                self.errorAt(offset: bd.nameStart, msg: "internal error: finalized enum-match payload was not recorded")
             } else {
-                self.addBindLocal(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
+                val bti: TypeInfo = self.typeInfoOfRef(ref: payloadRef)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: payloadRef, isInout: false, isMut: false, owned: false)
             }
             bi += 1
         }
@@ -5511,7 +5579,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: scrutTi)
+                    self.scanAddFinalMatchArmBinds(a: a, scrutTi: scrutTi, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

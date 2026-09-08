@@ -1,0 +1,59 @@
+// The compiler parser must build every top-level form and every impl-member
+// form directly into SyntaxFile rows.  This deliberately exercises extension
+// expansion, nested export, and re-export in one source so a structural gate
+// alone cannot accidentally leave one of them on the value-AST freezer path.
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevelCount, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxImpl, syntaxImplMemberCount, syntaxImplMember, syntaxMember, ImplId, MemberKind, SyntaxTopItemKind }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "extension E {\n  impl Box {\n    fn plain() {}\n    inout fn change() {}\n    move fn take() {}\n    borrow fn look() {}\n    async move fn later() {}\n    deinit {}\n    factory\n    factory named() {}\n    optional factory maybe() {}\n    result[I64] factory checked() {}\n    assoc val answer: I64 = 1\n    assoc fn helper() {}\n    type Item = I64\n  }\n}\nexport struct Published {}\nexport @Std/Io with { print as show }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    print(syntaxFileTopLevelCount(file: file))
+    val first = syntaxFileTopLevel(file: file, index: 0U64)
+    match syntaxTopItemKind(file: file, item: first) {
+        SyntaxTopItemKind.Impl => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    val impl = syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: first) />)
+    print(syntaxImplMemberCount(file: file, impl: impl))
+    val plain = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 0U64))
+    val change = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 1U64))
+    val take = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 2U64))
+    val later = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 4U64))
+    val memberwise = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 6U64))
+    val optionalFactory = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 8U64))
+    val resultFactory = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 9U64))
+    val assocValue = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 10U64))
+    val assocType = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 12U64))
+    match plain.kind {
+        MemberKind.Method => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    if change.selfInout { print(1U64) } else { print(0U64) }
+    if take.selfMove { print(1U64) } else { print(0U64) }
+    if later.isAsync && later.selfMove { print(1U64) } else { print(0U64) }
+    match memberwise.kind {
+        MemberKind.Factory => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    print(optionalFactory.factoryKind)
+    print(resultFactory.factoryKind)
+    if assocValue.hasRet { print(1U64) } else { print(0U64) }
+    match assocType.kind {
+        MemberKind.AssocType => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    val second = syntaxFileTopLevel(file: file, index: 1U64)
+    val third = syntaxFileTopLevel(file: file, index: 2U64)
+    match syntaxTopItemKind(file: file, item: second) {
+        SyntaxTopItemKind.Export => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    match syntaxTopItemKind(file: file, item: third) {
+        SyntaxTopItemKind.ReExport => { print(1U64) }
+        _ => { print(0U64) }
+    }
+}

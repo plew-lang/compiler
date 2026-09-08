@@ -235,6 +235,58 @@ export struct MidCanonicalArena {
 }
 pub impl MidCanonicalArena { factory }
 
+// Canonical calls are normalized to their selected ABI after instantiation and
+// again when an access expansion synthesizes a getter/setter call.  Keep this
+// tiny ownership conversion in the canonical vocabulary rather than allowing
+// each consumer to invent raw operand tags.  `capability` is 1=Read, 2=Inout.
+export fn canonicalMidBorrowOperand(arena: inout MidCanonicalArena, operandId: U64, capability: U64) -> U64 {
+    if operandId == 0U64 || operandId > arena.operands.count() { return 0U64 }
+    val source: MidOperandNode = arena.operands[operandId - 1U64]
+    if capability == 1U64 {
+        if source.tag == 3U64 && source.capability == 1U64 { return operandId }
+        // Immediate operands have no owned place to borrow from.  Passing an
+        // integer/bool/string immediate to a guaranteed ABI parameter keeps
+        // the same direct value; synthesizing a borrow would be meaningless.
+        if source.tag >= 5U64 && source.tag <= 7U64 { return operandId }
+        if source.tag != 1U64 { return 0U64 }
+        arena.operands.append(<MidOperandNode tag=3U64 place=source.place capability=1U64 />)
+        return arena.operands.count()
+    }
+    if capability == 2U64 {
+        if source.tag == 4U64 && source.capability == 2U64 { return operandId }
+        if source.tag != 1U64 { return 0U64 }
+        arena.operands.append(<MidOperandNode tag=4U64 place=source.place capability=2U64 />)
+        return arena.operands.count()
+    }
+    return 0U64
+}
+
+export fn canonicalMidBorrowPlace(arena: inout MidCanonicalArena, place: U64, capability: U64) -> U64 {
+    if place == 0U64 || place > arena.places.count() || (capability != 1U64 && capability != 2U64) { return 0U64 }
+    mut val tag: U64 = 3U64
+    if capability == 2U64 { tag = 4U64 }
+    arena.operands.append(<MidOperandNode tag=tag place=place capability=capability />)
+    return arena.operands.count()
+}
+
+export fn canonicalMidMoveOperand(arena: inout MidCanonicalArena, operandId: U64) -> U64 {
+    if operandId == 0U64 || operandId > arena.operands.count() { return 0U64 }
+    val source: MidOperandNode = arena.operands[operandId - 1U64]
+    if source.tag == 2U64 { return operandId }
+    // An immediate has no source owner to consume.  Its direct operand form
+    // is consequently also the canonical move argument form.
+    if source.tag >= 5U64 && source.tag <= 7U64 { return operandId }
+    if source.tag != 1U64 { return 0U64 }
+    arena.operands.append(<MidOperandNode tag=2U64 place=source.place />)
+    return arena.operands.count()
+}
+
+export fn canonicalMidMovePlace(arena: inout MidCanonicalArena, place: U64) -> U64 {
+    if place == 0U64 || place > arena.places.count() { return 0U64 }
+    arena.operands.append(<MidOperandNode tag=2U64 place=place />)
+    return arena.operands.count()
+}
+
 // A one-based immutable body ID in MidCanonicalArena.  Zero is never a
 // frozen body, which keeps optional node references and the first body
 // unambiguous without reserving dummy arena rows.

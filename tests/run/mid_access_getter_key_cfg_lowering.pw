@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// The outer indexed mutation has two independently selected getter inputs:
+// its receiver is `rows[order[0]]`, while its key is a separate getter result
+// `order[0]`.  Mid must freeze and materialize both recipes without reopening
+// the source expression tree; only the receiver path participates in reverse
+// writeback.
+struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn resetOrdered(rows: inout Array[Array[Counter]], order: Array[U64]) -> I32 {
+    return rows[order[0U64]][0U64].takeAndReset()
+}
+
+fn main() {
+    mut val rows: Array[Array[Counter]] = []
+    rows.append([<Counter n=7I32 />])
+    print(resetOrdered(rows: inout rows, order: [0U64]))
+    print(rows[0U64][0U64].n)
+}

@@ -455,7 +455,6 @@ fn midFinishEvaluationScope(state: inout MidBuildState, scope: U64) {
 // resources used to compute it do. The Switch consumes this result home.
 fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U64) -> MidOperandBuild {
     val term: U64 = c.semanticExprTerm(exprId: exprId)
-    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
     val parentCalls: Array[MidCallValue] = state.callValues
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
@@ -464,14 +463,36 @@ fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U6
     val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: false)
     match value.error {
         MidBuildError.None => {
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=value.operand /> />)
+            // Constants have neither a lexical owner nor an evaluation result
+            // place.  Keeping them as operands preserves CFG facts such as
+            // `while true`'s absent false edge; materializing them would turn
+            // that fact into an opaque local load.  This is the ordinary
+            // constant form for every condition, not a syntax-specific loop
+            // exception.
+            match value.operand {
+                MidOperand.Constant(value: _) => {
+                    midFinishEvaluationScope(state: inout state, scope: scope)
+                    state.callValues = parentCalls
+                    state.aggregateValues = parentAggregates
+                    return value
+                }
+                _ => {
+                    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
+                    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=value.operand /> />)
+                    midFinishEvaluationScope(state: inout state, scope: scope)
+                    state.callValues = parentCalls
+                    state.aggregateValues = parentAggregates
+                    return <MidOperandBuild operand=<MidOperand.Move place=result /> />
+                }
+            }
         }
-        _ => {}
+        _ => {
+            midFinishEvaluationScope(state: inout state, scope: scope)
+            state.callValues = parentCalls
+            state.aggregateValues = parentAggregates
+            return value
+        }
     }
-    midFinishEvaluationScope(state: inout state, scope: scope)
-    state.callValues = parentCalls
-    state.aggregateValues = parentAggregates
-    return <MidOperandBuild operand=<MidOperand.Move place=result /> error=value.error />
 }
 
 // Return leaves every currently active lexical scope, innermost first. Scope
@@ -1340,6 +1361,18 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     match templateReceiver {
         CallTemplateReceiver.None => { return <MidReceiverBuild /> }
         CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorSite) => {
+            // A lowered index read is represented as a prior call result, but
+            // that representation does not make an inout use into a value
+            // use. Preserve the access marker exactly as for a direct
+            // receiver so the later CFG rewrite can perform the required
+            // getter-modify-set writeback. Materializing here would leave the
+            // parent method mutating only a detached temporary.
+            if directInout {
+                val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: priorExpr)
+                if candidate < c.decls.accessCandidates.count() {
+                    return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
+                }
+            }
             val built: MidOperandBuild = materializeMidCallValue(c: inout c, state: inout state, exprId: priorExpr, siteKey: priorSite)
             match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
             return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=built.operand /> />
@@ -1809,13 +1842,14 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-payload")
                         return <MidBuildError.UnsupportedMatch />
                     }
-                    // ARC payloads remain borrowed from the matched enum for
-                    // the arm's lexical lifetime. A subsequent value use of
-                    // this local is represented as MidOperand.Copy and gains
-                    // its own ARC share there; eagerly copying the payload at
-                    // every pattern binding would make the representation
-                    // needlessly expensive and duplicate the source owner.
-                    val isBorrowed: Bool = c.arcNeedsRelease(ref: payload.fieldTerm)
+                    // Every non-consuming payload binding aliases the matched
+                    // enum for the arm's lexical lifetime.  This is not an
+                    // ARC classification: the parametric body may contain T,
+                    // whose ARC representation is known only after grounding.
+                    // A later MidOperand.Copy is the sole value boundary and
+                    // obtains the grounded ARC share when one is needed.
+                    // Scalars follow the same representation at zero ARC cost.
+                    val isBorrowed: Bool = true
                     val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if isBorrowed {

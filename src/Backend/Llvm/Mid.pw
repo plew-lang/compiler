@@ -163,6 +163,16 @@ pub impl LlvmCtx {
     }
 
     inout fn recordMidInstantiate(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidInstantiateError) {
+        // Coverage is normally emitted only after code generation completes.
+        // A frontend diagnostic can abort that run first, so make the same
+        // stable reason observable at the failure boundary under tracing.
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid instantiate-fallback detail=")
+            self.traceCodegenU64(n: self.midInstantiateCoverageDetail(reason: reason))
+            eprint(text: " fn=")
+            self.traceCodegenU64(n: fnIdx)
+            eprint(text: "\n")
+        }
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 2U64, detail: self.midInstantiateCoverageDetail(reason: reason))
     }
 
@@ -179,6 +189,17 @@ pub impl LlvmCtx {
     }
 
     inout fn recordMidPreflight(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidLlvmPreflight) {
+        // `--trace-codegen` must reveal why a verified body did not enter the
+        // canonical backend.  Coverage keeps the same stable scalar detail;
+        // this line merely makes that closed fact observable while diagnosing
+        // a new Mid boundary, without reopening source lowering.
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid preflight-fallback detail=")
+            self.traceCodegenU64(n: self.midPreflightCoverageDetail(reason: reason))
+            eprint(text: " fn=")
+            self.traceCodegenU64(n: fnIdx)
+            eprint(text: "\n")
+        }
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 5U64, detail: self.midPreflightCoverageDetail(reason: reason))
     }
 
@@ -2733,7 +2754,12 @@ pub impl LlvmCtx {
             CallReceiverPassing.Inout => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
                 val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
-                return operand.tag == 3U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
+                // Canonical operand tags distinguish the two borrow modes:
+                // tag 3 is Read and tag 4 is Inout (Mid/Ir.midFreezeOperand).
+                // Keep the backend preflight in that same closed vocabulary;
+                // accepting a made-up "tag 3, capability 2" combination would
+                // make a correctly elaborated access fall back to source LLVM.
+                return operand.tag == 4U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
             }
             CallReceiverPassing.Move => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
@@ -2755,7 +2781,37 @@ pub impl LlvmCtx {
         val callee: Func = c.arena.funcs[selected.callee]
         if callee.isAsync { return <MidCallPreflight.Async /> }
         if callee.hasRecv {
-            if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing) { return <MidCallPreflight.Receiver /> }
+            if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing) {
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid receiver-reject expected=")
+                    match selected.receiverPassing {
+                        CallReceiverPassing.None => { eprint(text: "none") }
+                        CallReceiverPassing.Borrow => { eprint(text: "borrow") }
+                        CallReceiverPassing.Inout => { eprint(text: "inout") }
+                        CallReceiverPassing.Move => { eprint(text: "move") }
+                    }
+                    eprint(text: " receiver-id=")
+                    self.traceCodegenU64(n: term.callReceiver)
+                    if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+                        val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+                        eprint(text: " receiver-tag=")
+                        self.traceCodegenU64(n: receiver.tag)
+                        eprint(text: " operand=")
+                        self.traceCodegenU64(n: receiver.operand)
+                        if receiver.operand != 0U64 && receiver.operand <= c.mid.operands.count() {
+                            val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+                            eprint(text: " operand-tag=")
+                            self.traceCodegenU64(n: operand.tag)
+                            eprint(text: " capability=")
+                            self.traceCodegenU64(n: operand.capability)
+                            eprint(text: " place=")
+                            self.traceCodegenU64(n: operand.place)
+                        }
+                    }
+                    eprint(text: "\n")
+                }
+                return <MidCallPreflight.Receiver />
+            }
         } else if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.Receiver /> }
         if callee.isExtern && !self.resolvedCCallSupported(c: inout c, selected: selected) { return <MidCallPreflight.Extern /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.len { return <MidCallPreflight.GenericArguments /> }
@@ -2770,7 +2826,7 @@ pub impl LlvmCtx {
             if operandId == 0U64 || operandId > c.mid.operands.count() || c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.types.count() { return <MidCallPreflight.ArgumentShape /> }
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
             match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => { if operand.tag != 3U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
+                CallArgumentPassing.Inout => { if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Move => { if operand.tag != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Borrow => {
                     if operand.tag == 3U64 {
@@ -3076,7 +3132,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalBufferInoutOperandSupported(c: inout Comp, body: MidBodyNode, bufferRef: U64, operandId: U64) -> Bool {
         if bufferRef == 0U64 || bufferRef >= c.arena.types.count() || operandId == 0U64 || operandId > c.mid.operands.count() { return false }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-        if operand.tag != 3U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return false }
+        if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return false }
         return c.typeRefEq(a: c.mid.places[operand.place - 1U64].typeTerm, b: bufferRef)
     }
 
@@ -3535,7 +3591,7 @@ pub impl LlvmCtx {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
         if place.rootTag == 1U64 {
-            if place.local >= body.locals.len { return false }
+            if place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed { return false }
         } else if place.rootTag == 2U64 {
             if !place.globalMutable || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: placeId) { return false }
         } else { return false }
@@ -3992,7 +4048,28 @@ pub impl LlvmCtx {
             val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
             if term.tag == 4U64 {
                 val call: MidCallPreflight = self.midCanonicalCallPreflight(c: inout c, body: body, terminatorId: block.terminator)
-                match call { MidCallPreflight.None => {} _ => { return <MidLlvmPreflight.Call reason=call /> } }
+                match call {
+                    MidCallPreflight.None => {}
+                    _ => {
+                        if c.traceCodegen {
+                            eprint(text: "[trace-codegen] Mid call-preflight-fallback block=")
+                            self.traceCodegenU64(n: blockI)
+                            eprint(text: " detail=")
+                            self.traceCodegenU64(n: self.midCallPreflightCoverageDetail(reason: call))
+                            if term.callTarget != 0U64 && term.callTarget <= c.mid.callTargets.count() {
+                                val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+                                if target.tag == 2U64 && target.resolution < c.arena.finalCallees.count() {
+                                    val selected: CallResolution = c.arena.finalCallees[target.resolution]
+                                    eprint(text: " callee=")
+                                    if selected.callee < c.arena.funcs.count() { self.traceCodegenName(c: inout c, start: c.arena.funcs[selected.callee].nameStart, len: c.arena.funcs[selected.callee].nameLen) }
+                                    else { eprint(text: "<invalid>") }
+                                }
+                            }
+                            eprint(text: "\n")
+                        }
+                        return <MidLlvmPreflight.Call reason=call />
+                    }
+                }
             } else if term.tag == 2U64 || term.tag == 5U64 || term.tag == 8U64 || term.tag == 9U64 {
             } else if term.tag == 3U64 {
                 if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: term.discriminant) { return <MidLlvmPreflight.Switch /> }

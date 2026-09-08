@@ -5,11 +5,11 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, canonicalMidBorrowOperand, canonicalMidMoveOperand }
 
 export enum MidInstantiateError {
     None
@@ -254,6 +254,34 @@ fn canonicalMatchSource(sourceTag: U64, sourceId: U64) -> MatchSource {
     return <MatchSource.Expression exprId=sourceId />
 }
 
+// Final match layouts are scalar arena rows.  Keeping arm/payload ownership
+// outside the match row lets Mid validate a projection without copying a
+// nested descriptor merely to inspect one selected field.
+fn midFinalMatchShapeMatches(c: inout Comp, matchIndex: U64, enumIndex: U64, scrutineeTypeRef: U64) -> Bool {
+    if matchIndex >= c.arena.finalMatches.count() { return false }
+    val resolution: FinalMatchResolution = c.arena.finalMatches[matchIndex]
+    return resolution.enumIndex == enumIndex && c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeTypeRef)
+}
+
+fn midFinalMatchPayloadMatches(c: inout Comp, matchIndex: U64, variantIndex: U64, bindTarget: U64, fieldIndex: U64, fieldTypeRef: U64) -> Bool {
+    if matchIndex >= c.arena.finalMatches.count() { return false }
+    val resolution: FinalMatchResolution = c.arena.finalMatches[matchIndex]
+    mut val armOffset: U64 = 0U64
+    while armOffset < resolution.armCount {
+        val arm: FinalMatchArmResolution = c.arena.finalMatchArms[resolution.armStart + armOffset]
+        if arm.hasVariant && arm.variantIndex == variantIndex {
+            mut val payloadOffset: U64 = 0U64
+            while payloadOffset < arm.payloadCount {
+                val payload: FinalMatchPayloadResolution = c.arena.finalMatchPayloads[arm.payloadStart + payloadOffset]
+                if payload.bindTarget == bindTarget && payload.fieldIndex == fieldIndex && c.typeRefEq(a: payload.fieldTypeRef, b: fieldTypeRef) { return true }
+                payloadOffset += 1U64
+            }
+        }
+        armOffset += 1U64
+    }
+    return false
+}
+
 fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
@@ -268,29 +296,14 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
         return 0U64
     }
-    val resolution = c.arena.finalMatches[matchIndex]
     val scrutineeType: U64 = c.groundTermForBody(ref: sourcePlace.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
-    if resolution.enumIndex != source.enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeType)) {
+    if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: source.enumIndex, scrutineeTypeRef: scrutineeType)) {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
         return 0U64
     }
     val resultTerm: U64 = c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if source.tag != 11U64 {
-        mut val found: Bool = false
-        mut val armI: U64 = 0U64
-        while armI < resolution.arms.count() {
-            val arm = resolution.arms[armI]
-            if arm.hasVariant && arm.variantIndex == source.variantIndex {
-                mut val payloadI: U64 = 0U64
-                while payloadI < arm.payloads.count() {
-                    val payload = arm.payloads[payloadI]
-                    if payload.bindTarget == source.bindTarget && payload.fieldIndex == source.fieldIndex && c.typeRefEq(a: payload.fieldTypeRef, b: resultTerm) { found = true }
-                    payloadI = payloadI + 1U64
-                }
-            }
-            armI = armI + 1U64
-        }
-        if !found {
+        if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: source.variantIndex, bindTarget: source.bindTarget, fieldIndex: source.fieldIndex, fieldTypeRef: resultTerm)) {
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
             return 0U64
         }
@@ -671,11 +684,7 @@ fn canonicalRemapTarget(c: Comp, source: MidBodyNode, bodyId: U64, target: U64) 
 }
 
 fn canonicalBorrowOperand(c: inout Comp, operand: U64) -> U64 {
-    if operand == 0U64 || operand > c.mid.operands.count() { return 0U64 }
-    val source: MidOperandNode = c.mid.operands[operand - 1U64]
-    if source.tag != 1U64 { return operand }
-    c.mid.operands.append(<MidOperandNode tag=3U64 place=source.place capability=1U64 />)
-    return c.mid.operands.count()
+    return canonicalMidBorrowOperand(arena: inout c.mid, operandId: operand, capability: 1U64)
 }
 
 fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallReceiverPassing) -> U64 {
@@ -691,7 +700,25 @@ fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallRecei
             c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=canonicalBorrowOperand(c: inout c, operand: source.operand) />)
             return c.mid.callReceivers.count()
         }
-        _ => { return receiver }
+        CallReceiverPassing.Inout => {
+            if source.tag != 2U64 { return 0U64 }
+            // An access marker is intentionally not a place yet.  Access
+            // elaboration consumes its frozen provenance and produces the
+            // concrete Inout borrow; normalizing it here would erase the
+            // marker before that CFG rewrite has a chance to run.
+            if source.operand != 0U64 && source.operand <= c.mid.operands.count() && c.mid.operands[source.operand - 1U64].tag == 8U64 { return receiver }
+            val operand: U64 = canonicalMidBorrowOperand(arena: inout c.mid, operandId: source.operand, capability: 2U64)
+            if operand == 0U64 { return 0U64 }
+            c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=operand />)
+            return c.mid.callReceivers.count()
+        }
+        CallReceiverPassing.Move => {
+            if source.tag != 2U64 { return 0U64 }
+            val operand: U64 = canonicalMidMoveOperand(arena: inout c.mid, operandId: source.operand)
+            if operand == 0U64 { return 0U64 }
+            c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=operand />)
+            return c.mid.callReceivers.count()
+        }
     }
 }
 
@@ -770,6 +797,17 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
     }
     val callee: Func = c.arena.funcs[selected.callee]
     if callee.params.count() != term.args.len || !midReceiverPassingMatches(callee: callee, passing: selected.receiverPassing) {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid instantiate-passing-reject stage=callee resolution=")
+            eprintU64(n: resolution)
+            eprint(text: " callee=")
+            eprintU64(n: selected.callee)
+            eprint(text: " args=")
+            eprintU64(n: term.args.len)
+            eprint(text: " params=")
+            eprintU64(n: callee.params.count())
+            eprint(text: "\n")
+        }
         return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
     }
     mut val targetError: MidInstantiateError = <MidInstantiateError.None />
@@ -777,7 +815,20 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
     if callTarget == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
     val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
     val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing)
-    if receiver == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+    if receiver == 0U64 {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid instantiate-passing-reject stage=receiver resolution=")
+            eprintU64(n: resolution)
+            eprint(text: " callee=")
+            eprintU64(n: selected.callee)
+            eprint(text: " source-receiver=")
+            eprintU64(n: term.callReceiver)
+            eprint(text: " instantiated-receiver=")
+            eprintU64(n: rawReceiver)
+            eprint(text: "\n")
+        }
+        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+    }
     val argumentStart: U64 = c.mid.callArguments.count()
     val conversionStatementStart: U64 = c.mid.statements.count()
     mut val argumentI: U64 = 0U64
@@ -1142,8 +1193,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                val resolution = c.arena.finalMatches[matchIndex]
-                if resolution.enumIndex != enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
@@ -1155,25 +1205,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                val resolution = c.arena.finalMatches[matchIndex]
-                if resolution.enumIndex != enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
-                } else {
-                    mut val arm: U64 = 0U64
-                    mut val found: Bool = false
-                    while arm < resolution.arms.count() {
-                        val current = resolution.arms[arm]
-                        if current.hasVariant && current.variantIndex == variantIndex {
-                            mut val payload: U64 = 0U64
-                            while payload < current.payloads.count() {
-                                val selected = current.payloads[payload]
-                                if selected.bindTarget == bindTarget && selected.fieldIndex == fieldIndex && c.typeRefEq(a: selected.fieldTypeRef, b: groundedResult) { found = true }
-                                payload += 1U64
-                            }
-                        }
-                        arm += 1U64
-                    }
-                    if !found && !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                } else if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
+                    if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
             return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
@@ -1184,25 +1219,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                val resolution = c.arena.finalMatches[matchIndex]
-                if resolution.enumIndex != enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
-                } else {
-                    mut val arm: U64 = 0U64
-                    mut val found: Bool = false
-                    while arm < resolution.arms.count() {
-                        val current = resolution.arms[arm]
-                        if current.hasVariant && current.variantIndex == variantIndex {
-                            mut val payload: U64 = 0U64
-                            while payload < current.payloads.count() {
-                                val selected = current.payloads[payload]
-                                if selected.bindTarget == bindTarget && selected.fieldIndex == fieldIndex && c.typeRefEq(a: selected.fieldTypeRef, b: groundedResult) { found = true }
-                                payload += 1U64
-                            }
-                        }
-                        arm += 1U64
-                    }
-                    if !found && !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                } else if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
+                    if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
             return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />

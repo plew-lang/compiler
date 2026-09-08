@@ -56,9 +56,14 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
         val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
         if statement.tag == 1U64 || statement.tag == 9U64 {
             canonicalMidConsumeRvalue(c: c, states: inout out, rvalueId: statement.value)
+            mut val assignedBorrow: Bool = false
+            if statement.value != 0U64 && statement.value <= c.mid.rvalues.count() {
+                val value: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
+                assignedBorrow = value.tag == 13U64 || value.tag == 15U64
+            }
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !c.mid.locals[body.locals.start + destination.local].isBorrowed { out.set(i: destination.local, value: <MidOwnership.Owned />) }
+                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !c.mid.locals[body.locals.start + destination.local].isBorrowed && !assignedBorrow { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
         if statement.tag == 2U64 {
@@ -116,6 +121,7 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
     }
     return out
 }
+
 
 fn canonicalMidSuccessors(c: Comp, term: MidTerminatorNode) -> Array[U64] {
     if term.tag == 2U64 { return [term.target] }
@@ -749,14 +755,19 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
             if statement.tag == 1U64 || statement.tag == 9U64 {
                 c.mid.statements.append(statement)
                 canonicalMidAppendMovedFlagClears(c: inout c, rvalueId: statement.value, sourceLocalCount: source.locals.len, plan: plan)
+                mut val assignedBorrow: Bool = false
+                if statement.value != 0U64 && statement.value <= c.mid.rvalues.count() {
+                    val value: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
+                    assignedBorrow = value.tag == 13U64 || value.tag == 15U64
+                }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < source.locals.len && !c.mid.locals[source.locals.start + destination.local].isBorrowed && !assignedBorrow && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
                 }
                 canonicalMidConsumeRvalue(c: c, states: inout currentOwnership, rvalueId: statement.value)
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                    if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() && destination.local < source.locals.len && !c.mid.locals[source.locals.start + destination.local].isBorrowed && !assignedBorrow {
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                         if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                     }
@@ -826,7 +837,8 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                                     else { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
                                 }
                                 MidOwnership.MaybeOwned => {
-                                    if plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                                    val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
+                                    if !declaration.isBorrowed && plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
                                 }
                                 _ => {}
                             }

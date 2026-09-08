@@ -1,0 +1,59 @@
+import @Std/Io with { print }
+
+struct Field {
+    pub val key: String
+    pub val value: Value
+}
+pub impl Field { factory }
+
+enum Value {
+    SVal(s: String)
+}
+
+struct Scan {
+    pub val text: String
+    pub val next: U64
+}
+pub impl Scan { factory }
+
+struct Section {
+    pub val header: String
+    pub val fields: Array[Field]
+}
+pub impl Section { factory }
+
+fn readHeader() -> Scan {
+    return <Scan text="header" + "" next=0U64 />
+}
+
+fn fieldValue(section: Section) -> String {
+    val field: Field = section.fields[0U64]
+    match field.value {
+        Value.SVal(s: val text) => { return text }
+    }
+}
+
+// A section retains both independent String owners while its local construction
+// value is dropped. This is the same ownership shape used by the package TOML
+// reader; a Mid aggregate/append/drop mismatch used to leave a Field.key
+// pointing at the already-dropped Section.header allocation.
+fn build() -> Array[Section] {
+    mut val sections: Array[Section] = []
+    mut val header: String = ""
+    mut val fields: Array[Field] = []
+    // A header boundary flushes the initial top-level section, then replaces
+    // both independently-owned state values before the next field is stored.
+    sections.append(<Section header=header fields=fields />)
+    val parsed: Scan = readHeader()
+    header = parsed.text
+    fields = []
+    fields.append(<Field key="field" + "" value=<Value.SVal s="value" + "" /> />)
+    sections.append(<Section header=header fields=fields />)
+    return sections
+}
+
+fn main() {
+    val sections: Array[Section] = build()
+    print(sections.count())
+    print(fieldValue(section: sections[1U64]))
+}

@@ -1377,8 +1377,10 @@ export fn runFrontend(c: inout Comp) {
                 }
                 c.modules.packageRoots.append(<Bind nameStart=moduleId nameLen=0 fieldStart=pkgRootModule fieldLen=0 />)
             }
+            tracePhaseCount(c: inout c, label: "load:read", count: qi)
             val src: String = readFileBytes(path)
             val sb: Array[U8] = src.bytes()
+            tracePhaseCount(c: inout c, label: "load:source-appended", count: qi)
             if c.arena.bytes.count() > 0 {
                 c.arena.bytes.append(10)
             }
@@ -1388,7 +1390,9 @@ export fn runFrontend(c: inout Comp) {
             c.modules.rangePaths.append(stringFromBytesUnchecked(path))
             // Parse now to discover edges; lower all retained items only after the complete
             // graph (and therefore all import aliases and declarations) exists.
+            tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
             val roots: SyntaxSlice = c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
+            tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
             pendingRoots.append(roots)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
             // contain only `impl` blocks — reject any free fn / type / extern / val.
@@ -1538,6 +1542,7 @@ export fn runFrontend(c: inout Comp) {
                 }
                 ii += 1
             }
+            tracePhaseCount(c: inout c, label: "load:imports-done", count: qi)
             // auto-part (spec/16): a file annotated with `@[...]` pulls in its
             // generated sibling `<file>.gen.pw` as a part of the same module (when it
             // exists). In gen mode this is suppressed ONLY for the entry (module 0) —
