@@ -1632,6 +1632,27 @@ export struct CallResolutionArgumentPassingRange {
 }
 pub impl CallResolutionArgumentPassingRange { factory fn count() -> U64 { return self.len } }
 
+// Value evaluation is a separate concern from type conversion and ABI
+// passing. The final descriptor must retain this source-grounded plan too:
+// LLVM needs the exact expressions that supply the already-selected ABI
+// parameters, including a default-generator expression inserted by Record.
+// Keeping only the parametric CallTemplate plan made backend correctness depend
+// on reopening a shared declaration-owned table after finalization.
+export struct CallResolutionArgumentRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallResolutionArgumentRange { factory fn count() -> U64 { return self.len } }
+
+export struct CallEvaluationArgument {
+    pub val exprId: U64
+    pub val isInout: Bool
+    pub val labelStart: U64
+    pub val labelLen: U64
+    pub val hasLabel: Bool
+}
+pub impl CallEvaluationArgument { factory }
+
 // The selected callable for one semantic call site while compiling one concrete
 // function body instance.  A site can be a written expression or an implicit
 // call introduced by a control construct (for example `for`'s iterator/next
@@ -1675,6 +1696,10 @@ export struct CallResolution {
     // infer passing from source shape or re-read Func flags.
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
     pub val argumentPassings: CallResolutionArgumentPassingRange = <CallResolutionArgumentPassingRange start=0U64 len=0U64 />
+    // The frozen evaluation sources for ABI arguments. This is intentionally
+    // distinct from `argumentPassings`: it says which values are evaluated,
+    // whereas that field says how each selected parameter receives them.
+    pub val arguments: CallResolutionArgumentRange = <CallResolutionArgumentRange start=0U64 len=0U64 />
     // Concrete receiver identity at source selection.  0 for an ordinary
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.
@@ -2213,6 +2238,7 @@ export struct Arena {
     // final-call row/pool made an ordinary descriptor read an ARC operation.
     pub mut val finalCalleeConversionPool: Array[U64] = []
     pub mut val finalCalleeArgumentPassingPool: Array[CallArgumentPassing] = []
+    pub mut val finalCalleeArgumentPool: Array[CallEvaluationArgument] = []
     // Concrete aggregate conversions, keyed by (BodyInstance, source ExprId).
     // This is semantic output alongside finalCallees, not a backend cache.
     pub mut val finalAggregates: Array[FinalAggregateResolution] = []

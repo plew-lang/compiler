@@ -125,6 +125,12 @@ else
     fail=$((fail + 1)); failed="$failed cli-options"
 fi
 
+if sh ./test-final-call-evaluation-plan.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed final-call-evaluation-plan"
+fi
+
 # Lifetime output alone must not pass through a legacy caller unnoticed.
 if sh ./test-mid-temporary-lifetime.sh; then
     :

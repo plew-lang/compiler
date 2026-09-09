@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1856,7 +1856,36 @@ pub impl Comp {
         return out
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
+    inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument]) -> CallResolutionArgumentRange {
+        val start: U64 = self.arena.finalCalleeArgumentPool.count()
+        mut val i: U64 = 0U64
+        while i < arguments.count() {
+            val argument: CallTemplateArgument = arguments[i]
+            self.arena.finalCalleeArgumentPool.append(<CallEvaluationArgument exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            i += 1U64
+        }
+        return <CallResolutionArgumentRange start=start len=arguments.count() />
+    }
+
+    fn finalCalleeArgumentAt(arguments: CallResolutionArgumentRange, index: U64) -> CallEvaluationArgument {
+        return self.arena.finalCalleeArgumentPool[arguments.start + index]
+    }
+
+    inout fn sameFinalCalleeArguments(arguments: CallResolutionArgumentRange, sources: Array[CallTemplateArgument]) -> Bool {
+        if arguments.len != sources.count() { return false }
+        mut val i: U64 = 0U64
+        while i < arguments.len {
+            val frozen: CallEvaluationArgument = self.finalCalleeArgumentAt(arguments: arguments, index: i)
+            val source: CallTemplateArgument = sources[i]
+            if frozen.exprId != self.callArgumentExprId(source: source.source) || frozen.isInout != source.isInout || frozen.labelStart != source.labelStart || frozen.labelLen != source.labelLen || frozen.hasLabel != source.hasLabel {
+                return false
+            }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
@@ -1864,7 +1893,8 @@ pub impl Comp {
         val parameterTypes: CallResolutionParameterTypeRange = self.pushFinalCalleeParameterTypes(types: parameterTypeRefs)
         val conversions: CallResolutionConversionRange = self.pushFinalCalleeConversions(conversions: argumentConversions)
         val passings: CallResolutionArgumentPassingRange = self.pushFinalCalleeArgumentPassings(passings: argumentPassings)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=typeArgs parameterTypeRefs=parameterTypes argumentConversions=conversions receiverPassing=receiverPassing argumentPassings=passings recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
+        val evaluationArguments: CallResolutionArgumentRange = self.pushFinalCalleeArguments(arguments: arguments)
+        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=typeArgs parameterTypeRefs=parameterTypes argumentConversions=conversions receiverPassing=receiverPassing argumentPassings=passings arguments=evaluationArguments recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
@@ -1912,11 +1942,11 @@ pub impl Comp {
             }
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, resultProjection: selection.resultProjection, target: selection.target)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, arguments: selection.argumentSources, resultProjection: selection.resultProjection, target: selection.target)
     }
 
     inout fn samePublishedNonStaticSelection(prior: CallResolution, selection: CallSiteSelection) -> Bool {
-        return prior.callee == selection.callee && self.typeRefEq(a: prior.recvTypeRef, b: selection.receiverRef) && self.typeRefEq(a: prior.resultTypeRef, b: selection.resultRef) && self.sameCallResultProjection(a: prior.resultProjection, b: selection.resultProjection) && self.sameCallTarget(a: prior.target, b: selection.target)
+        return prior.callee == selection.callee && self.typeRefEq(a: prior.recvTypeRef, b: selection.receiverRef) && self.typeRefEq(a: prior.resultTypeRef, b: selection.resultRef) && self.sameFinalCalleeArguments(arguments: prior.arguments, sources: selection.argumentSources) && self.sameCallResultProjection(a: prior.resultProjection, b: selection.resultProjection) && self.sameCallTarget(a: prior.target, b: selection.target)
     }
 
     fn sameCallTarget(a: CallTarget, b: CallTarget) -> Bool {
@@ -2284,6 +2314,31 @@ pub impl Comp {
         return 0U64
     }
 
+    // Backend value lowering consumes the same frozen descriptor as ABI/type
+    // lowering. This adapter creates the legacy transient ArgRange only from
+    // that immutable evaluation plan; it must not reopen a CallTemplate or an
+    // authored AST argument range after finalization.
+    inout fn bodyCalleeArgumentRange(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> ArgRange {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i >= self.finalCalleeCount() {
+            if siteIsStmt {
+                self.errorAt(offset: 0U64, msg: "internal error: final callable has no recorded evaluation plan")
+            } else {
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final callable has no recorded evaluation plan")
+            }
+            return self.pushArgs(args: [])
+        }
+        val frozen: CallResolution = self.arena.finalCallees[i]
+        mut val values: Array[Arg] = []
+        mut val argIndex: U64 = 0U64
+        while argIndex < frozen.arguments.len {
+            val argument: CallEvaluationArgument = self.finalCalleeArgumentAt(arguments: frozen.arguments, index: argIndex)
+            values.append(<Arg expr=argument.exprId isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            argIndex += 1U64
+        }
+        return self.pushArgs(args: values)
+    }
+
     inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() { return self.arena.finalCallees[i].resultTypeRef }
@@ -2418,8 +2473,8 @@ pub impl Comp {
         return true
     }
 
-    inout fn sameStaticCallResolution(e: CallResolution, callee: U64, recvRef: U64, calleeArgs: Array[U64], parameterTypeRefs: Array[U64], argumentConversions: Array[ValueConversionProof], receiverPassing: CallReceiverPassing, argumentPassings: Array[CallArgumentPassing], resultRef: U64, resultProjection: CallResultProjection, target: CallTarget) -> Bool {
-        return self.callTargetIsDirect(target: e.target) && self.sameCallTarget(a: e.target, b: target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameCallResultProjection(a: e.resultProjection, b: resultProjection) && self.sameResolvedTypeRefs(a: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs), b: calleeArgs) && self.sameResolvedTypeRefs(a: self.copyFinalCalleeParameterTypes(types: e.parameterTypeRefs), b: parameterTypeRefs) && self.sameFrozenValueConversionProofs(a: self.copyFinalCalleeConversions(conversions: e.argumentConversions), b: argumentConversions) && self.sameCallReceiverPassing(a: e.receiverPassing, b: receiverPassing) && self.sameCallArgumentPassings(a: self.copyFinalCalleeArgumentPassings(passings: e.argumentPassings), b: argumentPassings)
+    inout fn sameStaticCallResolution(e: CallResolution, callee: U64, recvRef: U64, calleeArgs: Array[U64], arguments: Array[CallTemplateArgument], parameterTypeRefs: Array[U64], argumentConversions: Array[ValueConversionProof], receiverPassing: CallReceiverPassing, argumentPassings: Array[CallArgumentPassing], resultRef: U64, resultProjection: CallResultProjection, target: CallTarget) -> Bool {
+        return self.callTargetIsDirect(target: e.target) && self.sameCallTarget(a: e.target, b: target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameFinalCalleeArguments(arguments: e.arguments, sources: arguments) && self.sameCallResultProjection(a: e.resultProjection, b: resultProjection) && self.sameResolvedTypeRefs(a: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs), b: calleeArgs) && self.sameResolvedTypeRefs(a: self.copyFinalCalleeParameterTypes(types: e.parameterTypeRefs), b: parameterTypeRefs) && self.sameFrozenValueConversionProofs(a: self.copyFinalCalleeConversions(conversions: e.argumentConversions), b: argumentConversions) && self.sameCallReceiverPassing(a: e.receiverPassing, b: receiverPassing) && self.sameCallArgumentPassings(a: self.copyFinalCalleeArgumentPassings(passings: e.argumentPassings), b: argumentPassings)
     }
 
     // Expand an enum conversion through every physical payload field while the
@@ -2949,7 +3004,7 @@ pub impl Comp {
         val target: CallTarget = self.runtimeIntrinsicTarget(callee: callee)
         if i < self.finalCalleeCount() {
             val prior: CallResolution = self.arena.finalCallees[i]
-            if !(self.sameStaticCallResolution(e: prior, callee: callee, recvRef: recvRef, calleeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultRef: result, resultProjection: resultProjection, target: target)) {
+            if !(self.sameStaticCallResolution(e: prior, callee: callee, recvRef: recvRef, calleeArgs: calleeArgs, arguments: argumentSources, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultRef: result, resultProjection: resultProjection, target: target)) {
                 if siteIsStmt {
                     self.errorAt(offset: 0U64, msg: "internal error: conflicting static CallResolution publish")
                 } else {
@@ -2958,7 +3013,7 @@ pub impl Comp {
             }
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, arguments: argumentSources, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId)
         // A call result can be the sole reachable occurrence of a generic
         // layout (for example `val token: Token[String] = marker()`).  This
         // belongs to the completed CallResolution, not to an Expr.Method-only
