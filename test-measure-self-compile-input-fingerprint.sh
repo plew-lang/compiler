@@ -25,4 +25,21 @@ grep -E '^compiler_worktree=[0-9a-f]{64}$' "$tmp/out/environment.txt" >/dev/null
 grep -E '^syntax_head=[0-9a-f]{40}$' "$tmp/out/environment.txt" >/dev/null
 grep -E '^syntax_worktree=[0-9a-f]{64}$' "$tmp/out/environment.txt" >/dev/null
 
+# Sampling must be opt-in, write a stack artifact beside the trace, and keep
+# the normal carrier output/exit status intact.  A tiny stand-in avoids making
+# this shell-level contract depend on Xcode's `sample` tool.
+printf '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PLEW_TEST_SAMPLE_LOG"\nprintf sample > "$4"\n' > "$tmp/sample"
+chmod +x "$tmp/sample"
+printf '#!/usr/bin/env python3\nimport sys, time\nsys.stderr.write("[trace-phase] fixture:start\\n")\nsys.stderr.flush()\ntime.sleep(1)\nsys.stderr.write("[trace-phase] fixture:done\\n")\nsys.stderr.flush()\nsys.stdout.write("fixture llvm\\n")\n' > "$tmp/slow-carrier"
+chmod +x "$tmp/slow-carrier"
+PLEW_TEST_SAMPLE_LOG="$tmp/sample.log" \
+PLEW_PERF_SAMPLE_COMMAND="$tmp/sample" \
+PLEW_PERF_SAMPLE_INTERVAL_SECONDS=0.5 \
+PLEW_PERF_SAMPLE_DURATION_SECONDS=1 \
+PLEWC="$tmp/slow-carrier" SOURCE="$tmp/src/_.pw" OUT_DIR="$tmp/profile" ./measure-self-compile.sh >/dev/null
+test -s "$tmp/profile/cpu-sample-001.txt"
+grep -F 'fixture llvm' "$tmp/profile/compiler.ll" >/dev/null
+grep -F $'sample\telapsed_seconds\tlast_phase\tpath' "$tmp/profile/cpu-samples.tsv" >/dev/null
+grep -F 'fixture:start' "$tmp/profile/cpu-samples.tsv" >/dev/null
+
 echo 'PASS measure-self-compile-input-fingerprint'

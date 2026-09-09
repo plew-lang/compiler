@@ -17,6 +17,13 @@ SOURCE="${SOURCE:-src/_.pw}"
 OUT_DIR="${OUT_DIR:-tmp/perf/$(date +%Y%m%d-%H%M%S)}"
 LLVM_CONFIG="${LLVM_CONFIG:-llvm-config}"
 TRACE_CODEGEN="${TRACE_CODEGEN:-0}"
+# Optional CPU sampling is deliberately a diagnostic run, not a performance
+# run.  `sample` pauses neither the compiler's semantics nor its output, but
+# sampling itself perturbs wall time; keep it opt-in and retain the stacks next
+# to the phase trace that says what the compiler was doing.
+SAMPLE_INTERVAL_SECONDS="${PLEW_PERF_SAMPLE_INTERVAL_SECONDS:-0}"
+SAMPLE_DURATION_SECONDS="${PLEW_PERF_SAMPLE_DURATION_SECONDS:-3}"
+SAMPLE_COMMAND="${PLEW_PERF_SAMPLE_COMMAND:-sample}"
 
 if [ ! -x "$PLEWC" ]; then
     echo "measure-self-compile: carrier is not executable: $PLEWC" >&2
@@ -99,6 +106,9 @@ export PLEW_PERF_CARRIER="$PLEWC"
 export PLEW_PERF_SOURCE="$SOURCE"
 export PLEW_PERF_OUT_DIR="$OUT_DIR"
 export PLEW_PERF_TRACE_CODEGEN="$TRACE_CODEGEN"
+export PLEW_PERF_SAMPLE_INTERVAL_SECONDS="$SAMPLE_INTERVAL_SECONDS"
+export PLEW_PERF_SAMPLE_DURATION_SECONDS="$SAMPLE_DURATION_SECONDS"
+export PLEW_PERF_SAMPLE_COMMAND="$SAMPLE_COMMAND"
 
 python3 - <<'PY'
 import os
@@ -111,16 +121,33 @@ carrier = os.environ["PLEW_PERF_CARRIER"]
 source = os.environ["PLEW_PERF_SOURCE"]
 out_dir = os.environ["PLEW_PERF_OUT_DIR"]
 trace_codegen = os.environ["PLEW_PERF_TRACE_CODEGEN"] == "1"
+sample_interval_text = os.environ["PLEW_PERF_SAMPLE_INTERVAL_SECONDS"]
+sample_duration_text = os.environ["PLEW_PERF_SAMPLE_DURATION_SECONDS"]
+sample_command = os.environ["PLEW_PERF_SAMPLE_COMMAND"]
+
+try:
+    sample_interval = float(sample_interval_text)
+    sample_duration = float(sample_duration_text)
+except ValueError as error:
+    raise SystemExit(f"measure-self-compile: sample interval and duration must be numbers: {error}")
+if sample_interval < 0:
+    raise SystemExit("measure-self-compile: PLEW_PERF_SAMPLE_INTERVAL_SECONDS must be zero or positive")
+if sample_interval > 0 and sample_duration <= 0:
+    raise SystemExit("measure-self-compile: PLEW_PERF_SAMPLE_DURATION_SECONDS must be positive when sampling")
 trace_path = os.path.join(out_dir, "trace.tsv")
 stderr_path = os.path.join(out_dir, "stderr.log")
 llvm_path = os.path.join(out_dir, "compiler.ll")
+cpu_samples_path = os.path.join(out_dir, "cpu-samples.tsv")
 
 started = time.monotonic()
 last_progress = started
 last_event = "(no trace event yet)"
 event_count = 0
-with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as trace, open(stderr_path, "wb") as stderr_log:
+sample_number = 0
+next_sample = started + sample_interval if sample_interval > 0 else None
+with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as trace, open(stderr_path, "wb") as stderr_log, open(cpu_samples_path, "w", encoding="utf-8") as cpu_samples:
     trace.write("elapsed_seconds\tstderr\n")
+    cpu_samples.write("sample\telapsed_seconds\tlast_phase\tpath\n")
     command = [carrier, "--trace-phases"]
     if trace_codegen:
         command.append("--trace-codegen")
@@ -135,9 +162,34 @@ with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as t
     selector = selectors.DefaultSelector()
     selector.register(process.stderr, selectors.EVENT_READ)
     while selector.get_map():
-        ready = selector.select(timeout=5)
+        timeout = 5
+        if next_sample is not None:
+            timeout = max(0, min(timeout, next_sample - time.monotonic()))
+        ready = selector.select(timeout=timeout)
         if not ready:
             now = time.monotonic()
+            if next_sample is not None and now >= next_sample:
+                if process.poll() is None and last_event != "(no trace event yet)":
+                    sample_number += 1
+                    sample_path = os.path.join(out_dir, f"cpu-sample-{sample_number:03d}.txt")
+                    # `sample` reports native frames, including plew_rawbuf_*,
+                    # malloc, LLVM and generated Plew functions.  Do not fold the
+                    # diagnostic duration into wall-time performance comparisons.
+                    subprocess.run(
+                        [sample_command, str(process.pid), str(sample_duration), "-file", sample_path],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                    cpu_samples.write(
+                        f"{sample_number}\t{now - started:.6f}\t{last_event}\t{os.path.basename(sample_path)}\n"
+                    )
+                    cpu_samples.flush()
+                    print(
+                        f"[perf] cpu-sample={sample_number} t={now - started:.3f}s last={last_event}",
+                        file=sys.stderr,
+                    )
+                next_sample = time.monotonic() + sample_interval
             if now - last_progress >= 60:
                 process.terminate()
                 print(f"[perf] no compiler phase progress for 60s; terminating at last={last_event}", file=sys.stderr)

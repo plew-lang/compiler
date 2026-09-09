@@ -19,6 +19,14 @@ require_progress src/Backend.pw 'backend:drain:generic-method-emitting' c
 require_progress src/Backend.pw 'backend:drain:generic-function-emitting' c
 require_progress src/Backend/Llvm/GenMethods.pw 'backend:generic-method-emitting' c
 
+# CPU samples identify frozen free bodies by `gf<bodyId>`.  The codegen trace
+# must retain the body-ID-to-source-name map so a hot native symbol can be
+# investigated at the source-level without changing normal compilation.
+provided=src/Backend/Llvm/ProvidedFns.pw
+grep -F '"[trace-codegen] frozen free body declare id="' "$provided" >/dev/null
+grep -F 'eprint(text: " name=")' "$provided" >/dev/null
+grep -F 'self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)' "$provided" >/dev/null
+
 methods=src/Backend/Llvm/GenMethods.pw
 grep -F 'eprint(text: " body=")' "$methods" >/dev/null
 grep -F 'eprint(text: " ownArgs=")' "$methods" >/dev/null
