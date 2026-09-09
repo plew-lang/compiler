@@ -3341,7 +3341,7 @@ pub impl Comp {
             }
         }
         val resultRef: U64 = self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRange(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef />
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRangeFromValues(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef />
     }
 
     // Complete a dynamic call solely from its symbolic source template.  The
@@ -3351,7 +3351,7 @@ pub impl Comp {
     inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> CallSiteSelection {
         val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
-        val args: ArgRange = self.templateArgumentRange(arguments: arguments)
+        val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val noCallee: U64 = self.arena.funcs.count()
         match target {
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val bindingDeclStart, fnTypeTerm: val fnTypeTerm) => {
@@ -3506,7 +3506,7 @@ pub impl Comp {
     inout fn selectStaticMethodTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> CallSiteSelection {
         val noCallee: U64 = self.arena.funcs.count()
         val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
-        val args: ArgRange = self.templateArgumentRange(arguments: arguments)
+        val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         mut val resultRef: U64 = self.groundTermForBody(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         if resultRef == 0U64 { resultRef = expected }
