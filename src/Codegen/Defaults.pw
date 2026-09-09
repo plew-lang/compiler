@@ -15,7 +15,7 @@ pub impl Comp {
             tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
             val template = self.decls.callTemplates[index]
             match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if !self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm) {
                         incomplete += 1U64
                         tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-callee", count: callee)
@@ -37,19 +37,23 @@ pub impl Comp {
         if templateIndex >= self.decls.callTemplates.count() { return false }
         val template = self.decls.callTemplates[templateIndex]
         match template.kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proof: val proof) => {
+            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.funcs.count() { return false }
                 val function = self.arena.funcs[callee]
+                val argumentValues: Array[CallTemplateArgument] = self.callTemplateArguments(range: arguments)
+                val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
+                if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return false }
                 // This also makes completion idempotent: the saved ordinary
                 // default calls are not reclassified as omitted arguments.
-                if arguments.count() == function.params.count() { return true }
-                if arguments.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return false }
-                if typeArgs.count() != function.typeParams.count() { return false }
+                if argumentValues.count() == function.params.count() { return true }
+                if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return false }
+                if typeArgValues.count() != function.typeParams.count() { return false }
                 // Empty substitutions are complete for a zero-binder callable.
                 // The inference helper also uses empty to mean no inference.
-                if typeArgs.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgs) { return false }
+                if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return false }
                 if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return false }
-                val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgs, recvInstRef: receiverTerm, selectedProof: proof)
+                val proof: StaticConformanceProof = self.thawStaticConformanceProof(id: proofId)
+                val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof)
                 val item = self.bodyProvidedItemTerm(f: function, environment: environment)
                 mut val parameterTerms: Array[U64] = []
                 mut val index: U64 = 0U64
@@ -64,12 +68,12 @@ pub impl Comp {
                 val previousRecording = self.cur.recordCallTemplates
                 self.cur.checkFn = template.siteKey.ownerFnIdx
                 self.cur.recordCallTemplates = true
-                val completed = self.recordBoundCallArguments(callee: callee, args: arguments, receiver: receiver, calleeTypeArgs: typeArgs, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm)
+                val completed = self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm)
                 self.cur.checkFn = previousOwner
                 self.cur.recordCallTemplates = previousRecording
                 match completed {
                     Optional.Some(v: val args) => {
-                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=typeArgs proof=proof /> />)
+                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=self.publishCallTemplateArguments(args: args) calleeTypeArgs=self.publishCallTemplateTypeArgs(args: typeArgValues) proofId=proofId /> />)
                         return true
                     }
                     Optional.None => { return false }
@@ -85,7 +89,7 @@ pub impl Comp {
     // An incomplete binding/signature does not publish a partial argument list.
     inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Optional[Array[CallTemplateArgument]] {
         mut val bindings: Array[CallParameterBinding] = []
-        match self.bindCallParameters(callee: callee, args: self.templateArgumentRange(arguments: args)) {
+        match self.bindCallParameters(callee: callee, args: self.templateArgumentRangeFromValues(arguments: args)) {
             Optional.Some(val v) => { bindings = v }
             Optional.None => {
                 tracePhase(c: inout self, label: "default-call-completion:binding-unresolved")
@@ -137,7 +141,7 @@ pub impl Comp {
                                 val template: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: exprId)
                                 if self.sameCallSiteKey(a: template.siteKey, b: siteKey) {
                                     match template.kind {
-                                        CallTemplateKind.Direct(callee: val priorCallee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                                        CallTemplateKind.Direct(callee: val priorCallee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                                             if priorCallee == generator { existing = exprId }
                                         }
                                         _ => {}
@@ -180,8 +184,8 @@ pub impl Comp {
             val previous: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: call)
             mut val matches: Bool = false
             match previous.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => {
-                    matches = callee == generator && args.count() == 0U64
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => {
+                    matches = callee == generator && args.len == 0U64
                 }
                 _ => {}
             }

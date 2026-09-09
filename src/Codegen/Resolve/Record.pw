@@ -147,10 +147,10 @@ pub impl Comp {
         match base {
             CallTemplateReceiver.Term(term: _) => { return <CallTemplateReceiver.Term term=viewedTerm /> }
             CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorKey) => {
-                return <CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.typeRefViewSources(ref: viewedTerm) />
+                return <CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.publishCallTemplateViews(views: self.typeRefViewSources(ref: viewedTerm)) />
             }
             CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
-                return <CallTemplateReceiver.PriorProtocolResultWithViews slot=priorSlot views=self.typeRefViewSources(ref: viewedTerm) />
+                return <CallTemplateReceiver.PriorProtocolResultWithViews slot=priorSlot views=self.publishCallTemplateViews(views: self.typeRefViewSources(ref: viewedTerm)) />
             }
             _ => {}
         }
@@ -177,7 +177,7 @@ pub impl Comp {
         if iterExpr < self.arena.exprs.count() {
             val template: CallTemplate = self.callTemplateForCurrentBody(exprId: iterExpr)
             match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if callee < self.arena.funcs.count() {
                         val selected: Func = self.arena.funcs[callee]
                         if selected.originTraitOwner != 0U64 {

@@ -23,14 +23,21 @@ for required in [
     if required not in ir:
         raise SystemExit(f"missing scalar CallTemplate storage: {required}")
 
+receiver_start = ir.index("export enum CallTemplateReceiver")
+receiver_end = ir.index("export enum CallArgumentSource", receiver_start)
+receiver_shape = ir[receiver_start:receiver_end]
+kind_start = ir.index("export enum CallTemplateKind")
+kind_end = ir.index("export struct CallTemplate {", kind_start)
+kind_shape = ir[kind_start:kind_end]
+if "views: Array[ResolvedViewSource]" in receiver_shape:
+    raise SystemExit("CallTemplate receiver keeps an inline ownership payload")
 for forbidden in [
     "args: Array[CallTemplateArgument]",
     "calleeTypeArgs: Array[U64]",
     "proof: StaticConformanceProof",
     "operands: Array[CallArgumentSource]",
-    "views: Array[ResolvedViewSource]",
 ]:
-    if forbidden in ir:
+    if forbidden in kind_shape:
         raise SystemExit(f"CallTemplate keeps an inline ownership payload: {forbidden}")
 
 print("PASS call-template-scalar-storage")

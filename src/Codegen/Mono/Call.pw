@@ -584,14 +584,14 @@ pub impl Comp {
                         return result
                     }
                     CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val dependency, views: val views) => {
-                        return self.typeRefWithAddedViewSources(ref: self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency), additions: views)
+                        return self.typeRefWithAddedViewSources(ref: self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency), additions: self.callTemplateViews(range: views))
                     }
                     CallTemplateReceiver.PriorProtocolResultWithViews(slot: val priorSlot, views: val views) => {
                         val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
                         if result == 0U64 {
                             self.errorAt(offset: 0U64, msg: "internal error: implicit viewed protocol dependency was not finalized")
                         }
-                        return self.typeRefWithAddedViewSources(ref: result, additions: views)
+                        return self.typeRefWithAddedViewSources(ref: result, additions: self.callTemplateViews(range: views))
                     }
                     CallTemplateReceiver.None => {
                         self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
@@ -624,11 +624,11 @@ pub impl Comp {
             }
             CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val siteKey, views: val views) => {
                 val base: U64 = self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
-                return self.typeRefWithAddedViewSources(ref: base, additions: views)
+                return self.typeRefWithAddedViewSources(ref: base, additions: self.callTemplateViews(range: views))
             }
             CallTemplateReceiver.PriorProtocolResultWithViews(slot: val slot, views: val views) => {
                 val base: U64 = self.bodyCalleeResultRef(exprId: self.cur.bodyFnIdx, siteIsStmt: true, slot: slot)
-                return self.typeRefWithAddedViewSources(ref: base, additions: views)
+                return self.typeRefWithAddedViewSources(ref: base, additions: self.callTemplateViews(range: views))
             }
         }
     }
@@ -1511,7 +1511,7 @@ pub impl Comp {
     inout fn callArgumentRangeForCurrentBody(exprId: U64, authored: ArgRange) -> ArgRange {
         if self.callTemplatesClosed {
             match self.callTemplateForCurrentBody(exprId: exprId).kind {
-                CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => { return self.templateArgumentRange(arguments: args) }
+                CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return self.templateArgumentRange(arguments: args) }
                 CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return self.templateArgumentRange(arguments: args) }
                 CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return self.templateArgumentRange(arguments: args) }
                 _ => {}
@@ -1520,7 +1520,19 @@ pub impl Comp {
         return authored
     }
 
-    inout fn templateArgumentRange(arguments: Array[CallTemplateArgument]) -> ArgRange {
+    inout fn templateArgumentRange(arguments: CallTemplateArgumentRange) -> ArgRange {
+        mut val args: Array[Arg] = []
+        mut val i: U64 = 0U64
+        while i < arguments.len {
+            if arguments.start + i >= self.decls.callTemplateArgumentPool.count() { return self.pushArgs(args: []) }
+            val argument: CallTemplateArgument = self.decls.callTemplateArgumentPool[arguments.start + i]
+            args.append(<Arg expr=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            i += 1U64
+        }
+        return self.pushArgs(args: args)
+    }
+
+    inout fn templateArgumentRangeFromValues(arguments: Array[CallTemplateArgument]) -> ArgRange {
         mut val args: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < arguments.count() {
@@ -1584,7 +1596,12 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: _, resultTerm: val storedResult) => {
                 op = storedOp
-                operands = storedOperands
+                mut val operandIndex: U64 = 0U64
+                while operandIndex < storedOperands.len {
+                    if storedOperands.start + operandIndex >= self.decls.callTemplateOperandPool.count() { return }
+                    operands.append(self.decls.callTemplateOperandPool[storedOperands.start + operandIndex])
+                    operandIndex += 1U64
+                }
                 resultTerm = storedResult
             }
             _ => {
@@ -3593,21 +3610,21 @@ pub impl Comp {
         // Expr.Call/Method/ExtMethod here would duplicate candidate selection
         // and lose a receiver/result dependency carried by CallSiteKey.
         match template.kind {
-            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proof: val proof) => {
+            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: val proofId) => {
                 if storedCallee < self.arena.funcs.count() {
-                    val selection: CallSiteSelection = self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: arguments, proof: proof)
+                    val selection: CallSiteSelection = self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
                     self.recordSelectedBodyCallee(selection: selection)
                     self.enqueueSelectedCallee(selection: selection)
                     return storedCallee
                 }
             }
             CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
-                val selection: CallSiteSelection = self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, arguments: arguments, target: target)
+                val selection: CallSiteSelection = self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), target: target)
                 self.recordSelectedBodyCallee(selection: selection)
                 return selection.callee
             }
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, resultTerm: val resultTerm) => {
-                val selection: CallSiteSelection = self.selectStaticMethodTemplateCall(exprId: exprId, receiver: receiver, arguments: arguments, resolution: resolution, resultTerm: resultTerm)
+                val selection: CallSiteSelection = self.selectStaticMethodTemplateCall(exprId: exprId, receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm)
                 self.recordSelectedBodyCallee(selection: selection)
                 self.enqueueSelectedCallee(selection: selection)
                 return selection.callee
@@ -5010,7 +5027,7 @@ pub impl Comp {
                 mut val selectedName: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
                 mut val hasSelectedCall: Bool = false
                 match template.kind {
-                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                         selected = callee
                         if selected < self.arena.funcs.count() {
                             selectedName = <Bind nameStart=self.arena.funcs[selected].nameStart nameLen=self.arena.funcs[selected].nameLen fieldStart=self.arena.funcs[selected].nameStart fieldLen=self.arena.funcs[selected].nameLen />

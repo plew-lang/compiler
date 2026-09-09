@@ -1000,7 +1000,7 @@ pub impl Comp {
         mut val out: Array[U64] = []
         mut val args: Array[U64] = []
         match self.callTemplateForCurrentBody(exprId: exprId).kind {
-            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored, proof: _) => { args = stored }
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored, proofId: _) => { args = self.callTemplateTypeArgs(range: stored) }
             _ => {}
         }
         mut val i: U64 = 0U64

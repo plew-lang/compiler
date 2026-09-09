@@ -1256,16 +1256,17 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
     return built
 }
 
-fn midTemplateArguments(template: CallTemplate) -> Array[CallTemplateArgument] {
+fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateArgument] {
     match template.kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => { return args }
-        CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return args }
-        CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return args }
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return c.callTemplateArguments(range: args) }
+        CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return c.callTemplateArguments(range: args) }
+        CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return c.callTemplateArguments(range: args) }
         CallTemplateKind.Operator(op: _, operands: val operands, resolution: _, resultTerm: _) => {
             mut val args: Array[CallTemplateArgument] = []
             mut val i: U64 = 0U64
-            while i < operands.count() {
-                args.append(<CallTemplateArgument source=operands[i] isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+            while i < operands.len {
+                if operands.start + i >= c.decls.callTemplateOperandPool.count() { return [] }
+                args.append(<CallTemplateArgument source=c.decls.callTemplateOperandPool[operands.start + i] isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
                 i += 1U64
             }
             return args
@@ -1276,7 +1277,7 @@ fn midTemplateArguments(template: CallTemplate) -> Array[CallTemplateArgument] {
 
 fn midTemplateIsCallable(template: CallTemplate) -> Bool {
     match template.kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proof: _) => { return true }
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { return true }
         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { return true }
         CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { return true }
         CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => { return true }
@@ -1310,7 +1311,7 @@ fn midExprIsShortCircuit(c: Comp, exprId: U64) -> Bool {
 
 fn midDirectCallee(c: Comp, template: CallTemplate) -> U64 {
     match template.kind {
-        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => { return callee }
+        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { return callee }
         _ => { return c.arena.funcs.count() }
     }
 }
@@ -1321,7 +1322,7 @@ fn midDirectCallee(c: Comp, template: CallTemplate) -> U64 {
 // reopening method lookup.
 fn midTemplateReceiver(template: CallTemplate) -> CallTemplateReceiver {
     match template.kind {
-        CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proof: _) => { return receiver }
+        CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proofId: _) => { return receiver }
         CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, resultTerm: _) => { return receiver }
         _ => { return <CallTemplateReceiver.None /> }
     }
@@ -1431,7 +1432,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     if !midTemplateIsCallable(template: template) {
         match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
     }
-    val sources: Array[CallTemplateArgument] = midTemplateArguments(template: template)
+    val sources: Array[CallTemplateArgument] = midTemplateArguments(c: c, template: template)
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
