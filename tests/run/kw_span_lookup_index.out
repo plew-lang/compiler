@@ -2,6 +2,7 @@ source-success-reused
 request-length-is-key
 miss-recorded
 miss-invalidated-by-source-append
+source-result-survives-append
 registered-name-wins
 empty-query
 comp-isolation

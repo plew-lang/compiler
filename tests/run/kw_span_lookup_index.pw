@@ -25,6 +25,10 @@ fn main() {
     if afterAppend.nameStart == later.nameStart && afterAppend.nameLen == later.nameLen && c.decls.kwSpanLookups.count() == 3U64 {
         write(s: "miss-invalidated-by-source-append\n")
     }
+    val stillFirst = c.kwSpan(kw: "stable", kwLen: 6U64)
+    if stillFirst.nameStart == source.nameStart && stillFirst.nameLen == source.nameLen && c.decls.kwSpanLookups.count() == 3U64 {
+        write(s: "source-result-survives-append\n")
+    }
 
     val prioritySource = c.internBytes(s: "priority")
     val beforeRegistration = c.kwSpan(kw: "priority", kwLen: 8U64)
