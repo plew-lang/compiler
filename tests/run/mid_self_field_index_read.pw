@@ -1,0 +1,22 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+
+struct Grid {
+    pub val rows: Array[Array[I64]]
+}
+
+pub impl Grid {
+    factory
+
+    inout fn firstRowCount() -> U64 {
+        return self.rows[0I64].count()
+    }
+}
+
+fn main() {
+    mut val rows: Array[Array[I64]] = []
+    rows.append([1I64, 2I64])
+    mut val grid = <Grid rows=rows />
+    assert(grid.firstRowCount() == 2U64)
+    print("ok")
+}

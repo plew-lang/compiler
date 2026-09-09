@@ -1,0 +1,30 @@
+// Reading an enum from an Array field is a value copy. The array remains an
+// owner, so the copied enum must retain its Array payload before it is matched
+// and later dropped.
+import @Std/Io with { print }
+
+enum Item { Payload(values: Array[String]) }
+
+struct Holder {
+    pub val items: Array[Item]
+}
+pub impl Holder { factory }
+
+struct Root {
+    pub val holder: Holder
+}
+pub impl Root {
+    factory
+
+    inout fn firstCount() -> U64 {
+        match self.holder.items[0U64] {
+            Item.Payload(val values) => { return values.count() }
+        }
+    }
+}
+
+fn main() {
+    val item = <Item.Payload values=["kept"] />
+    mut val root = <Root holder=<Holder items=[item] /> />
+    print(root.firstCount())
+}

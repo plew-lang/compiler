@@ -1,0 +1,25 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+
+struct Cell {
+    pub val values: Array[I64]
+}
+
+pub impl Cell { factory }
+
+struct Shelf {
+    pub val cells: Array[Cell]
+}
+
+pub impl Shelf { factory }
+
+fn appendFirst(shelf: inout Shelf, value: I64) {
+    shelf.cells[0I64].values.append(value)
+}
+
+fn main() {
+    mut val shelf = <Shelf cells=[<Cell values=[] />] />
+    appendFirst(shelf: inout shelf, value: 7I64)
+    assert(shelf.cells[0I64].values[0I64] == 7I64)
+    print("ok")
+}

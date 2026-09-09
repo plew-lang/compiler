@@ -139,6 +139,32 @@ else
     fail=$((fail + 1)); failed="$failed mid-copy-owned-destination"
 fi
 
+# A receiverless call still owns a canonical `None` receiver row. The row is
+# not an operand and must not become a synthetic move during verification.
+if sh ./test-mid-direct-call-without-receiver.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-direct-call-without-receiver"
+fi
+
+# An `inout self` call must carry the writable receiver place through
+# canonical Mid, not fall back to the AST emitter because its ABI is by
+# pointer.
+if sh ./test-mid-inout-receiver.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-inout-receiver"
+fi
+
+# A receiver reached through field then index projections must preserve that
+# exact writable place. The surrounding factory-heavy main is intentionally
+# outside this gate; only the isolated mutating helper is the Mid boundary.
+if sh ./test-mid-access-nested-field-receiver.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-access-nested-field-receiver"
+fi
+
 # Conversion runtime tests must not silently exercise a legacy boundary.
 if sh ./test-mid-owned-conversion.sh; then
     :
@@ -368,6 +394,27 @@ mid_enum_match_results=$(sh -c '
 ' sh)
 mempass=$(printf '%s\n' "$mid_enum_match_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$mid_enum_match_results" | sed -n 's/^FAIL //p'); do
+    fail=$((fail + 1)); failed="$failed $n"
+done
+
+# An ARC-owning payload bind is borrowed from its enum only within the arm.
+# Returning it must materialize a distinct owned result before the scrutinee
+# can die. Keep the real Array payload shape on Mid; a legacy fallback can
+# print the same count while omitting that ownership boundary.
+mid_payload_return_results=$(sh -c '
+    source="tests/run/match_payload_return_array_copy.pw"
+    coverage="/tmp/t_mid_payload_return_$$.coverage"
+    if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_payload_return_$$.ll 2>"$coverage"; then
+        echo "FAIL mid-payload-return(emit)"; exit 0
+    fi
+    if grep -q "name=valuesOf category=" "$coverage"; then
+        echo "FAIL mid-payload-return(legacy)"
+    else
+        echo "PASS mid-payload-return"
+    fi
+' sh)
+mprpass=$(printf '%s\n' "$mid_payload_return_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_payload_return_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 
@@ -771,6 +818,6 @@ for n in $(printf '%s\n' "$pr_results" | sed -n 's/^FAIL //p'); do
 done
 
 echo "----"
-echo "plewc: run=$pass  midcoverage=$mcpass  midbuildreason=$mbrpass  midshortcircuit=$mscpass  midenummatch=$mempass  midpayloadlessenumreturn=$mperpass  midlocalassign=$mlapass  midindexplace=$mipass  midinout=$mirpass  midborrowedread=$mbrrpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
+echo "plewc: run=$pass  midcoverage=$mcpass  midbuildreason=$mbrpass  midshortcircuit=$mscpass  midenummatch=$mempass  midpayloadreturn=$mprpass  midpayloadlessenumreturn=$mperpass  midlocalassign=$mlapass  midindexplace=$mipass  midinout=$mirpass  midborrowedread=$mbrrpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]

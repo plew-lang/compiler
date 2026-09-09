@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+enum Bytes {
+    Data(values: Array[U8])
+    Empty
+}
+
+fn valuesOf(bytes: Bytes) -> Array[U8] {
+    match bytes {
+        Bytes.Data(val values) => { return values }
+        Bytes.Empty => { return [] }
+    }
+}
+
+fn main() {
+    val bytes: Bytes = <Bytes.Data values=[1U8, 2U8, 3U8] />
+    val result: Array[U8] = valuesOf(bytes: bytes)
+    print(result.count())
+}

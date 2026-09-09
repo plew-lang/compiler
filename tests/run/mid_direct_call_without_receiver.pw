@@ -1,0 +1,7 @@
+fn answer() -> I64 {
+    return 1I64
+}
+
+fn main() {
+    val result: I64 = answer()
+}

@@ -1,0 +1,20 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+
+// The `Ok` bind has the fully grounded `Array[T]` payload type. Finalizing
+// this generic body must use the frontend's frozen match fact, rather than
+// reconstructing the field from `Result` spelling: `.count()` needs the
+// complete Array instance to select its method and preserve ARC ownership.
+fn itemCount[T](result: Result[Array[T], String]) -> U64 {
+    match result {
+        Result.Ok(value: val values) => { return values.count() }
+        Result.Err(error: _) => { return 0U64 }
+    }
+}
+
+fn main() {
+    assert(itemCount(result: <Result[Array[I64], String].Ok value=[1I64, 2I64, 3I64] />) == 3U64)
+    assert(itemCount(result: <Result[Array[String], String].Ok value=["a", "b"] />) == 2U64)
+    assert(itemCount(result: <Result[Array[I64], String].Err error="no" />) == 0U64)
+    print("ok")
+}
