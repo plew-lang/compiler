@@ -567,6 +567,7 @@ export struct KwSpanLookup {
     // a match, whereas a first source result and registered result stay valid.
     pub val sourceByteCount: U64
 }
+pub impl KwSpanLookup { factory }
 
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
