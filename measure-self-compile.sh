@@ -33,11 +33,56 @@ fi
 
 mkdir -p "$OUT_DIR"
 
+# A dirty compiler worktree is a legitimate development input, but a Git
+# revision and a patch hash are not a content-addressed source snapshot.
+# Fingerprint every source file passed to the carrier's source root and the
+# package-resolution inputs, and retain a per-file manifest for diagnosis.
+SOURCE_TREE_SHA256="$(python3 - "$SOURCE" "$OUT_DIR/source-inputs.sha256" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).resolve()
+manifest = Path(sys.argv[2])
+cwd = Path.cwd().resolve()
+source_root = source.parent
+
+inputs = {path.resolve() for path in source_root.rglob('*') if path.is_file()}
+for name in ('Plew.toml', 'Plew.lock'):
+    candidate = cwd / name
+    if candidate.is_file():
+        inputs.add(candidate.resolve())
+
+def label(path: Path) -> str:
+    try:
+        return str(path.relative_to(cwd))
+    except ValueError:
+        return str(path)
+
+ordered_inputs = sorted(inputs, key=label)
+total = hashlib.sha256()
+rows = []
+for path in ordered_inputs:
+    data = path.read_bytes()
+    input_label = label(path)
+    rows.append(f'{hashlib.sha256(data).hexdigest()}  {input_label}\n')
+    total.update(input_label.encode())
+    total.update(b'\0')
+    total.update(data)
+    total.update(b'\0')
+
+manifest.write_text(''.join(rows), encoding='utf-8')
+print(total.hexdigest())
+PY
+)"
+
 {
     echo "carrier=$PLEWC"
     shasum -a 256 "$PLEWC"
     echo "source=$SOURCE"
     shasum -a 256 "$SOURCE"
+    echo "source_tree_sha256=$SOURCE_TREE_SHA256"
+    echo "source_inputs_sha256_manifest=source-inputs.sha256"
     echo "compiler_head=$(git rev-parse HEAD)"
     echo "compiler_worktree=$(git diff --no-ext-diff --binary HEAD | shasum -a 256 | awk '{print $1}')"
     echo "syntax_head=$(git -C ../syntax rev-parse HEAD)"
