@@ -137,6 +137,12 @@ else
     fail=$((fail + 1)); failed="$failed final-call-evaluation-plan"
 fi
 
+if sh ./test-final-callee-canonical-index.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed final-callee-canonical-index"
+fi
+
 if sh ./test-call-template-scalar-storage.sh; then
     :
 else

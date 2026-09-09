@@ -506,12 +506,12 @@ fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, err
         2U64 => { c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=source.resolution />) }
         1U64 => {
             val site: CallSiteKey = <CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=source.slot />
-            val resolution: U64 = midFinalResolution(c: c, bodyId: bodyId, site: site)
-            if resolution == 0U64 {
+            val resolution: U64 = c.finalCalleeIndexForKey(bodyId: bodyId, siteKey: site)
+            if resolution >= c.finalCalleeCount() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingCallResolution /> }
                 return 0U64
             }
-            c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution - 1U64 />)
+            c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />)
         }
         3U64 => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: source.exprId)
@@ -634,7 +634,10 @@ fn canonicalCallResolution(c: Comp, terminator: MidTerminatorNode, bodyId: U64) 
             return target.resolution + 1U64
         }
         1U64 => {
-            return midFinalResolution(c: c, bodyId: bodyId, site: <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />)
+            val site: CallSiteKey = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+            val resolution: U64 = c.finalCalleeIndexForKey(bodyId: bodyId, siteKey: site)
+            if resolution >= c.finalCalleeCount() { return 0U64 }
+            return resolution + 1U64
         }
         3U64 => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: target.exprId)
@@ -993,20 +996,6 @@ fn midApplyArgumentPassing(operand: MidOperand, passing: CallArgumentPassing) ->
     }
 }
 
-// `CallSiteKey` is the semantic identity of a template occurrence.  ExprId is
-// intentionally absent: it is only a navigation anchor in CallResolution.
-fn midFinalResolution(c: Comp, bodyId: U64, site: CallSiteKey) -> U64 {
-    mut val i: U64 = 0U64
-    while i < c.arena.finalCallees.count() {
-        val candidate: CallResolution = c.arena.finalCallees[i]
-        if candidate.bodyId == bodyId && c.sameCallSiteKey(a: candidate.siteKey, b: site) {
-            return i + 1U64
-        }
-        i += 1U64
-    }
-    return 0U64
-}
-
 fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environment: BodyInstance, itemRef: U64) -> MidProjection {
     match projection {
         MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
@@ -1312,9 +1301,9 @@ fn instantiateMidCallTarget(c: Comp, target: MidCallTarget, bodyId: U64) -> MidC
     match target {
         MidCallTarget.Resolved(resolution: val resolution) => { return <MidCallTarget.Resolved resolution=resolution /> }
         MidCallTarget.Template(site: val site) => {
-            val resolution: U64 = midFinalResolution(c: c, bodyId: bodyId, site: site)
-            if resolution == 0U64 { return <MidCallTarget.Template site=site /> }
-            return <MidCallTarget.Resolved resolution=resolution - 1U64 />
+            val resolution: U64 = c.finalCalleeIndexForKey(bodyId: bodyId, siteKey: site)
+            if resolution >= c.finalCalleeCount() { return <MidCallTarget.Template site=site /> }
+            return <MidCallTarget.Resolved resolution=resolution />
         }
         MidCallTarget.TryConversion(exprId: val exprId) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
