@@ -125,6 +125,12 @@ else
     fail=$((fail + 1)); failed="$failed cli-options"
 fi
 
+if sh ./test-self-host-measurement.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed self-host-measurement"
+fi
+
 if sh ./test-final-call-evaluation-plan.sh; then
     :
 else
