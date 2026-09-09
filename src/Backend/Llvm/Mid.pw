@@ -694,7 +694,7 @@ pub impl LlvmCtx {
         if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
         val callee: Func = c.arena.funcs[selected.callee]
         // A selected associated function has no receiver and is emitted by
-        // the same closed `ensureFnInst` path as an ordinary free function.
+        // the same closed frozen-BodyInstance path as an ordinary free function.
         // Rejecting it here made frontend-resolved operator witnesses fall
         // back despite the LLVM emitter already consuming their descriptor.
         // Async remains separate because it requires Suspend/frame lowering.
@@ -1656,7 +1656,7 @@ pub impl LlvmCtx {
             if methodSlot >= self.genMethK.count() { return false }
             useMethodInstance = true
         } else {
-            freeSlot = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: selectedTypeArgs, recvInstRef: selected.recvTypeRef)
+            freeSlot = self.ensureFinalGenFnBody(c: inout c, bodyId: selected.calleeBodyId)
             if freeSlot >= self.genFnK.count() { return false }
         }
         mut val values: Array[LLVMValueRef] = []
@@ -3537,7 +3537,7 @@ pub impl LlvmCtx {
                 if methodSlot >= self.genMethK.count() { return false }
                 useMethod = true
             } else {
-                freeSlot = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: typeArgs, recvInstRef: selected.recvTypeRef)
+                freeSlot = self.ensureFinalGenFnBody(c: inout c, bodyId: selected.calleeBodyId)
                 if freeSlot >= self.genFnK.count() { return false }
             }
         }

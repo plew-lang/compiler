@@ -1,0 +1,5 @@
+// P2a: expression arena rows remain valid after executable-body finalization.
+// No call is present; the only value operation is an integer literal binding.
+fn main() {
+    val n: I64 = 1
+}

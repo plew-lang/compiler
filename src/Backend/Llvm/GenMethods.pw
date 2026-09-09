@@ -126,31 +126,57 @@ pub impl LlvmCtx {
         return self.genMethK.count()
     }
 
-    // Declare an LLVM function for each (generic instance, matching method): self + the
-    // method's params, return type — all under the receiver's substitution env.
+    // The final BodyInstance carries two adjacent substitution lanes.  Its
+    // first `f.typeParams.count()` entries are the call's complete method
+    // substitution (receiver binders followed by method-owned binders); the
+    // remaining entries are the receiver's structural arguments, appended by
+    // `bodyInstanceEnvironment` to bind `Self`/associated names in the body.
+    // LLVM already gets the latter through `receiverRef`, so it needs only the
+    // method-owned slice of the former.  Treating the trailing receiver lane
+    // as own arguments would turn `Array[U8].append` into a fabricated
+    // `append[U8]` specialization.
+    inout fn finalBodyMethodOwnArgs(c: inout Comp, f: Func, environment: InstanceEnvironment) -> Array[U64] {
+        mut val out: Array[U64] = []
+        val recvCount: U64 = c.recvParamCount(nameStart: f.recvStart, nameLen: f.recvLen)
+        mut val i: U64 = recvCount
+        while i < f.typeParams.count() && i < environment.args.count() {
+            out.append(environment.args[i])
+            i += 1U64
+        }
+        return out
+    }
+
+    // Declare exactly the method bodies in the frontend-closed executable
+    // body graph. `genInsts` is a layout-demand set: using it here used to
+    // declare every method on every layout, including bodies that had never
+    // received final CallResolution records.  That conflation both retained
+    // unused macro parser code and let LLVM lower a body under a fabricated
+    // identity.  Layout registration remains driven by `genInsts`; executable
+    // method declaration is driven exclusively by BodyInstance.
     inout fn declareGenMethods(c: inout Comp) {
-        mut val gi: U64 = 0
-        while gi < c.monoWork.genInsts.count() {
-            val instRef: U64 = c.monoWork.genInsts[gi]
-            val gt: TypeRef = c.arena.types[instRef]
-            // Array instances keep their methods on the array-special path; skip here.
-            if !(rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
-                mut val mfi: U64 = 0
-                while mfi < c.arena.funcs.count() {
-                    val mf: Func = c.arena.funcs[mfi]
-                    if c.methodMatchesInst(f: mf, instRef: instRef) {
-                        if !(mf.isProvided) && !(c.methodRecvIsTrait(f: mf)) {
-                            if c.methodInEntryModule(f: mf) {
-                                if self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: []) == self.genMethK.count() {
-                                    self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: [])
-                                }
-                            }
+        mut val bodyIndex: U64 = 0U64
+        while bodyIndex < c.arena.bodyInstances.count() {
+            val bodyId: U64 = bodyIndex + 1U64
+            val body: BodyInstance = c.arena.bodyInstances[bodyIndex]
+            if body.fnIdx < c.arena.funcs.count() {
+                val f: Func = c.arena.funcs[body.fnIdx]
+                // A `provided` body has a trait-proof environment and belongs
+                // to the dedicated provided/witness emission path.  It is not
+                // an ordinary receiver method merely because its copied AST
+                // has `self`; putting it in this table drops that proof and
+                // can create a second, receiver-only declaration for one
+                // callable identity.
+                if f.hasRecv && !(f.isExtern) && !(f.isProvided) && !(c.methodRecvIsTrait(f: f)) {
+                    val receiverRef: U64 = body.environment.receiverRef
+                    if receiverRef != 0U64 && receiverRef < c.arena.types.count() {
+                        val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: f, environment: body.environment)
+                        if self.genMethSlotFor(c: inout c, mfi: body.fnIdx, instRef: receiverRef, ownArgs: ownArgs, bodyId: bodyId) == self.genMethK.count() {
+                            self.declareOneGenMethod(c: inout c, mfi: body.fnIdx, instRef: receiverRef, ownArgs: ownArgs, bodyId: bodyId)
                         }
                     }
-                    mfi += 1
                 }
             }
-            gi += 1
+            bodyIndex += 1U64
         }
     }
 

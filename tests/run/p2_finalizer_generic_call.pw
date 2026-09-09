@@ -1,0 +1,8 @@
+// P2a: a final direct generic-body edge is distinct from a layout root.
+fn identity[T](value: T) -> T {
+    return value
+}
+
+fn main() {
+    val n: I64 = identity(value: 1I64)
+}

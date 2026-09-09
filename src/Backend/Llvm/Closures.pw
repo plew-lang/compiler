@@ -307,29 +307,31 @@ pub impl LlvmCtx {
         }
     }
 
-    // Declare every closure reachable from emitted code (main + plain user fns + free
-    // functions, which now emit as `gf` instances), then fixpoint over declared closures'
-    // own bodies (nested closures). Run before bodies.
+    // Declare every closure reachable from the frontend-closed executable body
+    // graph, then fixpoint over declared closures' own bodies (nested closures).
+    // `BodyInstance` is the source-of-truth here just as it is for ordinary
+    // function bodies: scanning every free declaration made a closure in an
+    // unused macro/value-parser helper executable merely because it shared the
+    // compiler module. Run before bodies so a reached closure literal can refer
+    // to its declared LLVM function.
     inout fn collectClosures(c: inout Comp) {
-        mut val fi: U64 = 0
-        while fi < c.arena.funcs.count() {
-            // a free function (no receiver) is emitted as its `gf` instance, so a closure in
-            // its body must be declared here too (isPlainUserFn no longer covers free fns).
-            val f: Func = c.arena.funcs[fi]
-            mut val isFreeFn: Bool = false
-            if !(f.hasRecv) {
-                if !(f.isExtern) {
-                    if !(f.isAsync) {
-                        if !(c.nameIsMain(f: f)) {
-                            isFreeFn = true
-                        }
-                    }
+        // The synthetic global-initializer body is a finalization root too,
+        // but has no Func row.  Scan its statement roots explicitly.
+        mut val globalI: U64 = 0U64
+        while globalI < c.arena.globals.count() {
+            self.scanStmtClosures(c: inout c, id: c.arena.globals[globalI].letStmt)
+            globalI += 1U64
+        }
+        mut val bodyI: U64 = 0U64
+        while bodyI < c.monoWork.bodyInstances.count() {
+            val bodyId: U64 = c.monoWork.bodyInstances[bodyI]
+            if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() {
+                val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+                if body.fnIdx < c.arena.funcs.count() {
+                    self.scanBlockClosures(c: inout c, id: c.arena.funcs[body.fnIdx].body)
                 }
             }
-            if c.nameIsMain(f: f) || isFreeFn {
-                self.scanBlockClosures(c: inout c, id: c.arena.funcs[fi].body)
-            }
-            fi += 1
+            bodyI += 1U64
         }
         mut val seen: U64 = 0
         while seen < self.cloIdx.count() {

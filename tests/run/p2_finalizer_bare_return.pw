@@ -1,0 +1,6 @@
+// P2a: a fresh compiler whose executable-body closure is correct must lower a
+// non-empty main even when no call, generic dispatch, or value payload is
+// involved. This separates statement-arena ownership from call reachability.
+fn main() {
+    return
+}

@@ -1025,44 +1025,6 @@ pub impl Comp {
         return bodyId
     }
 
-    // An associated callable uses the generic-function ABI path even when it
-    // has no type parameters.  Register that code-generation instance exactly
-    // where Mono has the final callable descriptor, so explicit calls, implicit
-    // protocol calls (`for`), and lowered operators cannot drift into separate
-    // registration rules.
-    inout fn enqueueSelectedAssocInstance(callee: U64, args: Array[U64], recvInstRef: U64) {
-        if callee >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[callee]
-        if f.isExtern || !(f.isAssoc) { return }
-        if f.typeParams.count() > 0U64 {
-            if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) { return }
-        }
-        if !(self.fnInstExists(fnIdx: callee, args: args, recvInstRef: recvInstRef)) {
-            self.monoWork.fnInsts.append(<FnInst fnIdx=callee args=args recvInstRef=recvInstRef />)
-        }
-    }
-
-    // Free-function instances (including the zero-type-argument case) use the
-    // same final substitutions as any other selected callable.  Registering
-    // them here removes the old second inference pass in `registerCallInst`,
-    // which could see a shared generic AST without the concrete caller
-    // environment.
-    inout fn enqueueSelectedFreeInstance(callee: U64, args: Array[U64]) {
-        if callee >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[callee]
-        // Async functions have their own entry/resume declaration and emission
-        // path.  They are final callables like any other call, but are never a
-        // `gf` body instance: registering them here opens the async body under
-        // the ordinary emitter, where `await` is intentionally not an Expr.
-        if f.isExtern || f.hasRecv || f.isAssoc || f.isAsync { return }
-        if f.typeParams.count() > 0U64 {
-            if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) { return }
-        }
-        if !(self.fnInstExists(fnIdx: callee, args: args)) {
-            self.monoWork.fnInsts.append(<FnInst fnIdx=callee args=args />)
-        }
-    }
-
     // A copied trait-provided callable inherits the conformance subject's
     // parameters followed by the trait requirement's parameters.  InferFnArgs
     // can recover the latter from ordinary arguments, but a contextless literal
@@ -1333,8 +1295,6 @@ pub impl Comp {
                 if recvArgs.count() == f.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
                     val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst, selectedProof: calleeProof)
                     self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
-                    self.enqueueSelectedAssocInstance(callee: callee, args: recvArgs, recvInstRef: recvInst)
-                    self.enqueueSelectedFreeInstance(callee: callee, args: recvArgs)
                     return
                 }
             }
@@ -1452,8 +1412,6 @@ pub impl Comp {
         self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
-        self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
-        self.enqueueSelectedFreeInstance(callee: callee, args: finalArgs)
     }
 
     // `try`'s error conversion is an implicit associated call.  It must enter
@@ -3811,8 +3769,6 @@ pub impl Comp {
         }
         self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvRef, calleeArgs: args)
         self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
-        self.enqueueSelectedAssocInstance(callee: callee, args: args, recvInstRef: recvRef)
-        self.enqueueSelectedFreeInstance(callee: callee, args: args)
     }
 
     // Walk one already-selected concrete body instance.  It is the frontend
@@ -3822,8 +3778,35 @@ pub impl Comp {
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
         if self.tracePhases {
+            // Keep trace-only aggregate reads inside this branch. The normal
+            // finalization path must not acquire an additional value lifetime
+            // merely to support diagnostics: it owns no Func/BodyInstance
+            // value, it consumes their arena rows below.
+            val tracedInstance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
+            val tracedFunction: Func = self.arena.funcs[tracedInstance.fnIdx]
             self.traceFinalBodyScans += 1U64
             tracePhaseProgress(c: inout self, label: "finalize-callables:body", count: self.traceFinalBodyScans, stride: 16U64)
+            // A reachable-body closure must be diagnosable without falling back
+            // to whole-module roots.  This trace is deliberately diagnostic
+            // only: it identifies the body currently being finalized, while
+            // the monotonic counter above remains the long-process contract.
+            mut val name: Array[U8] = []
+            mut val ni: U64 = 0U64
+            while ni < tracedFunction.nameLen {
+                name.append(self.arena.bytes[tracedFunction.nameStart + ni])
+                ni += 1U64
+            }
+            eprint(text: "[trace-phase] finalize-callables:body-target=")
+            eprint(text: stringFromBytesUnchecked(name))
+            eprint(text: " fn=")
+            traceU64(n: tracedInstance.fnIdx)
+            eprint(text: " id=")
+            traceU64(n: bodyId)
+            eprint(text: " receiver=")
+            traceU64(n: tracedInstance.environment.receiverRef)
+            eprint(text: " args=")
+            traceU64(n: tracedInstance.environment.args.count())
+            eprint(text: "\n")
         }
         val instance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
         val f: Func = self.arena.funcs[instance.fnIdx]
@@ -3859,6 +3842,9 @@ pub impl Comp {
         self.cur.typeParams = instance.environment.params
         self.cur.typeArgs = instance.environment.args
         self.enterBodyInstance(fnIdx: instance.fnIdx, environment: instance.environment)
+        if self.tracePhases {
+            tracePhase(c: inout self, label: "finalize-callables:body-environment-ready")
+        }
         // Associated callables have no value `self`, but their bodies may name
         // `Self`/associated types and their final-callable key is the concrete
         // subject selected at the call.  Mirror emitOneGenFn's assoc environment
@@ -3880,6 +3866,9 @@ pub impl Comp {
         // old provisional AST collector discovered these as an incidental
         // side effect before it later discarded its call decisions.
         mut val pi: U64 = 0U64
+        if self.tracePhases {
+            tracePhase(c: inout self, label: "finalize-callables:body-parameters")
+        }
         while pi < f.params.count() {
             val p: Param = self.funcParamAt(params: f.params, index: pi)
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
@@ -3887,6 +3876,9 @@ pub impl Comp {
             pi += 1U64
         }
         if f.hasRet { self.scanType(ref: f.retTy) }
+        if self.tracePhases {
+            tracePhase(c: inout self, label: "finalize-callables:body-block")
+        }
         self.scanBlockInsts(blkId: f.body)
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
     }
@@ -4224,20 +4216,10 @@ pub impl Comp {
         self.arena.finalTries = []
         self.arena.finalTryIndexSlots = []
         self.monoWork.bodyInstances = []
-        // `collectFnInsts` predates final-callable construction and may have
-        // registered a generic body from an AST-global / parametric type
-        // projection.  Keeping that provisional worklist lets (for example)
-        // a loop's `print[I64]` call leave an obsolete `print[Optional[…]]`
-        // instance for LLVM to emit.  Final descriptors are the one authority
-        // for call-driven instances, so rebuild this worklist from the roots
-        // and descriptor closure below rather than mixing the two phases.
-        // `collectFnInsts` predates final-callable construction and may have
-        // registered a generic body from an AST-global / parametric type
-        // projection.  Keeping that provisional worklist lets (for example)
-        // a loop's `print[I64]` call leave an obsolete `print[Optional[…]]`
-        // instance for LLVM to emit.  Final descriptors are the one authority
-        // for call-driven instances, so rebuild this worklist from the roots
-        // and descriptor closure below rather than mixing the two phases.
+        // `collectFnInsts` is provisional layout discovery. Its source-shaped
+        // instances are not executable identities and must not cross this
+        // boundary: every reachable body is created directly by the selected
+        // CallResolution in `enqueueSelectedCallee` below.
         self.monoWork.fnInsts = []
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
@@ -4265,117 +4247,40 @@ pub impl Comp {
             tracePhaseProgress(c: inout self, label: "finalize-callables:function-root", count: fi, stride: 64U64)
             val f: Func = self.arena.funcs[fi]
             if !(f.isExtern) && f.body != 0U64 {
-                // Backend declaration is deliberately lazy for provided/lang-item
-                // methods, but lazy *emission* must not be lazy semantic
-                // resolution.  Every concrete, non-generic body is therefore a
-                // finalization root. Generic templates still enter only through
-                // their concrete FnInst/body-instance substitutions.
-                if f.typeParams.count() == 0U64 && !(self.methodRecvIsTrait(f: f)) {
-                    // A method body is emitted with its receiver instance even
-                    // when that receiver has no generic arguments.  Give Mono
-                    // that same identity at the root: recording it as `0` then
-                    // emitting it as `Counter` made CallResolution miss and fall
-                    // back to the AST-global cache (where a shared provided
-                    // body could inherit `Two`'s selection).
-                    mut val rootRecv: U64 = 0U64
-                    if f.hasRecv || f.isAssoc {
-                        rootRecv = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-                    }
-                    self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: rootRecv)
+                // Declarations are not executable roots.  A whole-module root
+                // made an unused macro value parser (and every other imported
+                // helper) part of a normal compiler binary.  Finalization owns
+                // the executable call closure: globals seed it above, then only
+                // the selected program entry seeds it here; every ordinary,
+                // generic, method, witness, or async callee joins through a
+                // resolved call descriptor below.
+                mut val isEntry: Bool = self.nameIsMain(f: f)
+                // `plew gen` replaces the user's main with the synthesized
+                // harness.  Preserve the backend's entry selection exactly:
+                // the user's source main must not root macro-generated calls
+                // which are intentionally absent from the harness build.
+                if self.genMode && isEntry && fi != self.genMainIdx {
+                    isEntry = false
                 }
-                if self.nameIsMain(f: f) || f.isAsync {
+                if isEntry || f.isAsync {
                     self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64)
                 }
             }
             fi += 1U64
         }
-        // `genInsts` determines not only LLVM layouts but also the concrete
-        // method bodies that LLVM may emit on demand.  Register each receiver-
-        // generic, non-provided body here before code generation.  Previously
-        // `emitOneGenMethod` could first reach (for example) MapIter.next after
-        // finalization, leaving its nested calls without CallResolution entries and
-        // tempting backend-local resolution.  Method-own generic parameters are
-        // represented by an explicit FnInst at their call site, so this root set
-        // includes only the exact receiver-argument arity.
-        mut val gi2: U64 = 0U64
-        while gi2 < self.monoWork.genInsts.count() {
-            tracePhaseProgress(c: inout self, label: "finalize-callables:generic-instance", count: gi2, stride: 16U64)
-            val instRef: U64 = self.monoWork.genInsts[gi2]
-            if instRef < self.arena.types.count() {
-                val inst: TypeRef = self.arena.types[instRef]
-                mut val mfi: U64 = 0U64
-                while mfi < self.arena.funcs.count() {
-                    val mf: Func = self.arena.funcs[mfi]
-                    // A trait receiver is an abstract interface, never a
-                    // concrete generic instance. Its authored witness body is
-                    // finalized only through the conferred/provided copy on a
-                    // real conformer; enqueueing `B[Element]` here loses that
-                    // conformance proof and makes `self.base()` impossible to
-                    // resolve.
-                    if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) && !(mf.isExtern) && mf.body != 0U64 {
-                        if mf.hasRecv && mf.typeParams.count() == inst.args.count() {
-                            if self.methodMatchesInst(f: mf, instRef: instRef) {
-                                self.enqueueFinalBody(fnIdx: mfi, args: inst.args, recvInstRef: instRef)
-                            }
-                        }
-                        // Trait conformance witnesses are associated functions:
-                        // they have no value receiver and were therefore
-                        // invisible to the old method root.  LLVM can emit
-                        // them while constructing a reached generic type's
-                        // witness table, so finalize their concrete body here
-                        // before the backend starts.
-                        if self.assocWitnessMatchesInst(f: mf, instRef: instRef) {
-                            self.enqueueFinalBody(fnIdx: mfi, args: inst.args, recvInstRef: instRef)
-                            self.enqueueSelectedAssocInstance(callee: mfi, args: inst.args, recvInstRef: instRef)
-                        }
-                    }
-                    mfi += 1U64
-                }
-            }
-            gi2 += 1U64
-        }
+        // `genInsts` is a layout-demand collection, not an executable-body
+        // root set.  A method or witness becomes reachable only through a
+        // finalized call or proof below.  Mixing the two made every method on
+        // every discovered type executable and reintroduced imported macro
+        // parser bodies through their incidental collection-time layouts.
         mut val bodyI: U64 = 0U64
-        mut val fnI: U64 = 0U64
-        while bodyI < self.monoWork.bodyInstances.count() || fnI < self.monoWork.fnInsts.count() {
-            while fnI < self.monoWork.fnInsts.count() {
-                tracePhaseProgress(c: inout self, label: "finalize-callables:function-instance", count: fnI, stride: 16U64)
-                val fin: FnInst = self.monoWork.fnInsts[fnI]
-                self.enqueueFinalBody(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef)
-                fnI += 1U64
-            }
-            if bodyI < self.monoWork.bodyInstances.count() {
-                self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
-                bodyI += 1U64
-            }
-        }
-        // Materializing a code-generation instance from a final descriptor can
-        // reveal a new generic body.  That body must itself be finalized before
-        // LLVM sees it; otherwise a later instance of the same AST observes an
-        // older descriptor key.  Close descriptor→instance registration and
-        // body scanning together as one worklist fixpoint.
-        mut val callI: U64 = 0U64
-        mut val closingFinalCalls: Bool = true
-        while closingFinalCalls {
-            while callI < self.finalCalleeCount() {
-                tracePhaseProgress(c: inout self, label: "finalize-callables:descriptor", count: callI, stride: 64U64)
-                val selected: CallResolution = self.arena.finalCallees[callI]
-                self.enqueueSelectedAssocInstance(callee: selected.callee, args: self.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs), recvInstRef: selected.recvTypeRef)
-                self.enqueueSelectedFreeInstance(callee: selected.callee, args: self.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs))
-                callI += 1U64
-            }
-            while fnI < self.monoWork.fnInsts.count() {
-                tracePhaseProgress(c: inout self, label: "finalize-callables:function-instance", count: fnI, stride: 16U64)
-                val fin: FnInst = self.monoWork.fnInsts[fnI]
-                self.enqueueFinalBody(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef)
-                fnI += 1U64
-            }
-            while bodyI < self.monoWork.bodyInstances.count() {
-                self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
-                bodyI += 1U64
-            }
-            if callI >= self.finalCalleeCount() && fnI >= self.monoWork.fnInsts.count() && bodyI >= self.monoWork.bodyInstances.count() {
-                closingFinalCalls = false
-            }
+        // Scanning a body can append its selected callee body. This one worklist
+        // reaches a fixed point without a second `(Func,args)` queue, so a
+        // generic free function cannot be reopened under a different identity
+        // after its CallResolution has been frozen.
+        while bodyI < self.monoWork.bodyInstances.count() {
+            self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
+            bodyI += 1U64
         }
         self.verifyFinalCallResolutions()
         self.freezeFinalAccesses()

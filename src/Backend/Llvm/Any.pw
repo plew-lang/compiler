@@ -1210,7 +1210,18 @@ pub impl LlvmCtx {
         val savedBodyId: U64 = c.cur.bodyId
         c.cur.bodySelfRef = c.cur.selfRef
         c.cur.bodyItemRef = c.cur.itemRef
-        c.enterBodyInstance(fnIdx: fi, environment: environment)
+        // `finalizeCallables` is the sole producer of semantic body identities.
+        // LLVM must consume the frozen key it found above, never call
+        // `enterBodyInstance`: interning here would create an unscanned body
+        // whose CallResolution table is necessarily empty.  Whole-module
+        // finalization used to mask that violation by happening to scan every
+        // source body before codegen.
+        if bodyId == 0U64 {
+            c.errorAt(offset: f.nameStart, msg: "internal error: LLVM attempted to emit a body outside the finalized callable closure")
+        }
+        c.cur.bodyFnIdx = fi
+        c.cur.bodyEnvironment = environment
+        c.cur.bodyId = bodyId
         // Consume the same canonical body-instance receiver that Mono used to
         // populate CallResolution. This is a key projection only; LLVM never
         // resolves a call or infers a source from it.

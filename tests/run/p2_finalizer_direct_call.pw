@@ -1,0 +1,7 @@
+// P2a: the frozen direct-call descriptor must survive from finalization through
+// legacy lowering without relying on whole-module body roots.
+fn ping() {}
+
+fn main() {
+    ping()
+}

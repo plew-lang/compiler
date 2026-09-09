@@ -231,7 +231,7 @@ pub impl LlvmCtx {
 
     // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
     // unary: just lhs). The witness is its own 0-type-arg `gf` instance, declared lazily
-    // here on first reach (ensureFnInst); a missing slot is a loud not-yet-emittable error.
+    // through its already-frozen body; a missing slot is a loud finalization error.
     inout fn emitWitnessCall(c: inout Comp, callId: U64, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
         val af: Func = c.arena.funcs[fi]
         mut val av: Array[LLVMValueRef] = []
@@ -256,7 +256,7 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
-        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: targs, recvInstRef: recvInst)
+        val gslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
         if gslot < self.genFnK.count() {
             val raw: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
             return self.projectFinalCallResult(c: inout c, callId: callId, value: raw)

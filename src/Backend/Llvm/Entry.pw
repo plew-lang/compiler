@@ -387,18 +387,31 @@ pub impl LlvmCtx {
         self.seedGlobals(c: inout c)
         val savedBodyFn: U64 = c.cur.bodyFnIdx
         val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
+        val savedBodyId: U64 = c.cur.bodyId
         c.cur.bodyFnIdx = fi
         c.cur.bodyEnvironment = <InstanceEnvironment />
-        c.cur.bodyId = 0U64
+        // `finalizeCallables` closed every source call under the concrete main
+        // BodyInstance.  Legacy LLVM lowering is still allowed while a main
+        // body is outside Mid coverage, but it must consume that same frozen
+        // identity rather than intern an unrelated argless body on demand.
+        // Otherwise lookup misses the finalized descriptors and whole-module
+        // pre-scanning merely happens to hide the broken provenance.
+        c.cur.bodyId = bodyId
         // body locals (declared from here) are released at scope exit; seeded globals are not.
         self.curBodyMark = self.nLocals
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] legacy main body-start id=")
+            self.traceCodegenU64(n: bodyId)
+            eprint(text: "\n")
+        }
         self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
+        if c.traceCodegen { eprint(text: "[trace-codegen] legacy main body-done\n") }
         if !(self.terminated) {
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
         }
         c.cur.bodyFnIdx = savedBodyFn
         c.cur.bodyEnvironment = savedBodyEnvironment
-        c.cur.bodyId = 0U64
+        c.cur.bodyId = savedBodyId
     }
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).

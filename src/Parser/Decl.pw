@@ -1,14 +1,13 @@
 // ---- compiler top-level frontend: parse-driven program lowering ----
 //
-// ALL parsing is the shared @Plew/Syntax parser's job now: `parseProgram` runs
-// `parseProgramAst` over the compiler's token stream and `lowerTopItem`
-// (Codegen/Lower.pw) lowers each value-tree item (decl / impl / trait / extern /
-// import / export / directive) into the arena or Comp state. What remains here is the
-// pure semantic-side work that has no value-tree/macro counterpart: module-tag
-// helpers (markImport / recordExport, using original-offset spans — see moduleOf) and
-// derive accumulation (drainDerives — recording each `@[...]` for the auto-part of the
-// generated `.gen.pw` and the `plew gen` harness; `@[Eq]`/`@[Hash]` are real derive
-// macros in @Plew/Syntax, not compiler-privileged synthesis).
+// ALL parsing is the shared @Plew/Syntax parser's job now: the compiler entry
+// `parseProgramSyntaxInto` appends direct `SyntaxFile` rows, and the frontend
+// lowers those IDs without a value-AST bridge. What remains here is the pure
+// semantic-side work: module-tag helpers (markImport / recordExport, using
+// original-offset spans — see moduleOf) and derive accumulation (drainDerives —
+// recording each `@[...]` for the auto-part of the generated `.gen.pw` and the
+// `plew gen` harness; `@[Eq]`/`@[Hash]` are real derive macros in @Plew/Syntax,
+// not compiler-privileged synthesis).
 
 // Attach the pending `@[...]` derive requests to the just-parsed type, then clear
 // the scratch list for the next declaration.

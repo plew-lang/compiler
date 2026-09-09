@@ -256,6 +256,15 @@ else
     fail=$((fail + 1)); failed="$failed syntax-value-materializer"
 fi
 
+# The macro value parser is a public explicit boundary, not an ambient normal
+# compiler dependency.  Keep its endpoints out of normal compiler imports so
+# self-hosted generic codegen cannot root their bodies accidentally.
+if sh ./test-normal-compiler-no-macro-parser-root.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed normal-compiler-no-macro-parser-root"
+fi
+
 # Frozen conversion facts must stay canonical all the way through LLVM
 # lowering; a draft proof thaw here would reintroduce the migration bridge.
 if sh ./test-mid-canonical-conversion.sh; then

@@ -9,8 +9,8 @@ import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileByte
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
-import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend, tracePhase, tracePhaseCount }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
@@ -209,14 +209,15 @@ struct LlvmCtx {
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
-    // free-function instances (parallel: c.monoWork.fnInsts index -> value, type). A true
-    // generic instance (`id[I32]`) is keyed by its inferred args; a non-generic free fn is
-    // its own 0-type-arg instance (args=[]). Both resolve via genFnSlotFor(fnIdx, args).
+    // Free-function bodies (parallel: frozen BodyInstance id -> value, type).  The body id
+    // includes every ParamId substitution, receiver and selected proof, so it is the one
+    // executable identity shared with final CallResolution.  `FnInst` is only provisional
+    // Mono discovery work; LLVM must never use it as a second body key.
     pub mut val genFnK: Array[U64]
     pub mut val genFnVal: Array[LLVMValueRef]
     pub mut val genFnTy: Array[LLVMTypeRef]
-    // slots (into genFn*) declared lazily at a call site via ensureFnInst (a free fn first
-    // reached during body emission), queued for body emission in the pass-2 drain loop.
+    // Slots are declared from the finalized body closure before emission. The queue remains
+    // a uniform body-emission order, not a lazy source-level instance discovery mechanism.
     pub mut val genFnEmit: Array[U64]
     // generic-method instances, one per (method func, receiver instantiation):
     // a method on a generic struct/enum (`box.get()`, `maybe.unwrapOr(...)`) is
@@ -1076,8 +1077,8 @@ export fn emitLlvm(c: inout Comp) {
 
     // pass 1: declare generic free-fn instances + generic method instances (one per
     // receiver instantiation). Non-generic free/assoc fns and methods are no longer
-    // eagerly declared — each is its own 0-type-arg instance, declared lazily on first
-    // reach (gf via ensureFnInst, gm via ensureGenMethodDeclared).
+    // eagerly declared — each reachable free-function body is declared from its frozen
+    // BodyInstance, while receiver methods use their corresponding body identity.
     st.declareGenFns(c: inout c)
     st.declareGenMethods(c: inout c)
     // async fns: build each frame struct + resume fn, and a non-main entry symbol
@@ -1129,8 +1130,8 @@ export fn emitLlvm(c: inout Comp) {
     // async fn entry + resume bodies (main's entry drains the loop).
     st.emitAsyncFns(c: inout c)
     tracePhase(c: inout c, label: "backend:async:done")
-    // generic-method instance bodies. (Free-function instance bodies — eager `gf` plus any
-    // lazily declared via ensureFnInst — drain through genFnEmit in the fixpoint loop below.)
+    // generic-method instance bodies. Free-function bodies drain through the same fixed
+    // finalized queue below.
     st.emitGenMethods(c: inout c)
     tracePhase(c: inout c, label: "backend:generic-methods:done")
     // `emitGenMethods` has consumed every slot available through main/async
@@ -1173,8 +1174,8 @@ export fn emitLlvm(c: inout Comp) {
             st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
             genmDone += 1
         }
-        // free-function instance bodies (eager `gf` + lazily declared via ensureFnInst); the
-        // queue can grow as a body reaches a not-yet-declared free fn, so drain to fixpoint.
+        // Free-function bodies were all declared from the frozen closure. Keep the queue
+        // drain separate from method/witness drains for ABI order, not source discovery.
         while genfDone < st.genFnEmit.count() {
             tracePhaseCount(c: inout c, label: "backend:drain:generic-function-emitting", count: genfDone)
             st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone])
@@ -1672,16 +1673,13 @@ fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
     }
 }
 
-// Find the registered generic-fn instance slot for (fnIdx, args), or count.
-fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], recvInstRef: U64, st: inout LlvmCtx) -> U64 {
+// Find the registered free-function slot for one frozen executable body, or count.
+// Unlike the old `(fnIdx, args, receiver)` lookup, this cannot collapse two provided
+// bodies that share source syntax but carry different conformance evidence.
+fn genFnSlotForBody(bodyId: U64, st: inout LlvmCtx) -> U64 {
     mut val slot: U64 = 0
     while slot < st.genFnK.count() {
-        val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
-        if fin.fnIdx == fnIdx && c.sameBodyReceiver(a: fin.recvInstRef, b: recvInstRef) {
-            if typeArgsEq(c: inout c, a: fin.args, b: args) {
-                return slot
-            }
-        }
+        if st.genFnK[slot] == bodyId { return slot }
         slot += 1
     }
     return st.genFnK.count()

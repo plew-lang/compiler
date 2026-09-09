@@ -657,29 +657,25 @@ pub impl LlvmCtx {
         return self.fnIdx.count()
     }
 
-    // The genFn* slot for the free-function instance (fnIdx, args), declaring it lazily on
-    // first reach (mirrors ensureFreeFnDeclared, but for the unified `gf` mechanism: a
-    // non-generic free fn is its own 0-type-arg instance, args=[]). The signature is built
-    // under the instance env (typeParams -> args; empty for non-generic, a no-op). The body is
-    // queued (genFnEmit) for the pass-2 drain. Returns st.genFnK.count() if not declarable
-    // (extern / main / a method — those stay on their own paths). Idempotent via genFnSlotFor.
-    inout fn ensureFnInst(c: inout Comp, fnIdx: U64, args: Array[U64], recvInstRef: U64) -> U64 {
-        val existing: U64 = genFnSlotFor(c: inout c, fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, st: inout self)
+    // Resolve a free-function LLVM slot from the body id selected by frontend finalization.
+    // Declarations are all created before body emission, so this is a pure frozen-table lookup:
+    // LLVM cannot fabricate a body from a source function plus guessed substitutions.
+    inout fn ensureFinalGenFnBody(c: inout Comp, bodyId: U64) -> U64 {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] frozen free body request id=")
+            self.traceCodegenU64(n: bodyId)
+            eprint(text: "\n")
+        }
+        val existing: U64 = genFnSlotForBody(bodyId: bodyId, st: inout self)
         if existing < self.genFnK.count() {
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] frozen free body slot=")
+                self.traceCodegenU64(n: existing)
+                eprint(text: "\n")
+            }
             return existing
         }
-        val f: Func = c.arena.funcs[fnIdx]
-        // Mono owns instance discovery and final-body construction.  LLVM may
-        // declare the already-recorded instance, but must never append a new
-        // one from an AST-shaped fallback: doing so opens a body under a key
-        // which final-callable construction never scanned.
-        if f.isAssoc {
-            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final associated callable instance required by LLVM")
-        } else if f.hasRecv {
-            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final method instance required by LLVM")
-        } else {
-            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final free-function instance required by LLVM")
-        }
+        c.errorAt(offset: 0U64, msg: "internal error: frontend finalization did not declare the selected free-function body")
         return self.genFnK.count()
     }
 }

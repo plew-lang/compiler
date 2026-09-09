@@ -104,14 +104,28 @@ pub impl LlvmCtx {
     // as `pow(base:, exp:)`; LLVM must not infer or erase it from the bare-call
     // syntax.
     inout fn genLlvmResolvedCallableCall(c: inout Comp, callId: U64, cfi: U64, args: ArgRange, recvInstRef: U64, callOffset: U64) -> LLVMValueRef {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] direct call-start id=")
+            self.traceCodegenU64(n: callId)
+            eprint(text: " callee=")
+            self.traceCodegenU64(n: cfi)
+            eprint(text: "\n")
+        }
         // Type inference is a frontend/Mono decision.  The exact substitutions
         // selected there travel with the final callable; LLVM must never repeat
         // unification against the shared AST.
         val inferred: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] direct call-args-ready count=")
+            self.traceCodegenU64(n: inferred.count())
+            eprint(text: " body=")
+            self.traceCodegenU64(n: c.bodyCalleeBodyId(exprId: callId))
+            eprint(text: "\n")
+        }
         val cf0: Func = c.arena.funcs[cfi]
         // Async callees are declared by the entry/resume pipeline, not the
         // ordinary `gf` table.  Select that already-finalized entry before
-        // consulting `ensureFnInst`; otherwise the latter quite correctly
+        // consulting the ordinary frozen free-body table; that table quite correctly
         // rejects the absent gf instance and the async fallback is unreachable.
         if cf0.isAsync {
             val pslot: U64 = self.asyncEntrySlot(fi: cfi)
@@ -142,7 +156,7 @@ pub impl LlvmCtx {
             c.errorAt(offset: callOffset, msg: "internal error: final callable is missing grounded type arguments")
             return LLVMConstInt(self.i64ty, 1U64, 0I32)
         }
-        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred, recvInstRef: recvInstRef)
+        val gslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
         if gslot < self.genFnK.count() {
             val cf: Func = c.arena.funcs[cfi]
             val savedP: Array[Bind] = c.cur.typeParams
@@ -166,7 +180,7 @@ pub impl LlvmCtx {
             self.releaseInoutPins(c: inout c, mark: pinMark)
             return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
         }
-        // ensureFnInst declined: an `async fn` whose promise-returning entry is declared by
+        // A frozen free-body lookup intentionally excludes an `async fn`, whose promise-returning entry is declared by
         // declareAsyncFns into the dedicated async-entry table. Resolve it.
             val pslot: U64 = self.asyncEntrySlot(fi: cfi)
             if pslot < self.asyncEntryIdx.count() {

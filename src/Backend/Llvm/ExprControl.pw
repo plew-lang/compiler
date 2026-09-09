@@ -336,11 +336,9 @@ pub impl LlvmCtx {
                     }
                     mut val cav: Array[LLVMValueRef] = []
                     cav.append(errVal)
-                    val factoryArgs: Array[U64] = c.bodyCalleeTypeArgs(exprId: tryId)
-                    val factoryRecv: U64 = c.bodyCalleeReceiverRef(exprId: tryId)
-                    val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: factoryArgs, recvInstRef: factoryRecv)
+                    val fgslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: tryId, slot: 1U64))
                     if fgslot >= self.genFnK.count() {
-                        c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` error conversion failed to instantiate the `from` factory (internal: ensureFnInst returned no slot)")
+                        c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` error conversion factory has no frozen free-function body")
                     }
                     convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
                     didConvert = true
