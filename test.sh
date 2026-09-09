@@ -143,6 +143,12 @@ else
     fail=$((fail + 1)); failed="$failed final-callee-canonical-index"
 fi
 
+if sh ./test-synthetic-call-site-origin-index.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed synthetic-call-site-origin-index"
+fi
+
 if sh ./test-call-template-scalar-storage.sh; then
     :
 else

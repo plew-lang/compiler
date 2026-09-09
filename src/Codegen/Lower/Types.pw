@@ -1022,7 +1022,7 @@ pub impl Comp {
         val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=self.pushArgs(args: noArgs) />)
         val originSerial: U64 = self.nextExprOriginSerial
         self.nextExprOriginSerial += 1U64
-        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=receiverTerm />)
+        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=receiverTerm />)
         return call
     }
 

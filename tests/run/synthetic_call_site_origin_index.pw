@@ -1,0 +1,26 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Expr, SyntheticCallSite }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
+    val source = c.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val synthetic = c.pushExpr(e: <Expr.Int value=2U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val missing = c.pushExpr(e: <Expr.Int value=3U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+
+    val sourceTemplate = c.templateCallSiteKey(fnIdx: 0U64, exprId: source)
+    val sourceFinal = c.currentCallSiteKey(exprId: source, siteIsStmt: false, slot: 3U64)
+    if sourceTemplate.originKind == 1U64 && sourceFinal.originKind == 1U64 && sourceFinal.slot == 3U64 { write(s: "source-fallback\n") }
+    if c.syntheticCallSiteIndex(exprId: missing) == 0U64 { write(s: "missing-before-registration\n") }
+
+    c.recordSyntheticCallSite(site: <SyntheticCallSite exprId=synthetic originSerial=51U64 receiverTerm=17U64 />)
+    val index = c.syntheticCallSiteIndex(exprId: synthetic)
+    if index == 0U64 && c.decls.syntheticCallSites[index].originSerial == 51U64 && c.decls.syntheticCallSites[index].receiverTerm == 17U64 { write(s: "producer-indexed\n") }
+    if c.syntheticCallSiteIndex(exprId: missing) == c.decls.syntheticCallSites.count() { write(s: "missing-after-registration\n") }
+
+    val template = c.templateCallSiteKey(fnIdx: 0U64, exprId: synthetic)
+    val final = c.currentCallSiteKey(exprId: synthetic, siteIsStmt: false, slot: 7U64)
+    if template.originKind == 2U64 && template.originSerial == 51U64 { write(s: "template-origin\n") }
+    if final.originKind == 2U64 && final.originSerial == 51U64 && final.slot == 7U64 { write(s: "final-origin\n") }
+}

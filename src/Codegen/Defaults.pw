@@ -195,7 +195,7 @@ pub impl Comp {
             }
         } else {
             call = self.pushExpr(e: <Expr.Call nameStart=function.nameStart nameLen=function.nameLen args=noArgs />)
-            self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
+            self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
         }
         self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof, receiverTypeTerm: receiverTypeTerm)
         return call
