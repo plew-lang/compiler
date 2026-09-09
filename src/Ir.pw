@@ -539,16 +539,6 @@ export struct Bind {
     pub val isSendable: Bool = false
 }
 
-// The canonical result category for one `Comp.kwSpan` query.  A registered
-// name wins over a source occurrence; a source result remains first after a
-// later source append; a miss is valid only for the source-byte count at which
-// it was observed.
-export enum KwSpanLookupKind {
-    Missing
-    Source
-    Registered
-}
-
 // A content-addressed `kwSpan` result.  `keyStart..keyLen` points into the
 // private declaration pool, never into `Arena.bytes`: inserting a lookup must
 // not create a source occurrence which changes a later search's meaning.  The
@@ -562,7 +552,10 @@ export struct KwSpanLookup {
     pub val requestLen: U64
     pub val keyHash: U64
     pub val result: Bind
-    pub val kind: KwSpanLookupKind
+    // 0 = Missing, 1 = Source, 2 = Registered.  This is compiler-internal
+    // state, not a source-language enum value: scalar storage avoids making
+    // the lookup table depend on a user-visible Eq witness.
+    pub val kind: U64
     // Meaningful for Missing only.  A source append may turn a prior miss into
     // a match, whereas a first source result and registered result stay valid.
     pub val sourceByteCount: U64

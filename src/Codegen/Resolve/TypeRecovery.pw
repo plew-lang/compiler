@@ -506,6 +506,10 @@ pub impl Comp {
 
 pub impl Comp {
 
+    fn kwSpanMissingKind() -> U64 { return 0U64 }
+    fn kwSpanSourceKind() -> U64 { return 1U64 }
+    fn kwSpanRegisteredKind() -> U64 { return 2U64 }
+
     // Hash the full historical kwSpan request. `kwLen` is intentionally mixed even
     // though normal callers pass kw.bytes().count(): it used to change the source
     // scan boundary, so omitting it would silently change a malformed request.
@@ -574,7 +578,7 @@ pub impl Comp {
 
     // Publish the one canonical result for a query. Updating an existing row
     // intentionally leaves its key bytes and slot untouched.
-    inout fn putKwSpanLookup(kw: String, kwLen: U64, keyHash: U64, result: Bind, kind: KwSpanLookupKind) {
+    inout fn putKwSpanLookup(kw: String, kwLen: U64, keyHash: U64, result: Bind, kind: U64) {
         val prior: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: kwLen, keyHash: keyHash)
         val sourceByteCount: U64 = self.arena.bytes.count()
         if prior < self.decls.kwSpanLookups.count() {
@@ -609,7 +613,7 @@ pub impl Comp {
         val prior: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: bytes.count(), keyHash: keyHash)
         mut val alreadyRegistered: Bool = false
         if prior < self.decls.kwSpanLookups.count() {
-            alreadyRegistered = self.decls.kwSpanLookups[prior].kind == <KwSpanLookupKind.Registered />
+            alreadyRegistered = self.decls.kwSpanLookups[prior].kind == self.kwSpanRegisteredKind()
         }
         val start: U64 = self.arena.bytes.count()
         mut val i: U64 = 0
@@ -619,7 +623,7 @@ pub impl Comp {
         }
         if !alreadyRegistered {
             val span: Bind = <Bind nameStart=start nameLen=bytes.count() fieldStart=start fieldLen=bytes.count() />
-            self.putKwSpanLookup(kw: kw, kwLen: bytes.count(), keyHash: keyHash, result: span, kind: <KwSpanLookupKind.Registered />)
+            self.putKwSpanLookup(kw: kw, kwLen: bytes.count(), keyHash: keyHash, result: span, kind: self.kwSpanRegisteredKind())
         }
     }
 
@@ -665,7 +669,7 @@ pub impl Comp {
         val cachedIndex: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: kwLen, keyHash: keyHash)
         if cachedIndex < self.decls.kwSpanLookups.count() {
             val cached: KwSpanLookup = self.decls.kwSpanLookups[cachedIndex]
-            if cached.kind != <KwSpanLookupKind.Missing /> || cached.sourceByteCount == self.arena.bytes.count() {
+            if cached.kind != self.kwSpanMissingKind() || cached.sourceByteCount == self.arena.bytes.count() {
                 return cached.result
             }
         }
@@ -673,7 +677,7 @@ pub impl Comp {
         val n: U64 = self.arena.bytes.count()
         if n < kwLen {
             val missing: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
-            self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: <KwSpanLookupKind.Missing />)
+            self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: self.kwSpanMissingKind())
             return missing
         }
         mut val i: U64 = 0
@@ -681,13 +685,13 @@ pub impl Comp {
         while i <= last {
             if rangeEquals(bytes: self.arena.bytes, start: i, len: kwLen, kw: kw) {
                 val found: Bind = <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
-                self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: found, kind: <KwSpanLookupKind.Source />)
+                self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: found, kind: self.kwSpanSourceKind())
                 return found
             }
             i += 1
         }
         val missing: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
-        self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: <KwSpanLookupKind.Missing />)
+        self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: self.kwSpanMissingKind())
         return missing
     }
 
