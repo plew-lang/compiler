@@ -381,6 +381,34 @@ export enum MidOperand {
     Access(candidate: U64)
 }
 
+// A call is a high-fanout ownership boundary.  Its draft arguments must not
+// recursively own a MidPlace (and therefore an Array of projections): doing
+// so makes constructing an otherwise immutable `inout value.field` call copy
+// and destroy nested ARC containers before the canonical freeze can flatten
+// them.  This is the builder-side counterpart of MidOperandNode.  The only
+// variable-length relation is the body-owned `callArgumentProjections` pool;
+// each argument row itself is scalar.
+//
+// `tag` deliberately matches MidOperandNode: 1=Copy, 2=Move, 3=Read borrow,
+// 4=Inout borrow, 5=Integer, 6=String, 7=Float, 8=Access.
+export struct MidCallArgument {
+    pub val tag: U64
+    pub val rootTag: U64 = 1U64
+    pub val local: U64 = 0U64
+    pub val globalTarget: U64 = 0U64
+    pub val globalMutable: Bool = false
+    pub val projections: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val capability: U64 = 0U64
+    pub val integerValue: U64 = 0U64
+    pub val integerNegative: Bool = false
+    pub val integerBool: Bool = false
+    pub val stringStart: U64 = 0U64
+    pub val stringLen: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val accessCandidate: U64 = 0U64
+}
+pub impl MidCallArgument { factory }
+
 // The frontend has already selected the nominal/variant layout.  Elements are
 // kept in source evaluation order while fieldIndex identifies their eventual
 // physical slot, so neither Mid nor LLVM ever consult JSX labels or a variant
@@ -563,6 +591,12 @@ export enum MidTerminator {
     // Instantiation validates FinalTryResolution then emits an ordinary Switch.
     TryBranch(discriminant: MidOperand, exprId: U64, okTarget: U64, errTarget: U64)
     Call(callee: MidCallTarget, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace, target: U64)
+    // Normalized builder form for a call.  Unlike the legacy Call draft, its
+    // arguments have no nested owner; canonical freeze consumes the scalar
+    // rows directly.  Receiver/destination remain existing draft values in
+    // this slice and are migrated by the same rule when their paths become a
+    // measured blocker.
+    NormalizedCall(callee: MidCallTarget, receiver: MidCallReceiver, args: Array[MidCallArgument], destination: MidPlace, target: U64)
     Return
     ReturnValue(value: MidOperand)
     // Source `panic message`: evaluate the already-typed String operand, call
@@ -635,6 +669,9 @@ export struct MidBody {
     pub val locals: Array[MidLocalDecl] = []
     pub val scopes: Array[MidScope] = []
     pub val blocks: Array[MidBlock] = []
+    // Flat owner for the projection ranges used by NormalizedCall arguments.
+    // It is construction-only data and is consumed exactly once by freeze.
+    pub val callArgumentProjections: Array[MidProjection] = []
     pub val entry: U64 = 0U64
 }
 pub impl MidBody { factory }
@@ -661,6 +698,35 @@ fn midFreezeProjection(arena: inout MidCanonicalArena, projection: MidProjection
             arena.projections.append(<MidProjectionNode tag=2U64 indexLocal=indexLocal typeTerm=typeTerm />)
         }
     }
+}
+
+fn midFreezeNormalizedCallArgument(arena: inout MidCanonicalArena, projections: Array[MidProjection], argument: MidCallArgument) -> U64 {
+    if argument.tag >= 1U64 && argument.tag <= 4U64 {
+        if argument.projections.start + argument.projections.len > projections.count() { return 0U64 }
+        val projectionStart: U64 = arena.projections.count()
+        mut val projectionI: U64 = 0U64
+        while projectionI < argument.projections.len {
+            midFreezeProjection(arena: inout arena, projection: projections[argument.projections.start + projectionI])
+            projectionI = projectionI + 1U64
+        }
+        arena.places.append(<MidPlaceNode rootTag=argument.rootTag local=argument.local globalTarget=argument.globalTarget globalMutable=argument.globalMutable projections=<MidRange start=projectionStart len=argument.projections.len /> typeTerm=argument.typeTerm />)
+        val place: U64 = arena.places.count()
+        arena.operands.append(<MidOperandNode tag=argument.tag place=place capability=argument.capability />)
+        return arena.operands.count()
+    }
+    if argument.tag == 5U64 {
+        arena.operands.append(<MidOperandNode tag=5U64 integerValue=argument.integerValue integerNegative=argument.integerNegative integerBool=argument.integerBool typeTerm=argument.typeTerm />)
+        return arena.operands.count()
+    }
+    if argument.tag == 6U64 || argument.tag == 7U64 {
+        arena.operands.append(<MidOperandNode tag=argument.tag stringStart=argument.stringStart stringLen=argument.stringLen typeTerm=argument.typeTerm />)
+        return arena.operands.count()
+    }
+    if argument.tag == 8U64 {
+        arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=argument.accessCandidate />)
+        return arena.operands.count()
+    }
+    return 0U64
 }
 
 fn midFreezePlace(arena: inout MidCanonicalArena, place: MidPlace) -> U64 {
@@ -846,7 +912,7 @@ fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
     }
 }
 
-fn midFreezeTerminator(arena: inout MidCanonicalArena, terminator: MidTerminator) -> U64 {
+fn midFreezeTerminator(arena: inout MidCanonicalArena, callArgumentProjections: Array[MidProjection], terminator: MidTerminator) -> U64 {
     match terminator {
         MidTerminator.Open => { arena.terminators.append(<MidTerminatorNode tag=1U64 />) }
         MidTerminator.Goto(target: val target) => { arena.terminators.append(<MidTerminatorNode tag=2U64 target=target />) }
@@ -867,6 +933,17 @@ fn midFreezeTerminator(arena: inout MidCanonicalArena, terminator: MidTerminator
             mut val i: U64 = 0U64
             while i < args.count() {
                 arena.callArguments.append(midFreezeOperand(arena: inout arena, operand: args[i]))
+                i = i + 1U64
+            }
+            arena.terminators.append(<MidTerminatorNode tag=4U64 target=target args=<MidRange start=start len=args.count() /> destination=midFreezePlace(arena: inout arena, place: destination) callTarget=midFreezeCallTarget(arena: inout arena, target: callee) callReceiver=midFreezeCallReceiver(arena: inout arena, receiver: receiver) />)
+        }
+        MidTerminator.NormalizedCall(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
+            val start: U64 = arena.callArguments.count()
+            mut val i: U64 = 0U64
+            while i < args.count() {
+                val operand: U64 = midFreezeNormalizedCallArgument(arena: inout arena, projections: callArgumentProjections, argument: args[i])
+                if operand == 0U64 { return 0U64 }
+                arena.callArguments.append(operand)
                 i = i + 1U64
             }
             arena.terminators.append(<MidTerminatorNode tag=4U64 target=target args=<MidRange start=start len=args.count() /> destination=midFreezePlace(arena: inout arena, place: destination) callTarget=midFreezeCallTarget(arena: inout arena, target: callee) callReceiver=midFreezeCallReceiver(arena: inout arena, receiver: receiver) />)
@@ -904,7 +981,7 @@ fn storeMidCanonicalBody(arena: inout MidCanonicalArena, body: MidBody) -> MidCa
             midFreezeStatement(arena: inout arena, statement: block.statements[statementI])
             statementI = statementI + 1U64
         }
-        val terminator: U64 = midFreezeTerminator(arena: inout arena, terminator: block.terminator)
+        val terminator: U64 = midFreezeTerminator(arena: inout arena, callArgumentProjections: body.callArgumentProjections, terminator: block.terminator)
         arena.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.count() /> terminator=terminator />)
         i = i + 1U64
     }

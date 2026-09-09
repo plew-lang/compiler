@@ -1348,6 +1348,13 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
             }
             return <MidTerminator.Call callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, receiver: receiver, environment: environment, itemRef: itemRef) args=instantiatedArgs destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
         }
+        // NormalizedCall is consumed directly by the canonical freeze path.
+        // Preserve its scalar argument rows here solely so the deprecated
+        // draft instantiation API remains structurally total; its caller
+        // rejects this form before any legacy backend can observe it.
+        MidTerminator.NormalizedCall(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
+            return <MidTerminator.NormalizedCall callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, receiver: receiver, environment: environment, itemRef: itemRef) args=args destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
+        }
         MidTerminator.Return => { return <MidTerminator.Return /> }
         MidTerminator.ReturnValue(value: val value) => { return <MidTerminator.ReturnValue value=instantiateMidOperand(c: inout c, operand: value, environment: environment, itemRef: itemRef) /> }
         MidTerminator.Panic(message: val message) => { return <MidTerminator.Panic message=instantiateMidOperand(c: inout c, operand: message, environment: environment, itemRef: itemRef) /> }

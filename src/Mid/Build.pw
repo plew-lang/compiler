@@ -7,7 +7,7 @@ import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, Sema
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
-import ./Ir with { MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ./Ir with { MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -37,6 +37,12 @@ struct MidIndexLocalBuild {
     pub val error: MidBuildError = <MidBuildError.None />
 }
 pub impl MidIndexLocalBuild { factory }
+
+struct MidNormalizedCallArgumentBuild {
+    pub val argument: MidCallArgument = <MidCallArgument tag=8U64 />
+    pub val error: MidBuildError = <MidBuildError.None />
+}
+pub impl MidNormalizedCallArgumentBuild { factory }
 
 // A Mid build failure is part of the migration contract, not a diagnostic
 // string.  Keep the source form that cannot yet be represented so coverage
@@ -133,6 +139,9 @@ export struct MidBuildState {
     // values cannot escape to a sibling consumer; only the completed result
     // is published into the parent's evaluation scope.
     pub mut val aggregateValues: Array[MidAggregateValue] = []
+    // One flat owner for normalized call-argument place projections.  A call
+    // argument records only a range into this pool, never an owned MidPlace.
+    pub mut val callArgumentProjections: Array[MidProjection] = []
     // Nested loops select only their innermost target. These parallel private
     // stacks are deliberately separate from lexical scopes: a loop has two
     // CFG destinations, while a scope has one cleanup obligation.
@@ -150,6 +159,41 @@ export struct MidBuildState {
     // Lexical function identity of this parametric source body. It is used
     // solely to read its already-recorded CallTemplate by CallSiteKey.
     pub val sourceFunction: U64 = 0U64
+}
+
+fn midNormalizedCallPlace(state: inout MidBuildState, place: MidPlace, tag: U64, capability: U64) -> MidCallArgument {
+    val start: U64 = state.callArgumentProjections.count()
+    mut val i: U64 = 0U64
+    while i < place.projections.count() {
+        state.callArgumentProjections.append(place.projections[i])
+        i = i + 1U64
+    }
+    return <MidCallArgument tag=tag rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=start len=place.projections.count() /> capability=capability typeTerm=place.typeTerm />
+}
+
+// Normalize every argument shape at the call boundary.  This is intentionally
+// not an `inout field` special case: all place-bearing operand kinds share the
+// same flat body-owned projection pool, while immediate/access operands stay
+// scalar rows.
+fn midNormalizeCallArgument(state: inout MidBuildState, operand: MidOperand) -> MidCallArgument {
+    match operand {
+        MidOperand.Copy(place: val place) => { return midNormalizedCallPlace(state: inout state, place: place, tag: 1U64, capability: 0U64) }
+        MidOperand.Move(place: val place) => { return midNormalizedCallPlace(state: inout state, place: place, tag: 2U64, capability: 0U64) }
+        MidOperand.Borrow(place: val place, capability: val capability) => {
+            match capability {
+                MidBorrowCapability.Read => { return midNormalizedCallPlace(state: inout state, place: place, tag: 3U64, capability: 1U64) }
+                MidBorrowCapability.Inout => { return midNormalizedCallPlace(state: inout state, place: place, tag: 4U64, capability: 2U64) }
+            }
+        }
+        MidOperand.Constant(value: val value) => {
+            match value {
+                MidConstant.Integer(value: val value, isNegative: val negative, isBool: val boolean, typeTerm: val term) => { return <MidCallArgument tag=5U64 integerValue=value integerNegative=negative integerBool=boolean typeTerm=term /> }
+                MidConstant.StringLiteral(start: val start, len: val len, typeTerm: val term) => { return <MidCallArgument tag=6U64 stringStart=start stringLen=len typeTerm=term /> }
+                MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val term) => { return <MidCallArgument tag=7U64 stringStart=start stringLen=len typeTerm=term /> }
+            }
+        }
+        MidOperand.Access(candidate: val candidate) => { return <MidCallArgument tag=8U64 accessCandidate=candidate /> }
+    }
 }
 pub impl MidBuildState {
     factory initial(sourceFunction: U64) {
@@ -328,6 +372,57 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             return <MidPlaceLookup found=true place=<MidPlace rootTag=basePlace.place.rootTag local=basePlace.place.local globalTarget=basePlace.place.globalTarget globalMutable=basePlace.place.globalMutable projections=projections typeTerm=typeTerm /> />
         }
         _ => { return <MidPlaceLookup /> }
+    }
+}
+
+// Build an inout call argument without ever materializing the transitional
+// MidOperand(MidPlace(Array[Projection])) shape.  The source place is already
+// semantically frozen; this only writes its selected root/projections into
+// the body-owned scalar pool used by NormalizedCall.
+fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidNormalizedCallArgumentBuild {
+    if exprId >= c.arena.exprs.count() { return <MidNormalizedCallArgumentBuild error=<MidBuildError.InvalidStatement /> /> }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => {
+            val root: MidPlaceLookup = midPlaceForRecordedIdent(c: inout c, state: state, exprId: exprId, typeTerm: typeTerm)
+            if !root.found { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnboundLocalIdentifier /> /> }
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=root.place.rootTag local=root.place.local globalTarget=root.place.globalTarget globalMutable=root.place.globalMutable capability=2U64 typeTerm=typeTerm /> />
+        }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
+            val semantic: SemanticExprType = c.arena.semanticExprTypes[exprId]
+            if !semantic.hasFieldProjection { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+            mut val baseTerm: U64 = 0U64
+            if base < c.arena.semanticExprTypes.count() { baseTerm = c.arena.semanticExprTypes[base].term }
+            val parent: MidNormalizedCallArgumentBuild = midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm)
+            match parent.error { MidBuildError.None => {} _ => { return parent } }
+            state.callArgumentProjections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=<MidRange start=parent.argument.projections.start len=parent.argument.projections.len + 1U64 /> capability=2U64 typeTerm=typeTerm /> />
+        }
+        Expr.Index(base: val base, index: val index) => {
+            val baseTerm: U64 = c.semanticExprTerm(exprId: base)
+            val parent: MidNormalizedCallArgumentBuild = midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm)
+            match parent.error { MidBuildError.None => {} _ => { return parent } }
+            val indexTerm: U64 = c.semanticExprTerm(exprId: index)
+            if indexTerm == 0U64 { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
+            val evaluated: MidIndexLocalBuild = midIndexLocalForSourceExpr(c: inout c, state: inout state, exprId: index, typeTerm: indexTerm)
+            match evaluated.error { MidBuildError.None => {} _ => { return <MidNormalizedCallArgumentBuild error=evaluated.error /> } }
+            state.callArgumentProjections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=<MidRange start=parent.argument.projections.start len=parent.argument.projections.len + 1U64 /> capability=2U64 typeTerm=typeTerm /> />
+        }
+        _ => { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+    }
+}
+
+fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidNormalizedCallArgumentBuild {
+    match argument.source {
+        CallArgumentSource.Term(exprId: val exprId, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
+        CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
+        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId)) }
+        CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => {
+            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+            if candidate < c.decls.accessCandidates.count() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
+            return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> />
+        }
     }
 }
 
@@ -1436,17 +1531,23 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
-    mut val args: Array[MidOperand] = []
+    mut val args: Array[MidCallArgument] = []
     mut val i: U64 = 0U64
     while i < sources.count() {
-        val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i])
-        match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+        if sources[i].isInout {
+            val argument: MidNormalizedCallArgumentBuild = midTemplateInoutCallArgument(c: inout c, state: inout state, argument: sources[i])
+            match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+            args.append(argument.argument)
+        } else {
+            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i])
+            match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+            args.append(midNormalizeCallArgument(state: inout state, operand: argument.operand))
+        }
         if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
-        args.append(argument.operand)
         i += 1U64
     }
     val next: U64 = midNewBlock(state: inout state)
-    midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=args destination=destination target=next />)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.NormalizedCall callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=args destination=destination target=next />)
     state.currentBlock = next
     return <MidBuildError.None />
 }
@@ -2075,7 +2176,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }
-    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) {
         // A builder-produced canonical snapshot must be internally closed
@@ -2147,7 +2248,7 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }
-    val body: MidBody = <MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val body: MidBody = <MidBody sourceFunction=closure.bodyKey locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) {
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
@@ -2230,7 +2331,7 @@ export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
     }
     midEmitScopeExit(state: inout state, scope: 0U64)
     midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
-    val body: MidBody = <MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val body: MidBody = <MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
     return <MidBodyBuild body=body canonical=canonical />
