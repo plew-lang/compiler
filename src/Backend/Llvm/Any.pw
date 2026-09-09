@@ -949,6 +949,16 @@ pub impl LlvmCtx {
                                         eprint(text: " fn=")
                                         self.traceCodegenU64(n: fi)
                                         eprint(text: "\n")
+                                        match verification.error {
+                                            MidVerifyError.None => {}
+                                            _ => {
+                                                eprint(text: "[trace-codegen] Mid verify-location block=")
+                                                self.traceCodegenU64(n: verification.block)
+                                                eprint(text: " local=")
+                                                self.traceCodegenU64(n: verification.local)
+                                                eprint(text: "\n")
+                                            }
+                                        }
                                     }
                                     match verification.error {
                                         MidVerifyError.None => {

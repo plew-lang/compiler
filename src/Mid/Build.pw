@@ -1531,6 +1531,27 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+    mut val hasInoutArgument: Bool = false
+    mut val sourceI: U64 = 0U64
+    while sourceI < sources.count() {
+        if sources[sourceI].isInout { hasInoutArgument = true }
+        sourceI += 1U64
+    }
+    if !hasInoutArgument {
+        mut val ordinaryArgs: Array[MidOperand] = []
+        mut val ordinaryI: U64 = 0U64
+        while ordinaryI < sources.count() {
+            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[ordinaryI])
+            match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+            if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
+            ordinaryArgs.append(argument.operand)
+            ordinaryI += 1U64
+        }
+        val ordinaryNext: U64 = midNewBlock(state: inout state)
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=ordinaryArgs destination=destination target=ordinaryNext />)
+        state.currentBlock = ordinaryNext
+        return <MidBuildError.None />
+    }
     mut val args: Array[MidCallArgument] = []
     mut val i: U64 = 0U64
     while i < sources.count() {

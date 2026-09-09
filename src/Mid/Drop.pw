@@ -4,7 +4,7 @@
 // always-on verifier.
 
 import ../Frontend with { Comp }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidCallArgument, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 // Ownership state is function-local. A Global place denotes a stable storage
 // address whose owner is the module lifetime, so reads and borrows never
@@ -996,6 +996,25 @@ fn midConsumeReceiver(states: inout Array[MidOwnership], receiver: MidCallReceiv
     match receiver { MidCallReceiver.Value(operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) } _ => {} }
 }
 
+// NormalizedCall stores argument places in a body-owned scalar range rather
+// than a nested MidOperand.  It is nevertheless the same semantic operation:
+// only a whole-root Move transfers ownership; Copy and either borrow capability
+// leave the local owner intact.
+fn midConsumeNormalizedCallArgument(states: inout Array[MidOwnership], argument: MidCallArgument) {
+    if argument.tag != 2U64 || argument.rootTag != 1U64 || argument.projections.len != 0U64 || argument.local >= states.count() { return }
+    states.set(i: argument.local, value: <MidOwnership.Consumed />)
+}
+
+fn midMakeNormalizedCallArgumentUnavailable(states: inout Array[MidAccessibility], argument: MidCallArgument) {
+    if argument.tag != 2U64 || argument.rootTag != 1U64 || argument.projections.len != 0U64 || argument.local >= states.count() { return }
+    states.set(i: argument.local, value: <MidAccessibility.Unavailable />)
+}
+
+fn midNormalizedCallArgumentMovedRoot(argument: MidCallArgument) -> U64 {
+    if argument.tag == 2U64 && argument.rootTag == 1U64 && argument.projections.len == 0U64 { return argument.local }
+    return 18446744073709551615U64
+}
+
 // Transfer a single block. Drop/Assign are consumes/producers; all call/return
 // arguments are evaluated before the terminator edge and therefore consume their
 // Move operands in this block's outgoing state.
@@ -1071,6 +1090,17 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
                 out.set(i: destination.local, value: <MidOwnership.Owned />)
             }
         }
+        MidTerminator.NormalizedCall(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+            midConsumeReceiver(states: inout out, receiver: receiver)
+            mut val ai: U64 = 0U64
+            while ai < args.count() {
+                midConsumeNormalizedCallArgument(states: inout out, argument: args[ai])
+                ai += 1U64
+            }
+            if destination.projections.count() == 0U64 && destination.local < out.count() {
+                out.set(i: destination.local, value: <MidOwnership.Owned />)
+            }
+        }
         MidTerminator.ReturnValue(value: val value) => {
             midConsumeOperand(states: inout out, operand: value)
         }
@@ -1090,6 +1120,7 @@ export fn midSuccessors(term: MidTerminator) -> Array[U64] {
         }
         MidTerminator.TryBranch(discriminant: _, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => { return [okTarget, errTarget] }
         MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
+        MidTerminator.NormalizedCall(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
         MidTerminator.Suspend(state: _, resume: val resume) => { return [resume] }
         _ => { return [] }
     }
@@ -1302,6 +1333,17 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
             mut val ai: U64 = 0U64
             while ai < args.count() {
                 midMakeOperandUnavailable(states: inout out, operand: args[ai])
+                ai += 1U64
+            }
+            if destination.projections.count() == 0U64 && destination.local < out.count() {
+                out.set(i: destination.local, value: <MidAccessibility.Available />)
+            }
+        }
+        MidTerminator.NormalizedCall(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+            match receiver { MidCallReceiver.Value(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } _ => {} }
+            mut val ai: U64 = 0U64
+            while ai < args.count() {
+                midMakeNormalizedCallArgumentUnavailable(states: inout out, argument: args[ai])
                 ai += 1U64
             }
             if destination.projections.count() == 0U64 && destination.local < out.count() {
@@ -1744,6 +1786,28 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                 mut val ai: U64 = 0U64
                 while ai < args.count() {
                     val moved: U64 = midOperandMovedRoot(operand: args[ai])
+                    if moved < originalCount && needsFlag[moved] {
+                        statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                    }
+                    ai += 1U64
+                }
+                if destination.projections.count() == 0U64 && destination.local < originalCount && needsFlag[destination.local] {
+                    statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
+                }
+            }
+            MidTerminator.NormalizedCall(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+                match receiver {
+                    MidCallReceiver.Value(operand: val operand) => {
+                        val moved: U64 = midOperandMovedRoot(operand: operand)
+                        if moved < originalCount && needsFlag[moved] {
+                            statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                        }
+                    }
+                    _ => {}
+                }
+                mut val ai: U64 = 0U64
+                while ai < args.count() {
+                    val moved: U64 = midNormalizedCallArgumentMovedRoot(argument: args[ai])
                     if moved < originalCount && needsFlag[moved] {
                         statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
                     }
