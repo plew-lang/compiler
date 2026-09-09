@@ -521,7 +521,8 @@ export struct Bind {
     // interned name id (Phase D): set by internBytes for every re-interned name, so
     // type-parameter / supertrait / associated-type names (all built via internBytes)
     // match by integer ==. 0 for Binds built by a raw `<Bind .../>` literal that does
-    // not set it (non-type uses: kwCache, deinits, moduleRanges, imports/exports) —
+    // not set it (non-type uses: synthetic keyword spans, deinits, module ranges,
+    // imports/exports) —
     // those are not compared by nameId.
     pub val nameId: U64 = 0
     // Lexical identity of a generic binder. Unlike nameId/nameStart this is
@@ -536,6 +537,35 @@ export struct Bind {
     // A generic type parameter written `[sendable T]`. False for ordinary binders and
     // for non-type uses of Bind (match binds, field pairs, module ranges, ...).
     pub val isSendable: Bool = false
+}
+
+// The canonical result category for one `Comp.kwSpan` query.  A registered
+// name wins over a source occurrence; a source result remains first after a
+// later source append; a miss is valid only for the source-byte count at which
+// it was observed.
+export enum KwSpanLookupKind {
+    Missing
+    Source
+    Registered
+}
+
+// A content-addressed `kwSpan` result.  `keyStart..keyLen` points into the
+// private declaration pool, never into `Arena.bytes`: inserting a lookup must
+// not create a source occurrence which changes a later search's meaning.  The
+// slots table in `Decls` is derived from these rows and can be rebuilt.
+export struct KwSpanLookup {
+    pub val keyStart: U64
+    pub val keyLen: U64
+    // `kwSpan` historically accepts a requested length separately from the
+    // String.  Keep that part of the key so even malformed internal requests
+    // preserve their exact old scan boundary.
+    pub val requestLen: U64
+    pub val keyHash: U64
+    pub val result: Bind
+    pub val kind: KwSpanLookupKind
+    // Meaningful for Missing only.  A source append may turn a prior miss into
+    // a match, whereas a first source result and registered result stay valid.
+    pub val sourceByteCount: U64
 }
 
 // A call argument: the expression plus whether it was passed `inout` (which
@@ -2672,8 +2702,9 @@ pub impl DestructureSite { factory }
 // freeze the first instance's grounding into every other instantiation of a
 // generic body. `destructureSites`: each record/struct destructure's bind list
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
-// deferred item source (see ForTypeRecipe). `kwCache`: cached built-in name
-// spans (O(1) kwSpan).
+// deferred item source (see ForTypeRecipe). `kwSpanLookups` is the canonical
+// content-addressed result table for synthetic type-name spans; its byte pool
+// keeps query keys separate from source and its slots are a derived index.
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitBindPool: Array[Bind] = []
@@ -2744,7 +2775,9 @@ export struct Decls {
     // body with a conditional unique move must not fall back to the legacy
     // path-insensitive AST emitter while Mid migration is incremental.
     pub mut val ownershipCfgFunctions: Array[U64] = []
-    pub mut val kwCache: Array[Bind] = []
+    pub mut val kwSpanLookupBytes: Array[U8] = []
+    pub mut val kwSpanLookups: Array[KwSpanLookup] = []
+    pub mut val kwSpanLookupSlots: Array[U64] = []
 }
 pub impl Decls { factory }
 

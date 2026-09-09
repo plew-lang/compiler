@@ -1,0 +1,45 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+
+fn main() {
+    mut val c: Comp = <Comp />
+
+    val source = c.internBytes(s: "stable")
+    val first = c.kwSpan(kw: "stable", kwLen: 6U64)
+    val second = c.kwSpan(kw: "stable", kwLen: 6U64)
+    if first.nameStart == source.nameStart && second.nameStart == source.nameStart && c.decls.kwSpanLookups.count() == 1U64 {
+        write(s: "source-success-reused\n")
+    }
+
+    val wrongLength = c.kwSpan(kw: "stable", kwLen: 7U64)
+    if wrongLength.nameLen == 0U64 && c.decls.kwSpanLookups.count() == 2U64 {
+        write(s: "request-length-is-key\n")
+    }
+
+    val missing = c.kwSpan(kw: "later", kwLen: 5U64)
+    if missing.nameLen == 0U64 && c.decls.kwSpanLookups.count() == 3U64 {
+        write(s: "miss-recorded\n")
+    }
+    val later = c.internBytes(s: "later")
+    val afterAppend = c.kwSpan(kw: "later", kwLen: 5U64)
+    if afterAppend.nameStart == later.nameStart && afterAppend.nameLen == later.nameLen && c.decls.kwSpanLookups.count() == 3U64 {
+        write(s: "miss-invalidated-by-source-append\n")
+    }
+
+    val prioritySource = c.internBytes(s: "priority")
+    val beforeRegistration = c.kwSpan(kw: "priority", kwLen: 8U64)
+    c.addKwSpan(kw: "priority")
+    val afterRegistration = c.kwSpan(kw: "priority", kwLen: 8U64)
+    if beforeRegistration.nameStart == prioritySource.nameStart && afterRegistration.nameStart != prioritySource.nameStart && afterRegistration.nameLen == 8U64 {
+        write(s: "registered-name-wins\n")
+    }
+
+    val empty = c.kwSpan(kw: "", kwLen: 0U64)
+    if empty.nameLen == 0U64 { write(s: "empty-query\n") }
+
+    mut val other: Comp = <Comp />
+    val otherMissing = other.kwSpan(kw: "stable", kwLen: 6U64)
+    if otherMissing.nameLen == 0U64 && other.decls.kwSpanLookups.count() == 1U64 && c.decls.kwSpanLookups.count() == 5U64 {
+        write(s: "comp-isolation\n")
+    }
+}

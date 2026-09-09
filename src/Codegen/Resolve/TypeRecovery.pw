@@ -506,23 +506,121 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // A source span whose bytes read `kw` (length `kwLen`). The type system recovers
-    // a named type from a (start,len) span; some values have a known type with no
-    // source span to point at (a string literal's `String`, `.bytes()`'s `U8`). Reuse
-    // any occurrence of `kw` in the source as a label span (the match is purely the
-    // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
-    // Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.decls.kwCache`, so a
-    // built-in name with no guaranteed source occurrence has a stable, addressable
-    // span without scanning (or planting a comment in) the source.
+    // Hash the full historical kwSpan request. `kwLen` is intentionally mixed even
+    // though normal callers pass kw.bytes().count(): it used to change the source
+    // scan boundary, so omitting it would silently change a malformed request.
+    fn kwSpanHash(kw: String, kwLen: U64) -> U64 {
+        val bytes: Array[U8] = kw.bytes()
+        mut val h: U64 = 14695981039346656037U64
+        mut val i: U64 = 0U64
+        while i < bytes.count() {
+            h = h ^ (bytes[i] as U64)
+            h = U64.wrappingMul(h, 1099511628211U64)
+            i += 1U64
+        }
+        h = h ^ kwLen
+        return U64.wrappingMul(h, 1099511628211U64)
+    }
+
+    // Return the canonical row index, or count() when no query with this exact
+    // content and requested length is cached. Keys live outside Arena.bytes so
+    // merely recording a query never makes it discoverable as source text.
+    inout fn kwSpanLookupIndex(kw: String, kwLen: U64, keyHash: U64) -> U64 {
+        val capacity: U64 = self.decls.kwSpanLookupSlots.count()
+        if capacity == 0U64 {
+            return self.decls.kwSpanLookups.count()
+        }
+        mut val slot: U64 = keyHash & (capacity - 1U64)
+        while self.decls.kwSpanLookupSlots[slot] != 0U64 {
+            val index: U64 = self.decls.kwSpanLookupSlots[slot] - 1U64
+            val entry: KwSpanLookup = self.decls.kwSpanLookups[index]
+            if entry.keyHash == keyHash && entry.requestLen == kwLen && rangeEquals(bytes: self.decls.kwSpanLookupBytes, start: entry.keyStart, len: entry.keyLen, kw: kw) {
+                return index
+            }
+            slot = (slot + 1U64) & (capacity - 1U64)
+        }
+        return self.decls.kwSpanLookups.count()
+    }
+
+    // Rebuild only the derived open-addressed reader. Rows and private key bytes
+    // retain their identity, so a growth cannot affect source-span semantics.
+    inout fn rebuildKwSpanLookupIndex(capacity: U64) {
+        self.decls.kwSpanLookupSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.decls.kwSpanLookupSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val index: U64 = 0U64
+        while index < self.decls.kwSpanLookups.count() {
+            val entry: KwSpanLookup = self.decls.kwSpanLookups[index]
+            mut val slot: U64 = entry.keyHash & (capacity - 1U64)
+            while self.decls.kwSpanLookupSlots[slot] != 0U64 {
+                slot = (slot + 1U64) & (capacity - 1U64)
+            }
+            self.decls.kwSpanLookupSlots.set(i: slot, value: index + 1U64)
+            index += 1U64
+        }
+    }
+
+    inout fn ensureKwSpanLookupIndex(nextCount: U64) {
+        if self.decls.kwSpanLookupSlots.count() == 0U64 {
+            self.rebuildKwSpanLookupIndex(capacity: 8U64)
+        }
+        if nextCount * 4U64 > self.decls.kwSpanLookupSlots.count() * 3U64 {
+            self.rebuildKwSpanLookupIndex(capacity: self.decls.kwSpanLookupSlots.count() * 2U64)
+        }
+    }
+
+    // Publish the one canonical result for a query. Updating an existing row
+    // intentionally leaves its key bytes and slot untouched.
+    inout fn putKwSpanLookup(kw: String, kwLen: U64, keyHash: U64, result: Bind, kind: KwSpanLookupKind) {
+        val prior: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: kwLen, keyHash: keyHash)
+        val sourceByteCount: U64 = self.arena.bytes.count()
+        if prior < self.decls.kwSpanLookups.count() {
+            val old: KwSpanLookup = self.decls.kwSpanLookups[prior]
+            self.decls.kwSpanLookups.set(i: prior, value: <KwSpanLookup keyStart=old.keyStart keyLen=old.keyLen requestLen=old.requestLen keyHash=old.keyHash result=result kind=kind sourceByteCount=sourceByteCount />)
+            return
+        }
+
+        self.ensureKwSpanLookupIndex(nextCount: self.decls.kwSpanLookups.count() + 1U64)
+        val keyStart: U64 = self.decls.kwSpanLookupBytes.count()
+        val bytes: Array[U8] = kw.bytes()
+        mut val i: U64 = 0U64
+        while i < bytes.count() {
+            self.decls.kwSpanLookupBytes.append(bytes[i])
+            i += 1U64
+        }
+        self.decls.kwSpanLookups.append(<KwSpanLookup keyStart=keyStart keyLen=bytes.count() requestLen=kwLen keyHash=keyHash result=result kind=kind sourceByteCount=sourceByteCount />)
+        val capacity: U64 = self.decls.kwSpanLookupSlots.count()
+        mut val slot: U64 = keyHash & (capacity - 1U64)
+        while self.decls.kwSpanLookupSlots[slot] != 0U64 {
+            slot = (slot + 1U64) & (capacity - 1U64)
+        }
+        self.decls.kwSpanLookupSlots.set(i: slot, value: self.decls.kwSpanLookups.count())
+    }
+
+    // Append `kw` to Arena.bytes and register its stable span. A registration
+    // wins over a source occurrence, but repeated registration retains the first
+    // registered span just as the former insertion-ordered cache did.
     inout fn addKwSpan(kw: String) {
+        val bytes: Array[U8] = kw.bytes()
+        val keyHash: U64 = self.kwSpanHash(kw: kw, kwLen: bytes.count())
+        val prior: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: bytes.count(), keyHash: keyHash)
+        mut val alreadyRegistered: Bool = false
+        if prior < self.decls.kwSpanLookups.count() {
+            alreadyRegistered = self.decls.kwSpanLookups[prior].kind == <KwSpanLookupKind.Registered />
+        }
         val start: U64 = self.arena.bytes.count()
-        val b: Array[U8] = kw.bytes()
         mut val i: U64 = 0
-        while i < b.count() {
-            self.arena.bytes.append(b[i])
+        while i < bytes.count() {
+            self.arena.bytes.append(bytes[i])
             i += 1
         }
-        self.decls.kwCache.append(<Bind nameStart=start nameLen=b.count() fieldStart=start fieldLen=b.count() />)
+        if !alreadyRegistered {
+            val span: Bind = <Bind nameStart=start nameLen=bytes.count() fieldStart=start fieldLen=bytes.count() />
+            self.putKwSpanLookup(kw: kw, kwLen: bytes.count(), keyHash: keyHash, result: span, kind: <KwSpanLookupKind.Registered />)
+        }
     }
 
     // Build the built-in-name span cache once (before any kwSpan use). Covers exactly
@@ -559,31 +657,38 @@ pub impl Comp {
         }
     }
 
-    // Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any
-    // name not pre-cached falls back to a source scan (a len-0 Bind if absent, which
-    // callers treat as "no span").
+    // Return a stable source span naming `kw`.  Every outcome is memoized by
+    // content plus requested length. Registered names win; a source first-match
+    // remains valid after appends; only a prior miss is rescanned after bytes grow.
     inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
-        mut val ci: U64 = 0
-        while ci < self.decls.kwCache.count() {
-            val e: Bind = self.decls.kwCache[ci]
-            if rangeEquals(bytes: self.arena.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
-                return e
+        val keyHash: U64 = self.kwSpanHash(kw: kw, kwLen: kwLen)
+        val cachedIndex: U64 = self.kwSpanLookupIndex(kw: kw, kwLen: kwLen, keyHash: keyHash)
+        if cachedIndex < self.decls.kwSpanLookups.count() {
+            val cached: KwSpanLookup = self.decls.kwSpanLookups[cachedIndex]
+            if cached.kind != <KwSpanLookupKind.Missing /> || cached.sourceByteCount == self.arena.bytes.count() {
+                return cached.result
             }
-            ci += 1
         }
+
         val n: U64 = self.arena.bytes.count()
         if n < kwLen {
-            return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            val missing: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+            self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: <KwSpanLookupKind.Missing />)
+            return missing
         }
         mut val i: U64 = 0
         val last: U64 = n - kwLen
         while i <= last {
             if rangeEquals(bytes: self.arena.bytes, start: i, len: kwLen, kw: kw) {
-                return <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
+                val found: Bind = <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
+                self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: found, kind: <KwSpanLookupKind.Source />)
+                return found
             }
             i += 1
         }
-        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        val missing: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        self.putKwSpanLookup(kw: kw, kwLen: kwLen, keyHash: keyHash, result: missing, kind: <KwSpanLookupKind.Missing />)
+        return missing
     }
 
     // String literals are monomorphic (always `String`), so `val s = "hi"` infers
