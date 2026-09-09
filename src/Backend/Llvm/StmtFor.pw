@@ -96,8 +96,7 @@ pub impl LlvmCtx {
                 compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
                 return
             }
-            val itinst: U64 = self.genStructRefs[itreg]
-            val itgSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: itfi, instRef: itinst, ownArgs: [])
+            val itgSlot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: stmtId, siteIsStmt: true, slot: 1U64))
             if itgSlot >= self.genMethK.count() {
                 compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
                 return
@@ -120,8 +119,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
         }
-        val ninst: U64 = self.genStructRefs[nreg]
-        val nSlotF: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: nfi, instRef: ninst, ownArgs: [])
+        val nSlotF: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: stmtId, siteIsStmt: true, slot: 2U64))
         if nSlotF >= self.genMethK.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
@@ -155,12 +153,12 @@ pub impl LlvmCtx {
         val itfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 1U64)
         if itfi < c.arena.funcs.count() {
             // an Iterable: call iterator() and switch the instance ref to the iterator's.
-            val itSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: itfi, instRef: recvRef, ownArgs: [])
+            val itSlot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: stmtId, siteIsStmt: true, slot: 1U64))
             if itSlot >= self.genMethK.count() {
                 compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
                 return
             }
-            iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: c.pushArgs(args: noArgs))
+            iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: self.genMethK[itSlot], slot: itSlot, instRef: self.genMethInst[itSlot], args: c.pushArgs(args: noArgs))
             iterInstRef = c.bodyCalleeReceiverRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         } else {
             // the value IS its own Iterator (it has next() directly).
@@ -172,7 +170,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
             return
         }
-        val nSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: nfi, instRef: iterInstRef, ownArgs: [])
+        val nSlot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: stmtId, siteIsStmt: true, slot: 2U64))
         if nSlot >= self.genMethK.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
             return

@@ -1160,24 +1160,24 @@ export fn emitLlvm(c: inout Comp) {
     tracePhase(c: inout c, label: "backend:drain:start")
     mut val drainRound: U64 = 0U64
     while draining {
-        tracePhaseCount(c: inout c, label: "backend:drain:round", count: drainRound)
-        tracePhaseCount(c: inout c, label: "backend:drain:provided-queued", count: st.provEmit.count())
-        tracePhaseCount(c: inout c, label: "backend:drain:generic-method-queued", count: st.genMethEmit.count())
-        tracePhaseCount(c: inout c, label: "backend:drain:generic-function-queued", count: st.genFnEmit.count())
+        tracePhaseProgress(c: inout c, label: "backend:drain:round", count: drainRound, stride: 1U64)
+        tracePhaseProgress(c: inout c, label: "backend:drain:provided-queued", count: st.provEmit.count(), stride: 16U64)
+        tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-queued", count: st.genMethEmit.count(), stride: 16U64)
+        tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-queued", count: st.genFnEmit.count(), stride: 16U64)
         while provDone < st.provEmit.count() {
-            tracePhaseCount(c: inout c, label: "backend:drain:provided-emitting", count: provDone)
+            tracePhaseProgress(c: inout c, label: "backend:drain:provided-emitting", count: provDone, stride: 16U64)
             st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])], environment: c.bodyInstanceEnvironment(fnIdx: st.provEmit[provDone], args: [], recvInstRef: 0U64))
             provDone += 1
         }
         while genmDone < st.genMethEmit.count() {
-            tracePhaseCount(c: inout c, label: "backend:drain:generic-method-emitting", count: genmDone)
+            tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-emitting", count: genmDone, stride: 16U64)
             st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
             genmDone += 1
         }
         // Free-function bodies were all declared from the frozen closure. Keep the queue
         // drain separate from method/witness drains for ABI order, not source discovery.
         while genfDone < st.genFnEmit.count() {
-            tracePhaseCount(c: inout c, label: "backend:drain:generic-function-emitting", count: genfDone)
+            tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-emitting", count: genfDone, stride: 16U64)
             st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone])
             genfDone += 1
         }
@@ -1186,9 +1186,9 @@ export fn emitLlvm(c: inout Comp) {
         // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
         // or those deinit method bodies would be declared but never emitted (link error).
         st.emitWitnessBodies(c: inout c)
-        tracePhaseCount(c: inout c, label: "backend:drain:provided-after-witness", count: st.provEmit.count())
-        tracePhaseCount(c: inout c, label: "backend:drain:generic-method-after-witness", count: st.genMethEmit.count())
-        tracePhaseCount(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count())
+        tracePhaseProgress(c: inout c, label: "backend:drain:provided-after-witness", count: st.provEmit.count(), stride: 16U64)
+        tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-after-witness", count: st.genMethEmit.count(), stride: 16U64)
+        tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count(), stride: 16U64)
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
                 if genfDone >= st.genFnEmit.count() {

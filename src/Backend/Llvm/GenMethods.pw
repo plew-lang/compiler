@@ -84,12 +84,10 @@ pub impl LlvmCtx {
         }
     }
 
-    // Keep the generic-method trace scalar. `genMethOwn` is a scalar range
-    // table over a typed argument pool; copying its compatibility Array merely
-    // to print it exercises ownership work that the trace is meant to diagnose.
-    // The method/receiver identity is enough to locate an emission;
-    // a future payload trace must read through a dedicated owner-aware API.
-    inout fn traceGenMethod(c: inout Comp, event: String, mfi: U64, instRef: U64) {
+    // Keep the generic-method trace scalar. Its semantic key includes the
+    // finalized body and method-owned argument count, without copying an
+    // argument range merely to print it.
+    inout fn traceGenMethod(c: inout Comp, event: String, mfi: U64, instRef: U64, bodyId: U64 = 0U64, ownCount: U64 = 0U64) {
         if !(c.traceCodegen) { return }
         if mfi >= c.arena.funcs.count() { return }
         val f: Func = c.arena.funcs[mfi]
@@ -105,6 +103,10 @@ pub impl LlvmCtx {
         self.traceCodegenType(c: inout c, ref: instRef, depth: 0U64)
         eprint(text: " receiverRef=")
         self.traceCodegenU64(n: instRef)
+        eprint(text: " body=")
+        self.traceCodegenU64(n: bodyId)
+        eprint(text: " ownArgs=")
+        self.traceCodegenU64(n: ownCount)
         eprint(text: "\n")
     }
 
@@ -156,6 +158,7 @@ pub impl LlvmCtx {
     inout fn declareGenMethods(c: inout Comp) {
         mut val bodyIndex: U64 = 0U64
         while bodyIndex < c.arena.bodyInstances.count() {
+            tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: bodyIndex, stride: 64U64)
             val bodyId: U64 = bodyIndex + 1U64
             val body: BodyInstance = c.arena.bodyInstances[bodyIndex]
             if body.fnIdx < c.arena.funcs.count() {
@@ -181,7 +184,7 @@ pub impl LlvmCtx {
     }
 
     inout fn declareOneGenMethod(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) {
-        self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef)
+        self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
         val mf: Func = c.arena.funcs[mfi]
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
@@ -228,6 +231,11 @@ pub impl LlvmCtx {
         appendU64Dec(into: inout nm, n: mfi)
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: instRef)
+        // `bodyId` is Mono's complete specialization identity.  The same
+        // receiver and method can be selected under distinct method-owned
+        // arguments or proof environments, which must not alias in LLVM.
+        appendBytes(into: inout nm, from: "_b".bytes())
+        appendU64Dec(into: inout nm, n: bodyId)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
         self.genMethK.append(mfi)
@@ -236,7 +244,7 @@ pub impl LlvmCtx {
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)
         self.genMethOwn.append(self.pushGenMethOwn(args: ownArgs))
-        self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef)
+        self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
         c.cur.selfRef = sDs
         c.cur.itemRef = sDi
         c.cur.typeParams = savedP
@@ -249,7 +257,7 @@ pub impl LlvmCtx {
     inout fn emitOneGenMethod(c: inout Comp, slot: U64) {
         val mfi: U64 = self.genMethK[slot]
         val instRef: U64 = self.genMethInst[slot]
-        self.traceGenMethod(c: inout c, event: "emit", mfi: mfi, instRef: instRef)
+        self.traceGenMethod(c: inout c, event: "emit", mfi: mfi, instRef: instRef, bodyId: self.genMethBody[slot], ownCount: self.genMethOwn[slot].len)
         val mf: Func = c.arena.funcs[mfi]
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
@@ -288,6 +296,7 @@ pub impl LlvmCtx {
     inout fn emitGenMethods(c: inout Comp) {
         mut val slot: U64 = 0
         while slot < self.genMethK.count() {
+            tracePhaseProgress(c: inout c, label: "backend:generic-method-emitting", count: slot, stride: 16U64)
             self.emitOneGenMethod(c: inout c, slot: slot)
             slot += 1
         }
@@ -299,10 +308,10 @@ pub impl LlvmCtx {
     // can't be declared (the method has its own type params beyond the receiver
     // instance's — provided map[B]/filter is handled separately). Idempotent.
     inout fn ensureGenMethodDeclared(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) -> U64 {
-        self.traceGenMethod(c: inout c, event: "request", mfi: mfi, instRef: instRef)
+        self.traceGenMethod(c: inout c, event: "request", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
         val existing: U64 = self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         if existing < self.genMethK.count() {
-            self.traceGenMethod(c: inout c, event: "reuse", mfi: mfi, instRef: instRef)
+            self.traceGenMethod(c: inout c, event: "reuse", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
             return existing
         }
         // the method's type params must pair 1:1 with the instance's args plus the
@@ -319,8 +328,26 @@ pub impl LlvmCtx {
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         val slot: U64 = self.genMethK.count() - 1U64
         self.genMethEmit.append(slot)
-        self.traceGenMethod(c: inout c, event: "enqueue", mfi: mfi, instRef: instRef)
+        self.traceGenMethod(c: inout c, event: "enqueue", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
         return slot
+    }
+
+    // A source receiver call has already been finalized by Mono. Its
+    // BodyInstance is the complete semantic key: selected implementation,
+    // receiver, proof environment, and method-owned argument suffix. Never
+    // recreate that key from an AST call site in the LLVM backend.
+    inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64) -> U64 {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
+            return self.genMethK.count()
+        }
+        val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+        val instRef: U64 = body.environment.receiverRef
+        if body.fnIdx >= c.arena.funcs.count() || instRef == 0U64 || instRef >= c.arena.types.count() {
+            return self.genMethK.count()
+        }
+        val f: Func = c.arena.funcs[body.fnIdx]
+        val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: f, environment: body.environment)
+        return self.ensureGenMethodDeclared(c: inout c, mfi: body.fnIdx, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
     }
 }
 

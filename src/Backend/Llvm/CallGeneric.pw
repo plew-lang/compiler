@@ -4,47 +4,15 @@
 // value is built in the caller's context; the call arguments are built under the
 // receiver's substitution env (so a `fallback: T` arg coerces to the instance's
 // concrete type).
-// Dispatch a call to a method with its OWN type params (`absorb[S]…`): infer the
-// method type args from the call, monomorphize keyed by a pseudo instance ref
-// (receiver name + the inferred args), and call. Returns a null sentinel if the
-// args can't be inferred / the instance can't be declared.
+// Dispatch a call to a method with its OWN type params (`absorb[S]…`). Mono has
+// already selected and grounded the complete callable; LLVM consumes that
+// BodyInstance without re-inferring a receiver/method-argument split.
 
 pub impl LlvmCtx {
-    inout fn genMethodOwnTypeParamCall(c: inout Comp, callId: U64, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: ArgRange) -> LLVMValueRef {
-        val mf: Func = c.arena.funcs[mfi]
-        val allArgs: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
-        mut val margs: Array[U64] = []
-        mut val ai: U64 = 0U64
-        // A generic receiver owns the leading parameters.  The method's own
-        // substitutions are the suffix, already fixed by Mono.
-        val recvCount: U64 = c.recvParamCount(nameStart: recvStart, nameLen: recvLen)
-        while ai < allArgs.count() {
-            if ai >= recvCount { margs.append(allArgs[ai]) }
-            ai += 1U64
-        }
-        if margs.count() != mf.typeParams.count() - recvCount {
-            return LLVMConstNull(self.ptrty)
-        }
-        mut val mi: U64 = 0
-        while mi < margs.count() {
-            if margs[mi] == 0U64 {
-                return LLVMConstNull(self.ptrty)
-            }
-            mi += 1
-        }
-        // The final descriptor owns the split between receiver arguments and
-        // method-owned arguments.  Do not manufacture `Receiver[ownArgs]` here:
-        // that pseudo instance has a different body key from Mono's selected
-        // callable (e.g. `String.hash[H]` is String + H, never `String[H]`).
-        // Reuse the final receiver identity and keep `margs` in the dedicated
-        // own-argument lane used by generic-method declaration/emission.
-        mut val instRef: U64 = c.bodyCalleeReceiverRef(exprId: callId)
-        if instRef == 0U64 {
-            instRef = c.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
-        }
-        val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef, ownArgs: margs)
+    inout fn genMethodOwnTypeParamCall(c: inout Comp, callId: U64, recv: U64, args: ArgRange) -> LLVMValueRef {
+        val gslot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
         if gslot < self.genMethK.count() {
-            return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: mfi, slot: gslot, instRef: instRef, args: args)
+            return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: self.genMethK[gslot], slot: gslot, instRef: self.genMethInst[gslot], args: args)
         }
         return LLVMConstNull(self.ptrty)
     }

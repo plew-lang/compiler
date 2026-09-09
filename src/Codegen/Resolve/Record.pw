@@ -1830,13 +1830,7 @@ pub impl Comp {
             // semantic template that Mono is required to consume.  Record the
             // source declaration once and skip only generated provided copies.
             if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
-                if self.tracePhases {
-                    eprint(text: "[trace-phase] semantic-expression-record:body index=")
-                    traceU64(n: fi)
-                    eprint(text: " offset=")
-                    traceU64(n: f.defOffset)
-                    eprint(text: "\n")
-                }
+                tracePhaseProgress(c: inout self, label: "semantic-expression-record:body", count: fi, stride: 64U64)
                 self.cur.locals = []
                 self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv

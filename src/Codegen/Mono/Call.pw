@@ -3777,39 +3777,12 @@ pub impl Comp {
     // nested calls.  This is the only place generic bodies acquire their
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
-        if self.tracePhases {
-            // Keep trace-only aggregate reads inside this branch. The normal
-            // finalization path must not acquire an additional value lifetime
-            // merely to support diagnostics: it owns no Func/BodyInstance
-            // value, it consumes their arena rows below.
-            val tracedInstance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
-            val tracedFunction: Func = self.arena.funcs[tracedInstance.fnIdx]
-            self.traceFinalBodyScans += 1U64
-            tracePhaseProgress(c: inout self, label: "finalize-callables:body", count: self.traceFinalBodyScans, stride: 16U64)
-            // A reachable-body closure must be diagnosable without falling back
-            // to whole-module roots.  This trace is deliberately diagnostic
-            // only: it identifies the body currently being finalized, while
-            // the monotonic counter above remains the long-process contract.
-            mut val name: Array[U8] = []
-            mut val ni: U64 = 0U64
-            while ni < tracedFunction.nameLen {
-                name.append(self.arena.bytes[tracedFunction.nameStart + ni])
-                ni += 1U64
-            }
-            eprint(text: "[trace-phase] finalize-callables:body-target=")
-            eprint(text: stringFromBytesUnchecked(name))
-            eprint(text: " fn=")
-            traceU64(n: tracedInstance.fnIdx)
-            eprint(text: " id=")
-            traceU64(n: bodyId)
-            eprint(text: " receiver=")
-            traceU64(n: tracedInstance.environment.receiverRef)
-            eprint(text: " args=")
-            traceU64(n: tracedInstance.environment.args.count())
-            eprint(text: "\n")
-        }
         val instance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
         val f: Func = self.arena.funcs[instance.fnIdx]
+        if self.tracePhases {
+            self.traceFinalBodyScans += 1U64
+            tracePhaseProgress(c: inout self, label: "finalize-callables:body", count: self.traceFinalBodyScans, stride: 16U64)
+        }
         // Shared provided bodies are keyed by concrete conformance proof as
         // well as receiver. Keep that key observable in trace mode: it is the
         // shortest diagnostic for a descriptor written for one witness and
@@ -3842,9 +3815,6 @@ pub impl Comp {
         self.cur.typeParams = instance.environment.params
         self.cur.typeArgs = instance.environment.args
         self.enterBodyInstance(fnIdx: instance.fnIdx, environment: instance.environment)
-        if self.tracePhases {
-            tracePhase(c: inout self, label: "finalize-callables:body-environment-ready")
-        }
         // Associated callables have no value `self`, but their bodies may name
         // `Self`/associated types and their final-callable key is the concrete
         // subject selected at the call.  Mirror emitOneGenFn's assoc environment
@@ -3866,9 +3836,6 @@ pub impl Comp {
         // old provisional AST collector discovered these as an incidental
         // side effect before it later discarded its call decisions.
         mut val pi: U64 = 0U64
-        if self.tracePhases {
-            tracePhase(c: inout self, label: "finalize-callables:body-parameters")
-        }
         while pi < f.params.count() {
             val p: Param = self.funcParamAt(params: f.params, index: pi)
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
@@ -3876,9 +3843,6 @@ pub impl Comp {
             pi += 1U64
         }
         if f.hasRet { self.scanType(ref: f.retTy) }
-        if self.tracePhases {
-            tracePhase(c: inout self, label: "finalize-callables:body-block")
-        }
         self.scanBlockInsts(blkId: f.body)
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
     }
@@ -4861,6 +4825,7 @@ pub impl Comp {
     inout fn scanExprInsts(exprId: U64) {
         if self.tracePhases {
             self.traceExprInstScans += 1U64
+            tracePhaseProgress(c: inout self, label: "finalize-callables:expression", count: self.traceExprInstScans, stride: 256U64)
         }
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
