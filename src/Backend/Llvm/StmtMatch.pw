@@ -366,9 +366,15 @@ pub impl LlvmCtx {
                 // (the recursive case) recovers the enum (typeOf can't see this local). Skip
                 // for an array field (`elems: Array[E]`): there fd.tyStart/tyLen names the
                 // ELEMENT (`E`), so this would wrongly type the array bind as the element enum
-                // — the bind is an array, tracked via locElemTypeRef (set below), and its
-                // locTypeRef must stay 0 so a `.count()`/index over it routes the array path.
-                mut val tref: U64 = 0
+                // — the bind is an array, with its element term tracked below. Its own
+                // TypeRef remains the complete `Array[E]` field term so every ownership
+                // consumer sees the same semantic type as value consumers.
+                // Keep the frontend-resolved field term on the backend local.
+                // It is the single provenance for an escaping bind's ARC
+                // action; reconstructing an Array/struct/enum TypeRef from
+                // declaration spelling loses substitutions and can turn a
+                // required retain into a raw bit-copy.
+                mut val tref: U64 = fieldTerm
                 if !(isArrF) {
                     // declaration test (concreteEnumIdxByName), not the registered
                     // instances — registration is demand-driven, so a match emitted

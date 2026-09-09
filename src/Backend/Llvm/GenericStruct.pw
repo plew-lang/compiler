@@ -316,6 +316,23 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
+        // A backend local is not a second type resolver: it is the physical
+        // home selected from the frontend's already-grounded semantic term.
+        // Prefer that term for an identifier while the legacy emitter still
+        // owns lexical slots. In particular, a match payload bind can spell a
+        // declaration-level `T` while its field term is `Array[U8]` or
+        // `String`; an escaping read must retain according to the latter.
+        // Mid removes this compatibility lookup by carrying the same term on
+        // every Place directly.
+        match c.arena.exprs[id] {
+            Expr.Ident(start: val start, len: val len) => {
+                val local: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if local < self.nLocals && self.locTypeRef[local] != 0U64 {
+                    return self.locTypeRef[local]
+                }
+            }
+            _ => {}
+        }
         return c.groundedTypeOf(id: id)
     }
 
