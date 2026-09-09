@@ -2535,8 +2535,8 @@ export enum CallTemplateReceiver {
     // fresh lexical lookup.  Keep the dependency and the view transform in
     // one semantic source so body-instance grounding can apply provenance
     // after reading the already-published result.
-    PriorCallResultWithViews(exprId: U64, siteKey: CallSiteKey, views: Array[ResolvedViewSource])
-    PriorProtocolResultWithViews(slot: U64, views: Array[ResolvedViewSource])
+    PriorCallResultWithViews(exprId: U64, siteKey: CallSiteKey, views: CallTemplateViewRange)
+    PriorProtocolResultWithViews(slot: U64, views: CallTemplateViewRange)
 }
 
 // One call argument is semantic input, not a request to inspect a shared Expr
@@ -2570,6 +2570,30 @@ export struct CallTemplateArgument {
 }
 pub impl CallTemplateArgument { factory }
 
+// Call templates are long-lived semantic facts. Their variable-sized children
+// live in Decls-owned append-only pools, so reading one template does not copy
+// an ARC-managed Array or recursive proof payload.
+export struct CallTemplateArgumentRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallTemplateArgumentRange { factory }
+export struct CallTemplateTypeArgumentRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallTemplateTypeArgumentRange { factory }
+export struct CallTemplateOperandRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallTemplateOperandRange { factory }
+export struct CallTemplateViewRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallTemplateViewRange { factory }
+
 // Dynamic dispatch has source-selected identity just as direct dispatch does,
 // but its callable is a value or a witness slot rather than a Func declaration.
 // Keep the symbolic template distinct from CallTarget: its function TypeTerm is
@@ -2589,11 +2613,11 @@ export enum CallTemplateKind {
     // provided trait copy, in which case `proof` is the declaration-time
     // evidence that selected its conformance path; it is grounded only when
     // the enclosing BodyInstance grounds `receiver`.
-    Direct(callee: U64, receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], calleeTypeArgs: Array[U64], proof: StaticConformanceProof)
-    StaticMethod(receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64)
-    Dynamic(receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], target: DynamicCallTemplateTarget)
+    Direct(callee: U64, receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, calleeTypeArgs: CallTemplateTypeArgumentRange, proofId: U64)
+    StaticMethod(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, resolution: StaticMemberResolution, resultTerm: U64)
+    Dynamic(receiver: CallTemplateReceiver, args: CallTemplateArgumentRange, target: DynamicCallTemplateTarget)
     Protocol(receiver: CallTemplateReceiver)
-    Operator(op: I64, operands: Array[CallArgumentSource], resolution: StaticMemberResolution, resultTerm: U64)
+    Operator(op: I64, operands: CallTemplateOperandRange, resolution: StaticMemberResolution, resultTerm: U64)
 }
 
 // Parametric call semantics are owned by a declaration body and CallSiteKey,
@@ -2700,6 +2724,10 @@ export struct Decls {
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val callTemplates: Array[CallTemplate] = []
+    pub mut val callTemplateArgumentPool: Array[CallTemplateArgument] = []
+    pub mut val callTemplateTypeArgumentPool: Array[U64] = []
+    pub mut val callTemplateOperandPool: Array[CallArgumentSource] = []
+    pub mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     // Derived open-addressed index for CallTemplate. Slots hold one-based
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is
     // lookup structure, never a second semantic source.

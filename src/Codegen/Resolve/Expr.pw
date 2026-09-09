@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, DynamicCallTemplateTarget, StaticMemberResolution }
+import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
 
 pub impl Comp {
 
@@ -437,12 +437,73 @@ pub impl Comp {
     // syntax is copied once at Record time; Mono later grounds this immutable
     // template and must not inspect a shared Expr to rediscover labels, inout,
     // or an argument's parametric type.
-    inout fn directCallTemplateArgs(args: ArgRange) -> Array[CallTemplateArgument] {
-        mut val out: Array[CallTemplateArgument] = []
+    inout fn directCallTemplateArgs(args: ArgRange) -> CallTemplateArgumentRange {
+        val start: U64 = self.decls.callTemplateArgumentPool.count()
         mut val i: U64 = 0U64
         while i < args.len {
             val arg: Arg = self.argAt(args: args, index: i)
-            out.append(<CallTemplateArgument source=self.callArgumentSource(exprId: arg.expr) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
+            self.decls.callTemplateArgumentPool.append(<CallTemplateArgument source=self.callArgumentSource(exprId: arg.expr) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
+            i += 1U64
+        }
+        return <CallTemplateArgumentRange start=start len=self.decls.callTemplateArgumentPool.count() - start />
+    }
+
+    inout fn publishCallTemplateArguments(args: Array[CallTemplateArgument]) -> CallTemplateArgumentRange {
+        val start: U64 = self.decls.callTemplateArgumentPool.count()
+        mut val i: U64 = 0U64
+        while i < args.count() { self.decls.callTemplateArgumentPool.append(args[i]); i += 1U64 }
+        return <CallTemplateArgumentRange start=start len=self.decls.callTemplateArgumentPool.count() - start />
+    }
+
+    inout fn publishCallTemplateTypeArgs(args: Array[U64]) -> CallTemplateTypeArgumentRange {
+        val start: U64 = self.decls.callTemplateTypeArgumentPool.count()
+        mut val i: U64 = 0U64
+        while i < args.count() { self.decls.callTemplateTypeArgumentPool.append(args[i]); i += 1U64 }
+        return <CallTemplateTypeArgumentRange start=start len=self.decls.callTemplateTypeArgumentPool.count() - start />
+    }
+
+    fn callTemplateTypeArgs(range: CallTemplateTypeArgumentRange) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < range.len {
+            if range.start + i >= self.decls.callTemplateTypeArgumentPool.count() { return [] }
+            out.append(self.decls.callTemplateTypeArgumentPool[range.start + i])
+            i += 1U64
+        }
+        return out
+    }
+
+    fn callTemplateArguments(range: CallTemplateArgumentRange) -> Array[CallTemplateArgument] {
+        mut val out: Array[CallTemplateArgument] = []
+        mut val i: U64 = 0U64
+        while i < range.len {
+            if range.start + i >= self.decls.callTemplateArgumentPool.count() { return [] }
+            out.append(self.decls.callTemplateArgumentPool[range.start + i])
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn publishCallTemplateOperands(operands: Array[CallArgumentSource]) -> CallTemplateOperandRange {
+        val start: U64 = self.decls.callTemplateOperandPool.count()
+        mut val i: U64 = 0U64
+        while i < operands.count() { self.decls.callTemplateOperandPool.append(operands[i]); i += 1U64 }
+        return <CallTemplateOperandRange start=start len=self.decls.callTemplateOperandPool.count() - start />
+    }
+
+    inout fn publishCallTemplateViews(views: Array[ResolvedViewSource]) -> CallTemplateViewRange {
+        val start: U64 = self.decls.callTemplateViewPool.count()
+        mut val i: U64 = 0U64
+        while i < views.count() { self.decls.callTemplateViewPool.append(views[i]); i += 1U64 }
+        return <CallTemplateViewRange start=start len=self.decls.callTemplateViewPool.count() - start />
+    }
+
+    fn callTemplateViews(range: CallTemplateViewRange) -> Array[ResolvedViewSource] {
+        mut val out: Array[ResolvedViewSource] = []
+        mut val i: U64 = 0U64
+        while i < range.len {
+            if range.start + i >= self.decls.callTemplateViewPool.count() { return [] }
+            out.append(self.decls.callTemplateViewPool[range.start + i])
             i += 1U64
         }
         return out
@@ -455,15 +516,17 @@ pub impl Comp {
             match receiver { CallTemplateReceiver.Term(term: val term) => { receiverTerm = term } _ => {} }
         }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
+        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
+        val templateTypeArgs: CallTemplateTypeArgumentRange = self.publishCallTemplateTypeArgs(args: calleeTypeArgs)
+        val proofId: U64 = self.freezeStaticConformanceProof(proof: proof)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof />, expectedTerm: prior.expectedResultTerm)
+            val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm)
             self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
             return
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> receiverTypeTerm=receiverTerm />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId /> receiverTypeTerm=receiverTerm />)
     }
 
     // A dynamic call is selected at Record too.  It carries the same receiver
@@ -474,7 +537,7 @@ pub impl Comp {
     inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget) {
         if !(self.cur.recordCallTemplates) { return }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
+        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
@@ -487,7 +550,7 @@ pub impl Comp {
     inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) {
         if !(self.cur.recordCallTemplates) { return }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
+        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
@@ -609,10 +672,10 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=operands resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
             return
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=operands resolution=resolution resultTerm=resultTerm /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> />)
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
@@ -639,15 +702,17 @@ pub impl Comp {
     inout fn completeCallTemplateResult(kind: CallTemplateKind, expectedTerm: U64) -> CallTemplateKind {
         if expectedTerm == 0U64 { return kind }
         match kind {
-            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proof: val proof) => {
+            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.funcs.count() { return kind }
                 val function = self.arena.funcs[callee]
-                if function.typeParams.count() == 0U64 || typeArgs.count() > function.typeParams.count() { return kind }
-                if typeArgs.count() == function.typeParams.count() && self.fnArgsAllResolved(args: typeArgs) { return kind }
-                mut val completed: Array[U64] = typeArgs
+                if function.typeParams.count() == 0U64 || typeArgs.len > function.typeParams.count() { return kind }
+                val current: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
+                if typeArgs.len != current.count() { return kind }
+                if current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current) { return kind }
+                mut val completed: Array[U64] = current
                 while completed.count() < function.typeParams.count() { completed.append(0U64) }
                 if !self.matchCallResultArguments(pattern: function.retTy, expected: expectedTerm, params: function.typeParams, values: inout completed) { return kind }
-                return <CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=completed proof=proof />
+                return <CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=self.publishCallTemplateTypeArgs(args: completed) proofId=proofId />
             }
             _ => { return kind }
         }
