@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+struct Counter {
+    pub mut val value: I64
+}
+
+pub impl Counter { factory }
+
+fn increment(value: inout I64) -> I64 {
+    value += 1I64
+    return value
+}
+
+fn grow(counter: inout Counter) -> I64 {
+    return increment(value: inout counter.value)
+}
+
+fn main() {
+    mut val counter = <Counter value=1I64 />
+    print(grow(counter: inout counter))
+    print(counter.value)
+}

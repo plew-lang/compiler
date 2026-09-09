@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// A direct free-function call through an `inout` struct field is a normal
+// writable-place argument.  Keep the call as the returned expression so Mid
+// must build its call terminator from the exact field place rather than hiding
+// it behind a statement-only fallback.
+struct Counter {
+    pub mut val values: Array[I64]
+}
+
+pub impl Counter { factory }
+
+fn appendAndCount(values: inout Array[I64]) -> U64 {
+    values.append(99I64)
+    return values.count()
+}
+
+fn grow(counter: inout Counter) -> U64 {
+    return appendAndCount(values: inout counter.values)
+}
+
+fn main() {
+    mut val counter = <Counter values=[1I64] />
+    print(grow(counter: inout counter))
+    print(counter.values[1I64])
+}

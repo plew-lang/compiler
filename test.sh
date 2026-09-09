@@ -174,6 +174,14 @@ else
     fail=$((fail + 1)); failed="$failed mid-inout-receiver"
 fi
 
+# A free call receiving an `inout` struct field must retain that precise
+# writable place through Mid's call terminator, including from return position.
+if sh ./test-mid-inout-field-argument.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-inout-field-argument"
+fi
+
 # A receiver reached through field then index projections must preserve that
 # exact writable place. The surrounding factory-heavy main is intentionally
 # outside this gate; only the isolated mutating helper is the Mid boundary.
