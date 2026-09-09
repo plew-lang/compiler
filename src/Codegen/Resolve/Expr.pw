@@ -451,14 +451,20 @@ pub impl Comp {
     inout fn publishCallTemplateArguments(args: Array[CallTemplateArgument]) -> CallTemplateArgumentRange {
         val start: U64 = self.decls.callTemplateArgumentPool.count()
         mut val i: U64 = 0U64
-        while i < args.count() { self.decls.callTemplateArgumentPool.append(args[i]); i += 1U64 }
+        while i < args.count() {
+            self.decls.callTemplateArgumentPool.append(args[i])
+            i += 1U64
+        }
         return <CallTemplateArgumentRange start=start len=self.decls.callTemplateArgumentPool.count() - start />
     }
 
     inout fn publishCallTemplateTypeArgs(args: Array[U64]) -> CallTemplateTypeArgumentRange {
         val start: U64 = self.decls.callTemplateTypeArgumentPool.count()
         mut val i: U64 = 0U64
-        while i < args.count() { self.decls.callTemplateTypeArgumentPool.append(args[i]); i += 1U64 }
+        while i < args.count() {
+            self.decls.callTemplateTypeArgumentPool.append(args[i])
+            i += 1U64
+        }
         return <CallTemplateTypeArgumentRange start=start len=self.decls.callTemplateTypeArgumentPool.count() - start />
     }
 
@@ -487,14 +493,20 @@ pub impl Comp {
     inout fn publishCallTemplateOperands(operands: Array[CallArgumentSource]) -> CallTemplateOperandRange {
         val start: U64 = self.decls.callTemplateOperandPool.count()
         mut val i: U64 = 0U64
-        while i < operands.count() { self.decls.callTemplateOperandPool.append(operands[i]); i += 1U64 }
+        while i < operands.count() {
+            self.decls.callTemplateOperandPool.append(operands[i])
+            i += 1U64
+        }
         return <CallTemplateOperandRange start=start len=self.decls.callTemplateOperandPool.count() - start />
     }
 
     inout fn publishCallTemplateViews(views: Array[ResolvedViewSource]) -> CallTemplateViewRange {
         val start: U64 = self.decls.callTemplateViewPool.count()
         mut val i: U64 = 0U64
-        while i < views.count() { self.decls.callTemplateViewPool.append(views[i]); i += 1U64 }
+        while i < views.count() {
+            self.decls.callTemplateViewPool.append(views[i])
+            i += 1U64
+        }
         return <CallTemplateViewRange start=start len=self.decls.callTemplateViewPool.count() - start />
     }
 
