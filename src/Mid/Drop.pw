@@ -107,7 +107,8 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
     if term.value != 0U64 { canonicalMidConsumeOperand(c: c, states: inout out, operandId: term.value) }
     if term.tag == 4U64 {
         if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
-            canonicalMidConsumeOperand(c: c, states: inout out, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand)
+            val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+            if receiver.tag == 2U64 { canonicalMidConsumeOperand(c: c, states: inout out, operandId: receiver.operand) }
         }
         mut val argumentI: U64 = 0U64
         while argumentI < term.args.len {
@@ -288,7 +289,10 @@ fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlock
     if term.discriminant != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.discriminant) }
     if term.value != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.value) }
     if term.tag == 4U64 {
-        if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand) }
+        if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+            val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+            if receiver.tag == 2U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: receiver.operand) }
+        }
         mut val argumentI: U64 = 0U64
         while argumentI < term.args.len {
             canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: c.mid.callArguments[term.args.start + argumentI])

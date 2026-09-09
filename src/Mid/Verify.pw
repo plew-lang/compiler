@@ -3,8 +3,6 @@
 // lowering once Mid bodies become the production input.
 
 import ../Frontend with { Comp }
-import ../Diag with { eprintU64 }
-import @Std/Io with { eprint }
 import ./Ir with { MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership, analyzeCanonicalMidOwnership, midSuccessors }
 
@@ -29,22 +27,6 @@ export struct MidVerification {
 }
 pub impl MidVerification { factory }
 
-// Temporary trace aid while bringing frozen inout-call places to the
-// production verifier.  The verifier remains strict: this only identifies
-// which invariant rejected a body when --trace-codegen is enabled.
-fn canonicalMidMoveUnavailable(c: Comp, block: U64, local: U64, site: U64) -> MidVerification {
-    if c.traceCodegen {
-        eprint(text: "[trace-codegen] Mid move-unavailable site=")
-        eprintU64(n: site)
-        eprint(text: " block=")
-        eprintU64(n: block)
-        eprint(text: " local=")
-        eprintU64(n: local)
-        eprint(text: "\n")
-    }
-    return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=local />
-}
-
 // A global root is a typed address selected by the frontend.  It is not an
 // implicit local: only Copy/Borrow may read it, and the sole write protocol is
 // a mutable Global Drop immediately followed by Overwrite.  The ownership
@@ -62,35 +44,24 @@ fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
 }
 
 fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], operandId: U64, block: U64) -> MidVerification {
-    if operandId == 0U64 || operandId > c.mid.operands.count() { return canonicalMidMoveUnavailable(c: c, block: block, local: 0U64, site: 10U64) }
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag == 8U64 { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
     if operand.tag != 2U64 { return <MidVerification /> }
-    if operand.place == 0U64 || operand.place > c.mid.places.count() { return canonicalMidMoveUnavailable(c: c, block: block, local: 0U64, site: 11U64) }
+    if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
-    if place.rootTag != 1U64 { return canonicalMidMoveUnavailable(c: c, block: block, local: place.local, site: 12U64) }
+    if place.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     if place.projections.len != 0U64 { return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local /> }
-    if place.local >= states.count() { return canonicalMidMoveUnavailable(c: c, block: block, local: place.local, site: 13U64) }
+    if place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     match states[place.local] {
         MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
-        _ => {
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] Mid move-unavailable operand=")
-                eprintU64(n: operandId)
-                eprint(text: " local=")
-                eprintU64(n: place.local)
-                eprint(text: " block=")
-                eprintU64(n: block)
-                eprint(text: "\n")
-            }
-            return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local />
-        }
+        _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     }
     return <MidVerification />
 }
 
 fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool) -> MidVerification {
-    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return canonicalMidMoveUnavailable(c: c, block: block, local: 0U64, site: 14U64) }
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
     if value.tag == 7U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
@@ -105,11 +76,11 @@ fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], r
         return <MidVerification />
     }
     if value.tag == 19U64 {
-        if !isGrounded || value.resultTerm == 0U64 || value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return canonicalMidMoveUnavailable(c: c, block: block, local: 0U64, site: 15U64) }
+        if !isGrounded || value.resultTerm == 0U64 || value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         mut val captureI: U64 = 0U64
         while captureI < value.elements.len {
             val capture: MidClosureCaptureNode = c.mid.closureCaptures[value.elements.start + captureI]
-            if (capture.mode != 1U64 && capture.mode != 2U64) || capture.typeTerm == 0U64 { return canonicalMidMoveUnavailable(c: c, block: block, local: 0U64, site: 16U64) }
+            if (capture.mode != 1U64 && capture.mode != 2U64) || capture.typeTerm == 0U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
             val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: capture.operand, block: block)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             captureI += 1U64
@@ -312,13 +283,13 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 }
             }
             if statement.tag == 2U64 {
-                if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return canonicalMidMoveUnavailable(c: c, block: blockI, local: 0U64, site: 1U64) }
+                if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if !canonicalMidPhysicalFieldPath(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return canonicalMidMoveUnavailable(c: c, block: blockI, local: source.local, site: 2U64) }
-                if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return canonicalMidMoveUnavailable(c: c, block: blockI, local: source.local, site: 3U64) }
+                if !canonicalMidPhysicalFieldPath(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
-                if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return canonicalMidMoveUnavailable(c: c, block: blockI, local: destination.local, site: 4U64) }
+                if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
                 // Global storage has no local ownership state.  Its old value
                 // is nevertheless observable through ARC/deinit, so the
                 // completed body must prove the lowering's explicit release
@@ -330,7 +301,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
-                    _ => { return canonicalMidMoveUnavailable(c: c, block: blockI, local: source.local, site: 5U64) }
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 }
                 if destination.rootTag == 2U64 { }
                 else if destination.projections.len == 0U64 {
@@ -346,17 +317,17 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 }
             }
             if statement.tag == 8U64 {
-                if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return canonicalMidMoveUnavailable(c: c, block: blockI, local: 0U64, site: 6U64) }
+                if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 // InitializeGlobal is only meaningful in the compiler-created
                 // module initializer body. User function bodies may overwrite
                 // mutable globals but cannot create a second initial root.
-                if body.sourceFunction != 18446744073709551615U64 { return canonicalMidMoveUnavailable(c: c, block: blockI, local: 0U64, site: 7U64) }
+                if body.sourceFunction != 18446744073709551615U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return canonicalMidMoveUnavailable(c: c, block: blockI, local: source.local, site: 8U64) }
+                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
-                    _ => { return canonicalMidMoveUnavailable(c: c, block: blockI, local: source.local, site: 9U64) }
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 }
             }
             if statement.tag == 3U64 {
@@ -417,9 +388,13 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if !canonicalMidTargetIsValid(body: body, target: term.otherwise) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         }
         if term.tag == 4U64 {
-            if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
-                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand, block: blockI)
+            if term.callReceiver == 0U64 || term.callReceiver > c.mid.callReceivers.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
+            val callReceiver = c.mid.callReceivers[term.callReceiver - 1U64]
+            if callReceiver.tag == 2U64 {
+                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: callReceiver.operand, block: blockI)
                 match receiver.error { MidVerifyError.None => {} _ => { return receiver } }
+            } else if callReceiver.tag != 1U64 {
+                return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI />
             }
             mut val argumentI: U64 = 0U64
             while argumentI < term.args.len {
@@ -435,15 +410,6 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
         }
         if term.tag == 10U64 && !canonicalMidTargetIsValid(body: body, target: term.resume) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 6U64 || term.tag == 7U64 {
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] Mid terminal-value tag=")
-                eprintU64(n: term.tag)
-                eprint(text: " operand=")
-                eprintU64(n: term.value)
-                eprint(text: " block=")
-                eprintU64(n: blockI)
-                eprint(text: "\n")
-            }
             val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: term.value, block: blockI)
             match result.error { MidVerifyError.None => {} _ => { return result } }
         }
