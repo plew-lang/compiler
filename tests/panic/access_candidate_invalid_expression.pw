@@ -1,0 +1,5 @@
+import /Ir with { Decls, AccessCandidate }
+fn main() {
+    mut val declarations: Decls = <Decls />
+    declarations.registerAccessCandidate(<AccessCandidate readExpr=0U64 placeExpr=1U64 writeExpr=3U64 />, expressionCount: 3U64)
+}

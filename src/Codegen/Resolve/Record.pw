@@ -955,16 +955,8 @@ pub impl Comp {
     // asking a later phase to infer anything from a method name or collection
     // spelling.
     inout fn accessCandidateIndex(readExpr: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.accessCandidates.count() {
-            val candidate: AccessCandidate = self.decls.accessCandidates[i]
-            // A method receiver is the synthetic Index.index read; an
-            // explicit `inout` argument retains the authored Index place.
-            // They are two evaluation views of one candidate, never two
-            // separately inferred storage paths.
-            if candidate.readExpr == readExpr || candidate.placeExpr == readExpr { return i }
-            i += 1U64
-        }
+        val candidate = self.decls.accessCandidateForExpr(exprId: readExpr)
+        if candidate < self.decls.accessCandidateCount() { return candidate }
         // A selected inout use may project a field from an indexed value
         // (`items[i].field.append(...)`). The field is not a second storage
         // candidate: it retains the exact candidate underneath it, while the
@@ -979,7 +971,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        return self.decls.accessCandidates.count()
+        return self.decls.accessCandidateCount()
     }
 
     // Record one selected call's relationship to an indexed access candidate.
@@ -988,7 +980,7 @@ pub impl Comp {
     inout fn recordAccessUse(parentExpr: U64, readExpr: U64, role: U64, argIndex: U64, parameterIndex: U64, modeKnown: Bool, write: Bool) {
         if !(self.cur.recordCallTemplates) { return }
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
-        if candidateIndex >= self.decls.accessCandidates.count() { return }
+        if candidateIndex >= self.decls.accessCandidateCount() { return }
         val parent: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: parentExpr)
         mut val i: U64 = 0U64
         while i < self.decls.accessUses.count() {
@@ -1011,8 +1003,8 @@ pub impl Comp {
     inout fn recordAccessWriteFacet(readExpr: U64) {
         if self.cur.recordingAccessWriteFacet { return }
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
-        if candidateIndex >= self.decls.accessCandidates.count() { return }
-        val writeExpr: U64 = self.decls.accessCandidates[candidateIndex].writeExpr
+        if candidateIndex >= self.decls.accessCandidateCount() { return }
+        val writeExpr: U64 = self.decls.accessCandidateAt(index: candidateIndex).writeExpr
         if writeExpr >= self.arena.exprs.count() { return }
         self.cur.recordingAccessWriteFacet = true
         self.recordExpr(exprId: writeExpr)

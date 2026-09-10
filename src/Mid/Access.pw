@@ -1053,15 +1053,6 @@ fn midAccessInput(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidOperand 
     }
 }
 
-fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
-    mut val i: U64 = 0U64
-    while i < c.decls.accessCandidates.count() {
-        val candidate = c.decls.accessCandidates[i]
-        if candidate.readExpr == exprId || candidate.placeExpr == exprId { return i }
-        i += 1U64
-    }
-    return c.decls.accessCandidates.count()
-}
 
 // Reconstruct a projection *only* from the frontend-selected field slots
 // between a candidate's getter result and the value its parent consumes. The
@@ -1106,8 +1097,8 @@ fn midAccessChain(c: Comp, body: MidBody, outer: U64) -> Array[U64] {
         if seen { return [] }
         chain.append(current)
         val access: SemanticAccess = c.arena.semanticAccesses[current]
-        val nestedCandidate: U64 = midAccessCandidateForExpr(c: c, exprId: access.baseExpr)
-        if nestedCandidate >= c.decls.accessCandidates.count() { return chain }
+        val nestedCandidate: U64 = c.decls.accessCandidateForExpr(exprId: access.baseExpr)
+        if nestedCandidate >= c.decls.accessCandidateCount() { return chain }
         val nested: U64 = midAccessFor(c: c, bodyId: body.bodyInstance, parentResolution: access.writeResolution, candidate: nestedCandidate)
         if nested >= c.arena.semanticAccesses.count() { return [] }
         current = nested
@@ -1186,7 +1177,7 @@ fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, block
     while stage > 0U64 {
         stage -= 1U64
         val access: SemanticAccess = c.arena.semanticAccesses[chain[stage]]
-        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidates.count() />
+        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidateCount() />
         if stage + 1U64 < chain.count() {
             base = <MidOperand.Copy place=values[stage + 1U64] />
         } else {
@@ -1206,7 +1197,7 @@ fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, block
     }
     mut val parentReceiver: MidCallReceiver = receiver
     mut val parentArgs: Array[MidOperand] = args
-    val parentPlace: MidPlace = midAccessProjectedValuePlace(c: c, rootExpr: c.decls.accessCandidates[outerAccess.candidateIndex].readExpr, accessExpr: outerAccess.accessExpr, accessTerm: outerAccess.accessTerm, root: values[0U64])
+    val parentPlace: MidPlace = midAccessProjectedValuePlace(c: c, rootExpr: c.decls.accessCandidateAt(index: outerAccess.candidateIndex).readExpr, accessExpr: outerAccess.accessExpr, accessTerm: outerAccess.accessTerm, root: values[0U64])
     if parentPlace.local != values[0U64].local { return <MidAccessError.UnsupportedAccessProjection /> }
     val borrowedOuter: MidOperand = <MidOperand.Borrow place=parentPlace capability=<MidBorrowCapability.Inout /> />
     if role == 1U64 {
@@ -1223,7 +1214,7 @@ fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, block
     i = 0U64
     while i < chain.count() {
         val access: SemanticAccess = c.arena.semanticAccesses[chain[i]]
-        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidates.count() />
+        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidateCount() />
         if i + 1U64 < chain.count() {
             base = <MidOperand.Copy place=values[i + 1U64] />
         } else {
@@ -1268,7 +1259,7 @@ export fn elaborateMidAccesses(c: inout Comp, body: MidBody) -> MidAccessElabora
             MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
                 match callee {
                     MidCallTarget.Resolved(resolution: val parentResolution) => {
-                        mut val candidate: U64 = c.decls.accessCandidates.count()
+                        mut val candidate: U64 = c.decls.accessCandidateCount()
                         mut val role: U64 = 0U64
                         match receiver {
                             MidCallReceiver.Value(operand: val receiverOperand) => {

@@ -27,7 +27,7 @@ pub impl Comp {
         // selected parent ABI says writeback is necessary.
         val write: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: call, arg1HasLabel: false)
         self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=write originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
-        self.decls.accessCandidates.append(<AccessCandidate readExpr=call writeExpr=write placeExpr=place originSerial=originSerial />)
+        self.decls.registerAccessCandidate(<AccessCandidate readExpr=call writeExpr=write placeExpr=place originSerial=originSerial />, expressionCount: self.arena.exprs.count())
         return call
     }
 

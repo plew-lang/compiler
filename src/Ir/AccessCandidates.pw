@@ -1,0 +1,50 @@
+// Lower publishes immutable access provenance. Both ExprId views navigate to
+// the first registered candidate; they do not become semantic call identities.
+pub impl Decls {
+    inout fn registerAccessCandidate(candidate~: AccessCandidate, expressionCount: U64) {
+        if candidate.readExpr >= expressionCount || candidate.placeExpr >= expressionCount || candidate.writeExpr >= expressionCount {
+            panic "access candidate expression is outside the arena"
+        }
+        val index = self.accessCandidateRows.count()
+        self.accessCandidateRows.append(candidate)
+        self.indexAccessCandidate(exprId: candidate.readExpr, index: index, isRead: true)
+        self.indexAccessCandidate(exprId: candidate.placeExpr, index: index, isRead: false)
+    }
+
+    fn accessCandidateCount() -> U64 { return self.accessCandidateRows.count() }
+    fn accessCandidateAt(index: U64) -> AccessCandidate { return self.accessCandidateRows[index] }
+
+    fn accessCandidateForExpr(exprId: U64) -> U64 {
+        if exprId < self.accessCandidateByExpr.count() {
+            val entry = self.accessCandidateByExpr[exprId]
+            if entry != 0U64 { return entry - 1U64 }
+        }
+        return self.accessCandidateRows.count()
+    }
+
+    // Mutability recovery asks only for a synthetic read, not an authored place.
+    fn accessCandidateForRead(exprId: U64) -> U64 {
+        if exprId < self.accessCandidateByRead.count() {
+            val entry = self.accessCandidateByRead[exprId]
+            if entry != 0U64 { return entry - 1U64 }
+        }
+        return self.accessCandidateRows.count()
+    }
+}
+
+impl Decls {
+    inout fn indexAccessCandidate(exprId: U64, index: U64, isRead: Bool) {
+        // ExprIds are dense arena indices. Zero is absence, including holes
+        // and future expressions; candidate indices are stored one-based.
+        while self.accessCandidateByExpr.count() <= exprId {
+            self.accessCandidateByExpr.append(0U64)
+            self.accessCandidateByRead.append(0U64)
+        }
+        if self.accessCandidateByExpr[exprId] == 0U64 {
+            self.accessCandidateByExpr[exprId] = index + 1U64
+        }
+        if isRead && self.accessCandidateByRead[exprId] == 0U64 {
+            self.accessCandidateByRead[exprId] = index + 1U64
+        }
+    }
+}

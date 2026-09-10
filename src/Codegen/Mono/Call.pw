@@ -3803,8 +3803,8 @@ pub impl Comp {
         while useIndex < self.decls.accessUses.count() {
             val use: AccessUse = self.decls.accessUses[useIndex]
             if use.write && self.sameCallSiteKey(a: parent, b: use.parent) {
-                if use.candidateIndex < self.decls.accessCandidates.count() {
-                    val writeExpr: U64 = self.decls.accessCandidates[use.candidateIndex].writeExpr
+                if use.candidateIndex < self.decls.accessCandidateCount() {
+                    val writeExpr: U64 = self.decls.accessCandidateAt(index: use.candidateIndex).writeExpr
                     if writeExpr < self.arena.exprs.count() {
                         self.resolveBodyCallee(exprId: writeExpr)
                         // A detached setter is itself an ordinary selected call.
@@ -4059,8 +4059,8 @@ pub impl Comp {
     // same lexical source body, so the parent's normalized owner is the
     // canonical origin namespace for the synthetic read as well.
     inout fn finalAccessReadResolution(bodyId: U64, candidateIndex: U64, parent: CallResolution) -> U64 {
-        if candidateIndex >= self.decls.accessCandidates.count() { return self.finalCalleeCount() }
-        val candidate = self.decls.accessCandidates[candidateIndex]
+        if candidateIndex >= self.decls.accessCandidateCount() { return self.finalCalleeCount() }
+        val candidate = self.decls.accessCandidateAt(index: candidateIndex)
         val readKey: CallSiteKey = self.templateCallSiteKey(fnIdx: parent.siteKey.ownerFnIdx, exprId: candidate.readExpr)
         mut val i: U64 = 0U64
         while i < self.finalCalleeCount() {
@@ -4074,8 +4074,8 @@ pub impl Comp {
     }
 
     inout fn finalAccessWriteResolution(bodyId: U64, candidateIndex: U64, parent: CallResolution) -> U64 {
-        if candidateIndex >= self.decls.accessCandidates.count() { return self.finalCalleeCount() }
-        val candidate = self.decls.accessCandidates[candidateIndex]
+        if candidateIndex >= self.decls.accessCandidateCount() { return self.finalCalleeCount() }
+        val candidate = self.decls.accessCandidateAt(index: candidateIndex)
         val writeKey: CallSiteKey = self.templateCallSiteKey(fnIdx: parent.siteKey.ownerFnIdx, exprId: candidate.writeExpr)
         mut val i: U64 = 0U64
         while i < self.finalCalleeCount() {
@@ -4105,8 +4105,8 @@ pub impl Comp {
         // part of this value node: only an enclosing inout access decides
         // whether this value belongs to a reverse writeback chain.
         mut val candidateI: U64 = 0U64
-        while candidateI < self.decls.accessCandidates.count() {
-            val candidate = self.decls.accessCandidates[candidateI]
+        while candidateI < self.decls.accessCandidateCount() {
+            val candidate = self.decls.accessCandidateAt(index: candidateI)
             if candidate.readExpr == exprId {
                 val readResolution: U64 = self.finalAccessReadResolution(bodyId: bodyId, candidateIndex: candidateI, parent: parent)
                 if readResolution >= self.finalCalleeCount() { return 0U64 }
@@ -4175,8 +4175,8 @@ pub impl Comp {
 
     fn finalAccessCandidateForExpr(exprId: U64) -> U64 {
         mut val candidateI: U64 = 0U64
-        while candidateI < self.decls.accessCandidates.count() {
-            val candidate = self.decls.accessCandidates[candidateI]
+        while candidateI < self.decls.accessCandidateCount() {
+            val candidate = self.decls.accessCandidateAt(index: candidateI)
             if candidate.readExpr == exprId || candidate.placeExpr == exprId { return candidateI + 1U64 }
             candidateI = candidateI + 1U64
         }
@@ -4208,7 +4208,7 @@ pub impl Comp {
                                 self.errorAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate write has no final CallResolution")
                             }
                         }
-                        val candidate = self.decls.accessCandidates[use.candidateIndex]
+                        val candidate = self.decls.accessCandidateAt(index: use.candidateIndex)
                         match self.arena.exprs[candidate.placeExpr] {
                             Expr.Index(base: val baseExpr, index: val keyExpr) => {
                                 val baseTerm: U64 = self.semanticExprTerm(exprId: baseExpr)

@@ -419,8 +419,8 @@ fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argum
         CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
         CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId)) }
         CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => {
-            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
-            if candidate < c.decls.accessCandidates.count() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
+            val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
+            if candidate < c.decls.accessCandidateCount() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
             return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> />
         }
     }
@@ -633,18 +633,6 @@ fn buildMidLoopExit(state: inout MidBuildState, isContinue: Bool) -> MidBuildErr
     return <MidBuildError.None />
 }
 
-fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
-    mut val candidate: U64 = 0U64
-    while candidate < c.decls.accessCandidates.count() {
-        val access: AccessCandidate = c.decls.accessCandidates[candidate]
-        // Calls see the lowered synthetic read, whereas an explicit inout
-        // argument remains anchored at the authored place expression.  Both
-        // spellings denote the same frozen access candidate.
-        if access.readExpr == exprId || access.placeExpr == exprId { return candidate }
-        candidate += 1U64
-    }
-    return c.decls.accessCandidates.count()
-}
 
 // Lower turns an authored `items[index]` read into an `Index.index` synthetic
 // call, while AccessCandidate retains its authored place.  Array's storage
@@ -663,9 +651,9 @@ fn midDirectArrayIndexExpr(c: Comp, exprId: U64) -> U64 {
     match c.arena.exprs[exprId] {
         Expr.Index(base: _, index: _) => {}
         _ => {
-            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
-            if candidate >= c.decls.accessCandidates.count() { return c.arena.exprs.count() }
-            placeExpr = c.decls.accessCandidates[candidate].placeExpr
+            val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
+            if candidate >= c.decls.accessCandidateCount() { return c.arena.exprs.count() }
+            placeExpr = c.decls.accessCandidateAt(index: candidate).placeExpr
         }
     }
     if placeExpr >= c.arena.exprs.count() { return c.arena.exprs.count() }
@@ -734,8 +722,8 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
     }
-    val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
-    if candidate < c.decls.accessCandidates.count() {
+    val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
+    if candidate < c.decls.accessCandidateCount() {
         return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
     }
     match c.arena.exprs[exprId] {
@@ -1147,7 +1135,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
     }
-    val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+    val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
     val directPlaceExpr: U64 = midDirectArrayIndexPlace(c: inout c, state: inout state, exprId: exprId)
     if !allowAccessMarker && directPlaceExpr < c.arena.exprs.count() {
         val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
@@ -1156,9 +1144,9 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         }
         return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
     }
-    if candidate < c.decls.accessCandidates.count() {
+    if candidate < c.decls.accessCandidateCount() {
         if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
-        val readExpr: U64 = c.decls.accessCandidates[candidate].readExpr
+        val readExpr: U64 = c.decls.accessCandidateAt(index: candidate).readExpr
         val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr)
         return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
     }
@@ -1320,8 +1308,8 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             // materialize the already-frozen getter, otherwise Mid would ask
             // access elaboration to invent a writeback that frontend quite
             // correctly never published.
-            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
-            if argument.isInout && candidate < c.decls.accessCandidates.count() {
+            val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
+            if argument.isInout && candidate < c.decls.accessCandidateCount() {
                 built = <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
             } else {
                 built = materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: siteKey)
@@ -1464,8 +1452,8 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
             // getter-modify-set writeback. Materializing here would leave the
             // parent method mutating only a detached temporary.
             if directInout {
-                val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: priorExpr)
-                if candidate < c.decls.accessCandidates.count() {
+                val candidate: U64 = c.decls.accessCandidateForExpr(exprId: priorExpr)
+                if candidate < c.decls.accessCandidateCount() {
                     return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
                 }
             }

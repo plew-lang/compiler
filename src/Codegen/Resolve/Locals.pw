@@ -532,12 +532,8 @@ pub impl Comp {
     // can accept a later selected `inout` use which Mid will materialize and
     // write back through that exact candidate.
     inout fn materializablePlace(id: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.accessCandidates.count() {
-            val candidate: AccessCandidate = self.decls.accessCandidates[i]
-            if candidate.readExpr == id { return candidate.placeExpr }
-            i += 1U64
-        }
+        val candidate = self.decls.accessCandidateForRead(exprId: id)
+        if candidate < self.decls.accessCandidateCount() { return self.decls.accessCandidateAt(index: candidate).placeExpr }
         return id
     }
 

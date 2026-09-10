@@ -1,0 +1,50 @@
+import @Std/Io with { write }
+import /Ir with { Decls, AccessCandidate }
+fn check(table: Decls, rows: Array[AccessCandidate], limit: U64) {
+    mut val expression: U64 = 0U64
+    while expression < limit {
+        mut val expected = rows.count()
+        mut val expectedRead = rows.count()
+        mut val index: U64 = 0U64
+        while index < rows.count() {
+            val row = rows[index]
+            if expected == rows.count() && (row.readExpr == expression || row.placeExpr == expression) { expected = index }
+            if expectedRead == rows.count() && row.readExpr == expression { expectedRead = index }
+            index += 1U64
+        }
+        if table.accessCandidateForExpr(exprId: expression) != expected { panic "candidate index differs from first-match oracle" }
+        if table.accessCandidateForRead(exprId: expression) != expectedRead { panic "read index differs from first-match oracle" }
+        expression += 1U64
+    }
+    if table.accessCandidateForExpr(exprId: 18446744073709551615U64) != rows.count() { panic "unknown expression" }
+}
+fn main() {
+    mut val table: Decls = <Decls />
+    mut val rows: Array[AccessCandidate] = []
+    check(table: table, rows: rows, limit: 3U64)
+    mut val index: U64 = 0U64
+    while index < 257U64 {
+        val candidate = <AccessCandidate readExpr=index * 3U64 placeExpr=index * 3U64 + 1U64 writeExpr=1000U64 originSerial=index />
+        table.registerAccessCandidate(candidate, expressionCount: 1024U64)
+        rows.append(candidate)
+        index += 1U64
+    }
+    check(table: table, rows: rows, limit: 1025U64)
+    // Cross-role collisions keep the first row for each query's own predicate.
+    val overlap = <AccessCandidate readExpr=1U64 placeExpr=0U64 writeExpr=1000U64 originSerial=900U64 />
+    table.registerAccessCandidate(overlap, expressionCount: 1024U64)
+    rows.append(overlap)
+    val same = <AccessCandidate readExpr=900U64 placeExpr=900U64 writeExpr=1000U64 />
+    table.registerAccessCandidate(same, expressionCount: 1024U64)
+    rows.append(same)
+    check(table: table, rows: rows, limit: 1025U64)
+    mut val copy = table
+    val later = <AccessCandidate readExpr=1001U64 placeExpr=1002U64 writeExpr=1003U64 />
+    table.registerAccessCandidate(later, expressionCount: 1024U64)
+    if copy.accessCandidateForExpr(exprId: 1001U64) != copy.accessCandidateCount() { panic "copy observed later registration" }
+    if table.accessCandidateForExpr(exprId: 1001U64) != rows.count() { panic "miss remained stale" }
+    copy.registerAccessCandidate(<AccessCandidate readExpr=1004U64 placeExpr=1005U64 writeExpr=1006U64 />, expressionCount: 1024U64)
+    if table.accessCandidateForExpr(exprId: 1004U64) != table.accessCandidateCount() { panic "copy changed original" }
+    if table.accessCandidateAt(index: 257U64).originSerial != 900U64 { panic "provenance changed" }
+    write(s: "access-candidate-index-ok\n")
+}

@@ -1,6 +1,7 @@
 import ./SourceFiles with { SourceFiles, SourceFileRange }
 import @Std/Set with { Set }
 part ./Ir/Modules
+part ./Ir/AccessCandidates
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2715,7 +2716,9 @@ export struct Decls {
     // origin. ExprId is deliberately only a lookup anchor: CallSiteKey still
     // uses the producer serial as semantic identity.
     pub mut val syntheticCallSiteByExpr: Array[U64] = []
-    pub mut val accessCandidates: Array[AccessCandidate] = []
+    mut val accessCandidateRows: Array[AccessCandidate] = []
+    mut val accessCandidateByExpr: Array[U64] = []
+    mut val accessCandidateByRead: Array[U64] = []
     pub mut val accessUses: Array[AccessUse] = []
     // Parametric aggregate facts selected by Record. Unlike AST MakeField,
     // these carry physical layout identity and no field/variant spelling.
