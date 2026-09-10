@@ -19,6 +19,11 @@ fn shared(values: Buffer[MutableRef[Cell]]) {
     }
     print("shared-end")
 }
+fn copied(values: Buffer[MutableRef[Cell]]) {
+    mut val copy = values
+    copy.append(<MutableRef value=<Cell id=3I64 /> />)
+    print(copy.count())
+}
 fn exercise() {
     val empty: Buffer[MutableRef[Cell]] = Buffer.new()
     shared(values: empty)
@@ -26,11 +31,7 @@ fn exercise() {
     values.append(<MutableRef value=<Cell id=1I64 /> />)
     values.append(<MutableRef value=<Cell id=2I64 /> />)
     shared(values: values)
-    {
-        mut val copy = values
-        copy.append(<MutableRef value=<Cell id=3I64 /> />)
-        print(copy.count())
-    }
+    copied(values: values)
     print("original-alive")
     print(values.count())
 }
