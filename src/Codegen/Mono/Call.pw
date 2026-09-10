@@ -639,13 +639,11 @@ pub impl Comp {
     // shared generic body occurrence with the same arena navigation anchor.
     inout fn bodyCalleeResultForTemplateDependency(exprId: U64, siteKey: CallSiteKey) -> U64 {
         val bodyId: U64 = self.currentBodyInstanceId()
-        mut val i: U64 = 0U64
-        while i < self.arena.finalCallees.count() {
-            val entry: CallResolution = self.arena.finalCallees[i]
-            if entry.bodyId == bodyId && entry.exprId == exprId && self.sameCallSiteKey(a: entry.siteKey, b: siteKey) {
-                return entry.resultTypeRef
-            }
-            i += 1U64
+        // Dependency identity is the finalized body plus semantic call site.
+        // ExprId is only a diagnostic anchor, just as for other indexed readers.
+        val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
+        if index < self.finalCalleeCount() {
+            return self.arena.finalCallees[index].resultTypeRef
         }
         self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized")
         return 0U64

@@ -1,0 +1,11 @@
+import /Frontend with { Comp }
+import /Ir with { Expr }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    compiler.cur.bodyId = 1U64
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 100U64)
+    val key = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64)
+    // A nearby finalized slot must not satisfy a missing dependency.
+    compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key)
+}

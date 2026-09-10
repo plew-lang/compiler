@@ -1,0 +1,36 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    // Storage-level body identities: no generic environment needs interning.
+    compiler.cur.bodyId = 1U64
+    val firstKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 0U64)
+    if compiler.finalCalleeIndexForKey(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "empty index must miss" }
+    // One implicit site with many independent slots forces collisions and rehash.
+    mut val slot: U64 = 0U64
+    while slot < 257U64 {
+        compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: slot, recvTypeRef: 0U64, resultTypeRef: slot + 100U64)
+        slot += 1U64
+    }
+    slot = 0U64
+    while slot < 257U64 {
+        val key = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: slot)
+        if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key) != slot + 100U64 { panic "wrong implicit slot after growth" }
+        slot += 1U64
+    }
+    // An expression call and an implicit protocol call never share identity.
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 900U64)
+    val expressionKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: false, slot: 0U64)
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: expressionKey) != 900U64 { panic "origin namespace aliased" }
+    // The same lexical site in another instance has an independent result.
+    compiler.cur.bodyId = 2U64
+    if compiler.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "body identity lost" }
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 800U64)
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey) != 800U64 { panic "miss stayed cached" }
+    compiler.cur.bodyId = 1U64
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey) != 100U64 { panic "other instance overwrote result" }
+    // A saved semantic dependency survives a different navigation anchor.
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 1U64, siteKey: firstKey) != 100U64 { panic "navigation anchor became semantic identity" }
+    write(s: "template-dependency-index-ok\n")
+}
