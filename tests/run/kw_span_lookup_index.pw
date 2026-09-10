@@ -34,7 +34,7 @@ fn main() {
     val prioritySource = c.internBytes(s: "priority")
     val beforeRegistration = c.kwSpan(kw: "priority", kwLen: 8U64)
     c.addKwSpan(kw: "priority")
-    val afterRegistration = c.kwSpan(kw: "priority", kwLen: 8U64)
+    val afterRegistration = c.wellKnownSpan(kw: "priority", kwLen: 8U64)
     if beforeRegistration.nameStart == prioritySource.nameStart && afterRegistration.nameStart != prioritySource.nameStart && afterRegistration.nameLen == 8U64 {
         write(s: "registered-name-wins\n")
     }
