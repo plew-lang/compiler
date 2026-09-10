@@ -9,7 +9,7 @@ fn check(mode: U64) {
     val extra: MidPlace = <MidPlace local=2U64 typeTerm=1U64 />
     mut val name: U64 = 0U64
     if mode == 2U64 { name = 17U64 }
-    val temporary: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=mode == 1U64 isBorrowed=mode == 3U64 sourceNameStart=name />
+    val temporary: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=mode == 1U64 isBorrowed=mode == 3U64 isCaptureCell=mode == 9U64 isInout=mode == 10U64 ownsAtEntry=mode == 11U64 sourceNameStart=name />
     val returned: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isReturnPlace=true />
     val unused: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false />
     val initialize: MidStatement = <MidStatement.Assign destination=source value=<MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=9U64 isNegative=false isBool=false typeTerm=1U64 /> /> /> />
@@ -17,19 +17,31 @@ fn check(mode: U64) {
     if mode == 4U64 { statements.append(<MidStatement.Assign destination=extra value=<MidRvalue.Use operand=<MidOperand.Copy place=source /> /> />) }
     if mode == 5U64 { statements.append(initialize) }
     if mode == 6U64 { statements.append(<MidStatement.Assign destination=extra value=<MidRvalue.Use operand=<MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> /> /> />) }
-    statements.append(<MidStatement.Assign destination=result value=<MidRvalue.Use operand=<MidOperand.Copy place=source /> /> />)
+    if mode == 12U64 { statements.append(<MidStatement.Drop place=source />) }
+    mut val returnedValue: MidRvalue = <MidRvalue.Use operand=<MidOperand.Copy place=source /> />
+    if mode == 13U64 || mode == 14U64 { returnedValue = <MidRvalue.ReturnBoundary exprId=23U64 targetTerm=1U64 operand=<MidOperand.Copy place=source /> /> }
+    if mode == 7U64 { returnedValue = <MidRvalue.Convert operand=<MidOperand.Copy place=source /> conversion=1U64 /> }
+    statements.append(<MidStatement.Assign destination=result value=returnedValue />)
+    val returnIndex: U64 = statements.count() - 1U64
+    if mode == 8U64 { statements.append(<MidStatement.Assign destination=extra value=<MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=1U64 /> /> /> />) }
     statements.append(<MidStatement.ScopeExit scope=0U64 />)
-    val body: MidBody = <MidBody locals=[temporary, returned, unused] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=result /> /> />] />
+    mut val bodyInstance: U64 = 0U64
+    if mode == 13U64 { bodyInstance = 1U64 }
+    val body: MidBody = <MidBody bodyInstance=bodyInstance locals=[temporary, returned, unused] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=result /> /> />] />
     val original: MidCanonicalBody = arena.store(body: body)
     val optimized: MidCanonicalBody = optimizeCanonicalMidReturns(arena: inout arena, canonical: original)
     val node = arena.bodies[optimized.body - 1U64]
     val block = arena.blocks[node.blocks.start]
-    val statement = arena.statements[block.statements.start + statements.count() - 2U64]
+    val statement = arena.statements[block.statements.start + returnIndex]
     val value = arena.rvalues[statement.value - 1U64]
     val operand = arena.operands[value.operand - 1U64]
-    if mode == 0U64 {
+    if mode == 0U64 || mode == 13U64 {
         if operand.tag != 2U64 || optimized.body == original.body { write(s: "FAIL transfer\n") }
         else { write(s: "transfer\n") }
+        if mode == 13U64 {
+            if value.tag == 2U64 && value.exprId == 23U64 && value.targetTerm == 1U64 { write(s: "return-provenance\n") }
+            else { write(s: "FAIL return-provenance\n") }
+        }
         val previous = arena.bodies[original.body - 1U64]
         val previousBlock = arena.blocks[previous.blocks.start]
         val previousStatement = arena.statements[previousBlock.statements.start + 1U64]
@@ -43,7 +55,7 @@ fn check(mode: U64) {
 
 fn main() {
     mut val mode: U64 = 0U64
-    while mode < 7U64 {
+    while mode < 15U64 {
         check(mode: mode)
         mode += 1U64
     }

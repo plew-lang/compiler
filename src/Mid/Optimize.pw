@@ -110,16 +110,19 @@ fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: Mid
     if !arena.locals[body.locals.start + destination.local].isReturnPlace { return 0U64 }
     if returnPlace.rootTag != 1U64 || returnPlace.projections.len != 0U64 || returnPlace.local != destination.local { return 0U64 }
     val value = arena.rvalues[statement.value - 1U64]
-    // Identity returns have already become Use. Conversions retain their
-    // selected semantics; do not transfer through an arbitrary conversion.
-    if value.tag != 1U64 || value.operand == 0U64 { return 0U64 }
+    // Instantiation preserves an identity ReturnBoundary with its frozen
+    // return-site metadata. A nonidentity boundary becomes Convert instead.
+    // Keep that provenance when changing ownership; never erase the boundary.
+    if value.tag != 1U64 && value.tag != 2U64 { return 0U64 }
+    if value.tag == 2U64 && body.bodyInstance == 0U64 { return 0U64 }
+    if value.operand == 0U64 { return 0U64 }
     val operand = arena.operands[value.operand - 1U64]
     if operand.tag != 1U64 || operand.place == 0U64 { return 0U64 }
     val source = arena.places[operand.place - 1U64]
     if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= body.locals.len || source.local == destination.local { return 0U64 }
     val local = arena.locals[body.locals.start + source.local]
     if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
-    if definitions[source.local] != 1U64 || uses[source.local] != 1U64 || source.typeTerm != destination.typeTerm { return 0U64 }
+    if definitions[source.local] != 1U64 || uses[source.local] != 1U64 { return 0U64 }
     // No subsequent computation may overwrite the result or loop back to the
     // use. Lexical cleanup is left to the existing ownership/drop analysis.
     mut val index: U64 = statementIndex + 1U64
@@ -181,7 +184,7 @@ export fn optimizeCanonicalMidReturns(arena: inout MidCanonicalArena, canonical:
                 if index + 1U64 == transfers[blockIndex] {
                     val value = arena.rvalues[statement.value - 1U64]
                     arena.operands.append(<MidOperandNode tag=2U64 place=arena.operands[value.operand - 1U64].place />)
-                    arena.rvalues.append(<MidRvalueNode tag=1U64 operand=arena.operands.count() />)
+                    arena.rvalues.append(<MidRvalueNode tag=value.tag operand=arena.operands.count() exprId=value.exprId targetTerm=value.targetTerm />)
                     arena.statements.append(<MidStatementNode tag=1U64 destination=statement.destination value=arena.rvalues.count() />)
                 } else {
                     arena.statements.append(statement)
