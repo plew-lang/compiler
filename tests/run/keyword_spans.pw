@@ -48,5 +48,19 @@ fn main() {
     mut val other: KeywordSpans = <KeywordSpans />
     val absent = other.lookup(source: "".bytes(), spelling: "stable".bytes(), requestLength: 6U64)
     if absent.length != 0U64 { return }
+    // FNV hashes of a/i share the initial eight-slot bucket.
+    mut val collisions: KeywordSpans = <KeywordSpans />
+    val collisionA = collisions.lookup(source: "ia".bytes(), spelling: "a".bytes(), requestLength: 1U64)
+    val collisionI = collisions.lookup(source: "ia".bytes(), spelling: "i".bytes(), requestLength: 1U64)
+    if collisionA.start != 1U64 || collisionI.start != 0U64 { return }
+    mut val copied: KeywordSpans = collisions
+    copied.register(spelling: "a".bytes(), start: 900U64)
+    val original = collisions.lookup(source: "ia".bytes(), spelling: "a".bytes(), requestLength: 1U64)
+    if original.start != 1U64 { return }
+    val noSource = other.lookup(source: "".bytes(), spelling: "".bytes(), requestLength: 0U64)
+    if noSource.start != 0U64 || noSource.length != 0U64 { return }
+    other.register(spelling: "".bytes(), start: 17U64)
+    val registeredEmpty = other.lookup(source: "".bytes(), spelling: "".bytes(), requestLength: 99U64)
+    if registeredEmpty.start != 17U64 || registeredEmpty.length != 0U64 { return }
     write(s: "keyword-spans-ok\n")
 }
