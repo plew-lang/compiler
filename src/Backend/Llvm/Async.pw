@@ -369,7 +369,7 @@ pub impl LlvmCtx {
         rty.append(self.ptrty)
         rty.append(self.i64ty)
         val resolveTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(rty), 2U64, 0I32)
-        val resolve: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_resolve", nameId: 41U64, fnTy: resolveTy)
+        val resolve: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_resolve", fnTy: resolveTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, resolveTy, resolve, arrayCPtr(rargs), 2U64, anon())
         self.rawbufDrop(c: inout c, cell: promiseSelf)
         self.asyncFreeFrame(c: inout c, frame: self.curFrameBase)
@@ -383,7 +383,7 @@ pub impl LlvmCtx {
         mut val fty: Array[LLVMTypeRef] = []
         fty.append(self.ptrty)
         val freeTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(fty), 1U64, 0I32)
-        val freeFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_free", nameId: 45U64, fnTy: freeTy)
+        val freeFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_free", fnTy: freeTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, freeTy, freeFn, arrayCPtr(fargs), 1U64, anon())
     }
 
@@ -391,7 +391,7 @@ pub impl LlvmCtx {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val newTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(noty), 0U64, 0I32)
-        val newFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_new", nameId: 40U64, fnTy: newTy)
+        val newFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_new", fnTy: newTy)
         return LLVMBuildCall2(self.b, newTy, newFn, arrayCPtr(noargs), 0U64, anon())
     }
 
@@ -401,7 +401,7 @@ pub impl LlvmCtx {
         mut val aty: Array[LLVMTypeRef] = []
         aty.append(self.i64ty)
         val allocTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(aty), 1U64, 0I32)
-        val allocFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_alloc", nameId: 44U64, fnTy: allocTy)
+        val allocFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_alloc", fnTy: allocTy)
         return LLVMBuildCall2(self.b, allocTy, allocFn, arrayCPtr(aargs), 1U64, anon())
     }
 
@@ -409,7 +409,7 @@ pub impl LlvmCtx {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val loopTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noty), 0U64, 0I32)
-        val loopFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_loop_run", nameId: 43U64, fnTy: loopTy)
+        val loopFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_loop_run", fnTy: loopTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, loopTy, loopFn, arrayCPtr(noargs), 0U64, anon())
     }
 

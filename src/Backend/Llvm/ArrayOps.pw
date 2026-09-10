@@ -286,7 +286,7 @@ pub impl LlvmCtx {
         gtys.append(self.i64ty)
         gtys.append(self.i64ty)
         val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
-        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
+        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", fnTy: gfty)
         mut val gav: Array[LLVMValueRef] = []
         gav.append(data)
         gav.append(LLVMSizeOf(elemTy))
@@ -528,7 +528,7 @@ pub impl LlvmCtx {
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(lhs)
         av.append(leftBytes)

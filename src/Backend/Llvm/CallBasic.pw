@@ -194,25 +194,25 @@ pub impl LlvmCtx {
 
     inout fn genIoRuntimeIntrinsic(c: inout Comp, intrinsic: IoIntrinsic, args: ArgRange) -> LLVMValueRef {
         match intrinsic {
-            IoIntrinsic.Write => { return self.emitStrSink(c: inout c, rtName: "plew_write_raw", rtId: 2U64, argExpr: c.argAt(args: args, index: 0U64).expr) }
-            IoIntrinsic.Eprint => { return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.Write => { return self.emitStrSink(c: inout c, rtName: "plew_write_raw", argExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.Eprint => { return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", argExpr: c.argAt(args: args, index: 0U64).expr) }
             IoIntrinsic.WriteByte => {
                 mut val p: Array[LLVMTypeRef] = []
                 p.append(self.i8ty)
                 val ty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(p), 1U64, 0I32)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i8ty, unsigned: true))
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_writeByte", fnTy: ty), arrayCPtr(values), 1U64, anon())
             }
             IoIntrinsic.ReadStdin => {
                 mut val p: Array[LLVMTypeRef] = []
                 val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 0U64, 0I32)
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_readStdin", fnTy: ty), arrayCPtr(p), 0U64, anon())
             }
-            IoIntrinsic.ReadFile => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
-            IoIntrinsic.ReadFileBytes => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.ReadFile => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            IoIntrinsic.ReadFileBytes => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
             IoIntrinsic.FileExists => {
-                val raw: LLVMValueRef = self.emitPathStrIntrinsic(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, pathExpr: c.argAt(args: args, index: 0U64).expr)
+                val raw: LLVMValueRef = self.emitPathStrIntrinsic(c: inout c, rtName: "plew_fileExists", retTy: self.i64ty, pathExpr: c.argAt(args: args, index: 0U64).expr)
                 return LLVMBuildICmp(self.b, llvmIntNe(), raw, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
             }
         }
@@ -223,7 +223,7 @@ pub impl LlvmCtx {
             ProcessIntrinsic.ArgCount => {
                 mut val p: Array[LLVMTypeRef] = []
                 val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argCount", fnTy: ty), arrayCPtr(p), 0U64, anon())
             }
             ProcessIntrinsic.ArgAt => {
                 mut val p: Array[LLVMTypeRef] = []
@@ -231,7 +231,7 @@ pub impl LlvmCtx {
                 val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argAt", fnTy: ty), arrayCPtr(values), 1U64, anon())
             }
             ProcessIntrinsic.Exit => {
                 mut val p: Array[LLVMTypeRef] = []
@@ -239,13 +239,13 @@ pub impl LlvmCtx {
                 val ty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(p), 1U64, 0I32)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_exit", fnTy: ty), arrayCPtr(values), 1U64, anon())
             }
-            ProcessIntrinsic.ExecOut => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            ProcessIntrinsic.ExecOut => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
             ProcessIntrinsic.ExecCode => {
                 mut val p: Array[LLVMTypeRef] = []
                 val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_execCode", fnTy: ty), arrayCPtr(p), 0U64, anon())
             }
         }
     }
@@ -264,7 +264,7 @@ pub impl LlvmCtx {
                 val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
-                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", fnTy: ty), arrayCPtr(values), 1U64, anon())
             }
         }
     }
@@ -279,7 +279,7 @@ pub impl LlvmCtx {
                 parameters.append(self.ptrty)
                 parameters.append(self.i64ty)
                 val signature: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), 2U64, 0I32)
-                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: signature)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", fnTy: signature)
                 val text: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.arrValData(c: inout c, arr: text))
@@ -290,7 +290,7 @@ pub impl LlvmCtx {
                 mut val parameters: Array[LLVMTypeRef] = []
                 parameters.append(self.ptrty)
                 val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
-                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: signature)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", fnTy: signature)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
                 return LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
@@ -299,7 +299,7 @@ pub impl LlvmCtx {
                 mut val parameters: Array[LLVMTypeRef] = []
                 parameters.append(self.ptrty)
                 val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
-                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: signature)
+                val function: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", fnTy: signature)
                 mut val values: Array[LLVMValueRef] = []
                 values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
                 return LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), 1U64, anon())
@@ -444,7 +444,7 @@ pub impl LlvmCtx {
             mut val sty: Array[LLVMTypeRef] = []
             sty.append(self.i64ty)
             val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
-            val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", nameId: 42U64, fnTy: sleepTy)
+            val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", fnTy: sleepTy)
             mut val sargs: Array[LLVMValueRef] = []
             sargs.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
             return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
@@ -453,7 +453,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
             mut val ptys: Array[LLVMTypeRef] = []
             val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
@@ -462,7 +462,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
             mut val ptys: Array[LLVMTypeRef] = []
             val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_random_u64", nameId: 52U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_random_u64", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
@@ -472,7 +472,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
             mut val ptys: Array[LLVMTypeRef] = []
             val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_dict_seed", nameId: 53U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_dict_seed", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
@@ -482,7 +482,7 @@ pub impl LlvmCtx {
             ptys.append(self.ptrty)
             ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", fnTy: fty)
             val s: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
             mut val av: Array[LLVMValueRef] = []
             av.append(self.arrValData(c: inout c, arr: s))
@@ -493,7 +493,7 @@ pub impl LlvmCtx {
             mut val ptys: Array[LLVMTypeRef] = []
             ptys.append(self.ptrty)
             val fty: LLVMTypeRef = LLVMFunctionType(LLVMVoidTypeInContext(self.ctx), arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             av.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
@@ -502,7 +502,7 @@ pub impl LlvmCtx {
             mut val ptys: Array[LLVMTypeRef] = []
             ptys.append(self.ptrty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             av.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
@@ -522,7 +522,7 @@ pub impl LlvmCtx {
             ptys.append(self.ptrty)
             ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             // assert(cond, message: msg): use the caller's message String when given
             // (its {ptr,len} aggregate), else the default "assertion failed".
@@ -560,11 +560,9 @@ pub impl LlvmCtx {
                     rty = self.ffiTyOf(c: inout c, tyStart: ef.retStart, tyLen: ef.retLen)
                 }
                 val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
-                // the C symbol is the raw function name (no mangling); cache by the
-                // function's interned nameId, OFFSET past the runtime cache's small ids
-                // (1-30) so a foreign symbol whose nameId is e.g. 5 doesn't alias
-                // plew_print_str.
-                val ckey: U64 = ef.nameId + 1000000000U64
+                // Raw C symbol spelling is the cache identity, shared with
+                // runtime declarations through the same canonical interner.
+                val ckey: U64 = ef.nameId
                 mut val callee: LLVMValueRef = LLVMConstNull(self.ptrty)
                 mut val dfound: Bool = false
                 mut val di: U64 = 0

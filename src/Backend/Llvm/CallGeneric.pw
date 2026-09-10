@@ -380,7 +380,7 @@ pub impl LlvmCtx {
         ptys.append(self.ptrty)
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_inout_overlap", nameId: 28U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_inout_overlap", fnTy: fty)
         mut val cav: Array[LLVMValueRef] = []
         cav.append(pa)
         cav.append(pb)

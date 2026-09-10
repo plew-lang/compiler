@@ -1,0 +1,9 @@
+import @Std/Io with { readFileBytes, write }
+import @Std/Set with { Set }
+fn main() {
+    val text = readFileBytes("tests/run/runtime_symbol_identity.data".bytes())
+    mut val values: Set[U64] = Set.new()
+    values.insert(7U64)
+    if text != "loaded\n" || !values.contains(7U64) { panic "runtime symbols aliased" }
+    write(s: "runtime-symbol-identity-ok\n")
+}

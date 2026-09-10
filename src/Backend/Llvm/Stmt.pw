@@ -755,7 +755,7 @@ pub impl LlvmCtx {
                 }
             }
             Stmt.Panic(val msg, offset: _) => {
-                val ignore: LLVMValueRef = self.emitStrSink(c: inout c, rtName: "plew_panic_raw", rtId: 4U64, argExpr: msg)
+                val ignore: LLVMValueRef = self.emitStrSink(c: inout c, rtName: "plew_panic_raw", argExpr: msg)
                 LLVMBuildUnreachable(self.b)
                 self.terminated = true
             }
