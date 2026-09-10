@@ -927,7 +927,7 @@ pub impl LlvmCtx {
                                         self.traceCodegenU64(n: fi)
                                         eprint(text: "\n")
                                     }
-                                    val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: accesses.body)
+                                    val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
                                     if c.traceCodegen {
                                         eprint(text: "[trace-codegen] Mid drops-done name=")
                                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)

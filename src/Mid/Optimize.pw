@@ -1,0 +1,197 @@
+// Ownership optimizations consume frozen, instantiated Mid. They never inspect
+// source names or synthesize raw ARC operations. Rewrites append snapshots so
+// the input remains available to verification and other body instances.
+import ./Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidRange, MidBlockNode, MidStatementNode, MidRvalueNode, MidOperandNode }
+
+fn countLocal(counts: inout Array[U64], local: U64) {
+    if local < counts.count() && counts[local] < 2U64 {
+        counts.set(i: local, value: counts[local] + 1U64)
+    }
+}
+
+fn countPlace(arena: MidCanonicalArena, placeId: U64, counts: inout Array[U64]) {
+    if placeId == 0U64 || placeId > arena.places.count() { return }
+    val place = arena.places[placeId - 1U64]
+    if place.rootTag == 1U64 { countLocal(counts: inout counts, local: place.local) }
+    mut val index: U64 = 0U64
+    while index < place.projections.len {
+        val projection = arena.projections[place.projections.start + index]
+        if projection.tag == 2U64 { countLocal(counts: inout counts, local: projection.indexLocal) }
+        index += 1U64
+    }
+}
+
+fn countOperand(arena: MidCanonicalArena, operandId: U64, uses: inout Array[U64]) {
+    if operandId == 0U64 || operandId > arena.operands.count() { return }
+    countPlace(arena: arena, placeId: arena.operands[operandId - 1U64].place, counts: inout uses)
+}
+
+fn countDestination(arena: MidCanonicalArena, placeId: U64, definitions: inout Array[U64], uses: inout Array[U64]) {
+    if placeId == 0U64 || placeId > arena.places.count() { return }
+    val place = arena.places[placeId - 1U64]
+    if place.rootTag == 1U64 && place.projections.len == 0U64 {
+        countLocal(counts: inout definitions, local: place.local)
+    } else {
+        countPlace(arena: arena, placeId: placeId, counts: inout uses)
+    }
+}
+
+// Count occurrences, not distinct pool IDs: one operand row can be shared by
+// multiple instructions. Address-taking, projections and captures all count
+// as uses and therefore prevent the sole-use return transfer below.
+fn countRvalue(arena: MidCanonicalArena, valueId: U64, uses: inout Array[U64]) -> Bool {
+    if valueId == 0U64 || valueId > arena.rvalues.count() { return false }
+    val value = arena.rvalues[valueId - 1U64]
+    if value.tag < 1U64 || value.tag > 19U64 { return false }
+    countOperand(arena: arena, operandId: value.operand, uses: inout uses)
+    countPlace(arena: arena, placeId: value.place, counts: inout uses)
+    mut val index: U64 = 0U64
+    while index < value.elements.len {
+        if value.tag == 19U64 {
+            countOperand(arena: arena, operandId: arena.closureCaptures[value.elements.start + index].operand, uses: inout uses)
+        } else {
+            countOperand(arena: arena, operandId: arena.aggregateElements[value.elements.start + index].operand, uses: inout uses)
+        }
+        index += 1U64
+    }
+    return true
+}
+
+fn countBody(arena: MidCanonicalArena, body: MidBodyNode, definitions: inout Array[U64], uses: inout Array[U64]) -> Bool {
+    mut val blockIndex: U64 = 0U64
+    while blockIndex < body.blocks.len {
+        val block = arena.blocks[body.blocks.start + blockIndex]
+        mut val index: U64 = 0U64
+        while index < block.statements.len {
+            val statement = arena.statements[block.statements.start + index]
+            if statement.tag < 1U64 || statement.tag > 10U64 { return false }
+            if statement.tag == 1U64 || statement.tag == 9U64 {
+                countDestination(arena: arena, placeId: statement.destination, definitions: inout definitions, uses: inout uses)
+                if !countRvalue(arena: arena, valueId: statement.value, uses: inout uses) { return false }
+            } else {
+                // Explicit drops and overwrite sources are deliberately not
+                // rewritten. Their occurrences disqualify the temporary.
+                countPlace(arena: arena, placeId: statement.destination, counts: inout uses)
+                countPlace(arena: arena, placeId: statement.source, counts: inout uses)
+                if statement.tag == 5U64 { countLocal(counts: inout uses, local: statement.flag) }
+            }
+            index += 1U64
+        }
+        val term = arena.terminators[block.terminator - 1U64]
+        if term.tag < 2U64 || term.tag > 10U64 { return false }
+        countOperand(arena: arena, operandId: term.value, uses: inout uses)
+        countOperand(arena: arena, operandId: term.discriminant, uses: inout uses)
+        if term.tag == 4U64 {
+            countDestination(arena: arena, placeId: term.destination, definitions: inout definitions, uses: inout uses)
+            if term.callReceiver != 0U64 {
+                countOperand(arena: arena, operandId: arena.callReceivers[term.callReceiver - 1U64].operand, uses: inout uses)
+            }
+            index = 0U64
+            while index < term.args.len {
+                countOperand(arena: arena, operandId: arena.callArguments[term.args.start + index], uses: inout uses)
+                index += 1U64
+            }
+        }
+        blockIndex += 1U64
+    }
+    return true
+}
+
+fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, statementIndex: U64, definitions: Array[U64], uses: Array[U64]) -> U64 {
+    val term = arena.terminators[block.terminator - 1U64]
+    if term.tag != 6U64 || term.value == 0U64 { return 0U64 }
+    val returned = arena.operands[term.value - 1U64]
+    if returned.tag != 2U64 || returned.place == 0U64 { return 0U64 }
+    val statement = arena.statements[block.statements.start + statementIndex]
+    if statement.tag != 1U64 || statement.destination == 0U64 || statement.value == 0U64 { return 0U64 }
+    val destination = arena.places[statement.destination - 1U64]
+    val returnPlace = arena.places[returned.place - 1U64]
+    if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len { return 0U64 }
+    if !arena.locals[body.locals.start + destination.local].isReturnPlace { return 0U64 }
+    if returnPlace.rootTag != 1U64 || returnPlace.projections.len != 0U64 || returnPlace.local != destination.local { return 0U64 }
+    val value = arena.rvalues[statement.value - 1U64]
+    // Identity returns have already become Use. Conversions retain their
+    // selected semantics; do not transfer through an arbitrary conversion.
+    if value.tag != 1U64 || value.operand == 0U64 { return 0U64 }
+    val operand = arena.operands[value.operand - 1U64]
+    if operand.tag != 1U64 || operand.place == 0U64 { return 0U64 }
+    val source = arena.places[operand.place - 1U64]
+    if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= body.locals.len || source.local == destination.local { return 0U64 }
+    val local = arena.locals[body.locals.start + source.local]
+    if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
+    if definitions[source.local] != 1U64 || uses[source.local] != 1U64 || source.typeTerm != destination.typeTerm { return 0U64 }
+    // No subsequent computation may overwrite the result or loop back to the
+    // use. Lexical cleanup is left to the existing ownership/drop analysis.
+    mut val index: U64 = statementIndex + 1U64
+    while index < block.statements.len {
+        val following = arena.statements[block.statements.start + index]
+        if following.tag != 6U64 && following.tag != 7U64 { return 0U64 }
+        index += 1U64
+    }
+    return value.operand
+}
+
+// A single-definition owned temporary whose sole use is an identity return
+// has no remaining observer. Forward that ownership instead of creating an
+// extra share and immediately destroying the temporary. Parameters, named
+// locals, borrowed storage and nonidentity conversions are not candidates.
+export fn optimizeCanonicalMidReturns(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+    if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return canonical }
+    val body = arena.bodies[canonical.body - 1U64]
+    mut val definitions: Array[U64] = []
+    mut val uses: Array[U64] = []
+    mut val local: U64 = 0U64
+    while local < body.locals.len {
+        definitions.append(0U64)
+        uses.append(0U64)
+        local += 1U64
+    }
+    if !countBody(arena: arena, body: body, definitions: inout definitions, uses: inout uses) { return canonical }
+    // Plan before appending: a body with no applicable transfer allocates no
+    // replacement rows. Only changed statement ranges are copied below.
+    mut val transfers: Array[U64] = []
+    mut val changed: Bool = false
+    mut val blockIndex: U64 = 0U64
+    while blockIndex < body.blocks.len {
+        val block = arena.blocks[body.blocks.start + blockIndex]
+        mut val transfer: U64 = 0U64
+        mut val index: U64 = 0U64
+        while index < block.statements.len {
+            if returnTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 {
+                transfer = index + 1U64
+                changed = true
+            }
+            index += 1U64
+        }
+        transfers.append(transfer)
+        blockIndex += 1U64
+    }
+    if !changed { return canonical }
+    val blockStart: U64 = arena.blocks.count()
+    blockIndex = 0U64
+    while blockIndex < body.blocks.len {
+        val block = arena.blocks[body.blocks.start + blockIndex]
+        if transfers[blockIndex] == 0U64 {
+            arena.blocks.append(block)
+        } else {
+            val statementStart: U64 = arena.statements.count()
+            mut val index: U64 = 0U64
+            while index < block.statements.len {
+                val statement = arena.statements[block.statements.start + index]
+                if index + 1U64 == transfers[blockIndex] {
+                    val value = arena.rvalues[statement.value - 1U64]
+                    arena.operands.append(<MidOperandNode tag=2U64 place=arena.operands[value.operand - 1U64].place />)
+                    arena.rvalues.append(<MidRvalueNode tag=1U64 operand=arena.operands.count() />)
+                    arena.statements.append(<MidStatementNode tag=1U64 destination=statement.destination value=arena.rvalues.count() />)
+                } else {
+                    arena.statements.append(statement)
+                }
+                index += 1U64
+            }
+            arena.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len /> terminator=block.terminator />)
+        }
+        blockIndex += 1U64
+    }
+    arena.bodies.append(<MidBodyNode bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=body.locals scopes=body.scopes blocks=<MidRange start=blockStart len=body.blocks.len /> entry=body.entry />)
+    return <MidCanonicalBody body=arena.bodies.count() />
+}

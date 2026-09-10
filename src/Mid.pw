@@ -16,3 +16,6 @@ export ./Mid/Verify with { MidVerifyError, MidVerification, verifyMidBody, verif
 export ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
 export ./Mid/Instantiate with { MidInstantiateError, MidInstantiation, MidCanonicalInstantiation, instantiateMidBody, instantiateCanonicalMidBody }
 export ./Mid/Access with { MidAccessError, MidAccessElaboration, MidCanonicalAccessElaboration, elaborateMidAccesses, elaborateCanonicalMidAccesses }
+
+import ./Mid/Optimize with { optimizeCanonicalMidReturns }
+export ./Mid/Optimize with { optimizeCanonicalMidReturns }

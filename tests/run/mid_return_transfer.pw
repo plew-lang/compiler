@@ -1,0 +1,50 @@
+import @Std/Io with { write }
+import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidPlace, MidBorrowCapability, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidScope }
+import /Mid/Optimize with { optimizeCanonicalMidReturns }
+
+fn check(mode: U64) {
+    mut val arena: MidCanonicalArena = <MidCanonicalArena />
+    val source: MidPlace = <MidPlace local=0U64 typeTerm=1U64 />
+    val result: MidPlace = <MidPlace local=1U64 typeTerm=1U64 />
+    val extra: MidPlace = <MidPlace local=2U64 typeTerm=1U64 />
+    mut val name: U64 = 0U64
+    if mode == 2U64 { name = 17U64 }
+    val temporary: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=mode == 1U64 isBorrowed=mode == 3U64 sourceNameStart=name />
+    val returned: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isReturnPlace=true />
+    val unused: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false />
+    val initialize: MidStatement = <MidStatement.Assign destination=source value=<MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=9U64 isNegative=false isBool=false typeTerm=1U64 /> /> /> />
+    mut val statements: Array[MidStatement] = [initialize]
+    if mode == 4U64 { statements.append(<MidStatement.Assign destination=extra value=<MidRvalue.Use operand=<MidOperand.Copy place=source /> /> />) }
+    if mode == 5U64 { statements.append(initialize) }
+    if mode == 6U64 { statements.append(<MidStatement.Assign destination=extra value=<MidRvalue.Use operand=<MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> /> /> />) }
+    statements.append(<MidStatement.Assign destination=result value=<MidRvalue.Use operand=<MidOperand.Copy place=source /> /> />)
+    statements.append(<MidStatement.ScopeExit scope=0U64 />)
+    val body: MidBody = <MidBody locals=[temporary, returned, unused] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=result /> /> />] />
+    val original: MidCanonicalBody = arena.store(body: body)
+    val optimized: MidCanonicalBody = optimizeCanonicalMidReturns(arena: inout arena, canonical: original)
+    val node = arena.bodies[optimized.body - 1U64]
+    val block = arena.blocks[node.blocks.start]
+    val statement = arena.statements[block.statements.start + statements.count() - 2U64]
+    val value = arena.rvalues[statement.value - 1U64]
+    val operand = arena.operands[value.operand - 1U64]
+    if mode == 0U64 {
+        if operand.tag != 2U64 || optimized.body == original.body { write(s: "FAIL transfer\n") }
+        else { write(s: "transfer\n") }
+        val previous = arena.bodies[original.body - 1U64]
+        val previousBlock = arena.blocks[previous.blocks.start]
+        val previousStatement = arena.statements[previousBlock.statements.start + 1U64]
+        if arena.operands[arena.rvalues[previousStatement.value - 1U64].operand - 1U64].tag == 1U64 { write(s: "immutable\n") }
+        else { write(s: "FAIL immutable\n") }
+    } else {
+        if operand.tag != 1U64 || optimized.body != original.body { write(s: "FAIL preserve\n") }
+        else { write(s: "preserve\n") }
+    }
+}
+
+fn main() {
+    mut val mode: U64 = 0U64
+    while mode < 7U64 {
+        check(mode: mode)
+        mode += 1U64
+    }
+}
