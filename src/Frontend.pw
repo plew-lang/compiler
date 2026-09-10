@@ -1,3 +1,4 @@
+import ./KeywordSpans with { KeywordSpans }
 // @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler. It
 // DEFINES the shared compiler state `Comp` (＋ the name interner) and all analysis
 // over it: parsing (Parser), Codegen analysis (lower / resolve / check / infer /
@@ -59,8 +60,9 @@ export struct Comp {
     // declaration / conformance / name side-tables built during loading & analysis
     // (see `Decls`): traits, conformances, method aliases,
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
-    // the import-name / chain-result / keyword-span caches.
+    // the import-name / chain-result caches.
     pub mut val decls: Decls = <Decls />
+    pub mut val keywordSpans: KeywordSpans = <KeywordSpans />
     // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
     pub mut val parseScratch: ParseScratch = <ParseScratch />
     // the per-body codegen / lowering / verify cursor (see `Cursor`).

@@ -1,0 +1,22 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    val source = compiler.internBytes(s: "stable")
+    val first = compiler.kwSpan(kw: "stable", kwLen: 6U64)
+    val repeat = compiler.kwSpan(kw: "stable", kwLen: 6U64)
+    if first.nameStart != source.nameStart || repeat.fieldStart != source.nameStart || first.nameLen != 6U64 { return }
+    if compiler.keywordSpans.sourceScans != 1U64 { return }
+    val missing = compiler.kwSpan(kw: "later", kwLen: 5U64)
+    if missing.nameLen != 0U64 { return }
+    compiler.addKwSpan(kw: "later")
+    val registered = compiler.kwSpan(kw: "later", kwLen: 99U64)
+    if registered.nameLen != 5U64 || registered.fieldLen != 5U64 { return }
+    compiler.addKwSpan(kw: "later")
+    val duplicate = compiler.kwSpan(kw: "later", kwLen: 5U64)
+    if duplicate.nameStart != registered.nameStart { return }
+    compiler.addKwSpan(kw: "stable")
+    val replaced = compiler.kwSpan(kw: "stable", kwLen: 1U64)
+    if replaced.nameStart == first.nameStart || replaced.nameLen != 6U64 { return }
+    write(s: "kw-span-contract-ok\n")
+}

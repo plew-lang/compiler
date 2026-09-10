@@ -1,0 +1,132 @@
+// Memoized spelling lookup over append-only source. Keys live separately so
+// recording a miss never creates a source occurrence. Rows contain no owners.
+// One table follows one append-only source lineage. Copy table and source
+// together before extending them independently; replacing existing source
+// bytes requires a fresh table. Comp owns this lifecycle.
+export struct KeywordSpan {
+    pub val start: U64 = 0U64
+    pub val length: U64 = 0U64
+}
+pub impl KeywordSpan { factory }
+struct Entry {
+    pub val hash: U64
+    pub val keyStart: U64
+    pub val keyLength: U64
+    pub val start: U64 = 0U64
+    pub val found: Bool = false
+    pub val registered: Bool = false
+    pub val sourceSize: U64 = 0U64
+}
+pub impl Entry { factory }
+export struct KeywordSpans {
+    mut val keys: Array[U8] = []
+    mut val entries: Array[Entry] = []
+    mut val slots: Array[U64] = []
+    // Counts actual searches, allowing tests to assert work, not just results.
+    pub mut val sourceScans: U64 = 0U64
+}
+fn spellingHash(spelling: Array[U8]) -> U64 {
+    mut val hash: U64 = 14695981039346656037U64
+    val length: U64 = spelling.count()
+    mut val index: U64 = 0U64
+    while index < length {
+        hash = U64.wrappingMul(hash ^ (spelling[index] as U64), 1099511628211U64)
+        index += 1U64
+    }
+    return hash
+}
+fn bytesMatch(bytes: Array[U8], start: U64, spelling: Array[U8]) -> Bool {
+    val length: U64 = spelling.count()
+    mut val index: U64 = 0U64
+    while index < length {
+        if bytes[start + index] != spelling[index] { return false }
+        index += 1U64
+    }
+    return true
+}
+impl KeywordSpans {
+    inout fn grow() {
+        mut val capacity: U64 = self.slots.count() * 2U64
+        if capacity == 0U64 { capacity = 8U64 }
+        self.slots = []
+        mut val index: U64 = 0U64
+        while index < capacity {
+            self.slots.append(0U64)
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.entries.count() {
+            mut val slot: U64 = self.entries[index].hash & (capacity - 1U64)
+            while self.slots[slot] != 0U64 { slot = (slot + 1U64) & (capacity - 1U64) }
+            self.slots.set(i: slot, value: index + 1U64)
+            index += 1U64
+        }
+    }
+    // One canonical row per spelling, with a derived one-based slots index.
+    inout fn row(spelling: Array[U8]) -> U64 {
+        val hash: U64 = spellingHash(spelling: spelling)
+        val length: U64 = spelling.count()
+        if self.slots.count() == 0U64 { self.grow() }
+        mut val capacity: U64 = self.slots.count()
+        mut val slot: U64 = hash & (capacity - 1U64)
+        while self.slots[slot] != 0U64 {
+            val index: U64 = self.slots[slot] - 1U64
+            val entry: Entry = self.entries[index]
+            if entry.hash == hash && entry.keyLength == length && bytesMatch(bytes: self.keys, start: entry.keyStart, spelling: spelling) { return index }
+            slot = (slot + 1U64) & (capacity - 1U64)
+        }
+        if (self.entries.count() + 1U64) * 4U64 > capacity * 3U64 {
+            self.grow()
+            capacity = self.slots.count()
+            slot = hash & (capacity - 1U64)
+            while self.slots[slot] != 0U64 { slot = (slot + 1U64) & (capacity - 1U64) }
+        }
+        val index: U64 = self.entries.count()
+        val start: U64 = self.keys.count()
+        mut val cursor: U64 = 0U64
+        while cursor < length {
+            self.keys.append(spelling[cursor])
+            cursor += 1U64
+        }
+        self.entries.append(<Entry hash=hash keyStart=start keyLength=length />)
+        self.slots.set(i: slot, value: index + 1U64)
+        return index
+    }
+}
+
+pub impl KeywordSpans {
+    factory
+
+    inout fn register(spelling: Array[U8], start: U64) {
+        val index: U64 = self.row(spelling: spelling)
+        val entry: Entry = self.entries[index]
+        if entry.registered { return }
+        self.entries.set(i: index, value: <Entry hash=entry.hash keyStart=entry.keyStart keyLength=entry.keyLength start=start found=true registered=true />)
+    }
+    inout fn lookup(source: Array[U8], spelling: Array[U8], requestLength: U64) -> KeywordSpan {
+        val index: U64 = self.row(spelling: spelling)
+        val entry: Entry = self.entries[index]
+        // The old registration lookup ignores requestLength. Without a
+        // registration, a mismatched length can never pass rangeEquals.
+        if entry.registered { return <KeywordSpan start=entry.start length=entry.keyLength /> }
+        if requestLength != entry.keyLength { return <KeywordSpan /> }
+        if entry.found { return <KeywordSpan start=entry.start length=entry.keyLength /> }
+        if entry.keyLength == 0U64 { return <KeywordSpan /> }
+        val size: U64 = source.count()
+        // A new nonempty query on empty source is already known to be absent.
+        if entry.sourceSize == size { return <KeywordSpan /> }
+        mut val start: U64 = 0U64
+        mut val found: Bool = false
+        self.sourceScans += 1U64
+        if size >= entry.keyLength {
+            val last: U64 = size - entry.keyLength
+            while start <= last && !found {
+                if bytesMatch(bytes: source, start: start, spelling: spelling) { found = true }
+                else { start += 1U64 }
+            }
+        }
+        self.entries.set(i: index, value: <Entry hash=entry.hash keyStart=entry.keyStart keyLength=entry.keyLength start=start found=found sourceSize=size />)
+        if found { return <KeywordSpan start=start length=entry.keyLength /> }
+        return <KeywordSpan />
+    }
+}
