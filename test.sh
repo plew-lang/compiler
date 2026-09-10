@@ -100,6 +100,11 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     # tests need no such companion.
     ir_expect="tests/run/$name.ll.expect"
     if [ -f "$ir_expect" ] && ! grep -qF "$(cat "$ir_expect")" "$ll"; then echo "FAIL $name(ir)"; exit 0; fi
+    # Runtime output cannot detect an unnecessary metadata read. Check the
+    # final-owner release branches in this fixture's actual generated LLVM.
+    if [ "$name" = array_drop_count ] && ! python3 ./test-array-release-count.py "$ll" >/dev/null; then
+        echo "FAIL $name(release-count-ir)"; exit 0
+    fi
     extra_c=""
     [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
     if ! clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
