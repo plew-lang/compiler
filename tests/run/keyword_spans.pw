@@ -1,0 +1,52 @@
+import @Std/Io with { write }
+import /KeywordSpans with { KeywordSpans }
+
+fn main() {
+    mut val table: KeywordSpans = <KeywordSpans />
+    mut val source: Array[U8] = "stable:la".bytes()
+    val first = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 6U64)
+    mut val repeat: U64 = 0U64
+    while repeat < 100U64 {
+        val same = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 6U64)
+        if same.start != first.start { return }
+        repeat += 1U64
+    }
+    if first.length != 6U64 || table.sourceScans != 1U64 { return }
+    val miss = table.lookup(source: source, spelling: "later".bytes(), requestLength: 5U64)
+    val again = table.lookup(source: source, spelling: "later".bytes(), requestLength: 5U64)
+    if miss.length != 0U64 || again.length != 0U64 || table.sourceScans != 2U64 { return }
+    source.append(116U8)
+    source.append(101U8)
+    source.append(114U8)
+    val later = table.lookup(source: source, spelling: "later".bytes(), requestLength: 5U64)
+    if later.start != 7U64 || later.length != 5U64 || table.sourceScans != 3U64 { return }
+    val stable = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 6U64)
+    if stable.start != 0U64 || table.sourceScans != 3U64 { return }
+    val wrong = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 7U64)
+    if wrong.length != 0U64 || table.sourceScans != 3U64 { return }
+    table.register(spelling: "stable".bytes(), start: 100U64)
+    table.register(spelling: "stable".bytes(), start: 200U64)
+    val registered = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 7U64)
+    if registered.start != 100U64 || registered.length != 6U64 { return }
+    val empty = table.lookup(source: source, spelling: "".bytes(), requestLength: 0U64)
+    if empty.start != 0U64 || empty.length != 0U64 { return }
+    mut val index: U8 = 0U8
+    while index < 128U8 {
+        mut val key: Array[U8] = [255U8]
+        key.append(index)
+        table.register(spelling: key, start: (index as U64) + 1000U64)
+        index += 1U8
+    }
+    index = 0U8
+    while index < 128U8 {
+        mut val key: Array[U8] = [255U8]
+        key.append(index)
+        val entry = table.lookup(source: source, spelling: key, requestLength: 2U64)
+        if entry.start != (index as U64) + 1000U64 || entry.length != 2U64 { return }
+        index += 1U8
+    }
+    mut val other: KeywordSpans = <KeywordSpans />
+    val absent = other.lookup(source: "".bytes(), spelling: "stable".bytes(), requestLength: 6U64)
+    if absent.length != 0U64 { return }
+    write(s: "keyword-spans-ok\n")
+}

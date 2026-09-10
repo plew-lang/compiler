@@ -506,23 +506,16 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // A source span whose bytes read `kw` (length `kwLen`). The type system recovers
-    // a named type from a (start,len) span; some values have a known type with no
-    // source span to point at (a string literal's `String`, `.bytes()`'s `U8`). Reuse
-    // any occurrence of `kw` in the source as a label span (the match is purely the
-    // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
-    // Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.decls.kwCache`, so a
-    // built-in name with no guaranteed source occurrence has a stable, addressable
-    // span without scanning (or planting a comment in) the source.
+    // Preserve source append order and first-registration precedence.
     inout fn addKwSpan(kw: String) {
+        val bytes: Array[U8] = kw.bytes()
         val start: U64 = self.arena.bytes.count()
-        val b: Array[U8] = kw.bytes()
-        mut val i: U64 = 0
-        while i < b.count() {
-            self.arena.bytes.append(b[i])
-            i += 1
+        mut val index: U64 = 0U64
+        while index < bytes.count() {
+            self.arena.bytes.append(bytes[index])
+            index += 1U64
         }
-        self.decls.kwCache.append(<Bind nameStart=start nameLen=b.count() fieldStart=start fieldLen=b.count() />)
+        self.keywordSpans.register(spelling: bytes, start: start)
     }
 
     // Build the built-in-name span cache once (before any kwSpan use). Covers exactly
@@ -559,31 +552,10 @@ pub impl Comp {
         }
     }
 
-    // Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any
-    // name not pre-cached falls back to a source scan (a len-0 Bind if absent, which
-    // callers treat as "no span").
+    // The table owns only query state; source/registration semantics stay here.
     inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
-        mut val ci: U64 = 0
-        while ci < self.decls.kwCache.count() {
-            val e: Bind = self.decls.kwCache[ci]
-            if rangeEquals(bytes: self.arena.bytes, start: e.nameStart, len: e.nameLen, kw: kw) {
-                return e
-            }
-            ci += 1
-        }
-        val n: U64 = self.arena.bytes.count()
-        if n < kwLen {
-            return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
-        }
-        mut val i: U64 = 0
-        val last: U64 = n - kwLen
-        while i <= last {
-            if rangeEquals(bytes: self.arena.bytes, start: i, len: kwLen, kw: kw) {
-                return <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
-            }
-            i += 1
-        }
-        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        val span = self.keywordSpans.lookup(source: self.arena.bytes, spelling: kw.bytes(), requestLength: kwLen)
+        return <Bind nameStart=span.start nameLen=span.length fieldStart=span.start fieldLen=span.length />
     }
 
     // String literals are monomorphic (always `String`), so `val s = "hi"` infers
