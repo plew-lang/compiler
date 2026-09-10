@@ -1682,7 +1682,7 @@ pub impl Comp {
     // currently being scanned.  Generic templates share their AST, so this
     // cannot live in the AST-global TypeCache (which is intentionally only for
     // instance-invariant decisions).
-    inout fn finalCalleeCount() -> U64 { return self.arena.finalCallees.count() }
+    fn finalCalleeCount() -> U64 { return self.arena.finalCallees.count() }
 
     inout fn currentBodyInstanceId() -> U64 {
         if self.cur.bodyId != 0U64 { return self.cur.bodyId }
@@ -1726,7 +1726,7 @@ pub impl Comp {
         return <CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=slot />
     }
 
-    inout fn finalCalleeKeyEqual(entry: U64, bodyId: U64, siteKey: CallSiteKey) -> Bool {
+    fn finalCalleeKeyEqual(entry: U64, bodyId: U64, siteKey: CallSiteKey) -> Bool {
         val e: CallResolution = self.arena.finalCallees[entry]
         return e.bodyId == bodyId && self.sameCallSiteKey(a: e.siteKey, b: siteKey)
     }
@@ -2212,13 +2212,11 @@ pub impl Comp {
         return 0U64
     }
 
-    // `CallResolution` is keyed by the concrete body instance rather than AST alone:
-    // generic templates share AST nodes, while their selected callees need not.
-    // Keep the key comparison here, rather than duplicating it in every table
-    // accessor.  Mono writes and LLVM reads the same one key definition.
-    inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
-        val bodyId: U64 = self.currentBodyInstanceId()
-        val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+    // The final-call index is frontend-owned semantic output.  It accepts the
+    // complete published key, rather than reconstructing one from a backend
+    // cursor or an AST navigation anchor.  `finalCalleeCount()` is the sole
+    // not-found sentinel, matching the other final-resolution index readers.
+    fn finalCalleeIndexForKey(bodyId: U64, siteKey: CallSiteKey) -> U64 {
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         if capacity == 0U64 { return self.finalCalleeCount() }
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
@@ -2228,6 +2226,15 @@ pub impl Comp {
             indexSlot = (indexSlot + 1U64) % capacity
         }
         return self.finalCalleeCount()
+    }
+
+    // AST navigation adapter for legacy backend sites.  The semantic lookup
+    // itself remains the explicit-key reader above, which Mid can use without
+    // reintroducing an ambient body or ExprId dependency.
+    inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val bodyId: U64 = self.currentBodyInstanceId()
+        val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        return self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
     }
 
     // A call in a body without substitutions is instance-invariant.  Its

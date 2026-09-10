@@ -100,6 +100,8 @@ pub impl LlvmCtx {
                         self.traceCodegenU64(n: bodyId)
                         eprint(text: " fn=")
                         self.traceCodegenU64(n: body.fnIdx)
+                        eprint(text: " name=")
+                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
                         eprint(text: "\n")
                     }
                     val savedP: Array[Bind] = c.cur.typeParams
