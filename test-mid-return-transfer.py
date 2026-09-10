@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -55,7 +56,14 @@ for index, name in enumerate(cases, 1):
                 ran = subprocess.run([str(binary)], stdout=stream, stderr=errors, env=environment, timeout=55)
             row['run'] = ran.returncode
             row['golden_equal'] = (output / (name + '.out')).read_bytes() == source.with_suffix('.out').read_bytes()
-    row['passed'] = row.get('run') == 0 and row.get('golden_equal') is True
+    if name == 'mid_return_bytes_cow' and compiled.returncode == 0:
+        # This fixture has one raw-buffer-to-Array wrapper (Array.overBuffer).
+        # Discover its symbol/type from its ABI, not unstable gf/gs numbering.
+        wrappers = [match.group() for match in re.finditer(r'define (%gs[0-9]+) @[^ (]+\(ptr %0\) \{\n.*?\n\}', llvm.read_text(), re.S)
+                    if 'insertvalue ' + match.group(1) in match.group()]
+        row['buffer_wrapper_count'] = len(wrappers)
+        row['minimal_return_arc'] = len(wrappers) == 1 and wrappers[0].count('@plew_rawbuf_retain(') == 1 and not re.search(r'@(?:pwdrop|plew_rawbuf_drop)', wrappers[0])
+    row['passed'] = row.get('run') == 0 and row.get('golden_equal') is True and row.get('minimal_return_arc', True)
     results.append(row)
     (output / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     print(f"[return-transfer] {index}/{len(cases)} {'PASS' if row['passed'] else 'FAIL'} {name}", flush=True)
