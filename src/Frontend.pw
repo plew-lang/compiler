@@ -1590,6 +1590,7 @@ export fn runFrontend(c: inout Comp) {
         rootIndex += 1U64
     }
     tracePhase(c: inout c, label: "predeclare:done")
+    c.seedWellKnownSpans()
     tracePhase(c: inout c, label: "lower:start")
     rootIndex = 0U64
     mut val lowerIndex: U64 = 0U64
@@ -1612,10 +1613,9 @@ export fn runFrontend(c: inout Comp) {
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
     // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded
     // first above. There is no implicit prelude module anymore.)
-    // built-in-name span cache (kwSpan): append the lang-item names at known
-    // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
-    // the source. Before any analysis (which calls kwSpan via exprType).
-    c.buildKwCache()
+    // Declaration identity is known only after lowering. The spelling registry
+    // itself was seeded before lower because lowerers also need it.
+    c.captureLangArrayDecl()
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     c.rewriteAssocValReads()

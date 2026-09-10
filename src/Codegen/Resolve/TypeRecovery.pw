@@ -532,10 +532,10 @@ pub impl Comp {
         }
     }
 
-    // Build the built-in-name span cache once (before any kwSpan use). Covers exactly
-    // the names kwSpan is asked for. Appended after the lexed source, so token offsets
-    // are unaffected.
-    inout fn buildKwCache() {
+    // Register compiler-owned spellings immediately after loading. Their spans are
+    // synthetic and appended after every parsed file, so source token offsets stay
+    // valid. This must precede lowering: lowerers also need wellKnownSpan.
+    inout fn seedWellKnownSpans() {
         self.addKwSpan(kw: "String")
         self.addKwSpan(kw: "U8")
         self.addKwSpan(kw: "U64")
@@ -558,6 +558,11 @@ pub impl Comp {
         self.addKwSpan(kw: "Err")
         self.addKwSpan(kw: "Some")
         self.addKwSpan(kw: "")
+    }
+
+    // Lowering records declarations, so this identity lookup belongs after it.
+    // Keep it separate from seedWellKnownSpans: the latter is required earlier.
+    inout fn captureLangArrayDecl() {
         val langModule: U64 = self.modules.langModule
         mut val i: U64 = 0U64
         while i < self.arena.structs.count() {
