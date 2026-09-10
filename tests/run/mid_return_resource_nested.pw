@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Inner {
+    pub val number: I32
+    deinit { print(self.number) }
+}
+pub impl Inner { factory }
+unique struct Outer {
+    pub val number: I32
+    deinit {
+        val inner: Inner = <Inner number=82I32 />
+        print(self.number)
+    }
+}
+pub impl Outer { factory }
+struct Holder { pub val resource: MutableRef[Outer] }
+pub impl Holder { factory }
+fn make() -> Holder { return <Holder resource=<MutableRef value=<Outer number=81I32 /> /> /> }
+fn forward() -> Holder { return make() }
+fn exercise() {
+    val holder: Holder = forward()
+    print("owned")
+}
+fn main() {
+    exercise()
+    print("released")
+}

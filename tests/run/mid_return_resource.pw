@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Resource {
+    pub val number: I32
+    deinit { print(self.number) }
+}
+pub impl Resource { factory }
+struct Holder { pub val resource: MutableRef[Resource] }
+pub impl Holder { factory }
+fn freshHolder() -> Holder {
+    return <Holder resource=<MutableRef value=<Resource number=71I32 /> /> />
+}
+fn forwardedHolder() -> Holder { return freshHolder() }
+
+
+fn exercise() {
+    val holder: Holder = forwardedHolder()
+    print("owned")
+}
+fn main() {
+    exercise()
+    print("released")
+}

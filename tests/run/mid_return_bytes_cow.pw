@@ -1,5 +1,4 @@
 import @Std/Io with { print }
-import @Std/Core with { MutableRef }
 
 fn returnedBytes(text: String) -> Array[U8] { return text.bytes() }
 fn returnedText(text: String) -> String { return text }
@@ -9,18 +8,6 @@ pub impl[T] Box[T] { factory }
 fn boxedBytes(text: String) -> Box[Array[U8]] {
     return <Box[Array[U8]] value=text.bytes() />
 }
-
-unique struct Resource {
-    pub val number: I32
-    deinit { print(self.number) }
-}
-pub impl Resource { factory }
-struct Holder { pub val resource: MutableRef[Resource] }
-pub impl Holder { factory }
-fn freshHolder() -> Holder {
-    return <Holder resource=<MutableRef value=<Resource number=71I32 /> /> />
-}
-fn forwardedHolder() -> Holder { return freshHolder() }
 
 fn exercise() {
     val text: String = "ab" + "cd"
@@ -32,10 +19,7 @@ fn exercise() {
     print(bytes[0U64])
     print(shared[0U64])
     print(boxedBytes(text: text).value.count())
-    val holder: Holder = forwardedHolder()
-    print("owned")
 }
 fn main() {
     exercise()
-    print("released")
 }

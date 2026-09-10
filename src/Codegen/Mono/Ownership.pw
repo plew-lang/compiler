@@ -1,0 +1,73 @@
+// An owned value makes its destruction reachable even without an authored
+// call expression. Close these edges before LLVM, alongside ordinary calls.
+// Roots are concrete values in finalized calls/constructions, never the list
+// of imported declarations or provisional layout requests.
+pub impl Comp {
+    inout fn enqueueFinalDestruction(typeRef: U64, visited: inout Array[Bool]) {
+        if typeRef == 0U64 || typeRef >= self.arena.types.count() { return }
+        while visited.count() <= typeRef { visited.append(false) }
+        if visited[typeRef] { return }
+        visited.set(i: typeRef, value: true)
+        val type: TypeRef = self.arena.types[typeRef]
+        if type.isRecord {
+            mut val index: U64 = 0U64
+            while index < type.recordFieldTerms.count() {
+                self.enqueueFinalDestruction(typeRef: type.recordFieldTerms[index], visited: inout visited)
+                index += 1U64
+            }
+            return
+        }
+        val underlying: U64 = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
+        if underlying != 0U64 && underlying != typeRef {
+            self.enqueueFinalDestruction(typeRef: underlying, visited: inout visited)
+            return
+        }
+        match self.arcClassOfRef(ref: typeRef) {
+            ArcClass.StructVal(sidx: val index) => {
+                val declaration: StructDef = self.arena.structs[index]
+                if declaration.isUnique {
+                    val destructor: U64 = self.structOwnDeinitFi(sidx: index)
+                    if destructor < self.arena.funcs.count() {
+                        self.enqueueFinalBody(fnIdx: destructor, args: type.args, recvInstRef: typeRef)
+                    }
+                }
+                mut val field: U64 = 0U64
+                while field < declaration.fields.count() {
+                    val term: U64 = self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef)
+                    self.enqueueFinalDestruction(typeRef: term, visited: inout visited)
+                    field += 1U64
+                }
+            }
+            ArcClass.EnumVal(eidx: val index) => {
+                val declaration: EnumDef = self.arena.enums[index]
+                mut val variant: U64 = 0U64
+                while variant < declaration.variants.count() {
+                    mut val field: U64 = 0U64
+                    while field < declaration.variants[variant].fields.count() {
+                        val term: U64 = self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef)
+                        self.enqueueFinalDestruction(typeRef: term, visited: inout visited)
+                        field += 1U64
+                    }
+                    variant += 1U64
+                }
+            }
+            ArcClass.BufferLike(elem: val element) => {
+                self.enqueueFinalDestruction(typeRef: element, visited: inout visited)
+            }
+            ArcClass.RefCell(inst: val instance) => {
+                self.enqueueFinalDestruction(typeRef: self.arena.types[instance].args[0U64], visited: inout visited)
+            }
+            ArcClass.PromiseCell(inst: val instance) => {
+                self.enqueueFinalDestruction(typeRef: self.arena.types[instance].args[0U64], visited: inout visited)
+            }
+            // Weak destruction never destroys the pointee. A closure's values
+            // and an existential's concrete source join through their own
+            // reachable construction/call results, not the erased type.
+            ArcClass.WeakCell(inst: _) => {}
+            ArcClass.ClosureVal => {}
+            ArcClass.AnyBox => {}
+            ArcClass.StringLike => {}
+            ArcClass.Scalar => {}
+        }
+    }
+}

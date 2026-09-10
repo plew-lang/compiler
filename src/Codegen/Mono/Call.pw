@@ -4317,9 +4317,24 @@ pub impl Comp {
         // reaches a fixed point without a second `(Func,args)` queue, so a
         // generic free function cannot be reopened under a different identity
         // after its CallResolution has been frozen.
-        while bodyI < self.monoWork.bodyInstances.count() {
-            self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
-            bodyI += 1U64
+        mut val aggregateI: U64 = 0U64
+        mut val callI: U64 = 0U64
+        mut val destructionTypes: Array[Bool] = []
+        while bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
+            if bodyI < self.monoWork.bodyInstances.count() {
+                self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
+                bodyI += 1U64
+            }
+            // Destructors can call ordinary functions and construct further
+            // values. Both queues must close together, before the freeze.
+            while aggregateI < self.arena.finalAggregates.count() {
+                self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef, visited: inout destructionTypes)
+                aggregateI += 1U64
+            }
+            while callI < self.finalCalleeCount() {
+                self.enqueueFinalDestruction(typeRef: self.arena.finalCallees[callI].resultTypeRef, visited: inout destructionTypes)
+                callI += 1U64
+            }
         }
         self.verifyFinalCallResolutions()
         self.freezeFinalAccesses()
