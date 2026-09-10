@@ -518,9 +518,8 @@ pub impl Comp {
         self.keywordSpans.register(spelling: bytes, start: start)
     }
 
-    // Build the built-in-name span cache once (before any kwSpan use). Covers exactly
-    // the names kwSpan is asked for. Appended after the lexed source, so token offsets
-    // are unaffected.
+    // Register built-in spellings after lowering. Earlier source results are
+    // replaced by these registrations; existing source offsets stay unchanged.
     inout fn buildKwCache() {
         self.addKwSpan(kw: "String")
         self.addKwSpan(kw: "U8")

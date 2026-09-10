@@ -41,8 +41,7 @@ fn bytesMatch(bytes: Array[U8], start: U64, spelling: Array[U8]) -> Bool {
     }
     return true
 }
-pub impl KeywordSpans {
-    factory
+impl KeywordSpans {
     inout fn grow() {
         mut val capacity: U64 = self.slots.count() * 2U64
         if capacity == 0U64 { capacity = 8U64 }
@@ -90,6 +89,11 @@ pub impl KeywordSpans {
         self.slots.set(i: slot, value: index + 1U64)
         return index
     }
+}
+
+pub impl KeywordSpans {
+    factory
+
     inout fn register(spelling: Array[U8], start: U64) {
         val index: U64 = self.row(spelling: spelling)
         val entry: Entry = self.entries[index]
