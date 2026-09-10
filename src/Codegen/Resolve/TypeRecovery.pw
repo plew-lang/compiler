@@ -521,21 +521,6 @@ pub impl Comp {
         return self.decls.kwCache.count()
     }
 
-    // A miss is conditional on the source extent.  Its String is private state:
-    // adding it to Arena.bytes would incorrectly create a future source match.
-    inout fn kwSpanMissIndex(kw: String, kwLen: U64) -> U64 {
-        mut val index: U64 = 0U64
-        while index < self.decls.kwSpanMisses.count() {
-            val miss: KwSpanMiss = self.decls.kwSpanMisses[index]
-            val bytes: Array[U8] = miss.key.bytes()
-            if miss.requestLen == kwLen && rangeEquals(bytes: bytes, start: 0U64, len: bytes.count(), kw: kw) {
-                return index
-            }
-            index += 1U64
-        }
-        return self.decls.kwSpanMisses.count()
-    }
-
     // Append `kw` to Arena.bytes and register its stable span. A registration
     // wins over a source occurrence, but repeated registration retains the first
     // registered span just as the former insertion-ordered cache did.
@@ -604,26 +589,17 @@ pub impl Comp {
     }
 
     // Return a stable source span naming `kw`. Registered names win; a source
-    // first-match remains valid after appends; only a prior miss is rescanned
-    // after bytes grow.
+    // first-match remains valid after appends. Misses deliberately rescan:
+    // source growth may turn one into a match, and storing its String would
+    // introduce ownership machinery into this scalar frontend query.
     inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
         val cachedIndex: U64 = self.kwCacheIndex(kw: kw, kwLen: kwLen)
         if cachedIndex < self.decls.kwCache.count() {
             return self.decls.kwCache[cachedIndex]
         }
 
-        val missIndex: U64 = self.kwSpanMissIndex(kw: kw, kwLen: kwLen)
         val n: U64 = self.arena.bytes.count()
-        if missIndex < self.decls.kwSpanMisses.count() && self.decls.kwSpanMisses[missIndex].sourceByteCount == n {
-            return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
-        }
         if n < kwLen {
-            val missing: KwSpanMiss = <KwSpanMiss key=kw requestLen=kwLen sourceByteCount=n />
-            if missIndex < self.decls.kwSpanMisses.count() {
-                self.decls.kwSpanMisses.set(i: missIndex, value: missing)
-            } else {
-                self.decls.kwSpanMisses.append(missing)
-            }
             return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
         }
         mut val i: U64 = 0
@@ -635,12 +611,6 @@ pub impl Comp {
                 return found
             }
             i += 1
-        }
-        val missing: KwSpanMiss = <KwSpanMiss key=kw requestLen=kwLen sourceByteCount=n />
-        if missIndex < self.decls.kwSpanMisses.count() {
-            self.decls.kwSpanMisses.set(i: missIndex, value: missing)
-        } else {
-            self.decls.kwSpanMisses.append(missing)
         }
         return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
     }

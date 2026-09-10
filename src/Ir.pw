@@ -539,17 +539,6 @@ export struct Bind {
     pub val isSendable: Bool = false
 }
 
-// A negative kwSpan answer cannot use Arena.bytes as its key: appending that
-// key would make a later source search see text which was never in the source.
-// Keep the owned String only for misses; positive answers are ordinary source
-// spans in Decls.kwCache.
-export struct KwSpanMiss {
-    pub val key: String
-    pub val requestLen: U64
-    pub val sourceByteCount: U64
-}
-pub impl KwSpanMiss { factory }
-
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
 export struct Arg {
@@ -2685,11 +2674,9 @@ pub impl DestructureSite { factory }
 // generic body. `destructureSites`: each record/struct destructure's bind list
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
 // deferred item source (see ForTypeRecipe). `kwCache` holds registered names
-// followed by memoized positive source spans; miss keys are private strings.
+// followed by memoized positive source spans. A miss is not cached because its
+// answer changes when the loader appends source bytes.
 export struct Decls {
-    pub mut val kwCache: Array[Bind] = []
-    pub mut val kwRegisteredCount: U64 = 0U64
-    pub mut val kwSpanMisses: Array[KwSpanMiss] = []
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
@@ -2759,6 +2746,11 @@ export struct Decls {
     // body with a conditional unique move must not fall back to the legacy
     // path-insensitive AST emitter while Mid migration is incremental.
     pub mut val ownershipCfgFunctions: Array[U64] = []
+    // Registered spans are the prefix; later rows memoize successful source
+    // searches. This remains at the tail so pre-existing declaration fields
+    // retain their layout while the compiler self-hosts.
+    pub mut val kwCache: Array[Bind] = []
+    pub mut val kwRegisteredCount: U64 = 0U64
 }
 pub impl Decls { factory }
 

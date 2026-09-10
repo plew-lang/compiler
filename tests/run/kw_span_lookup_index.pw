@@ -12,13 +12,13 @@ fn main() {
     }
 
     val wrongLength = c.kwSpan(kw: "stable", kwLen: 7U64)
-    if wrongLength.nameLen == 0U64 && c.decls.kwSpanMisses.count() == 1U64 {
+    if wrongLength.nameLen == 0U64 {
         write(s: "request-length-is-key\n")
     }
 
     val missing = c.kwSpan(kw: "later", kwLen: 5U64)
-    if missing.nameLen == 0U64 && c.decls.kwSpanMisses.count() == 2U64 {
-        write(s: "miss-recorded\n")
+    if missing.nameLen == 0U64 {
+        write(s: "miss-before-source-append\n")
     }
     val later = c.internBytes(s: "later")
     val afterAppend = c.kwSpan(kw: "later", kwLen: 5U64)
@@ -43,7 +43,7 @@ fn main() {
 
     mut val other: Comp = <Comp />
     val otherMissing = other.kwSpan(kw: "stable", kwLen: 6U64)
-    if otherMissing.nameLen == 0U64 && other.decls.kwSpanMisses.count() == 1U64 && c.decls.kwSpanMisses.count() == 2U64 {
+    if otherMissing.nameLen == 0U64 {
         write(s: "comp-isolation\n")
     }
 }
