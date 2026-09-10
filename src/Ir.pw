@@ -2706,6 +2706,12 @@ export struct Decls {
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
     pub mut val syntheticCallSites: Array[SyntheticCallSite] = []
+    // Direct navigation from an arena ExprId to its one producer-recorded
+    // synthetic-call fact. Entries are one-based syntheticCallSites indices;
+    // zero means that this expression is authored source, not a synthetic
+    // origin. ExprId is deliberately only a lookup anchor: CallSiteKey still
+    // uses the producer serial as semantic identity.
+    pub mut val syntheticCallSiteByExpr: Array[U64] = []
     pub mut val accessCandidates: Array[AccessCandidate] = []
     pub mut val accessUses: Array[AccessUse] = []
     // Parametric aggregate facts selected by Record. Unlike AST MakeField,

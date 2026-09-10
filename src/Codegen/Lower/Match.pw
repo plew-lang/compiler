@@ -844,7 +844,7 @@ pub impl Comp {
     inout fn lowerIndexSetAssign(recv: U64, key: U64, value: U64) -> U64 {
         val call: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: value, arg1HasLabel: false)
         val originSerial: U64 = self.arena.exprOriginSerial[call]
-        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=0U64 />)
+        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=0U64 />)
         return self.pushStmt(s: <Stmt.ExprStmt expr=call />)
     }
 

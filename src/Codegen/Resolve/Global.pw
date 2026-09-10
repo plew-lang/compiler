@@ -192,7 +192,7 @@ pub impl Comp {
                             val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                             val originSerial: U64 = self.nextExprOriginSerial
                             self.nextExprOriginSerial += 1U64
-                            self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
+                            self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                         }
                     } else {
                         // Anonymous factory form (spec/05): `factory(label: T)` lowers as an
@@ -210,7 +210,7 @@ pub impl Comp {
                                 val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                                 val originSerial: U64 = self.nextExprOriginSerial
                                 self.nextExprOriginSerial += 1U64
-                                self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
+                                self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                             }
                         }
                     }

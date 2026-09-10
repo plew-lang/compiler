@@ -30,11 +30,10 @@ pub impl Comp {
 
 
     inout fn syntheticCallReceiverTerm(exprId: U64, fallback: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.syntheticCallSites.count() {
-            val site: SyntheticCallSite = self.decls.syntheticCallSites[i]
-            if site.exprId == exprId && site.receiverTerm != 0U64 { return site.receiverTerm }
-            i += 1U64
+        val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
+        if index < self.decls.syntheticCallSites.count() {
+            val site: SyntheticCallSite = self.decls.syntheticCallSites[index]
+            if site.receiverTerm != 0U64 { return site.receiverTerm }
         }
         return fallback
     }
