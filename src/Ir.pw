@@ -1,4 +1,6 @@
-import ./SourceFiles with { SourceFiles }
+import ./SourceFiles with { SourceFiles, SourceFileRange }
+import @Std/Set with { Set }
+part ./Ir/Modules
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2756,7 +2758,8 @@ pub impl Decls { factory }
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
 export struct Modules {
-    pub mut val files: SourceFiles = <SourceFiles />
+    mut val files: SourceFiles = <SourceFiles />
+    mut val syntaxRootModules: Set[U64] = Set.new()
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
     // import EDGES (fieldStart = importing module, fieldLen = the module the import

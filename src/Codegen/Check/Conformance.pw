@@ -622,33 +622,7 @@ pub impl Comp {
     }
 
     inout fn moduleIsSyntaxRoot(mod: U64) -> Bool {
-        mut val index: U64 = 0U64
-        while index < self.modules.files.count() {
-            if self.modules.files.range(index: index).moduleId == mod {
-                if self.pathHasSuffix(path: self.modules.files.path(index: index), suffix: "/syntax/src/_.pw") {
-                    return true
-                }
-            }
-            index += 1U64
-        }
-        return false
-    }
-
-    inout fn pathHasSuffix(path: String, suffix: String) -> Bool {
-        val p: Array[U8] = path.bytes()
-        val s: Array[U8] = suffix.bytes()
-        if p.count() < s.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        val base: U64 = p.count() - s.count()
-        while i < s.count() {
-            if p[base + i] != s[i] {
-                return false
-            }
-            i += 1
-        }
-        return true
+        return self.modules.isSyntaxRoot(moduleId: mod)
     }
 
     inout fn checkMoveFnReceivers() {

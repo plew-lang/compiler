@@ -1,0 +1,5 @@
+import /Ir with { Modules }
+import /SourceFiles with { SourceFiles }
+fn main() {
+    val modules = <Modules files=<SourceFiles /> />
+}

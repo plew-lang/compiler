@@ -201,15 +201,15 @@ pub impl Comp {
     // the file's start, not the concatenated buffer). An offset outside every range
     // (interner-appended synthetic names) falls back to the buffer-wide line count.
     inout fn errorAt(offset: U64, msg: String) {
-        match self.modules.files.containing(offset: offset) {
+        match self.modules.sourceFileContaining(offset: offset) {
             Optional.Some(v: val index) => {
                 mut val line: I64 = 1
-                mut val cursor = self.modules.files.range(index: index).start
+                mut val cursor = self.modules.sourceFileRange(index: index).start
                 while cursor < offset {
                     if self.arena.bytes[cursor] == 10U8 { line += 1 }
                     cursor += 1U64
                 }
-                compileErrorAtFile(path: self.modules.files.path(index: index), line: line, msg: msg)
+                compileErrorAtFile(path: self.modules.sourceFilePath(index: index), line: line, msg: msg)
             }
             Optional.None => {}
         }

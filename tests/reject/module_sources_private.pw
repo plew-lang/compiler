@@ -1,0 +1,5 @@
+import /Ir with { Modules }
+fn main() {
+    mut val modules: Modules = <Modules />
+    modules.files.append(start: 0U64, length: 1U64, moduleId: 0U64, path: "/syntax/src/_.pw")
+}

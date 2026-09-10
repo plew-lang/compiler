@@ -1,0 +1,31 @@
+import @Std/Io with { write }
+import /Ir with { Modules }
+fn main() {
+    mut val modules: Modules = <Modules />
+    if modules.isSyntaxRoot(moduleId: 0U64) { panic "empty module table" }
+    modules.registerSourceFile(start: 0U64, length: 2U64, moduleId: 0U64, path: "/a/src/_.pw")
+    if modules.isSyntaxRoot(moduleId: 0U64) { panic "non-Syntax root" }
+    // A later file may establish the attribute, including an empty file.
+    modules.registerSourceFile(start: 3U64, length: 0U64, moduleId: 0U64, path: "/a/syntax/src/_.pw")
+    if !modules.isSyntaxRoot(moduleId: 0U64) { panic "late root missing" }
+    modules.registerSourceFile(start: 4U64, length: 1U64, moduleId: 0U64, path: "/a/Part.pw")
+    if !modules.isSyntaxRoot(moduleId: 0U64) { panic "part cleared attribute" }
+    modules.registerSourceFile(start: 6U64, length: 1U64, moduleId: 8U64, path: "/b/syntax/src/_.pw")
+    modules.registerSourceFile(start: 8U64, length: 1U64, moduleId: 8U64, path: "/b/syntax/src/_.pw")
+    if !modules.isSyntaxRoot(moduleId: 8U64) || !modules.isSyntaxRoot(moduleId: 0U64) { panic "multiple roots" }
+    modules.registerSourceFile(start: 10U64, length: 1U64, moduleId: 10U64, path: "syntax/src/_.pw")
+    modules.registerSourceFile(start: 12U64, length: 1U64, moduleId: 11U64, path: "/a/syntax/src/_.pw.extra")
+    modules.registerSourceFile(start: 14U64, length: 1U64, moduleId: 12U64, path: "/a/Syntax/src/_.pw")
+    if modules.isSyntaxRoot(moduleId: 10U64) || modules.isSyntaxRoot(moduleId: 11U64) || modules.isSyntaxRoot(moduleId: 12U64) { panic "suffix contract changed" }
+    mut val copy = modules
+    modules.registerSourceFile(start: 16U64, length: 1U64, moduleId: 99U64, path: "/c/syntax/src/_.pw")
+    copy.registerSourceFile(start: 16U64, length: 1U64, moduleId: 18446744073709551615U64, path: "/d/syntax/src/_.pw")
+    if copy.isSyntaxRoot(moduleId: 99U64) || modules.isSyntaxRoot(moduleId: 18446744073709551615U64) { panic "copy lost independence" }
+    if !copy.isSyntaxRoot(moduleId: 18446744073709551615U64) || !modules.isSyntaxRoot(moduleId: 99U64) { panic "copied registration lost" }
+    if copy.sourceFileCount() != 9U64 || copy.sourceFilePath(index: 8U64) != "/d/syntax/src/_.pw" { panic "source metadata lost" }
+    match copy.sourceFileContaining(offset: 16U64) {
+        Optional.Some(v: val index) => { if copy.sourceFileRange(index: index).moduleId != 18446744073709551615U64 { panic "source owner changed" } }
+        Optional.None => { panic "source owner missing" }
+    }
+    write(s: "module-source-attributes-ok\n")
+}

@@ -1,0 +1,1 @@
+cannot set a private field when constructing outside its type's anonymous impl

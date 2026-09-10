@@ -1,0 +1,32 @@
+// Source registration owns both file provenance and derived module attributes.
+// The Syntax compatibility predicate is unchanged; only its evaluation moves
+// from repeated conformance queries to this registration boundary.
+pub impl Modules {
+    inout fn registerSourceFile(start: U64, length: U64, moduleId: U64, path: String) {
+        self.files.append(start: start, length: length, moduleId: moduleId, path: path)
+        if self.pathIsSyntaxRoot(path: path) {
+            self.syntaxRootModules.insert(moduleId)
+        }
+    }
+
+    fn sourceFileCount() -> U64 { return self.files.count() }
+    fn sourceFileRange(index: U64) -> SourceFileRange { return self.files.range(index: index) }
+    fn sourceFilePath(index: U64) -> String { return self.files.path(index: index) }
+    fn sourceFileContaining(offset: U64) -> Optional[U64] { return self.files.containing(offset: offset) }
+    fn isSyntaxRoot(moduleId: U64) -> Bool { return self.syntaxRootModules.contains(moduleId) }
+}
+
+impl Modules {
+    fn pathIsSyntaxRoot(path: String) -> Bool {
+        val bytes = path.bytes()
+        val suffix = "/syntax/src/_.pw".bytes()
+        if bytes.count() < suffix.count() { return false }
+        val start = bytes.count() - suffix.count()
+        mut val index: U64 = 0U64
+        while index < suffix.count() {
+            if bytes[start + index] != suffix[index] { return false }
+            index += 1U64
+        }
+        return true
+    }
+}

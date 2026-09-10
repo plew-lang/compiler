@@ -16,7 +16,7 @@ fn main() {
 
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
-    c.modules.files.append(start: 0U64, length: source.bytes().count(), moduleId: 0U64, path: "<test>")
+    c.modules.registerSourceFile(start: 0U64, length: source.bytes().count(), moduleId: 0U64, path: "<test>")
     c.syntax = file
     c.lowerSyntaxReExport(imp: imp)
 

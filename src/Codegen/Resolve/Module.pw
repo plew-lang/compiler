@@ -9,8 +9,8 @@
 
 pub impl Comp {
     inout fn moduleOf(offset: U64) -> U64 {
-        match self.modules.files.containing(offset: offset) {
-            Optional.Some(v: val index) => { return self.modules.files.range(index: index).moduleId }
+        match self.modules.sourceFileContaining(offset: offset) {
+            Optional.Some(v: val index) => { return self.modules.sourceFileRange(index: index).moduleId }
             Optional.None => { return 0U64 }
         }
     }
@@ -83,7 +83,7 @@ pub impl Comp {
     }
 
     inout fn offsetIsLoaded(offset: U64) -> Bool {
-        return self.modules.files.containing(offset: offset).isSome()
+        return self.modules.sourceFileContaining(offset: offset).isSome()
     }
 
     inout fn inferLetType(tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> LetEff {

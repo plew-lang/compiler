@@ -1388,7 +1388,7 @@ export fn runFrontend(c: inout Comp) {
             }
             val fileStart: U64 = c.arena.bytes.count()
             c.appendSrc(from: sb)
-            c.modules.files.append(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: moduleId, path: stringFromBytesUnchecked(path))
+            c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: moduleId, path: stringFromBytesUnchecked(path))
             // Parse now to discover edges; lower all retained items only after the complete
             // graph (and therefore all import aliases and declarations) exists.
             tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
@@ -1571,7 +1571,7 @@ export fn runFrontend(c: inout Comp) {
         val s: String = readStdin()
         val fileStart: U64 = c.arena.bytes.count()
         c.appendSrc(from: s.bytes())
-        c.modules.files.append(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: 0U64, path: "<stdin>")
+        c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: 0U64, path: "<stdin>")
         pendingRoots.append(c.parseFileSyntax(fileBytes: s.bytes(), fileStart: fileStart))
     }
     tracePhase(c: inout c, label: "load:done")
