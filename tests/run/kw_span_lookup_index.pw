@@ -7,7 +7,7 @@ fn main() {
     val source = c.internBytes(s: "stable")
     val first = c.kwSpan(kw: "stable", kwLen: 6U64)
     val second = c.kwSpan(kw: "stable", kwLen: 6U64)
-    if first.nameStart == source.nameStart && second.nameStart == source.nameStart && c.decls.kwCache.count() == 1U64 {
+    if first.nameStart == source.nameStart && second.nameStart == source.nameStart && c.decls.kwSourceCache.count() == 1U64 {
         write(s: "source-success-reused\n")
     }
 
@@ -22,11 +22,11 @@ fn main() {
     }
     val later = c.internBytes(s: "later")
     val afterAppend = c.kwSpan(kw: "later", kwLen: 5U64)
-    if afterAppend.nameStart == later.nameStart && afterAppend.nameLen == later.nameLen && c.decls.kwCache.count() == 2U64 {
+    if afterAppend.nameStart == later.nameStart && afterAppend.nameLen == later.nameLen && c.decls.kwSourceCache.count() == 2U64 {
         write(s: "miss-invalidated-by-source-append\n")
     }
     val stillFirst = c.kwSpan(kw: "stable", kwLen: 6U64)
-    if stillFirst.nameStart == source.nameStart && stillFirst.nameLen == source.nameLen && c.decls.kwCache.count() == 2U64 {
+    if stillFirst.nameStart == source.nameStart && stillFirst.nameLen == source.nameLen && c.decls.kwSourceCache.count() == 2U64 {
         write(s: "source-result-survives-append\n")
     }
 

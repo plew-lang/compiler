@@ -506,21 +506,6 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // Positive answers are spans already owned by Arena.bytes.  Registered
-    // keywords occupy the prefix of this cache, so their historical priority
-    // over source occurrences follows directly from lookup order.
-    inout fn kwCacheIndex(kw: String, kwLen: U64) -> U64 {
-        mut val index: U64 = 0U64
-        while index < self.decls.kwCache.count() {
-            val candidate: Bind = self.decls.kwCache[index]
-            if candidate.nameLen == kwLen && rangeEquals(bytes: self.arena.bytes, start: candidate.nameStart, len: candidate.nameLen, kw: kw) {
-                return index
-            }
-            index += 1U64
-        }
-        return self.decls.kwCache.count()
-    }
-
     // Append `kw` to Arena.bytes and register its stable span. A registration
     // wins over a source occurrence, but repeated registration retains the first
     // registered span just as the former insertion-ordered cache did.
@@ -528,7 +513,7 @@ pub impl Comp {
         val bytes: Array[U8] = kw.bytes()
         mut val alreadyRegistered: Bool = false
         mut val registered: U64 = 0U64
-        while registered < self.decls.kwRegisteredCount {
+        while registered < self.decls.kwCache.count() {
             val candidate: Bind = self.decls.kwCache[registered]
             if candidate.nameLen == bytes.count() && rangeEquals(bytes: self.arena.bytes, start: candidate.nameStart, len: candidate.nameLen, kw: kw) {
                 alreadyRegistered = true
@@ -544,13 +529,6 @@ pub impl Comp {
         if !alreadyRegistered {
             val span: Bind = <Bind nameStart=start nameLen=bytes.count() fieldStart=start fieldLen=bytes.count() />
             self.decls.kwCache.append(span)
-            mut val index: U64 = self.decls.kwCache.count() - 1U64
-            while index > self.decls.kwRegisteredCount {
-                self.decls.kwCache.set(i: index, value: self.decls.kwCache[index - 1U64])
-                index -= 1U64
-            }
-            self.decls.kwCache.set(i: self.decls.kwRegisteredCount, value: span)
-            self.decls.kwRegisteredCount += 1U64
         }
     }
 
@@ -593,9 +571,21 @@ pub impl Comp {
     // source growth may turn one into a match, and storing its String would
     // introduce ownership machinery into this scalar frontend query.
     inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
-        val cachedIndex: U64 = self.kwCacheIndex(kw: kw, kwLen: kwLen)
-        if cachedIndex < self.decls.kwCache.count() {
-            return self.decls.kwCache[cachedIndex]
+        mut val cachedIndex: U64 = 0U64
+        while cachedIndex < self.decls.kwCache.count() {
+            val cached: Bind = self.decls.kwCache[cachedIndex]
+            if cached.nameLen == kwLen && rangeEquals(bytes: self.arena.bytes, start: cached.nameStart, len: cached.nameLen, kw: kw) {
+                return cached
+            }
+            cachedIndex += 1U64
+        }
+        cachedIndex = 0U64
+        while cachedIndex < self.decls.kwSourceCache.count() {
+            val cached: Bind = self.decls.kwSourceCache[cachedIndex]
+            if cached.nameLen == kwLen && rangeEquals(bytes: self.arena.bytes, start: cached.nameStart, len: cached.nameLen, kw: kw) {
+                return cached
+            }
+            cachedIndex += 1U64
         }
 
         val n: U64 = self.arena.bytes.count()
@@ -607,7 +597,7 @@ pub impl Comp {
         while i <= last {
             if rangeEquals(bytes: self.arena.bytes, start: i, len: kwLen, kw: kw) {
                 val found: Bind = <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
-                self.decls.kwCache.append(found)
+                self.decls.kwSourceCache.append(found)
                 return found
             }
             i += 1
