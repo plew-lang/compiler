@@ -621,7 +621,7 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: "ParameterizedDerive")
     }
 
-    inout fn moduleIsSyntaxRoot(mod: U64) -> Bool {
+    fn moduleIsSyntaxRoot(mod: U64) -> Bool {
         return self.modules.isSyntaxRoot(moduleId: mod)
     }
 
