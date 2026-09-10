@@ -172,7 +172,7 @@ pub impl LlvmCtx {
                 if er != 0U64 {
                     ety = self.llvmTypeOfRef(c: inout c, ref: er)
                 }
-                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
+                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), elemTy: ety, elemRef: er)
             } else {
                 // every other class routes through the classifier + valueArc (the single
                 // class->action table): Ref/WeakRef cells, String, sub-struct (GROUNDED —
@@ -299,7 +299,7 @@ pub impl LlvmCtx {
             // at 0, release each element's heap (recursively) before freeing — instead of
             // just dropping the outer (which would leak the elements).
             if c.arcNeedsRelease(ref: self.locElemTypeRef[li]) {
-                self.emitReleaseArrayValue(c: inout c, data: data, count: self.arrValCount(c: inout c, arr: arr), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
+                self.emitReleaseArrayValue(c: inout c, data: data, elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
             } else {
                 self.rawbufDrop(c: inout c, cell: data)
             }
@@ -320,7 +320,7 @@ pub impl LlvmCtx {
                     ber = c.arena.types[self.locTypeRef[li]].args[0]
                 }
                 if c.arcNeedsRelease(ref: ber) {
-                    self.emitReleaseArrayValue(c: inout c, data: bdata, count: self.rawbufCount(c: inout c, data: bdata), elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
+                    self.emitReleaseArrayValue(c: inout c, data: bdata, elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
                 } else {
                     self.rawbufDrop(c: inout c, cell: bdata)
                 }

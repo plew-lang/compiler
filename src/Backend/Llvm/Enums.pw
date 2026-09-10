@@ -441,7 +441,7 @@ pub impl LlvmCtx {
                             if er != 0U64 {
                                 ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
                             }
-                            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety2, elemRef: er)
+                            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), elemTy: ety2, elemRef: er)
                         } else {
                             // classifier + valueArc (the single class->action table):
                             // GROUNDED struct/enum payloads included — the old

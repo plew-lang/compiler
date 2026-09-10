@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, MutableRef }
+
+unique struct Cell {
+    pub val id: I64
+    deinit { print(self.id) }
+}
+pub impl Cell { factory }
+struct Holder { pub val values: Buffer[MutableRef[Cell]] }
+pub impl Holder { factory }
+enum Payload { Items(values: Buffer[MutableRef[Cell]]) Empty }
+
+fn shared(values: Buffer[MutableRef[Cell]]) {
+    val holder = <Holder values=values />
+    val payload: Payload = <Payload.Items values=holder.values />
+    match payload {
+        Payload.Items(val values) => { print(values.count()) }
+        Payload.Empty => { print(0U64) }
+    }
+    print("shared-end")
+}
+fn exercise() {
+    val empty: Buffer[MutableRef[Cell]] = Buffer.new()
+    shared(values: empty)
+    mut val values: Buffer[MutableRef[Cell]] = Buffer.new()
+    values.append(<MutableRef value=<Cell id=1I64 /> />)
+    values.append(<MutableRef value=<Cell id=2I64 /> />)
+    shared(values: values)
+    {
+        mut val copy = values
+        copy.append(<MutableRef value=<Cell id=3I64 /> />)
+        print(copy.count())
+    }
+    print("original-alive")
+    print(values.count())
+}
+fn main() {
+    exercise()
+    print("done")
+}

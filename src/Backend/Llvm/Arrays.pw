@@ -1135,7 +1135,7 @@ pub impl LlvmCtx {
                     self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                 } else {
                     val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elem)
-                    self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: innerTy, elemRef: elem)
+                    self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), elemTy: innerTy, elemRef: elem)
                 }
             }
             // a `Ref[T]` value: the cell pointer itself, with a strong rc. retain =
@@ -1344,9 +1344,9 @@ pub impl LlvmCtx {
         }
     }
 
-    // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):
+    // Release one owner of array buffer `data` (element type elemTy/elemRef):
     // decrement its rc, and at 0 release every element's heap (loop) then free the buffer.
-    inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+    inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
         // No per-element heap to release (scalar elements): the whole decrement-and-free-
         // at-0 is exactly plew_rawbuf_drop, so emit one call instead of inlining release +
         // icmp + 2 blocks + condbr + free at every site (~8800 sites — most array releases).
@@ -1362,8 +1362,10 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.cont"))
         LLVMBuildCondBr(self.b, isZero, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        // reached only with element value-ARC (the scalar case returned above): cascade
-        // into each element's heap before freeing the buffer.
+        // Only the final owner needs the live range. rawbufRelease decrements
+        // without freeing, so the header is still valid here; null has count 0.
+        // Scalar and still-shared buffers never need a count load for release.
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
         self.rawbufFree(c: inout c, cell: data)
         LLVMBuildBr(self.b, contBB)
