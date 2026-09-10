@@ -1,0 +1,6 @@
+import /SourceFiles with { SourceFiles }
+fn main() {
+    mut val files: SourceFiles = <SourceFiles />
+    files.append(start: 8U64, length: 0U64, moduleId: 0U64, path: "first")
+    files.append(start: 3U64, length: 0U64, moduleId: 1U64, path: "second")
+}

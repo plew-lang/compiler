@@ -1058,9 +1058,9 @@ pub impl Comp {
     inout fn detectImportCycles() {
         mut val maxId: U64 = 0
         mut val ri: U64 = 0
-        while ri < self.modules.ranges.count() {
-            val r: Bind = self.modules.ranges[ri]
-            if r.fieldStart > maxId { maxId = r.fieldStart }
+        while ri < self.modules.files.count() {
+            val moduleId = self.modules.files.range(index: ri).moduleId
+            if moduleId > maxId { maxId = moduleId }
             ri += 1
         }
         val n: U64 = maxId + 1

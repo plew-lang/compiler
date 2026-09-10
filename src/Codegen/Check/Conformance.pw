@@ -622,16 +622,14 @@ pub impl Comp {
     }
 
     inout fn moduleIsSyntaxRoot(mod: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.modules.ranges.count() {
-            if self.modules.ranges[i].fieldStart == mod {
-                if i < self.modules.rangePaths.count() {
-                    if self.pathHasSuffix(path: self.modules.rangePaths[i], suffix: "/syntax/src/_.pw") {
-                        return true
-                    }
+        mut val index: U64 = 0U64
+        while index < self.modules.files.count() {
+            if self.modules.files.range(index: index).moduleId == mod {
+                if self.pathHasSuffix(path: self.modules.files.path(index: index), suffix: "/syntax/src/_.pw") {
+                    return true
                 }
             }
-            i += 1
+            index += 1U64
         }
         return false
     }

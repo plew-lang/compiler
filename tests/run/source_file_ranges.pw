@@ -1,0 +1,71 @@
+import @Std/Io with { write }
+import /SourceFiles with { SourceFiles }
+
+fn expectOwner(files: SourceFiles, offset: U64, expected: U64) {
+    match files.containing(offset: offset) {
+        Optional.Some(v: val index) => {
+            if files.range(index: index).moduleId != expected { panic "wrong source owner" }
+        }
+        Optional.None => { panic "missing source owner" }
+    }
+}
+fn expectMissing(files: SourceFiles, offset: U64) {
+    match files.containing(offset: offset) {
+        Optional.Some(v: _) => { panic "unexpected source owner" }
+        Optional.None => {}
+    }
+}
+fn main() {
+    mut val files: SourceFiles = <SourceFiles />
+    expectMissing(files: files, offset: 0U64)
+    files.append(start: 0U64, length: 0U64, moduleId: 4U64, path: "empty")
+    files.append(start: 0U64, length: 3U64, moduleId: 0U64, path: "root")
+    files.append(start: 4U64, length: 2U64, moduleId: 7U64, path: "import")
+    files.append(start: 6U64, length: 0U64, moduleId: 9U64, path: "empty-part")
+    files.append(start: 6U64, length: 2U64, moduleId: 0U64, path: "part")
+    files.append(start: 8U64, length: 0U64, moduleId: 9U64, path: "empty-tail")
+    expectOwner(files: files, offset: 0U64, expected: 0U64)
+    expectOwner(files: files, offset: 2U64, expected: 0U64)
+    expectMissing(files: files, offset: 3U64)
+    expectOwner(files: files, offset: 4U64, expected: 7U64)
+    expectOwner(files: files, offset: 5U64, expected: 7U64)
+    expectOwner(files: files, offset: 6U64, expected: 0U64)
+    expectOwner(files: files, offset: 7U64, expected: 0U64)
+    expectMissing(files: files, offset: 8U64)
+    expectMissing(files: files, offset: 18446744073709551615U64)
+    if files.count() != 6U64 || files.path(index: 3U64) != "empty-part" { panic "file metadata lost" }
+    mut val copy = files
+    files.append(start: 12U64, length: 3U64, moduleId: 3U64, path: "original")
+    copy.append(start: 9U64, length: 2U64, moduleId: 5U64, path: "copy")
+    expectMissing(files: files, offset: 9U64)
+    expectMissing(files: copy, offset: 12U64)
+    expectOwner(files: files, offset: 12U64, expected: 3U64)
+    expectOwner(files: copy, offset: 9U64, expected: 5U64)
+    // Differential oracle: exercise every byte, including gaps and empty files,
+    // over a larger table with repeated module ownership and nonuniform lengths.
+    mut val table: SourceFiles = <SourceFiles />
+    mut val cursor: U64 = 2U64
+    mut val index: U64 = 0U64
+    while index < 513U64 {
+        val length = index % 7U64
+        table.append(start: cursor, length: length, moduleId: index % 11U64, path: "file")
+        cursor += length + index % 3U64
+        index += 1U64
+    }
+    mut val offset: U64 = 0U64
+    while offset <= cursor {
+        mut val expected: U64 = table.count()
+        index = 0U64
+        while index < table.count() {
+            val file = table.range(index: index)
+            if offset >= file.start && offset - file.start < file.length { expected = index }
+            index += 1U64
+        }
+        match table.containing(offset: offset) {
+            Optional.Some(v: val actual) => { if actual != expected { panic "range oracle mismatch" } }
+            Optional.None => { if expected != table.count() { panic "range oracle miss" } }
+        }
+        offset += 1U64
+    }
+    write(s: "source-file-ranges-ok\n")
+}

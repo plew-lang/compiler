@@ -1,3 +1,5 @@
+import ./SourceFiles with { SourceFiles }
+
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
 // up the compiler state, plus their public memberwise factories and the generic
@@ -2746,19 +2748,15 @@ export struct Decls {
 }
 pub impl Decls { factory }
 
-// Module identity + cross-module visibility tables (spec/15). `ranges`: each
-// entry (reusing Bind) tags a source file's [start,len) span in `bytes` with its
-// module id (fieldStart), so `moduleOf(offset)` reverse-maps a decl/use to its
-// module (a module = a root file + its `part` tree; each `import` target is
-// another). `exports`: name spans of `export`ed top-level decls (a name is public
+// Module identity + cross-module visibility tables (spec/15). `files` owns
+// ordered, disjoint source spans and their paths. Its common position lookup
+// reverse-maps a declaration/use to a file and module (a module = a root file
+// + its `part` tree; each `import` target is another). `exports`: name spans of `export`ed top-level decls (a name is public
 // iff it appears here). `imports`: imported name spans with `fieldStart` = the
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
 export struct Modules {
-    pub mut val ranges: Array[Bind] = []
-    // source file path of each range (parallel to `ranges`) — lets diagnostics
-    // report `path:line` instead of a line number into the concatenated buffer.
-    pub mut val rangePaths: Array[String] = []
+    pub mut val files: SourceFiles = <SourceFiles />
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
     // import EDGES (fieldStart = importing module, fieldLen = the module the import

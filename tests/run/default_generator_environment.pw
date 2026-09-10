@@ -9,7 +9,7 @@ fn main() {
     val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
     val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
     val name = c.internTmpName(prefix: "declaration", n: 0U64)
-    c.modules.ranges.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=7U64 fieldLen=0U64 />)
+    c.modules.files.append(start: name.nameStart, length: name.nameLen, moduleId: 7U64, path: "<test>")
     val traitName = c.internTmpName(prefix: "Trait", n: 0U64)
     c.decls.traits.append(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
     c.decls.traitOwners.append(<TraitOwner nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)

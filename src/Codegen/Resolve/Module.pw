@@ -9,17 +9,10 @@
 
 pub impl Comp {
     inout fn moduleOf(offset: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.modules.ranges.count() {
-            val r: Bind = self.modules.ranges[i]
-            if offset >= r.nameStart {
-                if offset < r.nameStart + r.nameLen {
-                    return r.fieldStart
-                }
-            }
-            i += 1
+        match self.modules.files.containing(offset: offset) {
+            Optional.Some(v: val index) => { return self.modules.files.range(index: index).moduleId }
+            Optional.None => { return 0U64 }
         }
-        return 0
     }
 
     inout fn stmtPrincipalOffset(sid: U64) -> U64 {
@@ -90,17 +83,7 @@ pub impl Comp {
     }
 
     inout fn offsetIsLoaded(offset: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.modules.ranges.count() {
-            val r: Bind = self.modules.ranges[i]
-            if offset >= r.nameStart {
-                if offset < r.nameStart + r.nameLen {
-                    return true
-                }
-            }
-            i += 1
-        }
-        return false
+        return self.modules.files.containing(offset: offset).isSome()
     }
 
     inout fn inferLetType(tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> LetEff {

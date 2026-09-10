@@ -1,0 +1,60 @@
+// Loaded files occupy disjoint, ordered spans in the append-only source buffer.
+// Keep scalar ranges separate from paths so a position query has no String owner.
+export struct SourceFileRange {
+    pub val start: U64
+    pub val length: U64
+    pub val moduleId: U64
+}
+pub impl SourceFileRange { factory }
+
+export struct SourceFiles {
+    mut val ranges: Array[SourceFileRange] = []
+    mut val paths: Array[String] = []
+}
+
+pub impl SourceFiles {
+    factory
+
+    // All producers use this boundary. Empty files are retained for diagnostics
+    // and module enumeration, but never contain a source byte.
+    inout fn append(start: U64, length: U64, moduleId: U64, path: String) {
+        if length > 18446744073709551615U64 - start {
+            panic "source file range overflows"
+        }
+        val count = self.ranges.count()
+        if count != 0U64 {
+            val previous = self.ranges[count - 1U64]
+            if start < previous.start + previous.length {
+                panic "source file ranges must be ordered and disjoint"
+            }
+        }
+        self.ranges.append(<SourceFileRange start=start length=length moduleId=moduleId />)
+        self.paths.append(path)
+    }
+
+    fn count() -> U64 { return self.ranges.count() }
+    fn range(index: U64) -> SourceFileRange { return self.ranges[index] }
+    fn path(index: U64) -> String { return self.paths[index] }
+
+    // Upper bound on start: the final file starting at or before offset is
+    // the only possible owner. A gap, empty file, or synthetic suffix is None.
+    fn containing(offset: U64) -> Optional[U64] {
+        mut val lower: U64 = 0U64
+        mut val upper: U64 = self.ranges.count()
+        while lower < upper {
+            val middle = lower + (upper - lower) / 2U64
+            if self.ranges[middle].start <= offset {
+                lower = middle + 1U64
+            } else {
+                upper = middle
+            }
+        }
+        if lower == 0U64 { return <Optional.None /> }
+        val index = lower - 1U64
+        val file = self.ranges[index]
+        if offset - file.start < file.length {
+            return <Optional.Some v=index />
+        }
+        return <Optional.None />
+    }
+}
