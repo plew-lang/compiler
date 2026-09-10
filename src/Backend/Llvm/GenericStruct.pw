@@ -97,7 +97,7 @@ pub impl LlvmCtx {
             // type sites use (llvmTypeOfRef -> genStructSlot), so a constructed array VALUE and
             // its field/param/return TYPE pick the identical `%gs` even when the same `Array[E]`
             // was registered more than once (element-only matching could pick a different dup).
-            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+            val ab: Bind = c.wellKnownSpan(kw: "Array", kwLen: 5U64)
             mut val aargs: Array[U64] = []
             aargs.append(elemRef)
             val aref: U64 = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)

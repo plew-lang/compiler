@@ -1094,7 +1094,7 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
     val inputLocal: U64 = addMidTemporary(state: inout state, typeTerm: operandResultTerm)
     val inputPlace: MidPlace = <MidPlace local=inputLocal typeTerm=operandResultTerm />
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=inputPlace value=<MidRvalue.Use operand=input.operand /> />)
-    val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
+    val i64Name: Bind = c.wellKnownSpan(kw: "I64", kwLen: 3U64)
     val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
     if tagTerm == 0U64 {
         midCloseScope(state: inout state, scope: evaluation)
@@ -1923,7 +1923,7 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "scrutinee-not-place")
                 return <MidBuildError.UnsupportedMatch />
             }
-            val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
+            val i64Name: Bind = c.wellKnownSpan(kw: "I64", kwLen: 3U64)
             val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
             if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)

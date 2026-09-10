@@ -155,6 +155,12 @@ else
     fail=$((fail + 1)); failed="$failed call-template-scalar-storage"
 fi
 
+if sh ./test-well-known-span-boundary.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed well-known-span-boundary"
+fi
+
 # Lifetime output alone must not pass through a legacy caller unnoticed.
 if sh ./test-mid-temporary-lifetime.sh; then
     :

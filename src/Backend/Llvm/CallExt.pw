@@ -106,7 +106,7 @@ pub impl LlvmCtx {
                 // a Bool literal (`true`/`false`) carries no type span (tyLen 0); its lang-item
                 // is Bool, so a method on it (`true.format(…)`) dispatches on Bool.
                 if isBool {
-                    return c.kwSpan(kw: "Bool", kwLen: 4U64)
+                    return c.wellKnownSpan(kw: "Bool", kwLen: 4U64)
                 }
                 if tyLen > 0U64 {
                     if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
@@ -122,7 +122,7 @@ pub impl LlvmCtx {
                         return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
                     }
                 }
-                return c.kwSpan(kw: "F64", kwLen: 3U64)
+                return c.wellKnownSpan(kw: "F64", kwLen: 3U64)
             }
             Expr.Ident(val start, val len) => {
                 // a primitive-int local/param (`v: U64`): its tracked type name (locTypeRef),
@@ -182,7 +182,7 @@ pub impl LlvmCtx {
                 return <Bind nameStart=u.nameStart nameLen=u.nameLen fieldStart=u.nameStart fieldLen=u.nameLen />
             }
             if rangeEquals(bytes: c.arena.bytes, start: u.nameStart, len: u.nameLen, kw: "Bool") {
-                return c.kwSpan(kw: "Bool", kwLen: 4U64)
+                return c.wellKnownSpan(kw: "Bool", kwLen: 4U64)
             }
         }
         val z: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />

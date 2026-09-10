@@ -401,7 +401,7 @@ pub impl Comp {
         while ti < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[ti]
             if td.nameStart == owner && td.selfParamId != 0U64 {
-                val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+                val selfName: Bind = self.wellKnownSpan(kw: "Self", kwLen: 4U64)
                 scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=td.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
                 return
             }
@@ -1047,7 +1047,7 @@ pub impl Comp {
             ai += 1
         }
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable)
-        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+        val selfName: Bind = self.wellKnownSpan(kw: "Self", kwLen: 4U64)
         val selfParamId: U64 = self.nextParamId
         self.nextParamId += 1U64
         val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
@@ -1102,7 +1102,7 @@ pub impl Comp {
             i += 1U64
         }
         val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags)
-        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+        val selfName: Bind = self.wellKnownSpan(kw: "Self", kwLen: 4U64)
         val selfParamId: U64 = self.nextParamId
         self.nextParamId += 1U64
         val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />

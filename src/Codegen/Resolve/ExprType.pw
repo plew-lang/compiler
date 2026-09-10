@@ -219,7 +219,7 @@ pub impl Comp {
         // `Item` into the outer call provenance before Mono can see it.
         mut val itemRef: U64 = 0U64
         if f.isProvided && f.originTraitOwner != 0U64 {
-            val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+            val item: Bind = self.wellKnownSpan(kw: "Item", kwLen: 4U64)
             val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
             val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))
             itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
@@ -509,7 +509,7 @@ pub impl Comp {
                 // a `true`/`false` literal is `Bool`: recover a "Bool" span so a generic
                 // call like `print(true)` infers T = Bool.
                 if isBool {
-                    val b: Bind = self.kwSpan(kw: "Bool", kwLen: 4)
+                    val b: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4)
                     if b.nameLen != 0 {
                         return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
                     }
@@ -527,7 +527,7 @@ pub impl Comp {
                 if tyLen != 0 {
                     return <TypeInfo kind=2 nameStart=tyStart nameLen=tyLen ref=0 />
                 }
-                val fb: Bind = self.kwSpan(kw: "F64", kwLen: 3)
+                val fb: Bind = self.wellKnownSpan(kw: "F64", kwLen: 3)
                 return <TypeInfo kind=2 nameStart=fb.nameStart nameLen=fb.nameLen ref=0 />
             }
             Expr.Str(val start, val len) => {
@@ -718,7 +718,7 @@ pub impl Comp {
                 // comparisons (50-55) and logical `&&`/`||` (61,62) produce Bool — report
                 // it precisely so a `val x: I64 = a == b` mismatch is caught (was scalarInfo,
                 // i.e. type-less, which the checker treated as unknown/compatible).
-                val bb: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+                val bb: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4U64)
                 if bb.nameLen != 0U64 {
                     return <TypeInfo kind=2 nameStart=bb.nameStart nameLen=bb.nameLen ref=0 />
                 }
@@ -740,7 +740,7 @@ pub impl Comp {
                         val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: self.argAt(args: args, index: 0U64).expr, chainHoleRef: chainHoleRef))
                         if br != 0U64 {
                             val brt: TypeRef = self.arena.types[br]
-                            val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
+                            val powN: Bind = self.wellKnownSpan(kw: "pow", kwLen: 3U64)
                             fi = self.findAssoc(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
                         }
                     }
@@ -1248,7 +1248,7 @@ pub impl Comp {
                     // (`pop() -> Optional[T]`) as the raw template span: the recorded
                     // typed-IR slot was unusable, so a discarded or un-annotated result
                     // was never classified for release (its deinit silently skipped).
-                    val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
+                    val arrName: Bind = self.wellKnownSpan(kw: "Array", kwLen: 5)
                     val mi: U64 = self.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mi == self.arena.funcs.count() {
                         return scalarInfo()

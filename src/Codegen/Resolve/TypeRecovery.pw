@@ -545,6 +545,19 @@ pub impl Comp {
         self.addKwSpan(kw: "fn")
         self.addKwSpan(kw: "iterator")
         self.addKwSpan(kw: "next")
+        self.addKwSpan(kw: "Item")
+        self.addKwSpan(kw: "self")
+        self.addKwSpan(kw: "F64")
+        self.addKwSpan(kw: "I64")
+        self.addKwSpan(kw: "key")
+        self.addKwSpan(kw: "index")
+        self.addKwSpan(kw: "at")
+        self.addKwSpan(kw: "pow")
+        self.addKwSpan(kw: "deinit")
+        self.addKwSpan(kw: "Ok")
+        self.addKwSpan(kw: "Err")
+        self.addKwSpan(kw: "Some")
+        self.addKwSpan(kw: "")
         val langModule: U64 = self.modules.langModule
         mut val i: U64 = 0U64
         while i < self.arena.structs.count() {
@@ -566,28 +579,26 @@ pub impl Comp {
         }
     }
 
-    // Return a stable source span naming `kw`. Registered names win; a source
-    // first-match remains valid after appends. Misses deliberately rescan:
-    // source growth may turn one into a match, and storing its String would
-    // introduce ownership machinery into this scalar frontend query.
-    inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
-        mut val cachedIndex: U64 = 0U64
-        while cachedIndex < self.decls.kwCache.count() {
-            val cached: Bind = self.decls.kwCache[cachedIndex]
+    // A compiler-owned spelling is registered before semantic analysis. Keep
+    // this distinct from kwSpan: callers of this method must never recover a
+    // declaration/type label by repeatedly walking arbitrary source bytes.
+    inout fn wellKnownSpan(kw: String, kwLen: U64) -> Bind {
+        mut val index: U64 = 0U64
+        while index < self.decls.kwCache.count() {
+            val cached: Bind = self.decls.kwCache[index]
             if cached.nameLen == kwLen && rangeEquals(bytes: self.arena.bytes, start: cached.nameStart, len: cached.nameLen, kw: kw) {
                 return cached
             }
-            cachedIndex += 1U64
+            index += 1U64
         }
-        cachedIndex = 0U64
-        while cachedIndex < self.decls.kwSourceCache.count() {
-            val cached: Bind = self.decls.kwSourceCache[cachedIndex]
-            if cached.nameLen == kwLen && rangeEquals(bytes: self.arena.bytes, start: cached.nameStart, len: cached.nameLen, kw: kw) {
-                return cached
-            }
-            cachedIndex += 1U64
-        }
+        // Keep source recovery as a correctness fallback while the static
+        // literal-boundary test protects the registry from drift.
+        return self.kwSpan(kw: kw, kwLen: kwLen)
+    }
 
+    // Return a source span naming a dynamic spelling. A caller with a fixed
+    // compiler-owned spelling must use wellKnownSpan instead.
+    inout fn kwSpan(kw: String, kwLen: U64) -> Bind {
         val n: U64 = self.arena.bytes.count()
         if n < kwLen {
             return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
@@ -597,7 +608,6 @@ pub impl Comp {
         while i <= last {
             if rangeEquals(bytes: self.arena.bytes, start: i, len: kwLen, kw: kw) {
                 val found: Bind = <Bind nameStart=i nameLen=kwLen fieldStart=i fieldLen=kwLen />
-                self.decls.kwSourceCache.append(found)
                 return found
             }
             i += 1
@@ -608,7 +618,7 @@ pub impl Comp {
     // String literals are monomorphic (always `String`), so `val s = "hi"` infers
     // `String`; recover a "String" span to name PlewString (else require annotation).
     inout fn stringTypeSpan() -> Bind {
-        return self.kwSpan(kw: "String", kwLen: 6)
+        return self.wellKnownSpan(kw: "String", kwLen: 6)
     }
 
     inout fn typeInfoOfName(start: U64, len: U64, isArray: Bool) -> TypeInfo {

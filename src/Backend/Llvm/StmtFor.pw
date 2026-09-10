@@ -263,7 +263,7 @@ pub impl LlvmCtx {
         val optEid: U64 = self.genEnumDefs[ge]
         val optTy: LLVMTypeRef = self.genEnumTys[ge]
         val ed: EnumDef = c.arena.enums[optEid]
-        val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
+        val someB: Bind = c.wellKnownSpan(kw: "Some", kwLen: 4U64)
         val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: optEid, vi: someVi)
         // the bound element's declared type (the Some payload's single field).
@@ -410,7 +410,7 @@ pub impl LlvmCtx {
         val optEid: U64 = self.genEnumDefs[ge]
         val optTy: LLVMTypeRef = self.genEnumTys[ge]
         val ed: EnumDef = c.arena.enums[optEid]
-        val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
+        val someB: Bind = c.wellKnownSpan(kw: "Some", kwLen: 4U64)
         val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: optEid, vi: someVi)
         val itemFs: Array[FieldDef] = ed.variants[someVi].fields

@@ -355,7 +355,7 @@ pub impl Comp {
             self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
-                val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
+                val arrName: Bind = self.wellKnownSpan(kw: "Array", kwLen: 5)
                 self.checkFieldReadVis(ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             }
         }

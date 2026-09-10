@@ -151,7 +151,7 @@ pub impl LlvmCtx {
         // so a direct index / method on it dispatches the Index / generic-method witness (Array is
         // gen-instance pinned, found arena-wide).
         if self.exprIsArray(c: inout c, id: id) {
-            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+            val ab: Bind = c.wellKnownSpan(kw: "Array", kwLen: 5U64)
             return c.structDefByNameAny(start: ab.nameStart, len: ab.nameLen)
         }
         // a refless `String` value (a concat / indirect-closure-call result whose ref didn't
@@ -159,7 +159,7 @@ pub impl LlvmCtx {
         // its methods / `==` / `+` ride the uniform exprStructIdx→findMethod witness path. String's
         // value rep is pinned to strty (representation residue) but its DISPATCH is structural.
         if self.valueKind(c: inout c, id: id) == 1U64 {
-            val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+            val sb: Bind = c.wellKnownSpan(kw: "String", kwLen: 6U64)
             return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
         }
         return c.arena.structs.count()

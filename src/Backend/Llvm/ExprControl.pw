@@ -283,8 +283,8 @@ pub impl LlvmCtx {
         val reid: U64 = self.genEnumDefs[rge]
         val rety: LLVMTypeRef = self.genEnumTys[rge]
         val ed: EnumDef = c.arena.enums[eeid]
-        val okB: Bind = c.kwSpan(kw: "Ok", kwLen: 2U64)
-        val errB: Bind = c.kwSpan(kw: "Err", kwLen: 3U64)
+        val okB: Bind = c.wellKnownSpan(kw: "Ok", kwLen: 2U64)
+        val errB: Bind = c.wellKnownSpan(kw: "Err", kwLen: 3U64)
         val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
         val errVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
         // A PLACE operand (`try r` on a binding) loads a +0 alias of the place's

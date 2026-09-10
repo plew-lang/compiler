@@ -938,7 +938,7 @@ pub impl Comp {
     }
 
     inout fn assocItemRef(recvStart: U64, recvLen: U64, recvInstRef: U64) -> U64 {
-        val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+        val item: Bind = self.wellKnownSpan(kw: "Item", kwLen: 4U64)
         val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
         mut val receiver: U64 = recvInstRef
         if receiver == 0U64 {
@@ -1070,7 +1070,7 @@ pub impl Comp {
     inout fn bodyProvidedItemTerm(f: Func, environment: InstanceEnvironment) -> U64 {
         val declaration: Func = self.lexicalFunction(f: f)
         if !(declaration.isProvided) && !(self.methodRecvIsTrait(f: declaration)) { return 0U64 }
-        val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+        val item: Bind = self.wellKnownSpan(kw: "Item", kwLen: 4U64)
         val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
         mut val traitOwner: U64 = declaration.originTraitOwner
         if traitOwner == 0U64 { traitOwner = declaration.provTraitOwner }

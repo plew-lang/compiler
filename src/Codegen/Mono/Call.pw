@@ -375,7 +375,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
                 if self.cur.hasRecv {
-                    val selfName: Bind = self.kwSpan(kw: "self", kwLen: 4U64)
+                    val selfName: Bind = self.wellKnownSpan(kw: "self", kwLen: 4U64)
                     if spansEqual(c: inout self, aStart: start, aLen: len, bStart: selfName.nameStart, bLen: selfName.nameLen) {
                         // The body-instance receiver is the semantic identity
                         // that selected this callable.  Prefer it over the
@@ -885,7 +885,7 @@ pub impl Comp {
                 while ti < self.decls.traits.count() {
                     val traitDef: TraitDef = self.decls.traits[ti]
                     if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
-                        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+                        val selfName: Bind = self.wellKnownSpan(kw: "Self", kwLen: 4U64)
                         params.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=traitDef.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
                         values.append(canonicalRecv)
                         break
@@ -1431,8 +1431,8 @@ pub impl Comp {
         if operandResult.args.count() < 2U64 { return }
         val enumIndex: U64 = self.genericEnumIndex(nameStart: operandResult.nameStart, nameLen: operandResult.nameLen)
         if enumIndex >= self.arena.enums.count() { return }
-        val okName: Bind = self.kwSpan(kw: "Ok", kwLen: 2U64)
-        val errName: Bind = self.kwSpan(kw: "Err", kwLen: 3U64)
+        val okName: Bind = self.wellKnownSpan(kw: "Ok", kwLen: 2U64)
+        val errName: Bind = self.wellKnownSpan(kw: "Err", kwLen: 3U64)
         val okVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: okName.nameStart, variantLen: okName.nameLen)
         val errVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: errName.nameStart, variantLen: errName.nameLen)
         if okVariant >= self.arena.enums[enumIndex].variants.count() || errVariant >= self.arena.enums[enumIndex].variants.count() { return }
@@ -1544,7 +1544,7 @@ pub impl Comp {
     }
 
     inout fn operatorTemplateArgs(operands: Array[CallArgumentSource]) -> ArgRange {
-        val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+        val noLabel: Bind = self.wellKnownSpan(kw: "", kwLen: 0U64)
         mut val args: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < operands.count() {
@@ -1660,7 +1660,7 @@ pub impl Comp {
         // (the same rule as Record's operator template), never a backend type
         // recovery.
         if selectedResultRef == 0U64 && (op == opLt() || op == opLe() || op == opGt() || op == opGe()) {
-            val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+            val boolName: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4U64)
             selectedResultRef = self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
         }
         if callee >= self.arena.funcs.count() && selectedResultRef == 0U64 { selectedResultRef = selectedReceiverRef }
@@ -3266,14 +3266,14 @@ pub impl Comp {
             Expr.Method(recv: _, nameStart: _, nameLen: _, val args) => { return args }
             Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, val args) => { return args }
             Expr.Binary(op: _, val lhs, val rhs) => {
-                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                val noLabel: Bind = self.wellKnownSpan(kw: "", kwLen: 0U64)
                 mut val args: Array[Arg] = []
                 args.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
                 args.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
                 return self.pushArgs(args: args)
             }
             Expr.Unary(op: _, val operand) => {
-                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                val noLabel: Bind = self.wellKnownSpan(kw: "", kwLen: 0U64)
                 mut val args: Array[Arg] = []
                 args.append(<Arg expr=operand isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
                 return self.pushArgs(args: args)
@@ -5027,7 +5027,7 @@ pub impl Comp {
                 // after CallTemplates close.
                 val template: CallTemplate = self.callTemplateForCurrentBody(exprId: exprId)
                 mut val selected: U64 = self.arena.funcs.count()
-                mut val selectedName: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
+                mut val selectedName: Bind = self.wellKnownSpan(kw: "index", kwLen: 5U64)
                 mut val hasSelectedCall: Bool = false
                 match template.kind {
                     CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
@@ -5046,7 +5046,7 @@ pub impl Comp {
                     _ => {}
                 }
                 if hasSelectedCall {
-                    val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
+                    val label: Bind = self.wellKnownSpan(kw: "key", kwLen: 3U64)
                     val args: ArgRange = self.pushArgs(args: [<Arg expr=index isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
                     self.arena.exprs.set(i: exprId, value: <Expr.Method recv=base nameStart=selectedName.nameStart nameLen=selectedName.nameLen args=args />)
                     self.scanExprInsts(exprId: exprId)
@@ -5341,7 +5341,7 @@ pub impl Comp {
                     mut val iteratorRef: U64 = initialRef
                     if initialRef != 0U64 && initialRef < self.arena.types.count() && !(self.arena.types[initialRef].isAny) {
                         val noArgs: Array[Arg] = []
-                        val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
+                        val iteratorName: Bind = self.wellKnownSpan(kw: "iterator", kwLen: 8U64)
                         mut val iteratorFn: U64 = self.arena.funcs.count()
                         if useProtocolTemplate {
                             iteratorFn = self.resolveProtocolMethodForReceiver(recvRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs))
@@ -5375,7 +5375,7 @@ pub impl Comp {
                             val returned: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
                             if returned != 0U64 { iteratorRef = returned }
                         }
-                        val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
+                        val nextName: Bind = self.wellKnownSpan(kw: "next", kwLen: 4U64)
                         mut val nextFn: U64 = self.arena.funcs.count()
                         if useProtocolTemplate {
                             nextFn = self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs))
@@ -5395,7 +5395,7 @@ pub impl Comp {
                         // recovering it from the expression tree.
                         val none: U64 = self.arena.funcs.count()
                         self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef />)
-                        val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
+                        val nextName: Bind = self.wellKnownSpan(kw: "next", kwLen: 4U64)
                         val noArgs: Array[Arg] = []
                         val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
                         val nextSlot: U64 = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs))

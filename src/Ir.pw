@@ -2673,9 +2673,8 @@ pub impl DestructureSite { factory }
 // freeze the first instance's grounding into every other instantiation of a
 // generic body. `destructureSites`: each record/struct destructure's bind list
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
-// deferred item source (see ForTypeRecipe). `kwCache` holds registered names;
-// `kwSourceCache` holds memoized positive source spans. A miss is not cached
-// because its answer changes when the loader appends source bytes.
+// deferred item source (see ForTypeRecipe). `kwCache` holds compiler-owned
+// well-known spellings. Source-derived spellings are resolved separately.
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitBindPool: Array[Bind] = []
@@ -2746,10 +2745,8 @@ export struct Decls {
     // body with a conditional unique move must not fall back to the legacy
     // path-insensitive AST emitter while Mid migration is incremental.
     pub mut val ownershipCfgFunctions: Array[U64] = []
-    // Keep provenance distinct: registered spans win over source matches without
-    // an insertion/shift path. These tail fields preserve older row layout.
+    // Compiler-owned spellings only. This tail field preserves older row layout.
     pub mut val kwCache: Array[Bind] = []
-    pub mut val kwSourceCache: Array[Bind] = []
 }
 pub impl Decls { factory }
 

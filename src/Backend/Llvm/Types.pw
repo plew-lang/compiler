@@ -124,7 +124,7 @@ pub impl LlvmCtx {
     // `{ptr}` resolved STRUCTURALLY via its registered named `%st` type (de-pin: no
     // name->strty representation pin). Falls back to strty only before registration runs.
     inout fn stringLlvmTy(c: inout Comp) -> LLVMTypeRef {
-        val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+        val sb: Bind = c.wellKnownSpan(kw: "String", kwLen: 6U64)
         val reg: U64 = self.structRegSlot(c: inout c, start: sb.nameStart, len: sb.nameLen)
         if reg < self.genStructRefs.count() {
             return self.genStructTys[reg]

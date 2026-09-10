@@ -114,7 +114,7 @@ pub impl Comp {
     // (The Comp-level canonical; the backend's structDeinitFi free fn delegates here.)
     inout fn structOwnDeinitFi(sidx: U64) -> U64 {
         val sd: StructDef = self.arena.structs[sidx]
-        val b: Bind = self.kwSpan(kw: "deinit", kwLen: 6U64)
+        val b: Bind = self.wellKnownSpan(kw: "deinit", kwLen: 6U64)
         val noArgs: Array[Arg] = []
         return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: self.pushArgs(args: noArgs))
     }

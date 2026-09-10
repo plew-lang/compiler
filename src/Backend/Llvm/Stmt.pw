@@ -478,14 +478,14 @@ pub impl LlvmCtx {
                         } else {
                             val aer: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: init)
                             if aer != 0U64 {
-                                val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                                val ab: Bind = c.wellKnownSpan(kw: "Array", kwLen: 5U64)
                                 mut val aargs: Array[U64] = []
                                 aargs.append(aer)
                                 tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                             }
                         }
                     }
-                    val asi: U64 = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
+                    val asi: U64 = c.structDefByNameAny(start: c.wellKnownSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
                     if asi < c.arena.structs.count() {
                         sidx = asi
                     }

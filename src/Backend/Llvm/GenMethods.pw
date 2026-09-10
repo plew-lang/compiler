@@ -479,7 +479,7 @@ pub impl LlvmCtx {
                 // de-pin: the param's LLVM type is the per-instance `%gs` of `Array[E]`.
                 pty = self.llvmTypeOfRef(c: inout c, ref: gpr)
             }
-            pSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
+            pSidx = c.structDefByNameAny(start: c.wellKnownSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
         } else {
             if c.isGenericInst(ref: effRef) {
                 pty = self.llvmTypeOfRef(c: inout c, ref: effRef)

@@ -159,7 +159,7 @@ pub impl Comp {
     }
 
     inout fn checkCondBool(cond: U64) {
-        val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+        val bs: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4U64)
         if bs.nameLen == 0U64 {
             return
         }

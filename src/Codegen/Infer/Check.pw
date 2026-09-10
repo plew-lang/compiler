@@ -152,7 +152,7 @@ pub impl Comp {
         // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
         // operands must be Bool (`1I64 && true` has no truthiness coercion).
         if op == opAnd() || op == opOr() {
-            val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+            val bs: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4U64)
             if bs.nameLen != 0U64 {
                 val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
                 self.tcCheckValue(expectedRef: boolRef, valueExpr: lhs, pos: "logical")
@@ -278,7 +278,7 @@ pub impl Comp {
     inout fn tcCheckArrayIndex(base: U64, index: U64) {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind == 3 {
-            val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3U64)
+            val u64: Bind = self.wellKnownSpan(kw: "U64", kwLen: 3U64)
             if u64.nameLen == 0U64 {
                 return
             }

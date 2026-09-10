@@ -43,7 +43,7 @@ pub impl Comp {
     // at the frontend selection boundary; it is semantic call input, not a
     // request for Mono to manufacture and resolve a new method expression.
     inout fn indexCallArgs(key: U64) -> ArgRange {
-        val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
+        val label: Bind = self.wellKnownSpan(kw: "key", kwLen: 3U64)
         return self.pushArgs(args: [<Arg expr=key isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
     }
 
@@ -59,9 +59,9 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: receiverType.nameStart, len: receiverType.nameLen, kw: "Array") {
             return
         }
-        mut val name: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
+        mut val name: Bind = self.wellKnownSpan(kw: "index", kwLen: 5U64)
         if self.isDictionaryType(ti: receiverType) {
-            name = self.kwSpan(kw: "at", kwLen: 2U64)
+            name = self.wellKnownSpan(kw: "at", kwLen: 2U64)
         } else if !(self.typeHasMethodNamed(typeStart: receiverType.nameStart, typeLen: receiverType.nameLen, name: "index")) {
             return
         }
@@ -180,7 +180,7 @@ pub impl Comp {
                     if callee < self.arena.funcs.count() {
                         val selected: Func = self.arena.funcs[callee]
                         if selected.originTraitOwner != 0U64 {
-                            val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+                            val item: Bind = self.wellKnownSpan(kw: "Item", kwLen: 4U64)
                             itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: self.copyFuncTypes(types: selected.recvTraitArgs), assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
                         }
                     }
@@ -531,7 +531,7 @@ pub impl Comp {
             return 0U64
         }
         if self.methodRecvIsTrait(f: f) {
-            val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
+            val sb: Bind = self.wellKnownSpan(kw: "Self", kwLen: 4)
             mut val ti: U64 = 0U64
             while ti < self.decls.traits.count() {
                 val traitDef: TraitDef = self.decls.traits[ti]
@@ -1041,7 +1041,7 @@ pub impl Comp {
             // only an unsuffixed integer remains context-polymorphic.
             Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
                 if isBool {
-                    val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+                    val boolName: Bind = self.wellKnownSpan(kw: "Bool", kwLen: 4U64)
                     self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
                 } else if tyLen != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
@@ -1051,12 +1051,12 @@ pub impl Comp {
                 if tyLen != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
                 } else {
-                    val floatName: Bind = self.kwSpan(kw: "F64", kwLen: 3U64)
+                    val floatName: Bind = self.wellKnownSpan(kw: "F64", kwLen: 3U64)
                     self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: floatName.nameStart, nameLen: floatName.nameLen))
                 }
             }
             Expr.Str(start: _, len: _) => {
-                val stringName: Bind = self.kwSpan(kw: "String", kwLen: 6U64)
+                val stringName: Bind = self.wellKnownSpan(kw: "String", kwLen: 6U64)
                 self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: stringName.nameStart, nameLen: stringName.nameLen))
             }
             // A local binding's declared TypeRef is the lexical source of

@@ -456,7 +456,7 @@ pub impl LlvmCtx {
                 // arm resolves through the uniform generic path (drops exprIsArray dispatch).
                 if isArrF {
                     if elemRef != 0U64 {
-                        val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                        val ab: Bind = c.wellKnownSpan(kw: "Array", kwLen: 5U64)
                         mut val aargs: Array[U64] = []
                         aargs.append(elemRef)
                         tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
@@ -528,7 +528,7 @@ pub impl LlvmCtx {
                     // the arm resolve through the uniform generic path (drops exprIsArray).
                     mut val bindSidx: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
                     if fld.tyIsArray {
-                        bindSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
+                        bindSidx = c.structDefByNameAny(start: c.wellKnownSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
                     }
                     self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: bindSidx, isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
                     // track the element TypeRef and the `Array[E]` ref so a later
@@ -537,7 +537,7 @@ pub impl LlvmCtx {
                         val fer: U64 = arrayFieldElemRef(c: inout c, f: fld)
                         if fer != 0U64 {
                             self.setLocalElemTypeRef(ref: fer)
-                            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                            val ab: Bind = c.wellKnownSpan(kw: "Array", kwLen: 5U64)
                             mut val aargs: Array[U64] = []
                             aargs.append(fer)
                             self.setLocalTypeRef(ref: c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
