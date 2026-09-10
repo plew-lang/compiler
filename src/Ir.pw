@@ -539,40 +539,16 @@ export struct Bind {
     pub val isSendable: Bool = false
 }
 
-// A content-addressed `kwSpan` result.  `keyStart..keyLen` points into the
-// private declaration pool, never into `Arena.bytes`: inserting a lookup must
-// not create a source occurrence which changes a later search's meaning.  The
-// slots table in `Decls` is derived from these rows and can be rebuilt.
-export struct KwSpanLookup {
-    pub val keyStart: U64
-    pub val keyLen: U64
-    // `kwSpan` historically accepts a requested length separately from the
-    // String.  Keep that part of the key so even malformed internal requests
-    // preserve their exact old scan boundary.
+// A negative kwSpan answer cannot use Arena.bytes as its key: appending that
+// key would make a later source search see text which was never in the source.
+// Keep the owned String only for misses; positive answers are ordinary source
+// spans in Decls.kwCache.
+export struct KwSpanMiss {
+    pub val key: String
     pub val requestLen: U64
-    pub val keyHash: U64
-    pub val result: Bind
-    // 0 = Missing, 1 = Source, 2 = Registered.  This is compiler-internal
-    // state, not a source-language enum value: scalar storage avoids making
-    // the lookup table depend on a user-visible Eq witness.
-    pub val kind: U64
-    // Meaningful for Missing only.  A source append may turn a prior miss into
-    // a match, whereas a first source result and registered result stay valid.
     pub val sourceByteCount: U64
 }
-pub impl KwSpanLookup { factory }
-
-// A query-local, mutable side table for `Comp.kwSpan`.  It is intentionally
-// separate from `Decls`: declaration facts are copied with a compiler state,
-// whereas a derived cache must be shared by every copy of that state.  Keeping
-// the three backing arrays behind one explicit mutable reference avoids making
-// unrelated `Comp` copies retain/release each cache buffer independently.
-export struct KwSpanIndex {
-    pub mut val bytes: Array[U8] = []
-    pub mut val lookups: Array[KwSpanLookup] = []
-    pub mut val slots: Array[U64] = []
-}
-pub impl KwSpanIndex { factory }
+pub impl KwSpanMiss { factory }
 
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
@@ -2708,9 +2684,12 @@ pub impl DestructureSite { factory }
 // freeze the first instance's grounding into every other instantiation of a
 // generic body. `destructureSites`: each record/struct destructure's bind list
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
-// deferred item source (see ForTypeRecipe). The mutable `kwSpan` query index
-// belongs to Comp rather than this declaration-fact value (see KwSpanIndex).
+// deferred item source (see ForTypeRecipe). `kwCache` holds registered names
+// followed by memoized positive source spans; miss keys are private strings.
 export struct Decls {
+    pub mut val kwCache: Array[Bind] = []
+    pub mut val kwRegisteredCount: U64 = 0U64
+    pub mut val kwSpanMisses: Array[KwSpanMiss] = []
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
