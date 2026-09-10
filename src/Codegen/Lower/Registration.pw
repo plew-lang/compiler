@@ -1,6 +1,6 @@
 // Declaration-candidate registration (root: Lower.pw).
 //
-// `Decls.callables` is the single candidate surface consumed by registration and
+// `Decls` callable surface is the single candidate surface consumed by registration and
 // resolution. Function bodies/signatures remain in `arena.funcs`; every source
 // declaration enters the surface through registerDeclaredFunc.
 
@@ -536,8 +536,8 @@ pub impl Comp {
 
     inout fn checkFuncRegistration(f: Func) {
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val priorEntry: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val priorEntry: Callable = self.decls.callableAt(index: i)
             val prior: Func = self.arena.funcs[priorEntry.funcIdx]
             if !prior.isProvided {
                 // A bare declaration namespace is module-owned.  A named
@@ -581,8 +581,8 @@ pub impl Comp {
             return
         }
         mut val i: U64 = 0U64
-        while i < self.decls.callables.count() {
-            val prior: Func = self.arena.funcs[self.decls.callables[i].funcIdx]
+        while i < self.decls.callableCount() {
+            val prior: Func = self.arena.funcs[self.decls.callableAt(index: i).funcIdx]
             if !(prior.isProvided) && prior.extId == f.extId && prior.nameId == f.nameId {
                 if self.sameFuncCandidateBucket(a: prior, b: f) {
                     if self.callableFormsMayOverlap(a: prior, b: f) {
@@ -638,7 +638,7 @@ pub impl Comp {
             sourceOwner = f.srcTraitOwner
             if sourceOwner == 0U64 { sourceOwner = f.provTraitOwner }
         }
-        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=self.funcDeclModule(f: f) />)
+        self.decls.registerCallable(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=self.funcDeclModule(f: f) />, nameId: f.nameId, nameCount: self.interner.entries.count())
     }
 
     inout fn callableIsBare(c: Callable) -> Bool {

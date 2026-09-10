@@ -285,8 +285,8 @@ pub impl Comp {
         mut val typeMatch2Edge: U64 = self.arena.funcs.count()
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             // a bare call never resolves to a method (`hasRecv`) or an associated fn
             // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
@@ -386,8 +386,8 @@ pub impl Comp {
         if self.genMode {
             mut val gLabel: U64 = self.arena.funcs.count()
             mut val gj: U64 = 0
-            while gj < self.decls.callables.count() {
-                val gc: Callable = self.decls.callables[gj]
+            while gj < self.decls.callableCount() {
+                val gc: Callable = self.decls.callableAt(index: gj)
                 val gf: Func = self.arena.funcs[gc.funcIdx]
                 if !(gf.hasRecv || gf.isAssoc) {
                     if gf.nameId == qId {
@@ -412,8 +412,8 @@ pub impl Comp {
     inout fn firstFuncByName(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             // skip methods and associated fns: a bare name only names a free fn (see
             // findFunc — operator witnesses like `add` are assoc, not free).
@@ -430,8 +430,8 @@ pub impl Comp {
     inout fn firstVisibleFuncByName(useMod: U64, nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
@@ -457,8 +457,8 @@ pub impl Comp {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val foundInvisible: Bool = false
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
@@ -478,8 +478,8 @@ pub impl Comp {
     inout fn firstMethodRetType(typeStart: U64, typeLen: U64, name: String) -> TypeInfo {
         val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
                 if f.recvId == qRecv {
@@ -504,15 +504,15 @@ pub impl Comp {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
-        mut val typeMatchEntry: U64 = self.decls.callables.count()
-        mut val typeMatch2Entry: U64 = self.decls.callables.count()
+        mut val typeMatchEntry: U64 = self.decls.callableCount()
+        mut val typeMatch2Entry: U64 = self.decls.callableCount()
         mut val inherentMatch: U64 = self.arena.funcs.count()
         mut val inherentMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
                 // an extension method does not join bare resolution (spec/09): it is
@@ -553,7 +553,7 @@ pub impl Comp {
                 }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         // Inherent methods are the bare default over trait-provided methods with
         // the same selector.  The provided copy remains registered so `#Trait`
@@ -569,9 +569,9 @@ pub impl Comp {
             // are disambiguated by the args, and identical-trait copies are the same
             // method.)
             if typeMatch2 != self.arena.funcs.count() {
-                if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
-                    if self.decls.callables[typeMatchEntry].sourceKind == 2U64 && self.decls.callables[typeMatch2Entry].sourceKind == 2U64 {
-                        if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
+                    if self.decls.callableAt(index: typeMatchEntry).sourceKind == 2U64 && self.decls.callableAt(index: typeMatch2Entry).sourceKind == 2U64 {
+                        if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
                             self.errorAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                         }
                     }
@@ -839,11 +839,11 @@ pub impl Comp {
             mut val firstLabel: U64 = self.arena.funcs.count()
             mut val typeMatch: U64 = self.arena.funcs.count()
             mut val typeMatch2: U64 = self.arena.funcs.count()
-            mut val typeMatchEntry: U64 = self.decls.callables.count()
-            mut val typeMatch2Entry: U64 = self.decls.callables.count()
+            mut val typeMatchEntry: U64 = self.decls.callableCount()
+            mut val typeMatch2Entry: U64 = self.decls.callableCount()
             mut val i: U64 = 0U64
-            while i < self.decls.callables.count() {
-                val cand: Callable = self.decls.callables[i]
+            while i < self.decls.callableCount() {
+                val cand: Callable = self.decls.callableAt(index: i)
                 val f: Func = self.arena.funcs[cand.funcIdx]
                 mut val sourceMatches: Bool = false
                 if pass == 0U64 {
@@ -884,8 +884,8 @@ pub impl Comp {
             if typeMatch != self.arena.funcs.count() {
                 self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
                 if typeMatch2 != self.arena.funcs.count() {
-                    if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
-                        if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                    if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
+                        if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
                             self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: active views provide multiple matching methods")
                         }
                         // A direct conformance and a single trait-to-trait
@@ -1014,8 +1014,8 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
                 if f.extId != 0U64 {
@@ -1035,8 +1035,8 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
                 if f.viewOnly {
@@ -1065,11 +1065,11 @@ pub impl Comp {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
-        mut val typeMatchEntry: U64 = self.decls.callables.count()
-        mut val typeMatch2Entry: U64 = self.decls.callables.count()
+        mut val typeMatchEntry: U64 = self.decls.callableCount()
+        mut val typeMatch2Entry: U64 = self.decls.callableCount()
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
                 if self.callableMatchesSource(c: cand, source: source) {
@@ -1099,8 +1099,8 @@ pub impl Comp {
         if typeMatch != self.arena.funcs.count() {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             if typeMatch2 != self.arena.funcs.count() {
-                if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
-                    if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
+                    if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
                         self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this `#` name resolves to multiple declaration sources")
                     }
                 }
@@ -1121,8 +1121,8 @@ pub impl Comp {
         val rnu: Bind = self.newtypeUnderName(start: recvStart, len: recvLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.isAssoc && self.callableIsBare(c: cand) {
                 if f.nameId == qNameId {
@@ -1205,8 +1205,8 @@ pub impl Comp {
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.isAssoc {
                 if f.recvId == tId {
@@ -1259,8 +1259,8 @@ pub impl Comp {
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.isAssoc {
                 if f.recvId == tId {
@@ -1308,8 +1308,8 @@ pub impl Comp {
         }
         val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
-        while i < self.decls.callables.count() {
-            val cand: Callable = self.decls.callables[i]
+        while i < self.decls.callableCount() {
+            val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.isAssoc {
                 if f.recvId == eNameId {

@@ -1,0 +1,49 @@
+import @Std/Io with { write }
+import /Ir with { Decls, Callable }
+fn check(table: Decls, names: Array[U64]) {
+    if table.callableCount() != names.count() { panic "row count changed" }
+    mut val name: U64 = 0U64
+    while name < 260U64 {
+        mut val actual = table.firstCallableNamed(nameId: name)
+        mut val index: U64 = 0U64
+        while index < names.count() {
+            if names[index] == name {
+                if actual != index { panic "name candidates differ from linear oracle" }
+                val row = table.callableAt(index: actual)
+                if row.funcIdx != index * 2U64 || row.sourceOwner != index + 7U64 { panic "candidate provenance changed" }
+                actual = table.nextCallableNamed(index: actual)
+            }
+            index += 1U64
+        }
+        if actual != table.callableCount() { panic "extra candidate or cyclic chain" }
+        name += 1U64
+    }
+    if table.firstCallableNamed(nameId: 18446744073709551615U64) != table.callableCount() { panic "unknown name" }
+}
+fn add(table: inout Decls, names: inout Array[U64], name: U64) {
+    val index = names.count()
+    table.registerCallable(<Callable funcIdx=index * 2U64 sourceKind=index % 3U64 sourceId=name sourceOwner=index + 7U64 sourceModule=index % 5U64 />, nameId: name, nameCount: 259U64)
+    names.append(name)
+}
+fn main() {
+    mut val table: Decls = <Decls />
+    mut val names: Array[U64] = []
+    check(table: table, names: names)
+    mut val index: U64 = 0U64
+    while index < 257U64 {
+        add(table: inout table, names: inout names, name: index * 37U64 % 17U64)
+        index += 1U64
+    }
+    check(table: table, names: names)
+    mut val copy = table
+    mut val copiedNames = names
+    // Existing chain tails and previously missing names must both detach.
+    add(table: inout table, names: inout names, name: 1U64)
+    add(table: inout table, names: inout names, name: 259U64)
+    check(table: copy, names: copiedNames)
+    add(table: inout copy, names: inout copiedNames, name: 2U64)
+    add(table: inout copy, names: inout copiedNames, name: 258U64)
+    check(table: table, names: names)
+    check(table: copy, names: copiedNames)
+    write(s: "callable-name-index-ok\n")
+}

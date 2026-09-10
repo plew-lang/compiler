@@ -1,0 +1,39 @@
+// Candidate order and provenance are semantic. The name index only skips
+// rows whose names cannot match; receiver/source/overload selection stays in
+// the resolver. No query caches an arena-count sentinel across registration.
+pub impl Decls {
+    inout fn registerCallable(candidate~: Callable, nameId: U64, nameCount: U64) {
+        if nameId > nameCount { panic "callable name is outside the interner" }
+        while self.callableNameHeads.count() <= nameId {
+            self.callableNameHeads.append(0U64)
+            self.callableNameTails.append(0U64)
+        }
+        val entry = self.callableRows.count() + 1U64
+        val tail = self.callableNameTails[nameId]
+        self.callableRows.append(candidate)
+        self.callableNameNext.append(0U64)
+        if tail == 0U64 {
+            self.callableNameHeads[nameId] = entry
+        } else {
+            self.callableNameNext[tail - 1U64] = entry
+        }
+        self.callableNameTails[nameId] = entry
+    }
+
+    fn callableCount() -> U64 { return self.callableRows.count() }
+    fn callableAt(index: U64) -> Callable { return self.callableRows[index] }
+
+    fn firstCallableNamed(nameId: U64) -> U64 {
+        if nameId < self.callableNameHeads.count() {
+            val entry = self.callableNameHeads[nameId]
+            if entry != 0U64 { return entry - 1U64 }
+        }
+        return self.callableRows.count()
+    }
+
+    fn nextCallableNamed(index: U64) -> U64 {
+        val entry = self.callableNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.callableRows.count()
+    }
+}

@@ -50,7 +50,7 @@ fn main() {
     val second = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
         calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count())
     if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second)) { write(s: "distinct-evaluations\n") }
-    if c.decls.callables.count() == 0U64 { write(s: "no-source-lookup\n") }
+    if c.decls.callableCount() == 0U64 { write(s: "no-source-lookup\n") }
     val empty: Array[CallTemplateArgument] = []
     match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
         calleeTypeArgs: [], parameterTerms: [term]) {

@@ -2,6 +2,7 @@ import ./SourceFiles with { SourceFiles, SourceFileRange }
 import @Std/Set with { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
+part ./Ir/Callables
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2683,7 +2684,12 @@ export struct Decls {
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
     pub mut val traitOwners: Array[TraitOwner] = []
-    pub mut val callables: Array[Callable] = []
+    // Registration owns the surface and its name index together. Intern IDs
+    // are dense; links are one-based so absence survives later registration.
+    mut val callableRows: Array[Callable] = []
+    mut val callableNameHeads: Array[U64] = []
+    mut val callableNameTails: Array[U64] = []
+    mut val callableNameNext: Array[U64] = []
     pub mut val conforms: Array[Conform] = []
     // Typed immutable payload pools for scalar Conform rows. See the range
     // descriptors above; consumers must read them through Comp's range readers

@@ -1,0 +1,5 @@
+import /Ir with { Decls, Callable }
+fn main() {
+    mut val declarations: Decls = <Decls />
+    declarations.registerCallable(<Callable funcIdx=0U64 sourceKind=0U64 sourceId=0U64 sourceModule=0U64 />, nameId: 18446744073709551615U64, nameCount: 1U64)
+}
