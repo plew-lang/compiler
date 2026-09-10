@@ -40,7 +40,7 @@ pub impl LlvmCtx {
     // foreign symbol; it does not resolve a callable or a type.
     inout fn declareResolvedCFunction(c: inout Comp, selected: CallResolution) -> U64 {
         val declaration: Func = c.arena.funcs[selected.callee]
-        val key: U64 = declaration.nameId + 1000000000U64
+        val key: U64 = declaration.nameId
         mut val slot: U64 = 0U64
         while slot < self.declId.count() {
             if self.declId[slot] == key { return slot }

@@ -66,7 +66,7 @@ pub impl LlvmCtx {
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val fv: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
+        val fv: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: fnTy)
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = true
@@ -352,7 +352,7 @@ pub impl LlvmCtx {
         saTys.append(self.i32ty)
         saTys.append(self.ptrty)
         val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
-        val saFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
+        val saFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: saTy)
         mut val saArgs: Array[LLVMValueRef] = []
         saArgs.append(LLVMGetParam(mainFn, 0U64))
         saArgs.append(LLVMGetParam(mainFn, 1U64))
@@ -421,7 +421,7 @@ pub impl LlvmCtx {
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val igTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val igFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
+        val igFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: igTy)
         mut val noArgs: Array[LLVMValueRef] = []
         LLVMBuildCall2(self.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
     }

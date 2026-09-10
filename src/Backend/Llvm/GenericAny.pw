@@ -146,7 +146,7 @@ pub impl LlvmCtx {
         tys.append(self.f64ty)
         tys.append(self.f64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(tys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", nameId: 9150U64, fnTy: fty)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(l)
         av.append(r)
