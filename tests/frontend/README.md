@@ -16,3 +16,9 @@ The imported compiler implementation currently makes even this harness an
 expensive compile. Apply the normal 60-second meaningful-progress rule, retain
 the command session and final exit code, and do not overwrite the canonical
 compiler or seed with diagnostic artifacts.
+
+`TemplateDependencyUnfinalized.pw` checks that a published implicit-call slot
+cannot satisfy a different, unfinalized slot. Compile/link the harness normally;
+its execution must exit 1 and report the diagnostic in the companion `.err`.
+This is a compiler diagnostic test, not a panic (SIGABRT) test. The focused
+runner is `meta/agents/performance-profiles/20260910-dependency-index/check.py`.
