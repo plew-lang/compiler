@@ -718,7 +718,13 @@ pub impl Comp {
                 }
                 if isEnum {
                     mut val fieldCount: U64 = 0U64
-                    if enumIndex < self.arena.enumCount() && variantIndex < self.arena.enumAt(index: enumIndex).variants.count() { fieldCount = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() }
+                    if enumIndex < self.arena.enumCount() {
+                        val declaration = self.arena.enumAt(index: enumIndex)
+                        if variantIndex < declaration.variants.count() {
+                            val variant = declaration.variants[variantIndex]
+                            fieldCount = variant.fields.count()
+                        }
+                    }
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Enum enumIdx=enumIndex variantIndex=variantIndex /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 } else {
                     mut val fieldCount: U64 = 0U64
