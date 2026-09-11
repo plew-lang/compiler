@@ -1822,6 +1822,7 @@ export struct FinalStorageResolution {
     pub val stmtId: U64
     pub val sourceTypeRef: U64
     pub val targetTypeRef: U64
+    pub val shadowedBindingTarget: U64 = 0U64
     pub val conversion: U64
 }
 pub impl FinalStorageResolution { factory }

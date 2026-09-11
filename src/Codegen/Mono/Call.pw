@@ -2722,12 +2722,12 @@ pub impl Comp {
         return conversion
     }
 
-    inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64) {
+    inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64, shadowedBindingTarget: U64 = 0U64) {
         if self.currentBodyInstanceId() == 0U64 { return }
         val sourceRef: U64 = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val conversion: ValueConversionProof = self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
-        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
+        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef shadowedBindingTarget=shadowedBindingTarget conversion=self.freezeValueConversionProof(proof: conversion) />)
     }
 
     inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64]) -> Array[ValueConversionProof] {
@@ -5525,7 +5525,15 @@ pub impl Comp {
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty)
+                mut val shadowedBindingTarget: U64 = 0U64
+                val previous: U64 = self.localIndexByName(start: nameStart, len: nameLen)
+                if previous < self.cur.locals.count() {
+                    val prior = self.cur.locals[previous]
+                    if prior.owned && self.typeIsUnique(start: prior.tyStart, len: prior.tyLen) {
+                        shadowedBindingTarget = prior.nameStart
+                    }
+                }
+                self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty, shadowedBindingTarget: shadowedBindingTarget)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like
