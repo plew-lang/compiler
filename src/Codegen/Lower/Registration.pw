@@ -178,25 +178,25 @@ pub impl Comp {
     // in `viewIds`.
     inout fn hasTopLevelView(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        return t.viewExtId != 0U64 || t.viewIds.count() != 0U64
+        val term: TypeTerm = self.arena.typeTerms[ref]
+        return term.hasTopLevelView()
     }
 
     // A type parameter is a free unification variable only in its bare form;
     // `T#P` / projections retain their structural view/projection constraints.
     inout fn plainBinder(ref: U64, params: Array[Bind]) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return params.count() }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if self.hasTopLevelView(ref: ref) || t.assocTraitId != 0U64 || t.args.count() != 0U64 { return params.count() }
-        if t.paramId != 0U64 {
+        val term: TypeTerm = self.arena.typeTerms[ref]
+        if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return params.count() }
+        if term.paramId != 0U64 {
             mut val i: U64 = 0U64
             while i < params.count() {
-                if params[i].paramId == t.paramId { return i }
+                if params[i].paramId == term.paramId { return i }
                 i += 1U64
             }
             return params.count()
         }
-        return self.binderIndex(params: params, nameId: t.nameId)
+        return self.binderIndex(params: params, nameId: term.nameId)
     }
 
     inout fn occursInPattern(side: U64, binderId: U64, ref: U64, refSide: U64, aParams: Array[Bind], bParams: Array[Bind], binds: Array[UnifyBind]) -> Bool {

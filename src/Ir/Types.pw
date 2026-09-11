@@ -87,3 +87,11 @@ pub impl Arena {
         self.typeRows[index] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset siteOffset=t.siteOffset />
     }
 }
+
+// View presence is a property of the canonical term, independent of the
+// one-selector compatibility mirror and without thawing its pooled children.
+pub impl TypeTerm {
+    fn hasTopLevelView() -> Bool {
+        return self.viewExtId != 0U64 || self.viewIds.len != 0U64
+    }
+}
