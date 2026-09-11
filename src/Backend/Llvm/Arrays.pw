@@ -255,7 +255,7 @@ pub impl LlvmCtx {
                             }
                         }
                     }
-                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), elemRef: feRef)
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: feRef), elemRef: feRef)
                 }
                 _ => {}
             }

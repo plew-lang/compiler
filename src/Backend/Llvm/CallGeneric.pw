@@ -486,7 +486,7 @@ pub impl LlvmCtx {
                             argElemRef = c.arena.typeAt(index: parameterTypeRef).args[0]
                         }
                     }
-                    val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                    val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: argElemRef), elemRef: argElemRef)
                     // a literal arg is a temporary: give it a home so its buffer is
                     // released at the statement end (an escape inside the callee retains).
                     if !(p.isMove) {
