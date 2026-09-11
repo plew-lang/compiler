@@ -4460,16 +4460,23 @@ pub impl Comp {
                                 val valueTerm: U64 = self.semanticExprTerm(exprId: candidate.readExpr)
                                 val accessTerm: U64 = self.semanticExprTerm(exprId: use.accessExpr)
                                 val nestedCandidate: U64 = self.finalAccessCandidateForExpr(exprId: baseExpr)
+                                // Read-only uses evaluate the getter through the ordinary
+                                // Mid call path. Only get-modify-set needs closed input
+                                // recipes for deferred writeback.
                                 mut val baseInput: U64 = 0U64
-                                if nestedCandidate != 0U64 {
-                                    self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=baseTerm />)
-                                    baseInput = self.arena.semanticAccessInputs.count()
-                                } else {
-                                    baseInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: baseExpr)
+                                mut val keyInput: U64 = 0U64
+                                mut val accessInput: U64 = 0U64
+                                if use.write {
+                                    if nestedCandidate != 0U64 {
+                                        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=baseTerm />)
+                                        baseInput = self.arena.semanticAccessInputs.count()
+                                    } else {
+                                        baseInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: baseExpr)
+                                    }
+                                    keyInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: keyExpr)
+                                    accessInput = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
                                 }
-                                val keyInput: U64 = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: keyExpr)
-                                val accessInput: U64 = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
-                                if baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64 {
+                                if use.write && (baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64) {
                                     self.errorAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate has no frozen Mid input recipe")
                                 } else {
                                     self.arena.semanticAccesses.append(<SemanticAccess bodyId=parent.bodyId candidateIndex=use.candidateIndex nestedCandidate=nestedCandidate baseInput=baseInput keyInput=keyInput accessInput=accessInput baseExpr=baseExpr keyExpr=keyExpr baseTerm=baseTerm keyTerm=keyTerm valueTerm=valueTerm accessExpr=use.accessExpr accessTerm=accessTerm readResolution=readResolution writeResolution=writeResolution parentResolution=parentIndex role=use.role argIndex=use.argIndex parameterIndex=use.parameterIndex write=use.write />)

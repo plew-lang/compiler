@@ -2498,7 +2498,9 @@ export struct SemanticAccess {
     pub val nestedCandidate: U64 = 0U64
     // One-based SemanticAccessInput identities for the selected getter
     // receiver/key and the selected projection passed to the parent call.
-    // They intentionally replace the former AST navigation anchors below.
+    // Required only for write=true (get-modify-set). Read-only uses are
+    // ordinary getter calls and leave these IDs zero. They intentionally
+    // replace the former AST navigation anchors below for writeback.
     pub val baseInput: U64 = 0U64
     pub val keyInput: U64 = 0U64
     pub val accessInput: U64 = 0U64
