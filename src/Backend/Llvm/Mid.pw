@@ -7,6 +7,26 @@ import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion, Capture
 
 pub impl LlvmCtx {
 
+    // Integer spelling describes a magnitude, not the resolved value type.
+    // A contextual F32/F64 literal is already a float in Mid; constructing an
+    // LLVM integer with a floating type would produce an invalid i0 value.
+    inout fn midIntegerConstant(c: inout Comp, value: U64, negative: Bool, isBool: Bool, typeTerm: U64) -> LLVMValueRef {
+        mut val ty: LLVMTypeRef = self.i64ty
+        if isBool { ty = self.i1ty }
+        else if typeTerm != 0U64 && typeTerm < c.arena.typeCount() { ty = self.llvmTypeOfRef(c: inout c, ref: typeTerm) }
+        val kind: U32 = LLVMGetTypeKind(ty)
+        if kind == 2U32 || kind == 3U32 {
+            val magnitude: LLVMValueRef = LLVMConstInt(self.i64ty, value, 0I32)
+            val literal: LLVMValueRef = LLVMBuildUIToFP(self.b, magnitude, ty, anon())
+            if negative { return LLVMBuildFNeg(self.b, literal, anon()) }
+            return literal
+        }
+        val literal: LLVMValueRef = LLVMConstInt(ty, value, 0I32)
+        if negative { return LLVMBuildNeg(self.b, literal, anon()) }
+        return literal
+    }
+
+
     // Coverage is a set of frozen body-instance keys, not an emission log.
     // Flatten at this boundary: Mid errors are short-lived internal data,
     // whereas coverage records survive the lowering attempt and are copied by
@@ -1844,12 +1864,7 @@ pub impl LlvmCtx {
             return value
         }
         if operand.tag == 5U64 {
-            mut val ty: LLVMTypeRef = self.i64ty
-            if operand.integerBool { ty = self.i1ty }
-            else if operand.typeTerm != 0U64 && operand.typeTerm < c.arena.typeCount() { ty = self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm) }
-            val literal: LLVMValueRef = LLVMConstInt(ty, operand.integerValue, 0I32)
-            if operand.integerNegative { return LLVMBuildNeg(self.b, literal, anon()) }
-            return literal
+            return self.midIntegerConstant(c: inout c, value: operand.integerValue, negative: operand.integerNegative, isBool: operand.integerBool, typeTerm: operand.typeTerm)
         }
         if operand.tag == 6U64 {
             return self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen)
@@ -2333,12 +2348,7 @@ pub impl LlvmCtx {
             MidOperand.Constant(value: val value) => {
                 match value {
                 MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val term) => {
-                        mut val ty: LLVMTypeRef = self.i64ty
-                        if isBool { ty = self.i1ty }
-                        else if term != 0U64 && term < c.arena.typeCount() { ty = self.llvmTypeOfRef(c: inout c, ref: term) }
-                        val literal: LLVMValueRef = LLVMConstInt(ty, integer, 0I32)
-                    if isNegative { return LLVMBuildNeg(self.b, literal, anon()) }
-                    return literal
+                    return self.midIntegerConstant(c: inout c, value: integer, negative: isNegative, isBool: isBool, typeTerm: term)
                 }
                 MidConstant.StringLiteral(start: val start, len: val len, typeTerm: _) => {
                     return self.genLlvmStr(c: inout c, start: start, len: len)
