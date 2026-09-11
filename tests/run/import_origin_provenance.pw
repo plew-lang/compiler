@@ -1,0 +1,19 @@
+import /Ir with { Modules, ImportOrigin }
+import @Std/Io with { write }
+fn check(origin: ImportOrigin, module: U64, target: U64) {
+    if origin.localStart != 30U64 || origin.localLength != 5U64 || origin.sourceStart != 10U64 || origin.sourceLength != 7U64 { panic "spelling provenance changed" }
+    if origin.localModule != module || origin.targetModule != target { panic "module provenance changed" }
+}
+fn main() {
+    mut val modules: Modules = <Modules />
+    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=0U64 sourceStart=10U64 sourceLength=7U64 targetModule=9U64 />, reExport: false)
+    mut val copy = modules
+    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=8U64 sourceStart=10U64 sourceLength=7U64 targetModule=4U64 />, reExport: true)
+    copy.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=6U64 sourceStart=10U64 sourceLength=7U64 targetModule=2U64 />, reExport: false)
+    if modules.importOriginCount() != 1U64 || modules.reExportOriginCount() != 1U64 || copy.importOriginCount() != 2U64 || copy.reExportOriginCount() != 0U64 { panic "origin tables are not independent" }
+    check(origin: modules.importOriginAt(index: 0U64), module: 0U64, target: 9U64)
+    check(origin: modules.reExportOriginAt(index: 0U64), module: 8U64, target: 4U64)
+    check(origin: copy.importOriginAt(index: 0U64), module: 0U64, target: 9U64)
+    check(origin: copy.importOriginAt(index: 1U64), module: 6U64, target: 2U64)
+    write(s: "import-origin-provenance-ok\n")
+}
