@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// Exercise all dynamic target kinds with actual arguments and results.
+// Runtime output and Mid coverage are separate checks.
+struct Handler { pub val apply: fn(value: I64) -> I64 }
+pub impl Handler { factory }
+trait Transform { fn apply(value: I64) -> I64 }
+struct Offset { pub val amount: I64 }
+pub impl Offset { factory }
+pub impl Offset as Transform {
+    fn apply(value: I64) -> I64 { return value + self.amount }
+}
+fn throughLocal(callback: fn(value: I64) -> I64, value: I64) -> I64 {
+    return callback(value: value)
+}
+fn throughField(handler: Handler, value: I64) -> I64 {
+    return handler.apply(value: value)
+}
+fn throughExistential(transform: any Transform, value: I64) -> I64 {
+    return transform.apply(value: value)
+}
+fn main() {
+    val amount: I64 = 7I64
+    val callback: fn(value: I64) -> I64 = fn(value: I64) -> I64 { return value + amount }
+    print(throughLocal(callback: callback, value: 10I64))
+    print(throughField(handler: <Handler apply=callback />, value: 20I64))
+    print(throughExistential(transform: <Offset amount=amount />, value: 30I64))
+}
