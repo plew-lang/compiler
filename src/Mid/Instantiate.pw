@@ -631,7 +631,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, source: MidBodyNode, blockSt
             sourceLocal = c.mid.locals[source.locals.start + localI]
             typeTerm = c.groundTermForBody(ref: sourceLocal.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
         }
-        if !sourceLocal.isParameter {
+        if !sourceLocal.isParameter && sourceLocal.sourceNameStart == 0U64 {
             blockI = 0U64
             while blockI < blockLen {
                 val block: MidBlockNode = c.mid.blocks[blockStart + blockI]
@@ -1595,8 +1595,8 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                         val resultType: U64 = midRvalueResultType(c: c, value: value)
                         if resultType != 0U64 {
                             val declaration: MidLocalDecl = locals[destination.local]
-                            if declaration.isParameter {
-                                if declaration.typeTerm != resultType { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidLocalResultType /> } }
+                            if declaration.isParameter || declaration.sourceNameStart != 0U64 {
+                                if !c.typeRefEq(a: declaration.typeTerm, b: resultType) { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidLocalResultType /> } }
                             } else {
                                 locals.set(i: destination.local, value: midWithTypeTerm(local: declaration, typeTerm: resultType))
                                 statement = <MidStatement.Assign destination=<MidPlace rootTag=destination.rootTag local=destination.local globalTarget=destination.globalTarget globalMutable=destination.globalMutable projections=destination.projections typeTerm=resultType /> value=value />

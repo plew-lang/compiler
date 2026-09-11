@@ -1601,29 +1601,12 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             // The named destination belongs to the enclosing lexical scope;
             // only its initializer dependencies belong to this full expression.
             val evaluation: U64 = midOpenScope(state: inout state)
-            if midExprIsCall(c: c, exprId: init) {
-                // A direct call terminator cannot initialize a capture cell:
-                // it writes a logical T, while the cell allocation is an
-                // explicit Mid operation. Materialize the result first so the
-                // cell's first owner and value boundary stay visible.
-                mut val callDestination: MidPlace = destination
-                if state.locals[destinationLocal].isCaptureCell {
-                    val temporary: U64 = addMidTemporary(state: inout state, typeTerm: term)
-                    callDestination = <MidPlace local=temporary typeTerm=term />
-                }
-                val result: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: callDestination)
-                if state.locals[destinationLocal].isCaptureCell {
-                    midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.Use operand=<MidOperand.Move place=callDestination /> /> />)
-                }
-                midFinishEvaluationScope(state: inout state, scope: evaluation)
-                return result
-            }
             val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
             mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
             if aggregate.found {
                 operandResult = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
             } else {
-                operandResult = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: term, allowAccessMarker: false)
+                operandResult = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: c.semanticExprTerm(exprId: init), allowAccessMarker: false)
             }
             match operandResult.error {
                 MidBuildError.None => {}
@@ -1633,9 +1616,9 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
                 }
             }
             if state.locals[destinationLocal].isCaptureCell {
-                midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+                midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandResult.operand, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
             } else {
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandResult.operand, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
             }
             midFinishEvaluationScope(state: inout state, scope: evaluation)
             return <MidBuildError.None />
@@ -1684,20 +1667,9 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             }
             val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
             val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
-            if midExprIsCall(c: c, exprId: value) {
-                val call: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: temporary)
-                match call { MidBuildError.None => {} _ => { return call } }
-            } else {
-                val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: value)
-                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.OtherNotPlace /> /> />
-                if aggregate.found {
-                    operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
-                } else {
-                    operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
-                }
-                match operand.error { MidBuildError.None => {} _ => { return operand.error } }
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.Use operand=operand.operand /> />)
-            }
+            val operand: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: c.semanticExprTerm(exprId: value), allowAccessMarker: false)
+            match operand.error { MidBuildError.None => {} _ => { return operand.error } }
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operand.operand, typeTerm: c.semanticExprTerm(exprId: value)) /> />)
             midAppendStatement(state: inout state, statement: <MidStatement.Overwrite destination=destinationLookup.place source=temporary />)
             return <MidBuildError.None />
         }
