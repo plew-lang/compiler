@@ -54,6 +54,7 @@ pub impl LlvmCtx {
             MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
             MidVerifyError.UnelaboratedAccess => { return 7U64 }
             MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
+            MidVerifyError.UninstantiatedStorageBoundary => { return 11U64 }
             MidVerifyError.UninstantiatedCastBoundary => { return 10U64 }
         }
     }
@@ -427,6 +428,7 @@ pub impl LlvmCtx {
             MidRvalue.Use(operand: val operand) => {
                 return self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
             }
+            MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: _) => { return false }
             MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: val operand) => {
                 if targetTerm == 0U64 || targetTerm >= c.arena.typeCount() { return false }
                 return self.midOperandLlvmSupported(c: inout c, body: body, operand: operand) && c.typeRefEq(a: self.midOperandTypeTerm(operand: operand), b: targetTerm)
@@ -2689,6 +2691,7 @@ pub impl LlvmCtx {
                         // share (or transferred Move's). Store takes that share.
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
+                    MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: _) => { c.errorAt(offset: 0U64, msg: "internal error: uninstantiated Mid storage boundary") }
                     MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => {
                         mut val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
                         val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: destination.local)

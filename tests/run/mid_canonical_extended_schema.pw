@@ -53,4 +53,11 @@ fn main() {
     arena.locals.set(i: 0U64, value: <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />)
     arena.statements.set(i: 0U64, value: <MidStatementNode tag=10U64 destination=1U64 value=1U64 />)
     print(arena.isWellFormed(body: body))
+    arena.statements.set(i: 0U64, value: <MidStatementNode tag=1U64 destination=1U64 value=1U64 />)
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=20U64 sourceStmt=0U64 targetTerm=1U64 operand=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=20U64 targetTerm=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=20U64 operand=1U64 />)
+    print(arena.isWellFormed(body: body))
 }

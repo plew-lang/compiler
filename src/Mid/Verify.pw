@@ -17,6 +17,7 @@ export enum MidVerifyError {
     UnelaboratedScopeExit
     UnelaboratedAccess
     UninstantiatedReturnBoundary
+    UninstantiatedStorageBoundary
     UninstantiatedCastBoundary
 }
 
@@ -64,6 +65,7 @@ fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], r
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
+    if value.tag == 20U64 { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
     if value.tag == 7U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
     if (value.tag == 8U64 || value.tag == 9U64 || value.tag == 10U64) && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
     if value.tag >= 3U64 && value.tag <= 5U64 {
@@ -450,6 +452,7 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
         // their ABI target has not been selected yet.  After BodyInstance
         // grounding, however, ReturnBoundary deliberately remains explicit so
         // LLVM uses the final nominal ABI layout even for Identity conversion.
+        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: _) => { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
         MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: val operand) => {
             if !isGrounded || targetTerm == 0U64 { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
             return midVerifyConsumeOperand(states: inout states, operand: operand, block: block)

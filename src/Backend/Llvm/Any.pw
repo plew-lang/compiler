@@ -1001,6 +1001,7 @@ pub impl LlvmCtx {
                                         MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.UninstantiatedStorageBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                     }
                                 }

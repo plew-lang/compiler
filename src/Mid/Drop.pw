@@ -967,6 +967,7 @@ fn midConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand) {
 fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
     match value {
         MidRvalue.Use(operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
             mut val i: U64 = 0U64
@@ -1249,7 +1250,8 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
             MidStatement.Assign(destination: val destination, value: val value) => {
                 match value {
                     MidRvalue.Use(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
-                    MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+                    MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
                     MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
                         mut val element: U64 = 0U64
                         while element < elements.count() {
@@ -1454,6 +1456,10 @@ fn midAppendMovedFlagClears(value: MidRvalue, originalCount: U64, needsFlag: Arr
             }
         }
         MidRvalue.Use(operand: val operand) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
             val moved: U64 = midOperandMovedRoot(operand: operand)
             if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
         }

@@ -446,6 +446,7 @@ pub impl MidClosureCapture { factory }
 
 export enum MidRvalue {
     Use(operand: MidOperand)
+    StorageBoundary(stmtId: U64, targetTerm: U64, operand: MidOperand)
     // The ABI return boundary is distinct from an ordinary assignment. Its
     // source ExprId navigates to a frontend-frozen FinalReturnResolution during
     // instantiation; backend lowering must never see this parametric form.
@@ -808,6 +809,9 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         MidRvalue.Use(operand: val operand) => {
             arena.rvalues.append(<MidRvalueNode tag=1U64 operand=midFreezeOperand(arena: inout arena, operand: operand) />)
         }
+        MidRvalue.StorageBoundary(stmtId: val stmtId, targetTerm: val targetTerm, operand: val operand) => {
+            arena.rvalues.append(<MidRvalueNode tag=20U64 operand=midFreezeOperand(arena: inout arena, operand: operand) sourceStmt=stmtId targetTerm=targetTerm />)
+        }
         MidRvalue.ReturnBoundary(exprId: val exprId, targetTerm: val targetTerm, operand: val operand) => {
             arena.rvalues.append(<MidRvalueNode tag=2U64 operand=midFreezeOperand(arena: inout arena, operand: operand) exprId=exprId targetTerm=targetTerm />)
         }
@@ -1064,6 +1068,7 @@ fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool
     if node.tag == 18U64 {
         return node.resultTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand)
     }
+    if node.tag == 20U64 { return node.targetTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) }
     if node.tag == 19U64 {
         if node.closureBodyKey == 0U64 || node.resultTerm == 0U64 || !midRangeFits(range: node.elements, count: arena.closureCaptures.count()) { return false }
         mut val captureI: U64 = 0U64
