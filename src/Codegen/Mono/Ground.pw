@@ -669,9 +669,9 @@ pub impl Comp {
     // Match layouts against the complete semantic fields without substituting
     // ambient parameters or recovering terms from a template StructDef.
     inout fn recordLayoutMatches(ref: U64, structIndex: U64) -> Bool {
-        if ref >= self.arena.typeCount() || structIndex >= self.arena.structs.count() { return false }
+        if ref >= self.arena.typeCount() || structIndex >= self.arena.structCount() { return false }
         val term: TypeRef = self.arena.typeAt(index: ref)
-        val layout: StructDef = self.arena.structs[structIndex]
+        val layout: StructDef = self.arena.structAt(index: structIndex)
         if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
         if layout.nameLen == 0U64 || layout.isExtern || layout.typeParams.count() != 0U64 { return false }
         if self.arena.bytes[layout.nameStart] != 40U8 || layout.fields.count() != term.recordFieldTerms.count() { return false }
@@ -685,17 +685,17 @@ pub impl Comp {
     }
 
     inout fn recordStructIndex(ref: U64) -> U64 {
-        if ref >= self.arena.typeCount() { return self.arena.structs.count() }
+        if ref >= self.arena.typeCount() { return self.arena.structCount() }
         val term: TypeRef = self.arena.typeAt(index: ref)
-        if !term.isRecord { return self.arena.structs.count() }
+        if !term.isRecord { return self.arena.structCount() }
         val attached: U64 = self.structIndexByName(start: term.nameStart, len: term.nameLen)
         if self.recordLayoutMatches(ref: ref, structIndex: attached) { return attached }
         mut val index: U64 = 0U64
-        while index < self.arena.structs.count() {
+        while index < self.arena.structCount() {
             if self.recordLayoutMatches(ref: ref, structIndex: index) { return index }
             index += 1U64
         }
-        return self.arena.structs.count()
+        return self.arena.structCount()
     }
 
     inout fn groundRecordStruct(ref: U64) -> U64 {
@@ -707,10 +707,10 @@ pub impl Comp {
             return ref
         }
         val si: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
-        if si >= self.arena.structs.count() {
+        if si >= self.arena.structCount() {
             return ref
         }
-        val sd: StructDef = self.arena.structs[si]
+        val sd: StructDef = self.arena.structAt(index: si)
         mut val cn: Array[U8] = []
         appendBytes(into: inout cn, from: "(".bytes())
         mut val changed: Bool = false
@@ -750,10 +750,10 @@ pub impl Comp {
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val gi: U64 = 0
         mut val registered: Bool = false
-        while gi < self.arena.structs.count() {
-            if self.arena.structs[gi].nameId == nid {
+        while gi < self.arena.structCount() {
+            if self.arena.structAt(index: gi).nameId == nid {
                 registered = true
-                gi = self.arena.structs.count()
+                gi = self.arena.structCount()
             } else {
                 gi += 1
             }
@@ -865,12 +865,12 @@ pub impl Comp {
         val inst: TypeRef = self.arena.typeAt(index: instRef)
         val si: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
         mut val params: Array[Bind] = []
-        if si < self.arena.structs.count() {
-            params = self.arena.structs[si].typeParams
+        if si < self.arena.structCount() {
+            params = self.arena.structAt(index: si).typeParams
         } else {
             val ei: U64 = self.genericEnumIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
-            if ei < self.arena.enums.count() {
-                params = self.arena.enums[ei].typeParams
+            if ei < self.arena.enumCount() {
+                params = self.arena.enumAt(index: ei).typeParams
             }
         }
         if params.count() == 0U64 || params.count() != inst.args.count() {
@@ -1097,12 +1097,12 @@ pub impl Comp {
         // simple, crash-proof rule (rename the colliding type).
         mut val params: Array[Bind] = []
         val gsi: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if gsi < self.arena.structs.count() {
-            params = self.arena.structs[gsi].typeParams
+        if gsi < self.arena.structCount() {
+            params = self.arena.structAt(index: gsi).typeParams
         } else {
             val gei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if gei < self.arena.enums.count() {
-                params = self.arena.enums[gei].typeParams
+            if gei < self.arena.enumCount() {
+                params = self.arena.enumAt(index: gei).typeParams
             } else {
                 return false
             }
@@ -1212,8 +1212,8 @@ pub impl Comp {
         if !t.isRecord && t.nameLen > 0U64 {
             if self.arena.bytes[t.nameStart] == 40U8 {
                 val rsi: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
-                if rsi < self.arena.structs.count() {
-                    val rfs: Array[FieldDef] = self.arena.structs[rsi].fields
+                if rsi < self.arena.structCount() {
+                    val rfs: Array[FieldDef] = self.arena.structAt(index: rsi).fields
                     mut val rk: U64 = 0
                     while rk < rfs.count() {
                         self.scanType(ref: rfs[rk].ty)
@@ -1254,8 +1254,8 @@ pub impl Comp {
         val inst: TypeRef = self.arena.typeAt(index: instRef)
         val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: si)
             if sd.nameId == qInst {
                 if sd.typeParams.count() == inst.args.count() {
                     if sd.typeParams.count() > 0U64 {
@@ -1275,8 +1275,8 @@ pub impl Comp {
                         // (`BoxIter[I64]`), whose typedef/methods would else be missing. A
                         // leftover (generic-method) param stays non-ground and is skipped.
                         mut val mfi: U64 = 0
-                        while mfi < self.arena.funcs.count() {
-                            val mf: Func = self.arena.funcs[mfi]
+                        while mfi < self.arena.functionCount() {
+                            val mf: Func = self.arena.functionAt(index: mfi)
                             if mf.hasRecv {
                                 // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
                                 // their instances come from call sites, and expanding one here
@@ -1312,9 +1312,9 @@ pub impl Comp {
 
     inout fn collectGenInsts() {
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
+        while fi < self.arena.functionCount() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:function", count: fi, stride: 64U64)
-            val f: Func = self.arena.funcs[fi]
+            val f: Func = self.arena.functionAt(index: fi)
             // skip generic templates: their param/return types contain type
             // parameters (not concrete), resolved per instantiation instead.
             if f.typeParams.count() <= 0 {
@@ -1331,7 +1331,7 @@ pub impl Comp {
                 skipProvidedTemplate = true
             }
             if f.isProvided {
-                if self.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < self.arena.structs.count() {
+                if self.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < self.arena.structCount() {
                     skipProvidedTemplate = true
                 }
             }
@@ -1360,9 +1360,9 @@ pub impl Comp {
             fi += 1
         }
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
+        while si < self.arena.structCount() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:struct", count: si, stride: 64U64)
-            val s: StructDef = self.arena.structs[si]
+            val s: StructDef = self.arena.structAt(index: si)
             if s.typeParams.count() == 0U64 {
                 val fs: Array[FieldDef] = s.fields
                 mut val k: U64 = 0
@@ -1374,9 +1374,9 @@ pub impl Comp {
             si += 1
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
+        while ei < self.arena.enumCount() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:enum", count: ei, stride: 64U64)
-            val e: EnumDef = self.arena.enums[ei]
+            val e: EnumDef = self.arena.enumAt(index: ei)
             if e.typeParams.count() == 0U64 {
                 val vs: Array[Variant] = e.variants
                 mut val vi: U64 = 0

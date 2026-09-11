@@ -140,8 +140,8 @@ pub impl Comp {
                 self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mf < self.arena.funcs.count() {
-                    val selectedFn: Func = self.arena.funcs[mf]
+                if mf < self.arena.functionCount() {
+                    val selectedFn: Func = self.arena.functionAt(index: mf)
                     if self.methodRecvIsTrait(f: selectedFn) {
                         val recvRef: U64 = self.inferType(id: recv)
                         // Candidate selection and applicability validation use
@@ -191,17 +191,17 @@ pub impl Comp {
                 // covered by the backend missing-field check plus field defaults.)
                 if isEnum {
                     mut val cei: U64 = self.enumIdxByName(start: typeStart, len: typeLen)
-                    if cei >= self.arena.enums.count() {
+                    if cei >= self.arena.enumCount() {
                         cei = self.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
                     }
-                    if cei < self.arena.enums.count() {
+                    if cei < self.arena.enumCount() {
                         // a construction naming a variant the enum does not declare
                         // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
                         // for an unknown name) — a garbage tag. Reject it (spec/05).
                         mut val vfound: Bool = false
                         mut val vk: U64 = 0
-                        while vk < self.arena.enums[cei].variants.count() {
-                            if spansEqual(c: inout self, aStart: self.arena.enums[cei].variants[vk].nameStart, aLen: self.arena.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
+                        while vk < self.arena.enumAt(index: cei).variants.count() {
+                            if spansEqual(c: inout self, aStart: self.arena.enumAt(index: cei).variants[vk].nameStart, aLen: self.arena.enumAt(index: cei).variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
                                 vfound = true
                             }
                             vk += 1
@@ -210,13 +210,13 @@ pub impl Comp {
                             self.errorAt(offset: self.exprOffset(id: id), msg: "unknown enum variant in construction (this enum has no such variant)")
                         }
                         val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                        if cvi < self.arena.enums[cei].variants.count() {
-                            val cfs: Array[FieldDef] = self.arena.enums[cei].variants[cvi].fields
+                        if cvi < self.arena.enumAt(index: cei).variants.count() {
+                            val cfs: Array[FieldDef] = self.arena.enumAt(index: cei).variants[cvi].fields
                             // for a NON-generic enum, also category-check each provided
                             // payload value against the field's declared type (`<E.V a="s"/>`
                             // for `a: I64`). Generic enums (payload types need env grounding)
                             // are deferred.
-                            val enumIsGen: Bool = self.arena.enums[cei].typeParams.count() > 0U64
+                            val enumIsGen: Bool = self.arena.enumAt(index: cei).typeParams.count() > 0U64
                             mut val cfi: U64 = 0
                             while cfi < cfs.count() {
                                 if !(self.makeFieldsCoverField(fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
@@ -250,17 +250,17 @@ pub impl Comp {
                         // then `<Bar[I32] …/>`) is an arity error too. genericStructIndex
                         // filters typeParams>0 and would miss it — the same hole that let
                         // `Foo[I32]` through for a non-generic `Foo` (spec/06).
-                        mut val tpCount: U64 = self.arena.structs.count() + self.arena.enums.count() + 1U64
+                        mut val tpCount: U64 = self.arena.structCount() + self.arena.enumCount() + 1U64
                         val gsi: U64 = self.anyStructIndex(nameStart: typeStart, nameLen: typeLen)
-                        if gsi < self.arena.structs.count() {
-                            tpCount = self.arena.structs[gsi].typeParams.count()
+                        if gsi < self.arena.structCount() {
+                            tpCount = self.arena.structAt(index: gsi).typeParams.count()
                         } else {
                             val gei: U64 = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
-                            if gei < self.arena.enums.count() {
-                                tpCount = self.arena.enums[gei].typeParams.count()
+                            if gei < self.arena.enumCount() {
+                                tpCount = self.arena.enumAt(index: gei).typeParams.count()
                             }
                         }
-                        if tpCount <= self.arena.structs.count() + self.arena.enums.count() {
+                        if tpCount <= self.arena.structCount() + self.arena.enumCount() {
                             if tr.args.count() != tpCount {
                                 self.errorAt(offset: self.exprOffset(id: id), msg: "wrong number of type arguments for this generic type")
                             }
@@ -271,12 +271,12 @@ pub impl Comp {
                 // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
                 // — reject (same reliable-value discipline as the let-annotation check).
                 // Generic structs / enums (field types need env grounding) are deferred.
-                mut val nonGenSidx: U64 = self.arena.structs.count()
+                mut val nonGenSidx: U64 = self.arena.structCount()
                 if !(isEnum) {
                     if ty == 0U64 || self.arena.typeAt(index: ty).args.count() == 0U64 {
                         val sidxC: U64 = self.structIndexByName(start: typeStart, len: typeLen)
-                        if sidxC < self.arena.structs.count() {
-                            if self.arena.structs[sidxC].typeParams.count() == 0U64 && !self.arena.structs[sidxC].isExtern {
+                        if sidxC < self.arena.structCount() {
+                            if self.arena.structAt(index: sidxC).typeParams.count() == 0U64 && !self.arena.structAt(index: sidxC).isExtern {
                                 nonGenSidx = sidxC
                             }
                         }
@@ -288,8 +288,8 @@ pub impl Comp {
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
                     self.verifyExpr(id: field.value)
-                    if nonGenSidx < self.arena.structs.count() {
-                        val cfs: Array[FieldDef] = self.arena.structs[nonGenSidx].fields
+                    if nonGenSidx < self.arena.structCount() {
+                        val cfs: Array[FieldDef] = self.arena.structAt(index: nonGenSidx).fields
                         mut val fk: U64 = 0
                         while fk < cfs.count() {
                             if spansEqual(c: inout self, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: field.nameStart, bLen: field.nameLen) {
@@ -419,9 +419,9 @@ pub impl Comp {
                 // `unwrapOr` / `?.` / `match` instead.
                 val tti: TypeInfo = self.typeOf(id: expr)
                 if tti.nameLen > 0U64 {
-                    mut val isEnum: Bool = self.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < self.arena.enums.count()
+                    mut val isEnum: Bool = self.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < self.arena.enumCount()
                     if !(isEnum) {
-                        isEnum = self.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < self.arena.enums.count()
+                        isEnum = self.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < self.arena.enumCount()
                     }
                     if isEnum {
                         if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
@@ -508,7 +508,7 @@ pub impl Comp {
                 // verifyRecv) — so it is an undefined-identifier misuse (`val x = SomeType`).
                 // recordIdent stores the binding (value/fn/type-qual/undef) the backend reads;
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
-                val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.funcs.count())
+                val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.functionCount())
                 if !(self.bindIsValue(code: bindCode)) {
                     if bindCode == identFnCode() {
                         self.errorAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)")
@@ -583,7 +583,7 @@ pub impl Comp {
         }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
-                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.funcs.count())) {
+                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount())) {
                     self.verifyExpr(id: recv)
                 }
             }
@@ -677,10 +677,10 @@ pub impl Comp {
             }
         }
         val sidx: U64 = self.structIndexByName(start: tnStart, len: tnLen)
-        if sidx >= self.arena.structs.count() {
+        if sidx >= self.arena.structCount() {
             return
         }
-        val sd: StructDef = self.arena.structs[sidx]
+        val sd: StructDef = self.arena.structAt(index: sidx)
         mut val bi: U64 = 0
         while bi < site.binds.len {
             val bind: Bind = self.bindAt(binds: site.binds, index: bi)
@@ -732,11 +732,11 @@ pub impl Comp {
         }
         if a.isStruct {
             mut val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
-            if si >= self.arena.structs.count() {
+            if si >= self.arena.structCount() {
                 si = self.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
             }
-            if si < self.arena.structs.count() {
-                val sd: StructDef = self.arena.structs[si]
+            if si < self.arena.structCount() {
+                val sd: StructDef = self.arena.structAt(index: si)
                 mut val fi: U64 = 0
                 while fi < sd.fields.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
@@ -754,10 +754,10 @@ pub impl Comp {
             return
         }
         val ei: U64 = self.enumIdxByName(start: a.enumStart, len: a.enumLen)
-        if ei < self.arena.enums.count() {
+        if ei < self.arena.enumCount() {
             val vi: U64 = self.variantIndex(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
-            if vi < self.arena.enums[ei].variants.count() {
-                val fs: Array[FieldDef] = self.arena.enums[ei].variants[vi].fields
+            if vi < self.arena.enumAt(index: ei).variants.count() {
+                val fs: Array[FieldDef] = self.arena.enumAt(index: ei).variants[vi].fields
                 mut val fi: U64 = 0
                 while fi < fs.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {

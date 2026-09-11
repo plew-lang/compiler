@@ -1,5 +1,5 @@
-import /Ir with { Arena }
+import /Ir with { Arena, EnumDef }
 fn main() {
     mut val arena: Arena = <Arena />
-    arena.enums.append(arena.enums[0U64])
+    arena.enums.append(<EnumDef nameStart=0U64 nameLen=0U64 typeParams=[] variants=[] />)
 }

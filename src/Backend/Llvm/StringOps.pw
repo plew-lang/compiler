@@ -127,7 +127,7 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
-    // The c.arena.enums index of an expression's enum type, or c.arena.enums.count(). A JSX enum
+    // The c.arena.enums index of an expression's enum type, or c.arena.enumCount(). A JSX enum
     // construction (`<Kind.LParen />`) carries the enum name directly; otherwise the
     // typed-AST cache supplies a named type (kind 2). (Opaque extern LLVMTypeRefs
     // can't be `==`-compared in Plew, so detection is via the AST, not the value type.)
@@ -145,7 +145,7 @@ pub impl LlvmCtx {
         if tr != 0U64 {
             val tt: TypeRef = c.arena.typeAt(index: tr)
             val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)
-            if ei < c.arena.enums.count() {
+            if ei < c.arena.enumCount() {
                 return ei
             }
         }
@@ -153,6 +153,6 @@ pub impl LlvmCtx {
         if t.kind == 2 {
             return c.enumIdxByName(start: t.nameStart, len: t.nameLen)
         }
-        return c.arena.enums.count()
+        return c.arena.enumCount()
     }
 }

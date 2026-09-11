@@ -83,12 +83,12 @@ pub impl Comp {
     // canonical ordering for structural equality and keys.
     inout fn recordTypeTermForLayout(name: Bind) -> U64 {
         val si: U64 = self.anyStructIndex(nameStart: name.nameStart, nameLen: name.nameLen)
-        if si >= self.arena.structs.count() {
+        if si >= self.arena.structCount() {
             val noLabels: Array[U64] = []
             val noFields: Array[U64] = []
             return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=noLabels recordFieldTerms=noFields />)
         }
-        val fields: Array[FieldDef] = self.arena.structs[si].fields
+        val fields: Array[FieldDef] = self.arena.structAt(index: si).fields
         mut val labels: Array[U64] = []
         mut val terms: Array[U64] = []
         mut val i: U64 = 0U64
@@ -180,8 +180,8 @@ pub impl Comp {
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            if self.arena.structs[si].nameId == nid {
+        while si < self.arena.structCount() {
+            if self.arena.structAt(index: si).nameId == nid {
                 return nm
             }
             si += 1
@@ -291,8 +291,8 @@ pub impl Comp {
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(canonical))
         val nameId: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val si: U64 = 0U64
-        while si < self.arena.structs.count() {
-            if self.arena.structs[si].nameId == nameId { return nm }
+        while si < self.arena.structCount() {
+            if self.arena.structAt(index: si).nameId == nameId { return nm }
             si += 1U64
         }
         mut val fields: Array[FieldDef] = []
@@ -666,14 +666,14 @@ pub impl Comp {
         mut val matchCount: U64 = 0
         mut val resultTy: U64 = 0
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            if self.arena.funcs[fi].nameId == nameId {
-                if self.arena.funcs[fi].hasRecv == hasReceiver {
-                    if self.arena.funcs[fi].typeParams.count() == 0U64 {
+        while fi < self.arena.functionCount() {
+            if self.arena.functionAt(index: fi).nameId == nameId {
+                if self.arena.functionAt(index: fi).hasRecv == hasReceiver {
+                    if self.arena.functionAt(index: fi).typeParams.count() == 0U64 {
                         matchCount += 1
                         mut val pi: U64 = 0
-                        while pi < self.arena.funcs[fi].params.count() {
-                            val param: Param = self.funcParamAt(params: self.arena.funcs[fi].params, index: pi)
+                        while pi < self.arena.functionAt(index: fi).params.count() {
+                            val param: Param = self.funcParamAt(params: self.arena.functionAt(index: fi).params, index: pi)
                             if intern(c: inout self, start: param.nameStart, len: param.nameLen) == labelId {
                                 resultTy = param.ty
                             }
@@ -861,15 +861,15 @@ pub impl Comp {
         }
         if isEnum {
             mut val ei: U64 = 0
-            while ei < self.arena.enums.count() {
-                if self.arena.enums[ei].nameId == tid {
+            while ei < self.arena.enumCount() {
+                if self.arena.enumAt(index: ei).nameId == tid {
                     mut val vi: U64 = 0
-                    while vi < self.arena.enums[ei].variants.count() {
-                        if intern(c: inout self, start: self.arena.enums[ei].variants[vi].nameStart, len: self.arena.enums[ei].variants[vi].nameLen) == variantId {
+                    while vi < self.arena.enumAt(index: ei).variants.count() {
+                        if intern(c: inout self, start: self.arena.enumAt(index: ei).variants[vi].nameStart, len: self.arena.enumAt(index: ei).variants[vi].nameLen) == variantId {
                             mut val fj: U64 = 0
-                            while fj < self.arena.enums[ei].variants[vi].fields.count() {
-                                if intern(c: inout self, start: self.arena.enums[ei].variants[vi].fields[fj].nameStart, len: self.arena.enums[ei].variants[vi].fields[fj].nameLen) == fieldId {
-                                    return self.arena.enums[ei].variants[vi].fields[fj].ty
+                            while fj < self.arena.enumAt(index: ei).variants[vi].fields.count() {
+                                if intern(c: inout self, start: self.arena.enumAt(index: ei).variants[vi].fields[fj].nameStart, len: self.arena.enumAt(index: ei).variants[vi].fields[fj].nameLen) == fieldId {
+                                    return self.arena.enumAt(index: ei).variants[vi].fields[fj].ty
                                 }
                                 fj += 1
                             }
@@ -882,12 +882,12 @@ pub impl Comp {
             return 0U64
         }
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            if self.arena.structs[si].nameId == tid {
+        while si < self.arena.structCount() {
+            if self.arena.structAt(index: si).nameId == tid {
                 mut val fk: U64 = 0
-                while fk < self.arena.structs[si].fields.count() {
-                    if intern(c: inout self, start: self.arena.structs[si].fields[fk].nameStart, len: self.arena.structs[si].fields[fk].nameLen) == fieldId {
-                        return self.arena.structs[si].fields[fk].ty
+                while fk < self.arena.structAt(index: si).fields.count() {
+                    if intern(c: inout self, start: self.arena.structAt(index: si).fields[fk].nameStart, len: self.arena.structAt(index: si).fields[fk].nameLen) == fieldId {
+                        return self.arena.structAt(index: si).fields[fk].ty
                     }
                     fk += 1
                 }
@@ -937,12 +937,12 @@ pub impl Comp {
     inout fn appendOmittedMakeDefaultsByTypeId(out: inout Array[MakeField], typeId: U64, isEnum: Bool) {
         if isEnum { return }
         mut val si: U64 = 0U64
-        while si < self.arena.structs.count() {
-            if self.arena.structs[si].nameId == typeId { break }
+        while si < self.arena.structCount() {
+            if self.arena.structAt(index: si).nameId == typeId { break }
             si += 1U64
         }
-        if si >= self.arena.structs.count() { return }
-        val declared: Array[FieldDef] = self.arena.structs[si].fields
+        if si >= self.arena.structCount() { return }
+        val declared: Array[FieldDef] = self.arena.structAt(index: si).fields
         mut val fi: U64 = 0U64
         while fi < declared.count() {
             val fld: FieldDef = declared[fi]

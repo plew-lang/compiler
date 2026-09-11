@@ -133,20 +133,20 @@ pub impl LlvmCtx {
         val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
         val savedVP: Array[Bind] = c.cur.typeParams
         val savedVA: Array[U64] = c.cur.typeArgs
-        mut val eid: U64 = c.arena.enums.count()
+        mut val eid: U64 = c.arena.enumCount()
         mut val ai0: U64 = 0
         while ai0 < arms.len {
             val arm: MatchArm = c.matchArmAt(arms: arms, index: ai0)
             if !(arm.isWildcard) {
                 if !(arm.isStruct) {
-                    if eid == c.arena.enums.count() {
+                    if eid == c.arena.enumCount() {
                         eid = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
                     }
                 }
             }
             ai0 += 1
         }
-        if eid >= c.arena.enums.count() {
+        if eid >= c.arena.enumCount() {
             compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -282,7 +282,7 @@ pub impl LlvmCtx {
         val eety: LLVMTypeRef = self.genEnumTys[ege]
         val reid: U64 = self.genEnumDefs[rge]
         val rety: LLVMTypeRef = self.genEnumTys[rge]
-        val ed: EnumDef = c.arena.enums[eeid]
+        val ed: EnumDef = c.arena.enumAt(index: eeid)
         val okB: Bind = c.kwSpan(kw: "Ok", kwLen: 2U64)
         val errB: Bind = c.kwSpan(kw: "Err", kwLen: 3U64)
         val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
@@ -331,7 +331,7 @@ pub impl LlvmCtx {
                     // frontend already rejects a missing `from`, so the error below is a
                     // defensive backstop.
                     val ffi: U64 = c.bodyCallee(exprId: tryId)
-                    if ffi >= c.arena.funcs.count() {
+                    if ffi >= c.arena.functionCount() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "internal error: Mono did not finalize the `try` error-conversion factory")
                     }
                     mut val cav: Array[LLVMValueRef] = []

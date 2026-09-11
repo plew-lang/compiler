@@ -2,7 +2,7 @@ import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { ArgRange, Bind, Func, MethodAlias }
 fn add(c: inout Comp, receiver: Bind, name: Bind, traitId: U64 = 0U64, extensionId: U64 = 0U64, viewOnly: Bool = false, hasReceiver: Bool = true) -> U64 {
-    val index = c.arena.funcs.count()
+    val index = c.arena.functionCount()
     c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
         hasRecv=hasReceiver recvStart=receiver.nameStart recvLen=receiver.nameLen recvId=receiver.nameId
@@ -22,13 +22,13 @@ fn main() {
     val unrelated = c.internBytes(s: "unrelated")
     val traitName = c.internBytes(s: "Choice")
     val extensionName = c.internBytes(s: "Extra")
-    if selected(c: inout c, receiver: receiver, name: name) != c.arena.funcs.count() { panic "missing method" }
+    if selected(c: inout c, receiver: receiver, name: name) != c.arena.functionCount() { panic "missing method" }
     add(c: inout c, receiver: receiver, name: name, extensionId: extensionName.nameId)
     add(c: inout c, receiver: receiver, name: name, viewOnly: true)
     add(c: inout c, receiver: receiver, name: name, hasReceiver: false)
     add(c: inout c, receiver: other, name: name)
     add(c: inout c, receiver: receiver, name: unrelated)
-    if selected(c: inout c, receiver: receiver, name: name) != c.arena.funcs.count() { panic "ineligible method selected" }
+    if selected(c: inout c, receiver: receiver, name: name) != c.arena.functionCount() { panic "ineligible method selected" }
     val provided = add(c: inout c, receiver: receiver, name: name, traitId: traitName.nameId)
     if selected(c: inout c, receiver: receiver, name: name) != provided { panic "provided method missing" }
     val inherent = add(c: inout c, receiver: receiver, name: name)

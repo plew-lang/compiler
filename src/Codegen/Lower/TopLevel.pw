@@ -294,29 +294,29 @@ pub impl Comp {
     inout fn lowerExportItem(inner: TopItemAst) {
         match inner {
             TopItemAst.Extern(val e) => {
-                val xfB: U64 = self.arena.funcs.count()
-                val xsB: U64 = self.arena.structs.count()
+                val xfB: U64 = self.arena.functionCount()
+                val xsB: U64 = self.arena.structCount()
                 self.lowerExtern(e: e)
                 mut val xi: U64 = xfB
-                while xi < self.arena.funcs.count() {
-                    self.recordExport(nameStart: self.arena.funcs[xi].nameStart, nameLen: self.arena.funcs[xi].nameLen)
+                while xi < self.arena.functionCount() {
+                    self.recordExport(nameStart: self.arena.functionAt(index: xi).nameStart, nameLen: self.arena.functionAt(index: xi).nameLen)
                     xi += 1
                 }
                 mut val xj: U64 = xsB
-                while xj < self.arena.structs.count() {
-                    self.recordExportFrom(nameStart: self.arena.structs[xj].nameStart, nameLen: self.arena.structs[xj].nameLen, moduleOffset: self.arena.structs[xj].defOffset)
+                while xj < self.arena.structCount() {
+                    self.recordExportFrom(nameStart: self.arena.structAt(index: xj).nameStart, nameLen: self.arena.structAt(index: xj).nameLen, moduleOffset: self.arena.structAt(index: xj).defOffset)
                     xj += 1
                 }
             }
             TopItemAst.Decl(val d) => {
-                val sB: U64 = self.arena.structs.count()
-                val eB: U64 = self.arena.enums.count()
-                val fB: U64 = self.arena.funcs.count()
+                val sB: U64 = self.arena.structCount()
+                val eB: U64 = self.arena.enumCount()
+                val fB: U64 = self.arena.functionCount()
                 self.lowerDecl(d: d)
                 match d.kind {
-                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structs[sB].nameStart, nameLen: self.arena.structs[sB].nameLen, moduleOffset: self.arena.structs[sB].defOffset) }
-                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enums[eB].nameStart, nameLen: self.arena.enums[eB].nameLen, moduleOffset: self.arena.enums[eB].defOffset) }
-                    DeclKind.Func => { self.recordExport(nameStart: self.arena.funcs[fB].nameStart, nameLen: self.arena.funcs[fB].nameLen) }
+                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: sB).nameStart, nameLen: self.arena.structAt(index: sB).nameLen, moduleOffset: self.arena.structAt(index: sB).defOffset) }
+                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: eB).nameStart, nameLen: self.arena.enumAt(index: eB).nameLen, moduleOffset: self.arena.enumAt(index: eB).defOffset) }
+                    DeclKind.Func => { self.recordExport(nameStart: self.arena.functionAt(index: fB).nameStart, nameLen: self.arena.functionAt(index: fB).nameLen) }
                 }
             }
             TopItemAst.Trait(val t) => {
@@ -367,30 +367,30 @@ pub impl Comp {
     inout fn lowerSyntaxExportItem(item: TopItemId) {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extern => {
-                val funcBefore: U64 = self.arena.funcs.count()
-                val structBefore: U64 = self.arena.structs.count()
+                val funcBefore: U64 = self.arena.functionCount()
+                val structBefore: U64 = self.arena.structCount()
                 self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
                 mut val i: U64 = funcBefore
-                while i < self.arena.funcs.count() {
-                    self.recordExport(nameStart: self.arena.funcs[i].nameStart, nameLen: self.arena.funcs[i].nameLen)
+                while i < self.arena.functionCount() {
+                    self.recordExport(nameStart: self.arena.functionAt(index: i).nameStart, nameLen: self.arena.functionAt(index: i).nameLen)
                     i += 1U64
                 }
                 i = structBefore
-                while i < self.arena.structs.count() {
-                    self.recordExportFrom(nameStart: self.arena.structs[i].nameStart, nameLen: self.arena.structs[i].nameLen, moduleOffset: self.arena.structs[i].defOffset)
+                while i < self.arena.structCount() {
+                    self.recordExportFrom(nameStart: self.arena.structAt(index: i).nameStart, nameLen: self.arena.structAt(index: i).nameLen, moduleOffset: self.arena.structAt(index: i).defOffset)
                     i += 1U64
                 }
             }
             SyntaxTopItemKind.Decl => {
                 val d: SyntaxDecl = syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-                val structBefore: U64 = self.arena.structs.count()
-                val enumBefore: U64 = self.arena.enums.count()
-                val funcBefore: U64 = self.arena.funcs.count()
+                val structBefore: U64 = self.arena.structCount()
+                val enumBefore: U64 = self.arena.enumCount()
+                val funcBefore: U64 = self.arena.functionCount()
                 self.lowerSyntaxDecl(d: d)
                 match d.kind {
-                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structs[structBefore].nameStart, nameLen: self.arena.structs[structBefore].nameLen, moduleOffset: self.arena.structs[structBefore].defOffset) }
-                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enums[enumBefore].nameStart, nameLen: self.arena.enums[enumBefore].nameLen, moduleOffset: self.arena.enums[enumBefore].defOffset) }
-                    DeclKind.Func => { self.recordExport(nameStart: self.arena.funcs[funcBefore].nameStart, nameLen: self.arena.funcs[funcBefore].nameLen) }
+                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: structBefore).nameStart, nameLen: self.arena.structAt(index: structBefore).nameLen, moduleOffset: self.arena.structAt(index: structBefore).defOffset) }
+                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: enumBefore).nameStart, nameLen: self.arena.enumAt(index: enumBefore).nameLen, moduleOffset: self.arena.enumAt(index: enumBefore).defOffset) }
+                    DeclKind.Func => { self.recordExport(nameStart: self.arena.functionAt(index: funcBefore).nameStart, nameLen: self.arena.functionAt(index: funcBefore).nameLen) }
                 }
             }
             SyntaxTopItemKind.Trait => {

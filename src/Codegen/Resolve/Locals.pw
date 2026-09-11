@@ -155,14 +155,14 @@ pub impl Comp {
             rLen = ntu.nameLen
         }
         val si: U64 = self.structIndexByName(start: rStart, len: rLen)
-        if si < self.arena.structs.count() {
-            return self.arena.structs[si].isUnique
+        if si < self.arena.structCount() {
+            return self.arena.structAt(index: si).isUnique
         }
         // `unique enum` (spec/03): the same predicate serves enums, so every
         // uniqueness consumer (copy rejection, param modes, contagion) covers both.
         val ei: U64 = self.anyEnumIndex(nameStart: rStart, nameLen: rLen)
-        if ei < self.arena.enums.count() {
-            return self.arena.enums[ei].isUnique
+        if ei < self.arena.enumCount() {
+            return self.arena.enumAt(index: ei).isUnique
         }
         return false
     }
@@ -265,8 +265,8 @@ pub impl Comp {
         }
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
@@ -305,8 +305,8 @@ pub impl Comp {
         val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
@@ -328,8 +328,8 @@ pub impl Comp {
         val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
@@ -350,8 +350,8 @@ pub impl Comp {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
                 if f.nameId == qName {
                     if f.recvId == qRecv {
@@ -442,13 +442,13 @@ pub impl Comp {
             return
         }
         mut val sidx: U64 = self.structIndexByName(start: typeStart, len: typeLen)
-        if sidx >= self.arena.structs.count() {
+        if sidx >= self.arena.structCount() {
             sidx = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
         }
-        if sidx >= self.arena.structs.count() {
+        if sidx >= self.arena.structCount() {
             return
         }
-        val sd: StructDef = self.arena.structs[sidx]
+        val sd: StructDef = self.arena.structAt(index: sidx)
         if sd.isExtern {
             return
         }

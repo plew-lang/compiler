@@ -44,8 +44,8 @@ pub impl Comp {
                 }
                 val includePrivateProvided: Bool = useMod == self.traitModuleByIdArity(traitId: traitNameId, arity: concreteArity)
                 mut val gi: U64 = 0
-                while gi < self.arena.funcs.count() {
-                    val g: Func = self.arena.funcs[gi]
+                while gi < self.arena.functionCount() {
+                    val g: Func = self.arena.functionAt(index: gi)
                     if g.hasRecv && g.recvId == traitNameId && g.provTraitArity == concreteArity && g.nameId == qName {
                         if includePrivateProvided || g.isPub {
                             if self.paramsLabelsOk(params: g.params, args: args) {
@@ -67,8 +67,8 @@ pub impl Comp {
         val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
                 mut val fi: U64 = 0
                 while fi < s.fields.count() {
@@ -734,7 +734,7 @@ pub impl Comp {
                 // HERE (the type authority; the backend's genPowCall mirrors the same
                 // dispatch at emission). Falls through to normal overload resolution when
                 // the base has no matching `pow` (a user free `pow` with other labels).
-                mut val fi: U64 = self.arena.funcs.count()
+                mut val fi: U64 = self.arena.functionCount()
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
                     if args.len == 2U64 {
                         val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: self.argAt(args: args, index: 0U64).expr, chainHoleRef: chainHoleRef))
@@ -746,11 +746,11 @@ pub impl Comp {
                     }
                 }
                 // resolve the right overload (by labels + arg types) for its return.
-                if fi >= self.arena.funcs.count() {
+                if fi >= self.arena.functionCount() {
                     fi = self.resolvedCallee(id: id)
                 }
-                if fi < self.arena.funcs.count() {
-                    val f: Func = self.arena.funcs[fi]
+                if fi < self.arena.functionCount() {
+                    val f: Func = self.arena.functionAt(index: fi)
                     if f.hasRet {
                         // a generic free function: ground its declared return type under the
                         // type args inferred from THIS call, uniformly for a bare type
@@ -984,8 +984,8 @@ pub impl Comp {
                 // bare (which also covers `#P` naming a trait: its witnesses/provided
                 // copies live on the type and resolve bare).
                 val mfi: U64 = self.resolvedCallee(id: id)
-                if mfi < self.arena.funcs.count() {
-                    val mf: Func = self.arena.funcs[mfi]
+                if mfi < self.arena.functionCount() {
+                    val mf: Func = self.arena.functionAt(index: mfi)
                     if mf.hasRet {
                         val grounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef), args: args)
                         if grounded != 0U64 {
@@ -1023,10 +1023,10 @@ pub impl Comp {
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {
                     val afi: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if afi == self.arena.funcs.count() {
+                    if afi == self.arena.functionCount() {
                         return scalarInfo()
                     }
-                    val af: Func = self.arena.funcs[afi]
+                    val af: Func = self.arena.functionAt(index: afi)
                     if af.hasRet {
                         // a factory / Self-returning assoc fn inherited through a newtype
                         // receiver (spec/10): the result Self is the SYNTACTIC receiver
@@ -1102,7 +1102,7 @@ pub impl Comp {
                     // assumed bound symbolic during generic-body validation.
                     // Reusing a concrete implementation's return here would
                     // prematurely instantiate a rigid type parameter.
-                    if self.cur.checkFn < self.arena.funcs.count() {
+                    if self.cur.checkFn < self.arena.functionCount() {
                         val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: self.inferType(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
                         match staticResolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
@@ -1121,7 +1121,7 @@ pub impl Comp {
                     if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
                         val sTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                         val sMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                        val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: sTrait, traitArity: self.arena.funcs[self.cur.checkFn].provTraitArity, qName: sMethod, args: args, tpStart: rt.nameStart, tpLen: rt.nameLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
+                        val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: sTrait, traitArity: self.arena.functionAt(index: self.cur.checkFn).provTraitArity, qName: sMethod, args: args, tpStart: rt.nameStart, tpLen: rt.nameLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
                         if sr.nameLen != 0U64 {
                             return sr
                         }
@@ -1162,15 +1162,15 @@ pub impl Comp {
                     // its receiver term explicitly, so select through that
                     // term only for this missing-descriptor case; ordinary
                     // source expressions keep their already-selected cache.
-                    if mi == self.arena.funcs.count() && chainHoleRef != 0U64 {
+                    if mi == self.arena.functionCount() && chainHoleRef != 0U64 {
                         mi = self.resolveMethodFinalForType(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args)
                     }
-                    if mi == self.arena.funcs.count() {
+                    if mi == self.arena.functionCount() {
                         // not a method — but it may be a closure-typed FIELD called
                         // indirectly (`h.run()`); recover the fn type's return.
                         return self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen)
                     }
-                    val mf: Func = self.arena.funcs[mi]
+                    val mf: Func = self.arena.functionAt(index: mi)
                     if mf.hasRet {
                         val receiverGrounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args)
                         if receiverGrounded != 0U64 {
@@ -1250,10 +1250,10 @@ pub impl Comp {
                     // was never classified for release (its deinit silently skipped).
                     val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
                     val mi: U64 = self.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mi == self.arena.funcs.count() {
+                    if mi == self.arena.functionCount() {
                         return scalarInfo()
                     }
-                    val mf: Func = self.arena.funcs[mi]
+                    val mf: Func = self.arena.functionAt(index: mi)
                     if mf.hasRet {
                         // an ARRAY return (`-> Array[T]`) grounds through the same
                         // structured path — its retTy is the {Array, [T]} ref.

@@ -423,7 +423,7 @@ fn canonicalAccessChainAt(c: Comp, body: MidBodyNode, site: MidCanonicalAccessSi
 fn canonicalAccessSetterHasResult(c: Comp, access: SemanticAccess) -> Bool {
     if access.writeResolution >= c.arena.finalCallees.count() { return false }
     val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
-    return setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].hasRet
+    return setter.callee < c.arena.functionCount() && c.arena.functionAt(index: setter.callee).hasRet
 }
 
 fn canonicalAccessMarkerLocalBase(c: Comp, body: MidBodyNode, term: MidTerminatorNode, localBase: U64, marker: U64) -> U64 {
@@ -797,7 +797,7 @@ fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, term: MidTermin
     if rawKey == 0U64 { return <MidAccessError.UnsupportedAccessKey /> }
     if access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
     val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
-    if setter.callee >= c.arena.funcs.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    if setter.callee >= c.arena.functionCount() { return <MidAccessError.UnresolvedAccessCall /> }
     val receiver: U64 = canonicalAccessAppendSelectedReceiver(c: inout c, operandId: base, resolution: access.writeResolution)
     val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: access.writeResolution)
     if receiver == 0U64 || target == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
@@ -1157,7 +1157,7 @@ fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, block
         val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
         mut val setterPlace: MidPlace = valuePlace
         mut val needsDrop: Bool = false
-        if setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].hasRet {
+        if setter.callee < c.arena.functionCount() && c.arena.functionAt(index: setter.callee).hasRet {
             val resultLocal: U64 = locals.count()
             setterPlace = <MidPlace local=resultLocal typeTerm=setter.resultTypeRef />
             locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
@@ -1225,7 +1225,7 @@ fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, block
         match key { MidOperand.Access(candidate: _) => { return <MidAccessError.UnsupportedAccessKey /> } _ => {} }
         val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
         mut val receiverOperand: MidOperand = base
-        if setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].selfInout {
+        if setter.callee < c.arena.functionCount() && c.arena.functionAt(index: setter.callee).selfInout {
             match base {
                 MidOperand.Copy(place: val place) => { receiverOperand = <MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> }
                 _ => { return <MidAccessError.UnsupportedSetterReceiver /> }

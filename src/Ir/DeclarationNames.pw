@@ -1,6 +1,13 @@
 // These append-only declarations and their name summaries have one owner.
 // Name membership is the legacy global query, not lexical binder resolution.
 pub impl Arena {
+    fn functionCount() -> U64 { return self.funcs.count() }
+    fn functionAt(index: U64) -> Func { return self.funcs[index] }
+    fn structCount() -> U64 { return self.structs.count() }
+    fn structAt(index: U64) -> StructDef { return self.structs[index] }
+    fn enumCount() -> U64 { return self.enums.count() }
+    fn enumAt(index: U64) -> EnumDef { return self.enums[index] }
+
     inout fn registerStruct(declaration~: StructDef) {
         if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
         for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }

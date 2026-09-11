@@ -26,8 +26,8 @@ fn main() {
     c.prepareDefaultArgumentGenerators()
     val first = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 1U64)
     val second = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 1U64)
-    if first != second && first < c.arena.funcs.count() && second < c.arena.funcs.count() { write(s: "owner-identity\n") }
-    val generator: Func = c.arena.funcs[first]
+    if first != second && first < c.arena.functionCount() && second < c.arena.functionCount() { write(s: "owner-identity\n") }
+    val generator: Func = c.arena.functionAt(index: first)
     if generator.params.count() == 0U64 && !generator.hasRecv && !generator.selfInout && !generator.selfMove { write(s: "no-value-capture\n") }
     if generator.typeParams.count() == 1U64 && generator.recvTy == 19U64 && generator.extId == 31U64 && generator.defOffset == 9U64 && generator.originConformIdx == 4U64 && generator.sourceConformIdx == 6U64 { write(s: "declaration-environment\n") }
     if generator.hasRet && generator.retTy == 17U64 {
@@ -41,7 +41,7 @@ fn main() {
     }
     if c.decls.funcBounds.count() == 2U64 && c.decls.funcBounds[1U64].fnIdx == first && c.decls.funcBounds[1U64].paramTy == 23U64 { write(s: "bound-identity\n") }
     if c.decls.callableCount() == 0U64 { write(s: "no-source-surface\n") }
-    if c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64) == c.arena.funcs.count() { write(s: "required-parameter\n") }
+    if c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64) == c.arena.functionCount() { write(s: "required-parameter\n") }
     c.prepareDefaultArgumentGenerators()
-    if c.arena.funcs.count() == 4U64 && c.decls.funcBounds.count() == 2U64 { write(s: "idempotent\n") }
+    if c.arena.functionCount() == 4U64 && c.decls.funcBounds.count() == 2U64 { write(s: "idempotent\n") }
 }

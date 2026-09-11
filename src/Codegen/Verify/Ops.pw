@@ -322,7 +322,7 @@ pub impl Comp {
     inout fn verifyFieldReadVis(base: U64, nameStart: U64, nameLen: U64) {
         match self.arena.exprs[base] {
             Expr.Ident(val start, val len) => {
-                if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.funcs.count()) {
+                if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount()) {
                     if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
                         self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)")
                     } else {
@@ -340,10 +340,10 @@ pub impl Comp {
             // access slid to the backend's "field access only on a registered struct value
             // (so far)" message, which reads like a compiler limitation, not a user error.
             mut val fei: U64 = self.enumIdxByName(start: bt.nameStart, len: bt.nameLen)
-            if fei >= self.arena.enums.count() {
+            if fei >= self.arena.enumCount() {
                 fei = self.genericEnumIndex(nameStart: bt.nameStart, nameLen: bt.nameLen)
             }
-            if fei < self.arena.enums.count() {
+            if fei < self.arena.enumCount() {
                 self.errorAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)")
                 return
             }
@@ -362,12 +362,12 @@ pub impl Comp {
     }
 
     inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) {
-        if mf < self.arena.funcs.count() {
-                self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.funcs[mf], offset: nameStart)
+        if mf < self.arena.functionCount() {
+                self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.functionAt(index: mf), offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
                 // value that is immediately discarded — spec/03).
-                if self.arena.funcs[mf].selfInout {
+                if self.arena.functionAt(index: mf).selfInout {
                     val receiverPlace: U64 = self.materializablePlace(id: recv)
                     if !(self.exprIsPlace(id: receiverPlace)) {
                         self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")

@@ -43,11 +43,11 @@ pub impl Comp {
         if id < self.typeCache.callee.count() {
             match self.typeCache.callee[id] {
                 CachedCallee.Selected(val callee) => { return callee }
-                CachedCallee.NoStaticCallee => { return self.arena.funcs.count() }
+                CachedCallee.NoStaticCallee => { return self.arena.functionCount() }
                 CachedCallee.Uncomputed => {}
             }
         }
-        mut val r: U64 = self.arena.funcs.count()
+        mut val r: U64 = self.arena.functionCount()
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // A lexical closure binding shadows a same-spelled free
@@ -105,7 +105,7 @@ pub impl Comp {
     }
 
     fn calleeCacheEntry(callee: U64) -> CachedCallee {
-        if callee < self.arena.funcs.count() { return <CachedCallee.Selected callee=callee /> }
+        if callee < self.arena.functionCount() { return <CachedCallee.Selected callee=callee /> }
         return <CachedCallee.NoStaticCallee />
     }
 }
@@ -276,8 +276,8 @@ pub impl Comp {
     // template.  Globals use the one sentinel immediately after Func indices;
     // Mono normalizes its synthetic global body key to the same value.
     inout fn callTemplateOwner(fnIdx: U64) -> U64 {
-        if fnIdx < self.arena.funcs.count() { return fnIdx }
-        return self.arena.funcs.count()
+        if fnIdx < self.arena.functionCount() { return fnIdx }
+        return self.arena.functionCount()
     }
 
     // A provided method is copied once per conformance but deliberately shares
@@ -286,12 +286,12 @@ pub impl Comp {
     // canonicalization at the key boundary so every template producer and
     // consumer agrees without an ambient "current selected method" rule.
     inout fn callTemplateBodyOwner(fnIdx: U64) -> U64 {
-        if fnIdx >= self.arena.funcs.count() { return self.callTemplateOwner(fnIdx: fnIdx) }
-        val selected: Func = self.arena.funcs[fnIdx]
+        if fnIdx >= self.arena.functionCount() { return self.callTemplateOwner(fnIdx: fnIdx) }
+        val selected: Func = self.arena.functionAt(index: fnIdx)
         if !(selected.isProvided) { return fnIdx }
         mut val i: U64 = 0U64
-        while i < self.arena.funcs.count() {
-            val candidate: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val candidate: Func = self.arena.functionAt(index: i)
             if !(candidate.isProvided) && candidate.body == selected.body && candidate.nameId == selected.nameId && candidate.provTraitOwner == selected.provTraitOwner {
                 return i
             }
@@ -656,7 +656,7 @@ pub impl Comp {
     }
 
     inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> StaticMemberResolution {
-        if self.cur.checkFn >= self.arena.funcs.count() || receiverTerm == 0U64 { return <StaticMemberResolution.Missing /> }
+        if self.cur.checkFn >= self.arena.functionCount() || receiverTerm == 0U64 { return <StaticMemberResolution.Missing /> }
         if isUnary {
             if op == opSub() || op == opNot() || op == opBitNot() {
                 return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.unOpTraitName(op: op), memberName: unaryMethodName(op: op), arity: 1U64)
@@ -739,8 +739,8 @@ pub impl Comp {
         if expectedTerm == 0U64 { return kind }
         match kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
-                if callee >= self.arena.funcs.count() { return kind }
-                val function = self.arena.funcs[callee]
+                if callee >= self.arena.functionCount() { return kind }
+                val function = self.arena.functionAt(index: callee)
                 if function.typeParams.count() == 0U64 || typeArgs.len > function.typeParams.count() { return kind }
                 val current: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
                 if typeArgs.len != current.count() { return kind }
@@ -943,8 +943,8 @@ pub impl Comp {
         // here from the already-recorded receiver term; Mono must never infer
         // it from syntax again.
         mut val selectedProof: StaticConformanceProof = proof
-        if self.proofIsMissing(proof: selectedProof) && callee < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[callee]
+        if self.proofIsMissing(proof: selectedProof) && callee < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: callee)
             if f.isProvided {
                 match receiver {
                     CallTemplateReceiver.Term(term: val receiverTerm) => {
@@ -1205,10 +1205,10 @@ pub impl Comp {
         // generic structs are excluded from structIndexByName, so resolve the template
         // through genericStructIndex (a 0-arg / non-generic head is not our case).
         val sidx: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
-        if sidx >= self.arena.structs.count() {
+        if sidx >= self.arena.structCount() {
             return 0U64
         }
-        val sd: StructDef = self.arena.structs[sidx]
+        val sd: StructDef = self.arena.structAt(index: sidx)
         if sd.typeParams.count() == 0U64 {
             return 0U64
         }

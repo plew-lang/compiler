@@ -242,7 +242,7 @@ pub impl Comp {
         if t.paramId == 0U64 && t.args.count() == 0U64 {
             return false
         }
-        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count()
+        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enumCount()
     }
 
     inout fn typeRefEq(a: U64, b: U64) -> Bool {
@@ -327,8 +327,8 @@ pub impl Comp {
         if ref == 0U64 { ref = self.cur.bodyEnvironment.receiverRef }
         if ref == 0U64 { ref = self.cur.selfRef }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
-        if self.cur.bodyFnIdx >= self.arena.funcs.count() { return 0U64 }
-        val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
+        if self.cur.bodyFnIdx >= self.arena.functionCount() { return 0U64 }
+        val bodyFn: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
         if bodyFn.recvTy == 0U64 { return 0U64 }
         val binder: U64 = self.plainBinder(ref: termRef, params: self.copyFuncBinds(binds: bodyFn.typeParams))
         if binder >= bodyFn.typeParams.count() { return 0U64 }
@@ -358,8 +358,8 @@ pub impl Comp {
         // against that selected instance through the shared structural unifier;
         // this is the same semantic instance relation used by conformance and
         // callable selection, and handles nested receiver patterns as well.
-        if self.cur.bodyFnIdx < self.arena.funcs.count() {
-            val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
+        if self.cur.bodyFnIdx < self.arena.functionCount() {
+            val bodyFn: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
             mut val pi: U64 = 0U64
             while pi < bodyFn.typeParams.count() {
                 val bind: Bind = self.funcBindAt(binds: bodyFn.typeParams, index: pi)
@@ -373,11 +373,11 @@ pub impl Comp {
         }
         mut val params: Array[Bind] = []
         val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
-        if si < self.arena.structs.count() {
-            params = self.arena.structs[si].typeParams
+        if si < self.arena.structCount() {
+            params = self.arena.structAt(index: si).typeParams
         } else {
             val ei: U64 = self.genericEnumIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
-            if ei < self.arena.enums.count() { params = self.arena.enums[ei].typeParams }
+            if ei < self.arena.enumCount() { params = self.arena.enumAt(index: ei).typeParams }
         }
         if params.count() != recv.args.count() { return 0U64 }
         mut val i: U64 = 0U64

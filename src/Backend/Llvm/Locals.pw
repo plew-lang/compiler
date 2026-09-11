@@ -158,8 +158,8 @@ pub impl LlvmCtx {
                 }
             }
         }
-        if self.locStructIdx[li] < c.arena.structs.count() {
-            return c.arena.structs[self.locStructIdx[li]].isUnique
+        if self.locStructIdx[li] < c.arena.structCount() {
+            return c.arena.structAt(index: self.locStructIdx[li]).isUnique
         }
         return false
     }

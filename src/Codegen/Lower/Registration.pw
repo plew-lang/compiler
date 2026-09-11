@@ -538,7 +538,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.decls.callableCount() {
             val priorEntry: Callable = self.decls.callableAt(index: i)
-            val prior: Func = self.arena.funcs[priorEntry.funcIdx]
+            val prior: Func = self.arena.functionAt(index: priorEntry.funcIdx)
             if !prior.isProvided {
                 // A bare declaration namespace is module-owned.  A named
                 // extension is instead its own bundle: `#Ext` carries no module
@@ -582,7 +582,7 @@ pub impl Comp {
         }
         mut val i: U64 = 0U64
         while i < self.decls.callableCount() {
-            val prior: Func = self.arena.funcs[self.decls.callableAt(index: i).funcIdx]
+            val prior: Func = self.arena.functionAt(index: self.decls.callableAt(index: i).funcIdx)
             if !(prior.isProvided) && prior.extId == f.extId && prior.nameId == f.nameId {
                 if self.sameFuncCandidateBucket(a: prior, b: f) {
                     if self.callableFormsMayOverlap(a: prior, b: f) {
@@ -595,7 +595,7 @@ pub impl Comp {
     }
 
     inout fn registerDeclaredFunc(f: Func) -> U64 {
-        val idx: U64 = self.arena.funcs.count()
+        val idx: U64 = self.arena.functionCount()
         self.arena.registerFunction(f)
         self.registerCallable(funcIdx: idx, checkCollisions: true)
         return idx
@@ -605,8 +605,8 @@ pub impl Comp {
     // methods call this after their body record is appended; source selection is
     // therefore represented once, instead of reconstructed separately by # calls.
     inout fn registerCallable(funcIdx: U64, checkCollisions: Bool = false) {
-        if funcIdx >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[funcIdx]
+        if funcIdx >= self.arena.functionCount() { return }
+        val f: Func = self.arena.functionAt(index: funcIdx)
         // Source declarations cannot enter a surface which already has a
         // call-indistinguishable candidate.  Provided copies are synthesized
         // dispatch artifacts; their source trait is selected separately and

@@ -335,7 +335,7 @@ pub impl LlvmCtx {
                             val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
                             if rreg < self.genStructRefs.count() {
                                 self.expectedTy = 0U64
-                                return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[rreg]], sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
+                                return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: self.genStructDefs[rreg]), sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
                             }
                         }
                     }
@@ -363,7 +363,7 @@ pub impl LlvmCtx {
         if c.isGenericInst(ref: gty) {
             val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
             if gslot < self.genStructRefs.count() {
-                val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
+                val sd: StructDef = c.arena.structAt(index: self.genStructDefs[gslot])
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
                 // MERGE (see genLlvmMakeEnum) so a field sub-expression referencing the
@@ -405,14 +405,14 @@ pub impl LlvmCtx {
             // field inference, nor the expectedTy fallback could ground: the head names a
             // generic template with no concrete type arguments. Report it honestly at the
             // construction (front-end inference already handled every inferable case).
-            if c.genericStructIndex(nameStart: rtStart, nameLen: rtLen) < c.arena.structs.count() {
+            if c.genericStructIndex(nameStart: rtStart, nameLen: rtLen) < c.arena.structCount() {
                 c.errorAt(offset: typeStart, msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
             } else {
                 c.errorAt(offset: typeStart, msg: "LLVM backend: construction of this type is not supported")
             }
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[reg]], sty: self.genStructTys[reg], fields: fields, errOffset: typeStart)
+        return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: self.genStructDefs[reg]), sty: self.genStructTys[reg], fields: fields, errOffset: typeStart)
     }
 
     // The LLVM type of a strong reference-cell pointee T (from the instance's first type arg).
@@ -445,7 +445,7 @@ pub impl LlvmCtx {
     }
 
     // The struct index of a strong-ref base's pointee T (for `->field` resolution), or
-    // c.arena.structs.count() if the base isn't a strong ref to a registered struct.
+    // c.arena.structCount() if the base isn't a strong ref to a registered struct.
     inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         if r != 0U64 {
@@ -455,7 +455,7 @@ pub impl LlvmCtx {
                 return self.localStructIdxFor(c: inout c, start: pt.nameStart, len: pt.nameLen)
             }
         }
-        return c.arena.structs.count()
+        return c.arena.structCount()
     }
 
     // Load a strong ref base's pointee struct VALUE (`*cell`) — the basis for `->field`.

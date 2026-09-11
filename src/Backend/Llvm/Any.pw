@@ -45,10 +45,10 @@ pub impl LlvmCtx {
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
         val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && typeRefMentionsSelf(c: inout c, ref: req.retTy)
         val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
-        if wfi >= c.arena.funcs.count() {
+        if wfi >= c.arena.functionCount() {
             return LLVMConstNull(self.ptrty)
         }
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.genStructRefs.count() {
             return LLVMConstNull(self.ptrty)
@@ -174,7 +174,7 @@ pub impl LlvmCtx {
     // independent), and returns the new box pointer. Used to give `any P` value
     // semantics on copy (a `mut val b = a` must not alias a's boxed value).
     inout fn buildAnyCopyThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.genStructRefs.count() {
             return LLVMConstNull(self.ptrty)
@@ -205,7 +205,7 @@ pub impl LlvmCtx {
     // lands on the per-type witnesses). The caller (emitAnyRelease) frees the box itself
     // afterwards. Rebuilt per vtable like the copy thunk (LLVM uniques duplicate names).
     inout fn buildAnyDropThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.genStructRefs.count() {
             return LLVMConstNull(self.ptrty)
@@ -386,7 +386,7 @@ pub impl LlvmCtx {
     // Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
     // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
     inout fn boxIntoAny(c: inout Comp, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
@@ -423,7 +423,7 @@ pub impl LlvmCtx {
             return LLVMConstNull(self.ptrty)
         }
         val sidx: U64 = self.exprStructIdx(c: inout c, id: valueExpr)
-        if sidx >= c.arena.structs.count() {
+        if sidx >= c.arena.structCount() {
             return LLVMConstNull(self.ptrty)
         }
         val tr: TypeRef = c.arena.typeAt(index: targetRef)
@@ -468,7 +468,7 @@ pub impl LlvmCtx {
         // enum (Optional/Result/user enums). A `Dictionary` / record / other head is NOT
         // repacked here, so it is left for the type checker to reject (no silent identity).
         val isArr: Bool = rangeEquals(bytes: c.arena.bytes, start: td.nameStart, len: td.nameLen, kw: "Array")
-        val isEnum: Bool = c.genericEnumIndex(nameStart: td.nameStart, nameLen: td.nameLen) < c.arena.enums.count()
+        val isEnum: Bool = c.genericEnumIndex(nameStart: td.nameStart, nameLen: td.nameLen) < c.arena.enumCount()
         if !(isArr) && !(isEnum) {
             return false
         }
@@ -499,7 +499,7 @@ pub impl LlvmCtx {
             val td: TypeRef = c.arena.typeAt(index: dstElem)
             val ts: TypeRef = c.arena.typeAt(index: srcElem)
             val sidx: U64 = c.structIndexByName(start: ts.nameStart, len: ts.nameLen)
-            if sidx >= c.arena.structs.count() {
+            if sidx >= c.arena.structCount() {
                 return false
             }
             return c.findTraitIdxByName(start: td.nameStart, len: td.nameLen) < c.decls.traits.count()
@@ -536,7 +536,7 @@ pub impl LlvmCtx {
         }
         // a generic enum (`Optional[src] -> Optional[dst]`, `Result[src,E] -> …`): tag-dispatch,
         // erasing each variant's payload fields that widen to the existential.
-        if c.genericEnumIndex(nameStart: td.nameStart, nameLen: td.nameLen) < c.arena.enums.count() {
+        if c.genericEnumIndex(nameStart: td.nameStart, nameLen: td.nameLen) < c.arena.enumCount() {
             return self.eraseEnumToAny(c: inout c, srcEnum: v, srcRef: srcRef, dstRef: dstRef)
         }
         return v
@@ -567,16 +567,16 @@ pub impl LlvmCtx {
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         mut val vi: U64 = 0
-        while vi < c.arena.enums[srcEid].variants.count() {
+        while vi < c.arena.enumAt(index: srcEid).variants.count() {
             val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "eraseenum.v"))
             val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "eraseenum.n"))
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon()), thenBB, nextBB)
             LLVMPositionBuilderAtEnd(self.b, thenBB)
             mut val payloadVals: Array[LLVMValueRef] = []
-            val fs: Array[FieldDef] = c.arena.enums[srcEid].variants[vi].fields
+            val fs: Array[FieldDef] = c.arena.enumAt(index: srcEid).variants[vi].fields
             if fs.count() > 0U64 {
                 // load the source payload under the SOURCE env (so `v: T` sizes as the concrete).
-                c.cur.typeParams = c.arena.enums[srcEid].typeParams
+                c.cur.typeParams = c.arena.enumAt(index: srcEid).typeParams
                 c.cur.typeArgs = c.arena.typeAt(index: srcRef).args
                 val srcPty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: srcEid, vi: vi)
                 val pv: LLVMValueRef = LLVMBuildLoad2(self.b, srcPty, srcPayloadPtr, anon())
@@ -585,10 +585,10 @@ pub impl LlvmCtx {
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fieldVal: LLVMValueRef = LLVMBuildExtractValue(self.b, pv, fj, anon())
-                    c.cur.typeParams = c.arena.enums[srcEid].typeParams
+                    c.cur.typeParams = c.arena.enumAt(index: srcEid).typeParams
                     c.cur.typeArgs = c.arena.typeAt(index: srcRef).args
                     val sFieldRef: U64 = c.groundTypeRef(ref: fs[fj].ty)
-                    c.cur.typeParams = c.arena.enums[dstEid].typeParams
+                    c.cur.typeParams = c.arena.enumAt(index: dstEid).typeParams
                     c.cur.typeArgs = c.arena.typeAt(index: dstRef).args
                     val dFieldRef: U64 = c.groundTypeRef(ref: fs[fj].ty)
                     c.cur.typeParams = savedP
@@ -610,7 +610,7 @@ pub impl LlvmCtx {
                 }
             }
             // rebuild the variant of the DESTINATION enum (payload sizes as the existential).
-            c.cur.typeParams = c.arena.enums[dstEid].typeParams
+            c.cur.typeParams = c.arena.enumAt(index: dstEid).typeParams
             c.cur.typeArgs = c.arena.typeAt(index: dstRef).args
             val dv: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: dstEid, ety: dstEty, vi: vi, payloadVals: payloadVals)
             c.cur.typeParams = savedP
@@ -773,7 +773,7 @@ pub impl LlvmCtx {
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active
     // substitution env, if any — used for both plain functions and generic instances).
     inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, environment: InstanceEnvironment) {
-        val f: Func = c.arena.funcs[fi]
+        val f: Func = c.arena.functionAt(index: fi)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-entry name=")
             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -1142,8 +1142,8 @@ pub impl LlvmCtx {
             // instances — registration is demand-driven, so a method emitted before any
             // construction of the enum would leave `self` ref-less. Mirrors bindOneParam.
             if recvRef == 0U64 {
-                if recvSidx >= c.arena.structs.count() {
-                    if c.concreteEnumIdxByName(start: f.recvStart, len: f.recvLen) < c.arena.enums.count() {
+                if recvSidx >= c.arena.structCount() {
+                    if c.concreteEnumIdxByName(start: f.recvStart, len: f.recvLen) < c.arena.enumCount() {
                         recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                     }
                 }
@@ -1153,7 +1153,7 @@ pub impl LlvmCtx {
             // (formerly left 0, recovered via recvSidx classifier — the dominant Ident gap). Set
             // before the extension-view layering below so `self#Ext` still wraps this ref's args.
             if recvRef == 0U64 {
-                if recvSidx < c.arena.structs.count() {
+                if recvSidx < c.arena.structCount() {
                     recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }

@@ -75,15 +75,15 @@ pub impl Comp {
         val ar: Bind = self.aliasReal(start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         val si: U64 = self.structIndexByName(start: ar.nameStart, len: ar.nameLen)
-        if si < self.arena.structs.count() {
-            if self.arena.structs[si].isCExtern {
+        if si < self.arena.structCount() {
+            if self.arena.structAt(index: si).isCExtern {
                 return 0U64
             }
             return q
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            if self.arena.enums[ei].nameId == q {
+        while ei < self.arena.enumCount() {
+            if self.arena.enumAt(index: ei).nameId == q {
                 return q
             }
             ei += 1
@@ -104,8 +104,8 @@ pub impl Comp {
     // callable.  Bare and `#` method calls must not rediscover candidates by
     // different rules after resolution.
     inout fn checkResolvedMethodArgCategories(mf: U64, args: ArgRange) {
-        if mf >= self.arena.funcs.count() { return }
-        val cf: Func = self.arena.funcs[mf]
+        if mf >= self.arena.functionCount() { return }
+        val cf: Func = self.arena.functionAt(index: mf)
         // Generic and provided methods need their resolved substitution before
         // this conservative non-generic category checker can compare values.
         // Preserve the ordinary-method boundary; this helper only removes the
@@ -123,8 +123,8 @@ pub impl Comp {
     }
 
     inout fn checkResolvedMethodArgs(mf: U64, args: ArgRange) {
-        if mf >= self.arena.funcs.count() { return }
-        val cf: Func = self.arena.funcs[mf]
+        if mf >= self.arena.functionCount() { return }
+        val cf: Func = self.arena.functionAt(index: mf)
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
         mut val ai: U64 = 0U64
         while ai < args.len {
@@ -147,12 +147,12 @@ pub impl Comp {
             return
         }
         val nq: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val theFi: U64 = self.arena.funcs.count()
+        mut val theFi: U64 = self.arena.functionCount()
         mut val count: U64 = 0
         mut val anyOther: Bool = false
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             if f.hasRecv && f.nameId == nq && f.recvId == rId {
                 if f.typeParams.count() > 0U64 || f.isProvided || f.extId != 0U64 {
                     anyOther = true
@@ -171,12 +171,12 @@ pub impl Comp {
 
     inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: ArgRange) {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val theFi: U64 = self.arena.funcs.count()
+        mut val theFi: U64 = self.arena.functionCount()
         mut val count: U64 = 0
         mut val anyGen: Bool = false
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             if f.nameId == q && !f.hasRecv && !f.isExtern {
                 if f.typeParams.count() > 0U64 {
                     anyGen = true
@@ -190,7 +190,7 @@ pub impl Comp {
         if anyGen || count != 1U64 {
             return
         }
-        val cf: Func = self.arena.funcs[theFi]
+        val cf: Func = self.arena.functionAt(index: theFi)
         if !(self.paramsLabelsOk(params: cf.params, args: args)) {
             return
         }
@@ -211,9 +211,9 @@ pub impl Comp {
         val qEnum: U64 = intern(c: inout self, start: arE.nameStart, len: arE.nameLen)
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            if self.arena.enums[ei].nameId == qEnum {
-                val vars: Array[Variant] = self.arena.enums[ei].variants
+        while ei < self.arena.enumCount() {
+            if self.arena.enumAt(index: ei).nameId == qEnum {
+                val vars: Array[Variant] = self.arena.enumAt(index: ei).variants
                 mut val vi: U64 = 0
                 while vi < vars.count() {
                     if vars[vi].nameId == qVar {

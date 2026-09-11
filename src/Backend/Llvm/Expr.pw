@@ -85,7 +85,7 @@ pub impl LlvmCtx {
                 // `eq` to the inline structural path below.
                 if op == opEq() || op == opNe() {
                     val eqFi: U64 = self.eqWitnessFn(c: inout c, callId: id)
-                    if eqFi < c.arena.funcs.count() {
+                    if eqFi < c.arena.functionCount() {
                         return self.emitWitnessCall(c: inout c, callId: id, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
@@ -94,7 +94,7 @@ pub impl LlvmCtx {
                 // no witness keeps the built-in LLVM operation below.
                 if isBinTraitOp(op: op) {
                     val wfi: U64 = self.binWitnessFn(c: inout c, callId: id)
-                    if wfi < c.arena.funcs.count() {
+                    if wfi < c.arena.functionCount() {
                         return self.emitWitnessCall(c: inout c, callId: id, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
@@ -105,7 +105,7 @@ pub impl LlvmCtx {
                 // falls through to the structural / built-in `icmp` ordering below.
                 if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                     val ordFi: U64 = self.ordWitnessFn(c: inout c, callId: id)
-                    if ordFi < c.arena.funcs.count() {
+                    if ordFi < c.arena.functionCount() {
                         return self.emitWitnessCall(c: inout c, callId: id, fi: ordFi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
@@ -183,9 +183,9 @@ pub impl LlvmCtx {
                 // (collections.md §3-付録4); their bodies forward to bufferCount/bufferCapacity
                 // intrinsics, so no Expr.Field property interception here.
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count() {
+                if sidx < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx >= c.arena.structs[sidx].fields.count() {
+                    if fidx >= c.arena.structAt(index: sidx).fields.count() {
                         // distinct from the unregistered-base error below: the base's struct
                         // IS known, the field name just doesn't exist on it. nameStart points
                         // at the source field name (parsed fields and Lower-synthesized ones
@@ -196,8 +196,8 @@ pub impl LlvmCtx {
                         c.errorAt(offset: nameStart, msg: "no such field on this value's type")
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
                     }
-                    if fidx < c.arena.structs[sidx].fields.count() {
-                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                    if fidx < c.arena.structAt(index: sidx).fields.count() {
+                        val fd: FieldDef = c.arena.structAt(index: sidx).fields[fidx]
                         val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
                         val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, bv, fidx, anon())
                         // projecting a field OUT OF AN OWNED TEMPORARY (`xs[i].items`,
@@ -353,9 +353,9 @@ pub impl LlvmCtx {
                 // (an array field yields the {ptr,i64} value, whose buffer is shared, so
                 // `r->arr[i] = v` mutates through any alias).
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count() {
+                if psidx < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count() {
+                    if fidx < c.arena.structAt(index: psidx).fields.count() {
                         return LLVMBuildExtractValue(self.b, self.loadRefPointee(c: inout c, base: base), fidx, anon())
                     }
                     // the pointee struct IS known — the field just doesn't exist on it;
@@ -468,7 +468,7 @@ pub impl LlvmCtx {
                 // source-level call in Mono.  A primitive without a witness keeps
                 // the LLVM operation below.
                 val uwfi: U64 = self.unaryWitnessFn(c: inout c, callId: id)
-                if uwfi < c.arena.funcs.count() {
+                if uwfi < c.arena.functionCount() {
                     return self.emitWitnessCall(c: inout c, callId: id, fi: uwfi, lhs: operand, rhs: operand, binary: false)
                 }
                 if op == opSub() {

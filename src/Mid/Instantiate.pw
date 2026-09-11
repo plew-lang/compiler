@@ -795,10 +795,10 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
     if resolutionId == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
     val resolution: U64 = resolutionId - 1U64
     val selected: CallResolution = c.arena.finalCallees[resolution]
-    if selected.callee >= c.arena.funcs.count() || selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
+    if selected.callee >= c.arena.functionCount() || selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
         return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionArity /> />
     }
-    val callee: Func = c.arena.funcs[selected.callee]
+    val callee: Func = c.arena.functionAt(index: selected.callee)
     if callee.params.count() != term.args.len || !midReceiverPassingMatches(callee: callee, passing: selected.receiverPassing) {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid instantiate-passing-reject stage=callee resolution=")
@@ -903,8 +903,8 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
     val source: MidBodyNode = c.mid.bodies[body.body - 1U64]
     val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
     mut val itemRef: U64 = 0U64
-    if environment.fnIdx < c.arena.funcs.count() {
-        itemRef = c.bodyProvidedItemTerm(f: c.arena.funcs[environment.fnIdx], environment: environment.environment)
+    if environment.fnIdx < c.arena.functionCount() {
+        itemRef = c.bodyProvidedItemTerm(f: c.arena.functionAt(index: environment.fnIdx), environment: environment.environment)
     } else if environment.fnIdx != source.sourceFunction {
         return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
     }
@@ -1423,10 +1423,10 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
         return <MidInstantiation body=body error=<MidInstantiateError.InvalidBodyInstance /> />
     }
     val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
-    if environment.fnIdx >= c.arena.funcs.count() {
+    if environment.fnIdx >= c.arena.functionCount() {
         return <MidInstantiation body=body error=<MidInstantiateError.InvalidBodyInstance /> />
     }
-    val f: Func = c.arena.funcs[environment.fnIdx]
+    val f: Func = c.arena.functionAt(index: environment.fnIdx)
     val itemRef: U64 = c.bodyProvidedItemTerm(f: f, environment: environment.environment)
     mut val locals: Array[MidLocalDecl] = []
     mut val localI: U64 = 0U64
@@ -1488,10 +1488,10 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                             val conversions: Array[U64] = c.copyFinalCalleeConversions(conversions: selected.argumentConversions)
                             val parameterTypes: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
                             val argumentPassings: Array[CallArgumentPassing] = c.copyFinalCalleeArgumentPassings(passings: selected.argumentPassings)
-                            if selected.callee >= c.arena.funcs.count() || conversions.count() != rawArgs.count() || parameterTypes.count() != rawArgs.count() || argumentPassings.count() != rawArgs.count() {
+                            if selected.callee >= c.arena.functionCount() || conversions.count() != rawArgs.count() || parameterTypes.count() != rawArgs.count() || argumentPassings.count() != rawArgs.count() {
                                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionArity /> }
                             } else {
-                                val calleeDef: Func = c.arena.funcs[selected.callee]
+                                val calleeDef: Func = c.arena.functionAt(index: selected.callee)
                                 if calleeDef.params.count() != rawArgs.count() {
                                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionArity /> }
                                 } else if !(midReceiverPassingMatches(callee: calleeDef, passing: selected.receiverPassing)) {

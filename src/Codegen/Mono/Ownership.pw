@@ -24,10 +24,10 @@ pub impl Comp {
         }
         match self.arcClassOfRef(ref: typeRef) {
             ArcClass.StructVal(sidx: val index) => {
-                val declaration: StructDef = self.arena.structs[index]
+                val declaration: StructDef = self.arena.structAt(index: index)
                 if declaration.isUnique {
                     val destructor: U64 = self.structOwnDeinitFi(sidx: index)
-                    if destructor < self.arena.funcs.count() {
+                    if destructor < self.arena.functionCount() {
                         self.enqueueFinalBody(fnIdx: destructor, args: type.args, recvInstRef: typeRef)
                     }
                 }
@@ -39,7 +39,7 @@ pub impl Comp {
                 }
             }
             ArcClass.EnumVal(eidx: val index) => {
-                val declaration: EnumDef = self.arena.enums[index]
+                val declaration: EnumDef = self.arena.enumAt(index: index)
                 mut val variant: U64 = 0U64
                 while variant < declaration.variants.count() {
                     mut val field: U64 = 0U64

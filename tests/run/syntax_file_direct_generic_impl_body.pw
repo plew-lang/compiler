@@ -33,5 +33,5 @@ fn main() {
     c.appendSrc(from: source.bytes())
     c.syntax = file
     c.lowerSyntaxImpl(im: impl)
-    print(c.arena.funcs.count())
+    print(c.arena.functionCount())
 }

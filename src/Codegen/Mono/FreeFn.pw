@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): generic free-function inference and
 // instance registration.
 
-// Whether c.arena.funcs[fi] is a generic free function (no receiver, has type params).
+// Whether c.arena.functionAt(index: fi) is a generic free function (no receiver, has type params).
 
 import ../../Ir with { CallTemplateArgument }
 
@@ -92,10 +92,10 @@ pub impl Comp {
         return out
     }
     inout fn isGenericFreeFn(fi: U64) -> Bool {
-        if fi >= self.arena.funcs.count() {
+        if fi >= self.arena.functionCount() {
             return false
         }
-        val f: Func = self.arena.funcs[fi]
+        val f: Func = self.arena.functionAt(index: fi)
         if f.hasRecv {
             return false
         }
@@ -429,8 +429,8 @@ pub impl Comp {
 
     inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64) {
         val fi: U64 = finalIdx
-        if fi < self.arena.funcs.count() {
-            if self.arena.funcs[fi].isExtern {
+        if fi < self.arena.functionCount() {
+            if self.arena.functionAt(index: fi).isExtern {
                 // a generic `extern(plewIntrinsic)` (e.g. `arrayPush[T]`, `arrayGet[T]`):
                 // lowered inline at the call site, so it has no monomorphized instance —
                 // never register one (else a bogus prototype/body with an unmapped return
@@ -444,7 +444,7 @@ pub impl Comp {
                 // no concrete receiver for its nested calls.  Instance demand
                 // is therefore a pure consumer of the final descriptor.
                 val finalArgs: Array[U64] = self.bodyCalleeTypeArgs(exprId: id)
-                if finalArgs.count() == self.arena.funcs[fi].typeParams.count() && self.fnArgsAllGround(args: finalArgs) {
+                if finalArgs.count() == self.arena.functionAt(index: fi).typeParams.count() && self.fnArgsAllGround(args: finalArgs) {
                     if !(self.fnInstExists(fnIdx: fi, args: finalArgs)) {
                         // polymorphic-recursion ceiling: an ever-deepening type argument
                         // (`deep(v: (v, v))` through an anonymous record) grows fn instances
@@ -530,10 +530,10 @@ pub impl Comp {
         if mi == 4000000000U64 {
             mi = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
-        if mi == self.arena.funcs.count() {
+        if mi == self.arena.functionCount() {
             return
         }
-        val mf: Func = self.arena.funcs[mi]
+        val mf: Func = self.arena.functionAt(index: mi)
         // Associated functions have no value receiver.  Their instance is
         // registered from the completed final-callee table, where the selected
         // subject is explicit; treating the type-name AST as a method receiver
@@ -587,12 +587,12 @@ pub impl Comp {
 
     inout fn recvParamCount(nameStart: U64, nameLen: U64) -> U64 {
         val gsi: U64 = self.genericStructIndex(nameStart: nameStart, nameLen: nameLen)
-        if gsi < self.arena.structs.count() {
-            return self.arena.structs[gsi].typeParams.count()
+        if gsi < self.arena.structCount() {
+            return self.arena.structAt(index: gsi).typeParams.count()
         }
         val gei: U64 = self.genericEnumIndex(nameStart: nameStart, nameLen: nameLen)
-        if gei < self.arena.enums.count() {
-            return self.arena.enums[gei].typeParams.count()
+        if gei < self.arena.enumCount() {
+            return self.arena.enumAt(index: gei).typeParams.count()
         }
         return 0
     }

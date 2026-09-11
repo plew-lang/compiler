@@ -18,8 +18,8 @@ pub impl LlvmCtx {
     // the final-callable descriptor; do not search registered instances by the
     // receiver (two map calls on the same iterator may have different outputs).
     inout fn adapterResultForFinalMethod(c: inout Comp, finalMfi: U64, resultRef: U64) -> U64 {
-        if finalMfi >= c.arena.funcs.count() || resultRef == 0U64 || resultRef >= c.arena.typeCount() { return 0U64 }
-        val f: Func = c.arena.funcs[finalMfi]
+        if finalMfi >= c.arena.functionCount() || resultRef == 0U64 || resultRef >= c.arena.typeCount() { return 0U64 }
+        val f: Func = c.arena.functionAt(index: finalMfi)
         if !(f.isProvided) { return 0U64 }
         val nameStart: U64 = f.nameStart
         val nameLen: U64 = f.nameLen
@@ -56,7 +56,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
+        val sd: StructDef = c.arena.structAt(index: self.genStructDefs[gslot])
         mut val fields: Array[MakeField] = []
         // field 0 = inner = the receiver expression.
         fields.append(<MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv origin=<MakeFieldOrigin.Synthesized /> />)

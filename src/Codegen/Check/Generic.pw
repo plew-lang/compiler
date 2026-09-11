@@ -32,10 +32,10 @@ pub impl Comp {
     }
 
     inout fn isSelfTypeInProvided(start: U64, len: U64) -> Bool {
-        if self.cur.checkFn >= self.arena.funcs.count() {
+        if self.cur.checkFn >= self.arena.functionCount() {
             return false
         }
-        val f: Func = self.arena.funcs[self.cur.checkFn]
+        val f: Func = self.arena.functionAt(index: self.cur.checkFn)
         if !(self.methodRecvIsTrait(f: f)) {
             return false
         }
@@ -50,10 +50,10 @@ pub impl Comp {
     }
 
     inout fn isTypeParamOf(fnIdx: U64, start: U64, len: U64) -> Bool {
-        if fnIdx >= self.arena.funcs.count() {
+        if fnIdx >= self.arena.functionCount() {
             return false
         }
-        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.funcs[fnIdx].typeParams)
+        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.functionAt(index: fnIdx).typeParams)
         val qTp: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
         while i < tps.count() {
@@ -94,7 +94,7 @@ pub impl Comp {
             return <IdentBinding code=identValueCode() target=self.cur.locals[li].nameStart />
         }
         val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
-        if fi < self.arena.funcs.count() {
+        if fi < self.arena.functionCount() {
             return <IdentBinding code=identFnCode() target=fi />
         }
         if self.isTypeName(start: start, len: len) {
@@ -172,8 +172,8 @@ pub impl Comp {
                 // provided method of this trait (a method with recv = the trait)
                 val includePrivateProvided: Bool = useMod == self.traitModuleByIdArity(traitId: traitNameId, arity: concreteArity)
                 mut val gi: U64 = 0
-                while gi < self.arena.funcs.count() {
-                    val g: Func = self.arena.funcs[gi]
+                while gi < self.arena.functionCount() {
+                    val g: Func = self.arena.functionAt(index: gi)
                     if g.hasRecv {
                         if g.recvId == traitNameId && g.provTraitArity == concreteArity {
                             if includePrivateProvided || g.isPub {
@@ -235,8 +235,8 @@ pub impl Comp {
         val extId: U64 = intern(c: inout self, start: extStart, len: extLen)
         val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val fi: U64 = 0U64
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             if f.extId == extId && self.methodRecvIsTrait(f: f) {
                 val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.typeAt(index: f.recvTy))
                 mut val bi: U64 = 0U64
@@ -362,7 +362,7 @@ pub impl Comp {
                 // the same binop type-check verifyProgram runs on non-generic bodies, now
                 // applied to EVERY module's generic templates (std included — no
                 // trusted-import boundary).
-                if self.cur.checkFn < self.arena.funcs.count() {
+                if self.cur.checkFn < self.arena.functionCount() {
                     self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                 }
                 val lt: TypeInfo = self.typeOf(id: lhs)
@@ -413,11 +413,11 @@ pub impl Comp {
                 // and `f`'s `x: I64`) is a type error at the definition. The callee's own
                 // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
                 val fi: U64 = self.resolvedCallee(id: exprId)
-                if fi < self.arena.funcs.count() {
-                    val ps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[fi].params)
+                if fi < self.arena.functionCount() {
+                    val ps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: fi).params)
                     mut val k: U64 = 0
                     while k < args.len {
-                        val pi: U64 = self.paramIndexForArg(params: self.arena.funcs[fi].params, args: args, argIdx: k)
+                        val pi: U64 = self.paramIndexForArg(params: self.arena.functionAt(index: fi).params, args: args, argIdx: k)
                         if pi < ps.count() {
                             if !(ps[pi].tyIsArray) {
                                 self.checkGenericTypeMatch(expectedRef: ps[pi].ty, valueExpr: self.argAt(args: args, index: k).expr)
@@ -480,8 +480,8 @@ pub impl Comp {
                             // members are only the trait's requirements / provided methods /
                             // supertrait members (spec/08). Anything else is undefined on Self.
                             val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                            val selfTraitId: U64 = intern(c: inout self, start: self.arena.funcs[self.cur.checkFn].recvStart, len: self.arena.funcs[self.cur.checkFn].recvLen)
-                            if !(self.traitProvidesMember(traitNameId: selfTraitId, traitArity: self.arena.funcs[self.cur.checkFn].provTraitArity, qName: qm, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart))) {
+                            val selfTraitId: U64 = intern(c: inout self, start: self.arena.functionAt(index: self.cur.checkFn).recvStart, len: self.arena.functionAt(index: self.cur.checkFn).recvLen)
+                            if !(self.traitProvidesMember(traitNameId: selfTraitId, traitArity: self.arena.functionAt(index: self.cur.checkFn).provTraitArity, qName: qm, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart))) {
                                 self.errorAt(offset: nameStart, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
                             }
                         } else {
@@ -516,11 +516,11 @@ pub impl Comp {
                         }
                         if !(staticBoundMember) && !(self.isGenericInst(ref: rt.ref)) {
                             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                            if mi != self.arena.funcs.count() {
-                                val mps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[mi].params)
+                            if mi != self.arena.functionCount() {
+                                val mps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: mi).params)
                                 mut val mk: U64 = 0
                                 while mk < args.len {
-                                    val mpi: U64 = self.paramIndexForArg(params: self.arena.funcs[mi].params, args: args, argIdx: mk)
+                                    val mpi: U64 = self.paramIndexForArg(params: self.arena.functionAt(index: mi).params, args: args, argIdx: mk)
                                     if mpi < mps.count() {
                                         if !(mps[mpi].tyIsArray) {
                                             self.checkGenericTypeMatch(expectedRef: mps[mpi].ty, valueExpr: self.argAt(args: args, index: mk).expr)
@@ -635,7 +635,7 @@ pub impl Comp {
                 // value position: a bare type / type-parameter name reaching here is NOT a
                 // value (an assoc-fn receiver `T.make()` is rerouted via checkBoundsRecv) —
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
-                if self.cur.checkFn < self.arena.funcs.count() {
+                if self.cur.checkFn < self.arena.functionCount() {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                     if !(self.bindIsValue(code: bindCode)) {
                         if bindCode == identFnCode() {
@@ -707,15 +707,15 @@ pub impl Comp {
                 }
                 if isEnum {
                     val ei: U64 = self.anyEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                    if ei >= self.arena.enums.count() { return false }
+                    if ei >= self.arena.enumCount() { return false }
                     val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    if vi >= self.arena.enums[ei].variants.count() { return false }
-                    self.genericCheckFieldsUnder(params: self.arena.enums[ei].typeParams, targs: et.args, defFields: self.arena.enums[ei].variants[vi].fields, makeFields: fields)
+                    if vi >= self.arena.enumAt(index: ei).variants.count() { return false }
+                    self.genericCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumAt(index: ei).variants[vi].fields, makeFields: fields)
                     return true
                 }
                 val si: U64 = self.anyStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                if si >= self.arena.structs.count() { return false }
-                self.genericCheckFieldsUnder(params: self.arena.structs[si].typeParams, targs: et.args, defFields: self.arena.structs[si].fields, makeFields: fields)
+                if si >= self.arena.structCount() { return false }
+                self.genericCheckFieldsUnder(params: self.arena.structAt(index: si).typeParams, targs: et.args, defFields: self.arena.structAt(index: si).fields, makeFields: fields)
                 return true
             }
             _ => { return false }
@@ -752,7 +752,7 @@ pub impl Comp {
         if expectedRef == 0U64 {
             return
         }
-        if self.cur.checkFn >= self.arena.funcs.count() {
+        if self.cur.checkFn >= self.arena.functionCount() {
             return
         }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
@@ -916,8 +916,8 @@ pub impl Comp {
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     self.checkBoundsExpr(exprId: value)
-                    if self.cur.checkFn < self.arena.funcs.count() {
-                        self.checkGenericTypeMatch(expectedRef: self.arena.funcs[self.cur.checkFn].retTy, valueExpr: value)
+                    if self.cur.checkFn < self.arena.functionCount() {
+                        self.checkGenericTypeMatch(expectedRef: self.arena.functionAt(index: self.cur.checkFn).retTy, valueExpr: value)
                     }
                 }
             }
@@ -986,8 +986,8 @@ pub impl Comp {
 
     inout fn checkGenericBodies() {
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
             // block). Generic externs like `arrayPush[T]` would otherwise have block 0
             // (some unrelated function's body) walked under their own bound-less type
@@ -1091,6 +1091,6 @@ pub impl Comp {
         self.cur.extId = 0
         self.cur.selfRef = 0
         self.cur.itemRef = 0
-        self.cur.checkFn = self.arena.funcs.count()
+        self.cur.checkFn = self.arena.functionCount()
     }
 }

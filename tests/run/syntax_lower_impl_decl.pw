@@ -12,5 +12,5 @@ fn main() {
     c.appendSrc(from: source.bytes())
     c.syntax = file
     c.lowerSyntaxImpl(im: syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 1U64)) />))
-    print(c.arena.funcs.count())
+    print(c.arena.functionCount())
 }

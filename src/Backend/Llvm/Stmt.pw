@@ -266,7 +266,7 @@ pub impl LlvmCtx {
                     // a bare type-param annotation (`val v: T` in a generic body): the
                     // span "T" resolves to nothing — retry with the env-GROUNDED type's
                     // name so the local is a real struct to field access AND to ARC.
-                    if sidx >= c.arena.structs.count() {
+                    if sidx >= c.arena.structCount() {
                         if gty != 0U64 {
                             sidx = self.localStructIdxFor(c: inout c, start: c.arena.typeAt(index: gty).nameStart, len: c.arena.typeAt(index: gty).nameLen)
                         }
@@ -358,12 +358,12 @@ pub impl LlvmCtx {
                     // its scope-exit release never ran (the drop path itself
                     // demand-registers via genEnumSlot).
                     if tyLen > 0U64 {
-                        if c.enumIdxByName(start: tyStart, len: tyLen) < c.arena.enums.count() {
+                        if c.enumIdxByName(start: tyStart, len: tyLen) < c.arena.enumCount() {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                         }
                     } else {
                         if clsRef != 0U64 {
-                            if c.enumIdxByName(start: c.arena.typeAt(index: clsRef).nameStart, len: c.arena.typeAt(index: clsRef).nameLen) < c.arena.enums.count() {
+                            if c.enumIdxByName(start: c.arena.typeAt(index: clsRef).nameStart, len: c.arena.typeAt(index: clsRef).nameLen) < c.arena.enumCount() {
                                 tref = clsRef
                             }
                         }
@@ -437,11 +437,11 @@ pub impl LlvmCtx {
                 if tref == 0U64 {
                     if !(isArr) {
                         if tyLen > 0U64 {
-                            if self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen) < c.arena.structs.count() {
+                            if self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen) < c.arena.structCount() {
                                 tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                             }
                         } else {
-                            if self.structIdxOfRef(c: inout c, ref: clsRef) < c.arena.structs.count() {
+                            if self.structIdxOfRef(c: inout c, ref: clsRef) < c.arena.structCount() {
                                 tref = clsRef
                             }
                         }
@@ -486,7 +486,7 @@ pub impl LlvmCtx {
                         }
                     }
                     val asi: U64 = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
-                    if asi < c.arena.structs.count() {
+                    if asi < c.arena.structCount() {
                         sidx = asi
                     }
                 }
@@ -566,8 +566,8 @@ pub impl LlvmCtx {
                             mut val tr: U64 = self.locTypeRef[li]
                             if tr == 0U64 {
                                 val osi: U64 = self.locStructIdx[li]
-                                if osi < c.arena.structs.count() {
-                                    tr = c.findOrAddTypeRef(nameStart: c.arena.structs[osi].nameStart, nameLen: c.arena.structs[osi].nameLen)
+                                if osi < c.arena.structCount() {
+                                    tr = c.findOrAddTypeRef(nameStart: c.arena.structAt(index: osi).nameStart, nameLen: c.arena.structAt(index: osi).nameLen)
                                 }
                             }
                             self.storeToPlace(c: inout c, placePtr: self.locPtr[li], placeTy: self.locTy[li], typeRef: tr, valueExpr: value, destroyOld: !(self.locMoved[li]), unsigned: self.locKind[li] == 3U64)
@@ -591,10 +591,10 @@ pub impl LlvmCtx {
                             Expr.Ident(start: val bs, len: val bl) => {
                                 val li: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                                 val sidx: U64 = self.exprStructIdx(c: inout c, id: fbase)
-                                if li < self.nLocals && sidx < c.arena.structs.count() {
+                                if li < self.nLocals && sidx < c.arena.structCount() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
-                                    if fidx < c.arena.structs[sidx].fields.count() {
-                                        val fld: FieldDef = c.arena.structs[sidx].fields[fidx]
+                                    if fidx < c.arena.structAt(index: sidx).fields.count() {
+                                        val fld: FieldDef = c.arena.structAt(index: sidx).fields[fidx]
                                         val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.locTy[li], self.locPtr[li], fidx, anon())
                                         // a boxed (recursive) field (`a.next = <Optional.None/>`):
                                         // build the value (its type is the expected type, so a
@@ -651,12 +651,12 @@ pub impl LlvmCtx {
                                 // the base struct pointer via placePtrOf, then GEP the field.
                                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fbase)
                                 mut val handled: Bool = false
-                                if bsi < c.arena.structs.count() {
+                                if bsi < c.arena.structCount() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
-                                    if fidx < c.arena.structs[bsi].fields.count() {
+                                    if fidx < c.arena.structAt(index: bsi).fields.count() {
                                         val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
                                         if LLVMIsNull(baseTy) == 0I32 {
-                                            val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
+                                            val fld: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
                                             val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
                                             val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
                                             // route through the single store choke point. (The
@@ -686,10 +686,10 @@ pub impl LlvmCtx {
                         // alias of the MutableRef. Frontend verify rejects writes through Ref;
                         // keep the backend gate as a final invariant check.
                         val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: abase)
-                        if psidx < c.arena.structs.count() {
+                        if psidx < c.arena.structCount() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
-                            if fidx < c.arena.structs[psidx].fields.count() {
-                                val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
+                            if fidx < c.arena.structAt(index: psidx).fields.count() {
+                                val fld: FieldDef = c.arena.structAt(index: psidx).fields[fidx]
                                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: abase)
                                 if !(c.isMutableRefInst(ref: refTy)) {
                                     c.errorAt(offset: c.exprOffset(id: abase), msg: "LLVM backend: cannot assign through read-only Ref; expected MutableRef")

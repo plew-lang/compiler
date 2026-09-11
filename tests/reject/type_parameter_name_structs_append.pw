@@ -1,5 +1,5 @@
-import /Ir with { Arena }
+import /Ir with { Arena, StructDef }
 fn main() {
     mut val arena: Arena = <Arena />
-    arena.structs.append(arena.structs[0U64])
+    arena.structs.append(<StructDef nameStart=0U64 nameLen=0U64 typeParams=[] fields=[] isUnique=false isExtern=false />)
 }

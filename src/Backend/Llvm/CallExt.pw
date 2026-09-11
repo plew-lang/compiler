@@ -22,8 +22,8 @@ pub impl LlvmCtx {
     }
 
     inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Bool {
-        if selected.callee >= c.arena.funcs.count() { return false }
-        val declaration: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return false }
+        val declaration: Func = c.arena.functionAt(index: selected.callee)
         if !declaration.isExtern || !declaration.isCExtern || declaration.hasRecv || declaration.isAsync { return false }
         if declaration.typeParams.count() != 0U64 || selected.parameterTypeRefs.count() != declaration.params.count() { return false }
         val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
@@ -39,7 +39,7 @@ pub impl LlvmCtx {
     // one finalized signature. The source span below spells only the selected
     // foreign symbol; it does not resolve a callable or a type.
     inout fn declareResolvedCFunction(c: inout Comp, selected: CallResolution) -> U64 {
-        val declaration: Func = c.arena.funcs[selected.callee]
+        val declaration: Func = c.arena.functionAt(index: selected.callee)
         val key: U64 = declaration.nameId
         mut val slot: U64 = 0U64
         while slot < self.declId.count() {
@@ -148,10 +148,10 @@ pub impl LlvmCtx {
                 // a primitive-typed struct field (`self.a` where a: U64): its field type
                 // name, for dispatching a method on the primitive (`self.a.absorb[S](…)`).
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                if bsi < c.arena.structs.count() {
+                if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        val fd: FieldDef = c.arena.structs[bsi].fields[fidx]
+                    if fidx < c.arena.structAt(index: bsi).fields.count() {
+                        val fd: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
                         if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
                             return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
                         }

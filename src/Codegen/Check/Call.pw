@@ -181,7 +181,7 @@ pub impl Comp {
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         self.checkUniqueArgModes(args: args)
         val fi: U64 = self.resolvedCallee(id: id)
-        if fi == self.arena.funcs.count() {
+        if fi == self.arena.functionCount() {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
             // is a local, not a declared function, so check each arg against the fn type's
             // parameter types (the TypeRef stores args as [return, param0, param1, …]).
@@ -206,7 +206,7 @@ pub impl Comp {
             }
             return
         }
-        val f: Func = self.arena.funcs[fi]
+        val f: Func = self.arena.functionAt(index: fi)
         self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = self.copyFuncParams(params: f.params)
         mut val i: U64 = 0
@@ -286,12 +286,12 @@ pub impl Comp {
 
     inout fn recvOwnParamCount(rt: TypeInfo) -> U64 {
         val si: U64 = self.genericStructIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
-        if si < self.arena.structs.count() {
-            return self.arena.structs[si].typeParams.count()
+        if si < self.arena.structCount() {
+            return self.arena.structAt(index: si).typeParams.count()
         }
         val ei: U64 = self.genericEnumIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
-        if ei < self.arena.enums.count() {
-            return self.arena.enums[ei].typeParams.count()
+        if ei < self.arena.enumCount() {
+            return self.arena.enumAt(index: ei).typeParams.count()
         }
         return 0U64
     }
@@ -343,8 +343,8 @@ pub impl Comp {
                 return
             }
             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-            if mi != self.arena.funcs.count() {
-                val mf: Func = self.arena.funcs[mi]
+            if mi != self.arena.functionCount() {
+                val mf: Func = self.arena.functionAt(index: mi)
                 self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
@@ -464,8 +464,8 @@ pub impl Comp {
         match self.arena.exprs[recv] {
             Expr.Ident(start: val rStart, len: val rLen) => {
                 val ai: U64 = self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if ai < self.arena.funcs.count() {
-                    val af: Func = self.arena.funcs[ai]
+                if ai < self.arena.functionCount() {
+                    val af: Func = self.arena.functionAt(index: ai)
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
                     mut val ginf: Array[U64] = []
                     if af.typeParams.count() > 0U64 {

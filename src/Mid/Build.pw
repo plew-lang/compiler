@@ -1048,8 +1048,8 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
     val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
     if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
     val operandResult: TypeRef = c.arena.typeAt(index: operandResultTerm)
-    if operandResult.args.count() != 2U64 || state.sourceFunction >= c.arena.funcs.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
-    val returnResultTerm: U64 = c.arena.funcs[state.sourceFunction].retTy
+    if operandResult.args.count() != 2U64 || state.sourceFunction >= c.arena.functionCount() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
+    val returnResultTerm: U64 = c.arena.functionAt(index: state.sourceFunction).retTy
     if returnResultTerm == 0U64 || returnResultTerm >= c.arena.typeCount() || c.arena.typeAt(index: returnResultTerm).args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.InvalidFunction /> /> }
 
     // The yielded Ok value crosses the nested evaluation scope; all Result
@@ -1395,7 +1395,7 @@ fn midExprIsShortCircuit(c: Comp, exprId: U64) -> Bool {
 fn midDirectCallee(c: Comp, template: CallTemplate) -> U64 {
     match template.kind {
         CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { return callee }
-        _ => { return c.arena.funcs.count() }
+        _ => { return c.arena.functionCount() }
     }
 }
 
@@ -1433,13 +1433,13 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     // its frozen read receiver now and let instantiation apply the selected
     // borrow passing. Inout/move static receivers remain intentionally closed
     // until they have an equally explicit source-access representation.
-    val directInout: Bool = callee < c.arena.funcs.count() && c.arena.funcs[callee].hasRecv && c.arena.funcs[callee].selfInout
-    if callee >= c.arena.funcs.count() {
+    val directInout: Bool = callee < c.arena.functionCount() && c.arena.functionAt(index: callee).hasRecv && c.arena.functionAt(index: callee).selfInout
+    if callee >= c.arena.functionCount() {
         match template.kind {
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
             _ => { return <MidReceiverBuild /> }
         }
-    } else if !(c.arena.funcs[callee].hasRecv) {
+    } else if !(c.arena.functionAt(index: callee).hasRecv) {
         return <MidReceiverBuild />
     }
     match templateReceiver {
@@ -1721,7 +1721,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 if midTermIsUnique(c: inout c, term: term) {
                     resultOperand = <MidOperand.Move place=callDestination />
                 }
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.funcs[state.sourceFunction].retTy operand=resultOperand /> />)
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.functionAt(index: state.sourceFunction).retTy operand=resultOperand /> />)
                 midEmitAllScopeExits(state: inout state)
                 midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
                 return <MidBuildError.None />
@@ -1732,7 +1732,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             // only then may lexical cleanup destroy the source locals.
             if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
             val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.funcs[state.sourceFunction].retTy operand=operand.operand /> />)
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.functionAt(index: state.sourceFunction).retTy operand=operand.operand /> />)
             midEmitAllScopeExits(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
             return <MidBuildError.None />
@@ -2134,10 +2134,10 @@ fn midAggregateHasUniqueValue(c: inout Comp, aggregate: SemanticAggregate) -> Bo
 // used at identifier sites; only instantiateMidBody may subsequently ground
 // their TypeTerms. This function intentionally does not install Cursor state.
 export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
-    if fnIdx >= c.arena.funcs.count() {
+    if fnIdx >= c.arena.functionCount() {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
-    val f: Func = c.arena.funcs[fnIdx]
+    val f: Func = c.arena.functionAt(index: fnIdx)
     // A Mid ABI local must have a frontend-resolved TypeTerm.  Synthetic
     // deinit walkers currently rely on the legacy receiver spelling path and
     // use the zero sentinel here; treating it as I64 would miscompile the

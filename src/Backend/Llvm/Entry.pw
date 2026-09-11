@@ -343,7 +343,7 @@ pub impl LlvmCtx {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Globals />)
         }
         if c.functionRequiresOwnershipCfg(fnIdx: fi) && !midReady {
-            val mainDef: Func = c.arena.funcs[fi]
+            val mainDef: Func = c.arena.functionAt(index: fi)
             c.errorAt(offset: mainDef.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
         }
         self.beginFnBody(fv: mainFn)
@@ -404,7 +404,7 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: bodyId)
             eprint(text: "\n")
         }
-        self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
+        self.genLlvmBlock(c: inout c, id: c.arena.functionAt(index: fi).body)
         if c.traceCodegen { eprint(text: "[trace-codegen] legacy main body-done\n") }
         if !(self.terminated) {
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))

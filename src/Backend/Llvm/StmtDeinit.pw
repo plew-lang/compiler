@@ -1,6 +1,6 @@
 // Part of the LLVM backend (root: _.pw): deinit emission, scope drop, and block execution.
 
-// The `deinit` method index of struct `sidx`, or c.arena.funcs.count() if it has none.
+// The `deinit` method index of struct `sidx`, or c.arena.functionCount() if it has none.
 
 pub impl LlvmCtx {
 
@@ -38,7 +38,7 @@ pub impl LlvmCtx {
     // def's param-typed fields stay unclassified (Scalar) — matching the old exclusion.
     // Instance-precise callers pass their grounded instance ref to arcNeedsRelease.
     inout fn structNeedsDeinit(c: inout Comp, sidx: U64) -> Bool {
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         return c.arcNeedsRelease(ref: c.findOrAddTypeRef(nameStart: sd.nameStart, nameLen: sd.nameLen))
     }
 
@@ -135,9 +135,9 @@ pub impl LlvmCtx {
             return
         }
         self.arcPush(sidx: sidx)
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
-        if fi < c.arena.funcs.count() {
+        if fi < c.arena.functionCount() {
             // the deinit method is its struct's 0-type-arg `gm` instance (B3-2): declare it on
             // demand and call the symbol directly with the value (no recv expr here).
             val dslot: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
@@ -353,7 +353,7 @@ pub impl LlvmCtx {
             return
         }
         val sidx: U64 = self.locStructIdx[li]
-        if sidx >= c.arena.structs.count() {
+        if sidx >= c.arena.structCount() {
             // an owned local with no struct index: an enum local (incl. a `move` enum
             // param — owned, so its payload deinit runs HERE in the callee), or an
             // anonymous argument TEMPORARY (registerArgTemp — any class). Route through

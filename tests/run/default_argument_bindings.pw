@@ -89,7 +89,7 @@ fn main() {
         Optional.None => { write(s: "duplicate-rejected\n") }
         _ => {}
     }
-    match c.bindCallParameters(callee: c.arena.funcs.count(), args: empty) {
+    match c.bindCallParameters(callee: c.arena.functionCount(), args: empty) {
         Optional.None => { write(s: "unknown-owner-rejected\n") }
         _ => {}
     }

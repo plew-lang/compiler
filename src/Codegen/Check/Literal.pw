@@ -299,8 +299,8 @@ pub impl Comp {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val seen: Array[U64] = []
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.isAssoc {
                 if f.recvId == qType {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
@@ -335,8 +335,8 @@ pub impl Comp {
                 }
             }
             val fi: U64 = self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
-            if fi < self.arena.funcs.count() {
-                val f: Func = self.arena.funcs[fi]
+            if fi < self.arena.functionCount() {
+                val f: Func = self.arena.functionAt(index: fi)
                 if f.params.count() >= 2 {
                     val rhsParam: Param = self.funcParamAt(params: f.params, index: 1U64)
                     val pit: IntTy = self.spanIntTy(start: rhsParam.tyStart, len: rhsParam.tyLen)
@@ -454,10 +454,10 @@ pub impl Comp {
             return false
         }
         val ai: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        if ai >= self.arena.funcs.count() {
+        if ai >= self.arena.functionCount() {
             return false
         }
-        val f: Func = self.arena.funcs[ai]
+        val f: Func = self.arena.functionAt(index: ai)
         if f.typeParams.count() == 0U64 {
             return false
         }

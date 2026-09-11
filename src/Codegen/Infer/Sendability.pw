@@ -62,19 +62,19 @@ pub impl Comp {
             return self.typeRefIsSendableDepth(ref: under, depth: depth - 1U64)
         }
         val si: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if si < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[si]
+        if si < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: si)
             if sd.isNonsendable {
                 return false
             }
             return self.fieldsAreSendable(params: sd.typeParams, targs: t.args, fields: sd.fields, depth: depth - 1U64)
         }
         mut val ei: U64 = self.concreteEnumIndex(nStart: t.nameStart, nLen: t.nameLen)
-        if ei >= self.arena.enums.count() {
+        if ei >= self.arena.enumCount() {
             ei = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         }
-        if ei < self.arena.enums.count() {
-            val ed: EnumDef = self.arena.enums[ei]
+        if ei < self.arena.enumCount() {
+            val ed: EnumDef = self.arena.enumAt(index: ei)
             if ed.isNonsendable {
                 return false
             }

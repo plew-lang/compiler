@@ -66,11 +66,11 @@ pub impl Comp {
             return
         }
         val args: ArgRange = self.indexCallArgs(key: key)
-        mut val callee: U64 = self.arena.funcs.count()
+        mut val callee: U64 = self.arena.functionCount()
         if receiverTerm != 0U64 {
             callee = self.resolveMethodForResolvedReceiver(recv: base, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
         }
-        if callee >= self.arena.funcs.count() {
+        if callee >= self.arena.functionCount() {
             callee = self.resolveMethodFinalForType(recv: base, receiverType: receiverType, nameStart: name.nameStart, nameLen: name.nameLen, args: args)
         }
         self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: self.directReceiverTemplateForExpr(exprId: base), receiverTerm: receiverTerm, args: args)
@@ -177,8 +177,8 @@ pub impl Comp {
             val template: CallTemplate = self.callTemplateForCurrentBody(exprId: iterExpr)
             match template.kind {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    if callee < self.arena.funcs.count() {
-                        val selected: Func = self.arena.funcs[callee]
+                    if callee < self.arena.functionCount() {
+                        val selected: Func = self.arena.functionAt(index: callee)
                         if selected.originTraitOwner != 0U64 {
                             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
                             itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: self.copyFuncTypes(types: selected.recvTraitArgs), assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
@@ -210,8 +210,8 @@ pub impl Comp {
         if t.args.count() != 0U64 || !(rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self")) {
             return term
         }
-        if self.cur.checkFn >= self.arena.funcs.count() { return term }
-        val owner: Func = self.arena.funcs[self.cur.checkFn]
+        if self.cur.checkFn >= self.arena.functionCount() { return term }
+        val owner: Func = self.arena.functionAt(index: self.cur.checkFn)
         if owner.recvTy != 0U64 { return owner.recvTy }
         return term
     }
@@ -264,8 +264,8 @@ pub impl Comp {
     // selection.  The result is a plain TypeTerm; callee/receiver/substitution
     // remain provenance so canonical type identity cannot depend on a call.
     inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) {
-        if callee >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[callee]
+        if callee >= self.arena.functionCount() { return }
+        val f: Func = self.arena.functionAt(index: callee)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
             calleeArgs = self.inferParametricFnArgs(f: f, args: args)
@@ -367,9 +367,9 @@ pub impl Comp {
             return
         }
         val structIndex: U64 = self.structDefByNameAny(start: recvTy.nameStart, len: recvTy.nameLen)
-        if structIndex >= self.arena.structs.count() { return }
+        if structIndex >= self.arena.structCount() { return }
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val fields: Array[FieldDef] = self.arena.structs[structIndex].fields
+        val fields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
         mut val fieldIndex: U64 = 0U64
         while fieldIndex < fields.count() {
             if fields[fieldIndex].nameId == fieldName { break }
@@ -408,8 +408,8 @@ pub impl Comp {
     }
 
     inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) {
-        if callee >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[callee]
+        if callee >= self.arena.functionCount() { return }
+        val f: Func = self.arena.functionAt(index: callee)
         // Associated factories are syntactically method-shaped but have a
         // type qualifier, not a value receiver.  Their selected declaration
         // is complete without a receiver TypeTerm; the finalizer supplies the
@@ -450,8 +450,8 @@ pub impl Comp {
         // Retain the selected-callee predicate for ordinary trait-receiver
         // declarations reached through their requirement surface.
         mut val sourceTraitReceiver: Bool = false
-        if self.cur.checkFn < self.arena.funcs.count() {
-            sourceTraitReceiver = self.methodRecvIsTrait(f: self.arena.funcs[self.cur.checkFn])
+        if self.cur.checkFn < self.arena.functionCount() {
+            sourceTraitReceiver = self.methodRecvIsTrait(f: self.arena.functionAt(index: self.cur.checkFn))
         }
         if (sourceTraitReceiver || self.methodRecvIsTrait(f: f)) && (sourceTraitReceiver || f.originTraitId != 0U64) {
             val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
@@ -562,12 +562,12 @@ pub impl Comp {
         }
         mut val rcount: U64 = 0
         val si: U64 = self.anyStructIndex(nameStart: f.recvStart, nameLen: f.recvLen)
-        if si < self.arena.structs.count() {
-            rcount = self.arena.structs[si].typeParams.count()
+        if si < self.arena.structCount() {
+            rcount = self.arena.structAt(index: si).typeParams.count()
         } else {
             val ei: U64 = self.anyEnumIndex(nameStart: f.recvStart, nameLen: f.recvLen)
-            if ei < self.arena.enums.count() {
-                rcount = self.arena.enums[ei].typeParams.count()
+            if ei < self.arena.enumCount() {
+                rcount = self.arena.enumAt(index: ei).typeParams.count()
             }
         }
         mut val args: Array[U64] = []
@@ -619,8 +619,8 @@ pub impl Comp {
             val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
             val qVariant: U64 = intern(c: inout self, start: variantStart, len: variantLen)
             mut val ei: U64 = 0U64
-            while ei < self.arena.enums.count() {
-                val en: EnumDef = self.arena.enums[ei]
+            while ei < self.arena.enumCount() {
+                val en: EnumDef = self.arena.enumAt(index: ei)
                 if en.nameId == qType {
                     mut val vi: U64 = 0U64
                     while vi < en.variants.count() {
@@ -641,8 +641,8 @@ pub impl Comp {
         }
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val si: U64 = 0U64
-        while si < self.arena.structs.count() {
-            val st: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val st: StructDef = self.arena.structAt(index: si)
             if st.nameId == qType {
                 mut val fi: U64 = 0U64
                 while fi < st.fields.count() {
@@ -663,7 +663,7 @@ pub impl Comp {
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
                 mut val elements: Array[SemanticAggregateElement] = []
                 mut val variantIndex: U64 = 0U64
-                mut val enumIndex: U64 = self.arena.enums.count()
+                mut val enumIndex: U64 = self.arena.enumCount()
                 if isEnum {
                     variantIndex = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     enumIndex = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
@@ -683,15 +683,15 @@ pub impl Comp {
                     // backend query and not a separate semantic pass.
                     mut val isBoxed: Bool = false
                     if isEnum {
-                        if enumIndex < self.arena.enums.count() && variantIndex < self.arena.enums[enumIndex].variants.count() {
-                            val declaredFields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                        if enumIndex < self.arena.enumCount() && variantIndex < self.arena.enumAt(index: enumIndex).variants.count() {
+                            val declaredFields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
                     } else if resultTerm < self.arena.typeCount() && !(self.arena.typeAt(index: resultTerm).isRecord) {
                         val result: TypeRef = self.arena.typeAt(index: resultTerm)
                         val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
-                        if structIndex < self.arena.structs.count() {
-                            val declaredFields: Array[FieldDef] = self.arena.structs[structIndex].fields
+                        if structIndex < self.arena.structCount() {
+                            val declaredFields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
                     }
@@ -718,7 +718,7 @@ pub impl Comp {
                 }
                 if isEnum {
                     mut val fieldCount: U64 = 0U64
-                    if enumIndex < self.arena.enums.count() && variantIndex < self.arena.enums[enumIndex].variants.count() { fieldCount = self.arena.enums[enumIndex].variants[variantIndex].fields.count() }
+                    if enumIndex < self.arena.enumCount() && variantIndex < self.arena.enumAt(index: enumIndex).variants.count() { fieldCount = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() }
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Enum enumIdx=enumIndex variantIndex=variantIndex /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 } else {
                     mut val fieldCount: U64 = 0U64
@@ -727,7 +727,7 @@ pub impl Comp {
                         fieldCount = result.recordFieldTerms.count()
                     } else {
                         val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
-                        if structIndex < self.arena.structs.count() { fieldCount = self.arena.structs[structIndex].fields.count() }
+                        if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
                     }
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Struct /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 }
@@ -897,7 +897,7 @@ pub impl Comp {
         if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return }
         val scrutinee: TypeRef = self.arena.typeAt(index: scrutineeTerm)
         val enumIndex: U64 = self.anyEnumIndex(nameStart: scrutinee.nameStart, nameLen: scrutinee.nameLen)
-        if enumIndex >= self.arena.enums.count() { return }
+        if enumIndex >= self.arena.enumCount() { return }
         mut val selectedArms: Array[SemanticMatchArm] = []
         mut val armIndex: U64 = 0U64
         while armIndex < arms.len {
@@ -907,8 +907,8 @@ pub impl Comp {
                 selectedArms.append(<SemanticMatchArm />)
             } else {
                 val variantIndex: U64 = self.variantIndex(enumStart: scrutinee.nameStart, enumLen: scrutinee.nameLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-                if variantIndex >= self.arena.enums[enumIndex].variants.count() { return }
-                val fields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                if variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return }
+                val fields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
                 mut val payloads: Array[SemanticMatchPayload] = []
                 mut val bindIndex: U64 = 0U64
                 while bindIndex < arm.binds.len {
@@ -923,7 +923,7 @@ pub impl Comp {
                         if fieldIndex >= fields.count() { return }
                         val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: scrutineeTerm, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
                         if fieldTerm == 0U64 { return }
-                        val fields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                        val fields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
                         if fieldIndex >= fields.count() { return }
                         payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm isBoxed=self.fieldIsBoxed(f: fields[fieldIndex]) />)
                     }
@@ -1089,7 +1089,7 @@ pub impl Comp {
                 // conformance.  Record it through the same CallTemplate
                 // producers as every other static call; Mono must not reopen
                 // the spelling and rediscover its witness.
-                mut val cfi: U64 = self.arena.funcs.count()
+                mut val cfi: U64 = self.arena.functionCount()
                 if rangeEquals(bytes: self.arena.bytes, start: callStart, len: callLen, kw: "pow") && args.len == 2U64 {
                     val baseExpr: U64 = self.argAt(args: args, index: 0U64).expr
                     val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
@@ -1108,15 +1108,15 @@ pub impl Comp {
                             _ => {}
                         }
                         cfi = self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId))
-                        if cfi < self.arena.funcs.count() {
+                        if cfi < self.arena.functionCount() {
                             self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
                             return
                         }
                     }
                 }
                 cfi = self.resolvedCallee(id: exprId)
-                if cfi < self.arena.funcs.count() {
-                    val cf: Func = self.arena.funcs[cfi]
+                if cfi < self.arena.functionCount() {
+                    val cf: Func = self.arena.functionAt(index: cfi)
                     val ps: Array[Param] = self.copyFuncParams(params: cf.params)
                     // a generic callee's parametric param (`xs: Array[T]`) is grounded
                     // under THIS call's inferred type args before use as a literal
@@ -1182,14 +1182,14 @@ pub impl Comp {
                         // owns the final `isInout` mode.
                         mut val accessWrite: Bool = false
                         mut val paramIndex: U64 = args.len
-                        if cfi < self.arena.funcs.count() {
-                            val selected: Func = self.arena.funcs[cfi]
+                        if cfi < self.arena.functionCount() {
+                            val selected: Func = self.arena.functionAt(index: cfi)
                             paramIndex = self.paramIndexForArg(params: selected.params, args: args, argIdx: accessArg)
                             if paramIndex < selected.params.count() {
                                 accessWrite = self.funcParamAt(params: selected.params, index: paramIndex).isInout
                             }
                         }
-                        self.recordAccessUse(parentExpr: exprId, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: cfi < self.arena.funcs.count(), write: accessWrite)
+                        self.recordAccessUse(parentExpr: exprId, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: cfi < self.arena.functionCount(), write: accessWrite)
                         // An explicit `inout rows[i]` owns the same detached
                         // get-modify-set write facet as an inout method
                         // receiver.  Record it at this producer boundary while
@@ -1216,7 +1216,7 @@ pub impl Comp {
                 // type spelling, not a value receiver.  Select its associated
                 // callable here while Record still owns that lexical/type-name
                 // source; Mono must only ground the resulting Direct template.
-                if methodCallee >= self.arena.funcs.count() {
+                if methodCallee >= self.arena.functionCount() {
                     val assocRecv: Bind = self.assocRecvName(recv: recv)
                     if assocRecv.nameLen != 0U64 {
                         methodCallee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -1227,7 +1227,7 @@ pub impl Comp {
                 // still owns the one frontend selection: resolve it now from
                 // the already-recorded receiver, rather than leaving Mono to
                 // reopen this method Expr during finalization.
-                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 {
+                if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 {
                     methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 }
                 // A parametric field receiver (`self.items: Array[T]`) has a
@@ -1236,7 +1236,7 @@ pub impl Comp {
                 // surface. This is still declaration-time source selection:
                 // Record owns the lexical `self.items` scope and publishes the
                 // resulting template once; Mono only grounds it later.
-                if methodCallee >= self.arena.funcs.count() {
+                if methodCallee >= self.arena.functionCount() {
                     methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 // Newtype member inheritance selects the underlying surface
@@ -1244,7 +1244,7 @@ pub impl Comp {
                 // The finalizer already normalizes that receiver for the
                 // selected declaration; Record must make the same frontend
                 // selection so it can publish a Direct template first.
-                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+                if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                     val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
                     val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
                     if underlying != 0U64 && underlying < self.arena.typeCount() {
@@ -1253,15 +1253,15 @@ pub impl Comp {
                     }
                 }
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: self.directReceiverTemplateForExpr(exprId: recv), receiverTerm: receiverTerm, args: args)
-                if methodCallee >= self.arena.funcs.count() {
+                if methodCallee >= self.arena.functionCount() {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 // A synthetic index read used as this receiver is an access
                 // candidate.  Only a selected direct method supplies a final
                 // self mode here; generic-bound/dynamic variants remain
                 // explicitly deferred until their frozen target is grounded.
-                if methodCallee < self.arena.funcs.count() {
-                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.funcs[methodCallee].selfInout)
+                if methodCallee < self.arena.functionCount() {
+                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)
                 } else {
                     self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: false, write: false)
                 }
@@ -1277,8 +1277,8 @@ pub impl Comp {
                 // Array's nested argument and can leave `[1, 2]` without its
                 // required Array[I32] context. This is a producer boundary,
                 // so ground the declaration parameter once under that term.
-                if methodCallee < self.arena.funcs.count() {
-                    val selectedMethod: Func = self.arena.funcs[methodCallee]
+                if methodCallee < self.arena.functionCount() {
+                    val selectedMethod: Func = self.arena.functionAt(index: methodCallee)
                     val mps: Array[Param] = self.copyFuncParams(params: selectedMethod.params)
                     mut val mk: U64 = 0U64
                     while mk < args.len {
@@ -1314,15 +1314,15 @@ pub impl Comp {
                 // present in Record; the ordinary TypeCache intentionally
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
-                if methodCallee >= self.arena.funcs.count() {
+                if methodCallee >= self.arena.functionCount() {
                     methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 }
-                if methodCallee >= self.arena.funcs.count() && source.surfaceId != 0U64 && source.surfaceId <= self.interner.entries.count() {
+                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && source.surfaceId <= self.interner.entries.count() {
                     val surface: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                     methodCallee = self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
-                if methodCallee >= self.arena.funcs.count() {
+                if methodCallee >= self.arena.functionCount() {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
             }
@@ -1369,7 +1369,7 @@ pub impl Comp {
                     mut val fieldCount: U64 = receiver.recordFieldTerms.count()
                     if !receiver.isRecord {
                         val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
-                        if structIndex < self.arena.structs.count() { fieldCount = self.arena.structs[structIndex].fields.count() }
+                        if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
                     }
                     if fieldIndex < fieldCount {
                         self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex)
@@ -1678,8 +1678,8 @@ pub impl Comp {
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     self.recordExpr(exprId: value)
-                    if self.cur.checkFn < self.arena.funcs.count() {
-                        val expected: U64 = self.arena.funcs[self.cur.checkFn].retTy
+                    if self.cur.checkFn < self.arena.functionCount() {
+                        val expected: U64 = self.arena.functionAt(index: self.cur.checkFn).retTy
                         self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
                         self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                     }
@@ -1797,7 +1797,7 @@ pub impl Comp {
         self.cur.typeParams = noParams
         self.cur.typeArgs = noArgs
         self.cur.recordCallTemplates = recordCallTemplates
-        self.cur.checkFn = self.arena.funcs.count()
+        self.cur.checkFn = self.arena.functionCount()
         mut val gvi: U64 = 0
         while gvi < self.arena.globals.count() {
             self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
@@ -1811,10 +1811,10 @@ pub impl Comp {
         // semantic walk feed itself and eventually reinterpret range payloads as
         // owned values in a later duplicate body.  Freeze the declaration frontier
         // before the walk so each authored body is recorded exactly once.
-        val sourceFuncLimit: U64 = self.arena.funcs.count()
+        val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
         while fi < sourceFuncLimit {
-            val f: Func = self.arena.funcs[fi]
+            val f: Func = self.arena.functionAt(index: fi)
             // A trait-provided body is copied per conformance, but its lexical
             // source body owns one shared CallTemplate set.  Skipping every
             // `srcTraitId` body left operators in provided methods without the
@@ -1865,7 +1865,7 @@ pub impl Comp {
         self.cur.itemRef = 0
         self.cur.typeParams = []
         self.cur.typeArgs = []
-        self.cur.checkFn = self.arena.funcs.count()
+        self.cur.checkFn = self.arena.functionCount()
         self.cur.recordCallTemplates = false
     }
 }

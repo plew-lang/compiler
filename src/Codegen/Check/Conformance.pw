@@ -4,8 +4,8 @@
 pub impl Comp {
     inout fn checkImplOnBuiltin() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             // only primitive *scalars* (I8..U64, Bool) are method-less: their behaviour
             // is trait-only, so an inherent method on one is rejected. `String`/`Array`
             // are owned aggregate lang-items that legitimately carry inherent methods
@@ -45,8 +45,8 @@ pub impl Comp {
 
     inout fn checkImplOnNewtype() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv || f.isAssoc {
                 if self.newtypeUnderRef(start: f.recvStart, len: f.recvLen) != 0U64 {
                     self.errorAt(offset: self.fnAnchor(f: f), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
@@ -58,8 +58,8 @@ pub impl Comp {
 
     inout fn checkTraitProvidedMethodOwners() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.extId == 0U64 {
                 if self.methodRecvIsTrait(f: f) {
                     val ownerMod: U64 = self.traitModuleByOwner(owner: f.provTraitOwner)
@@ -627,8 +627,8 @@ pub impl Comp {
 
     inout fn checkMoveFnReceivers() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
                 if f.selfMove {
                     if !(self.typeIsUnique(start: f.recvStart, len: f.recvLen)) {

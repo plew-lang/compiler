@@ -404,8 +404,8 @@ pub impl Comp {
     // ambiguous for this call — picking the first silently would invent meaning
     // (spec: 補完はする／忖度はしない／曖昧はエラー).
     inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) {
-        if b != self.arena.funcs.count() {
-            if self.overloadsAmbiguous(fa: self.arena.funcs[a], fb: self.arena.funcs[b], args: args) {
+        if b != self.arena.functionCount() {
+            if self.overloadsAmbiguous(fa: self.arena.functionAt(index: a), fb: self.arena.functionAt(index: b), args: args) {
                 mut val off: U64 = 0
                 if args.len > 0 {
                     off = self.exprOffset(id: self.argAt(args: args, index: 0U64).expr)
@@ -458,8 +458,8 @@ pub impl Comp {
         }
         val qEnum: U64 = intern(c: inout self, start: enumStart, len: enumLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
+        while ei < self.arena.enumCount() {
+            val e: EnumDef = self.arena.enumAt(index: ei)
             if e.nameId == qEnum {
                 val vars: Array[Variant] = e.variants
                 mut val vi: U64 = 0
@@ -485,8 +485,8 @@ pub impl Comp {
         val qEnum: U64 = intern(c: inout self, start: arE.nameStart, len: arE.nameLen)
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
+        while ei < self.arena.enumCount() {
+            val e: EnumDef = self.arena.enumAt(index: ei)
             if e.nameId == qEnum {
                 val vars: Array[Variant] = e.variants
                 mut val vi: U64 = 0
@@ -532,8 +532,8 @@ pub impl Comp {
         self.addKwSpan(kw: "next")
         val langModule: U64 = self.modules.langModule
         mut val i: U64 = 0U64
-        while i < self.arena.structs.count() {
-            val candidate: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val candidate: StructDef = self.arena.structAt(index: i)
             // StructDef.nameStart can be a re-interned span, whereas the
             // keyword cache deliberately uses a synthetic span. Compare the
             // declaration's immutable bytes here, once in the frontend, then

@@ -29,8 +29,8 @@ pub impl Comp {
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
+        while ei < self.arena.enumCount() {
+            val e: EnumDef = self.arena.enumAt(index: ei)
             if e.nameId == qEnum {
                 val vars: Array[Variant] = e.variants
                 mut val vi: U64 = 0

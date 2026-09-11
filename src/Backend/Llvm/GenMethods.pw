@@ -89,8 +89,8 @@ pub impl LlvmCtx {
     // argument range merely to print it.
     inout fn traceGenMethod(c: inout Comp, event: String, mfi: U64, instRef: U64, bodyId: U64 = 0U64, ownCount: U64 = 0U64) {
         if !(c.traceCodegen) { return }
-        if mfi >= c.arena.funcs.count() { return }
-        val f: Func = c.arena.funcs[mfi]
+        if mfi >= c.arena.functionCount() { return }
+        val f: Func = c.arena.functionAt(index: mfi)
         eprint(text: "[trace-codegen] ")
         eprint(text: event)
         eprint(text: " index=")
@@ -161,8 +161,8 @@ pub impl LlvmCtx {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: bodyIndex, stride: 64U64)
             val bodyId: U64 = bodyIndex + 1U64
             val body: BodyInstance = c.arena.bodyInstances[bodyIndex]
-            if body.fnIdx < c.arena.funcs.count() {
-                val f: Func = c.arena.funcs[body.fnIdx]
+            if body.fnIdx < c.arena.functionCount() {
+                val f: Func = c.arena.functionAt(index: body.fnIdx)
                 // A `provided` body has a trait-proof environment and belongs
                 // to the dedicated provided/witness emission path.  It is not
                 // an ordinary receiver method merely because its copied AST
@@ -185,7 +185,7 @@ pub impl LlvmCtx {
 
     inout fn declareOneGenMethod(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) {
         self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef, bodyId: bodyId, ownCount: ownArgs.count())
-        val mf: Func = c.arena.funcs[mfi]
+        val mf: Func = c.arena.functionAt(index: mfi)
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         val savedR: U64 = self.curRecvInstRef
@@ -258,7 +258,7 @@ pub impl LlvmCtx {
         val mfi: U64 = self.genMethK[slot]
         val instRef: U64 = self.genMethInst[slot]
         self.traceGenMethod(c: inout c, event: "emit", mfi: mfi, instRef: instRef, bodyId: self.genMethBody[slot], ownCount: self.genMethOwn[slot].len)
-        val mf: Func = c.arena.funcs[mfi]
+        val mf: Func = c.arena.functionAt(index: mfi)
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         val savedR: U64 = self.curRecvInstRef
@@ -317,7 +317,7 @@ pub impl LlvmCtx {
         // the method's type params must pair 1:1 with the instance's args plus the
         // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
         // A still-mismatched count means own params we couldn't infer — leave undeclared.
-        val mf: Func = c.arena.funcs[mfi]
+        val mf: Func = c.arena.functionAt(index: mfi)
         // A concrete impl on a generic receiver (`impl Box[I64]`) has no
         // binders of its own, yet its self ABI is still the concrete Box[I64]
         // instance. It belongs in the same receiver-instance table; only a
@@ -342,10 +342,10 @@ pub impl LlvmCtx {
         }
         val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
         val instRef: U64 = body.environment.receiverRef
-        if body.fnIdx >= c.arena.funcs.count() || instRef == 0U64 || instRef >= c.arena.typeCount() {
+        if body.fnIdx >= c.arena.functionCount() || instRef == 0U64 || instRef >= c.arena.typeCount() {
             return self.genMethK.count()
         }
-        val f: Func = c.arena.funcs[body.fnIdx]
+        val f: Func = c.arena.functionAt(index: body.fnIdx)
         val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: f, environment: body.environment)
         return self.ensureGenMethodDeclared(c: inout c, mfi: body.fnIdx, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
     }
@@ -506,7 +506,7 @@ pub impl LlvmCtx {
                 // param stayed ref-less — its scope-exit drop (a `move` param owns
                 // its value) never ran the payload's deinit. The drop path itself
                 // demand-registers (genEnumSlot), so a bare ref is enough.
-                if c.concreteEnumIdxByName(start: pgStart, len: pgLen) < c.arena.enums.count() {
+                if c.concreteEnumIdxByName(start: pgStart, len: pgLen) < c.arena.enumCount() {
                     pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
                 }
             }
@@ -570,7 +570,7 @@ pub impl LlvmCtx {
                 if pRef == 0U64 {
                     // declaration-keyed for emission-order independence (see the enum
                     // arm above).
-                    if c.enumIdxByName(start: gs2, len: gl2) < c.arena.enums.count() {
+                    if c.enumIdxByName(start: gs2, len: gl2) < c.arena.enumCount() {
                         pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                     }
                 }
@@ -581,12 +581,12 @@ pub impl LlvmCtx {
                 // covers a generic-`T` param grounded to a struct; pgStart/pgLen covers a `Self`
                 // param (`assoc fn eq(lhs~: Self)` on a struct conformance) grounded to the recv.
                 if pRef == 0U64 {
-                    if self.localStructIdxFor(c: inout c, start: gs2, len: gl2) < c.arena.structs.count() {
+                    if self.localStructIdxFor(c: inout c, start: gs2, len: gl2) < c.arena.structCount() {
                         pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                     }
                 }
                 if pRef == 0U64 {
-                    if self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen) < c.arena.structs.count() {
+                    if self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen) < c.arena.structCount() {
                         pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
                     }
                 }

@@ -153,7 +153,7 @@ pub impl Comp {
     // parameter names: `x#E` is valid exactly when E's receiver constraint is
     // statically proved for x.
     inout fn staticTraitPatternProof(receiverRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> StaticConformanceProof {
-        if self.cur.checkFn < self.arena.funcs.count() {
+        if self.cur.checkFn < self.arena.functionCount() {
             val requested: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=traitOwner positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=[] />
             val assumed: StaticConformanceProof = self.assumedBoundProof(fnIdx: self.cur.checkFn, receiverRef: receiverRef, constraint: requested)
             match assumed {
@@ -195,8 +195,8 @@ pub impl Comp {
                     ri += 1U64
                 }
                 mut val fi: U64 = 0U64
-                while fi < self.arena.funcs.count() {
-                    val candidate: Func = self.arena.funcs[fi]
+                while fi < self.arena.functionCount() {
+                    val candidate: Func = self.arena.functionAt(index: fi)
                     if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                         return <StaticMemberResolution.Provided proof=proof traitIdx=nextTrait callee=fi />
                     }
@@ -252,8 +252,8 @@ pub impl Comp {
                                 // identity rather than asking Mono to recover
                                 // it from the call spelling later.
                                 mut val fi: U64 = 0U64
-                                while fi < self.arena.funcs.count() {
-                                    val candidate: Func = self.arena.funcs[fi]
+                                while fi < self.arena.functionCount() {
+                                    val candidate: Func = self.arena.functionAt(index: fi)
                                     if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                                         return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
                                     }
@@ -316,8 +316,8 @@ pub impl Comp {
                                     if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
                                         val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath boundIdx=boundIdx edges=[ci] />
                                         mut val fi: U64 = 0U64
-                                        while fi < self.arena.funcs.count() {
-                                            val candidate: Func = self.arena.funcs[fi]
+                                        while fi < self.arena.functionCount() {
+                                            val candidate: Func = self.arena.functionAt(index: fi)
                                             if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                                                 return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
                                             }
@@ -348,8 +348,8 @@ pub impl Comp {
         // not an ambient lookup: `impl P { self.p() }` has exactly `Self: P`
         // in scope.  Preserve that proof in the same carrier as an authored
         // `where T: P`, so BodyInstance later grounds the receiver once.
-        if fnIdx < self.arena.funcs.count() && receiverRef < self.arena.typeCount() {
-            val f: Func = self.arena.funcs[fnIdx]
+        if fnIdx < self.arena.functionCount() && receiverRef < self.arena.typeCount() {
+            val f: Func = self.arena.functionAt(index: fnIdx)
             val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
             if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
                 mut val ti: U64 = 0U64
@@ -373,8 +373,8 @@ pub impl Comp {
                             ri += 1U64
                         }
                         mut val fi: U64 = 0U64
-                        while fi < self.arena.funcs.count() {
-                            val candidate: Func = self.arena.funcs[fi]
+                        while fi < self.arena.functionCount() {
+                            val candidate: Func = self.arena.functionAt(index: fi)
                             if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
                                 return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
                             }
@@ -955,8 +955,8 @@ pub impl Comp {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
                 if f.recvId == qRecv {
                     if f.nameId == qName {
@@ -1030,8 +1030,8 @@ pub impl Comp {
         val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if f.isAssoc || f.hasRecv {
                 if f.recvId == qRecv {
                     if f.nameId == qName {
@@ -1041,7 +1041,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.arena.funcs.count()
+        return self.arena.functionCount()
     }
 
     // Does the concrete type INSTANCE `ref` (a TypeRef, args carried) conform to the trait?
@@ -1117,10 +1117,10 @@ pub impl Comp {
         // onto every method of the impl), so one witness fn suffices to read them.
         val firstReq: Func = self.traitReqAt(reqs: tr.reqs, index: 0U64)
         val wfi: U64 = self.witnessFnFor(typeStart: t.nameStart, typeLen: t.nameLen, nameStart: firstReq.nameStart, nameLen: firstReq.nameLen)
-        if wfi >= self.arena.funcs.count() {
+        if wfi >= self.arena.functionCount() {
             return true
         }
-        val wf: Func = self.arena.funcs[wfi]
+        val wf: Func = self.arena.functionAt(index: wfi)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
@@ -1186,7 +1186,7 @@ pub impl Comp {
     // emitted generic body is checked by the same path regardless of whether
     // its substitutions came from arguments, a receiver, or an expected result.
     inout fn checkOneFnInstBounds(fin: FnInst) {
-        val f: Func = self.arena.funcs[fin.fnIdx]
+        val f: Func = self.arena.functionAt(index: fin.fnIdx)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]

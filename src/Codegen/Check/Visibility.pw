@@ -10,8 +10,8 @@ pub impl Comp {
         if ty.nameLen != 0U64 { return ty }
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0U64
-        while i < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[i]
+        while i < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: i)
             if !(f.hasRecv || f.isAssoc) && f.nameId == qId && self.funcDeclModule(f: f) == surfaceMod {
                 return <Bind nameStart=f.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
@@ -134,8 +134,8 @@ pub impl Comp {
                     // The name is in scope iff some free fn of this name is visible from the
                     // call's module (scoped resolution). If so, any remaining mismatch is an
                     // overload/label/type error reported elsewhere — not a visibility issue.
-                    if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.funcs.count() {
-                        if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.funcs.count() {
+                    if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.functionCount() {
+                        if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
                             // a free fn of this name exists only in other (loaded) modules and
                             // was not imported here — the use needs an import.
                             self.errorAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)")
@@ -184,16 +184,16 @@ pub impl Comp {
     inout fn typeDeclVisibleFrom(useMod: U64, start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if self.defModuleVisible(defOffset: sd.defOffset, useMod: useMod) { return true }
             }
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count() {
-            val ed: EnumDef = self.arena.enums[i]
+        while i < self.arena.enumCount() {
+            val ed: EnumDef = self.arena.enumAt(index: i)
             if ed.nameId == qId {
                 if self.defModuleVisible(defOffset: ed.defOffset, useMod: useMod) { return true }
             }
@@ -227,8 +227,8 @@ pub impl Comp {
     // which have no global declaration.)
     inout fn typeDeclExistsGlobally(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        if self.anyStructIndex(nameStart: start, nameLen: len) < self.arena.structs.count() { return true }
-        if self.anyEnumIndex(nameStart: start, nameLen: len) < self.arena.enums.count() { return true }
+        if self.anyStructIndex(nameStart: start, nameLen: len) < self.arena.structCount() { return true }
+        if self.anyEnumIndex(nameStart: start, nameLen: len) < self.arena.enumCount() { return true }
         mut val i: U64 = 0
         while i < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[i]
@@ -349,16 +349,16 @@ pub impl Comp {
     inout fn typeDeclModule(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
             }
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count() {
-            val ed: EnumDef = self.arena.enums[i]
+        while i < self.arena.enumCount() {
+            val ed: EnumDef = self.arena.enumAt(index: i)
             if ed.nameId == qId {
                 if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
             }
@@ -390,16 +390,16 @@ pub impl Comp {
     inout fn typeDeclIdentityInModule(mod: U64, start: U64, len: U64) -> Bind {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val d: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val d: StructDef = self.arena.structAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count() {
-            val d: EnumDef = self.arena.enums[i]
+        while i < self.arena.enumCount() {
+            val d: EnumDef = self.arena.enumAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
@@ -508,14 +508,14 @@ pub impl Comp {
 
     inout fn declIdentityHasName(identity: Bind, start: U64, len: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val d: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val d: StructDef = self.arena.structAt(index: i)
             if d.defOffset == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count() {
-            val d: EnumDef = self.arena.enums[i]
+        while i < self.arena.enumCount() {
+            val d: EnumDef = self.arena.enumAt(index: i)
             if d.defOffset == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
             i += 1
         }
@@ -610,8 +610,8 @@ pub impl Comp {
         if !(self.isRecordSurfaceName(start: start, len: len)) { return }
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: si)
             if sd.nameId == qId {
                 mut val fi: U64 = 0
                 while fi < sd.fields.count() {
@@ -678,8 +678,8 @@ pub impl Comp {
     }
 
     inout fn checkSurfaceFuncSignature(surfaceMod: U64, fnIdx: U64, offset: U64) {
-        if fnIdx >= self.arena.funcs.count() { return }
-        val f: Func = self.arena.funcs[fnIdx]
+        if fnIdx >= self.arena.functionCount() { return }
+        val f: Func = self.arena.functionAt(index: fnIdx)
         mut val pi: U64 = 0
         while pi < f.params.count() {
             self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: f.params, index: pi), offset: offset)
@@ -886,16 +886,16 @@ pub impl Comp {
         val surfaceMod: U64 = self.exportEntrySurfaceModule(e: e)
         val identity: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: e.nameStart, len: e.nameLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[si]
+        while si < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: si)
             if identity.nameLen != 0U64 && sd.defOffset == identity.nameStart {
                 self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
             }
             si += 1
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val ed: EnumDef = self.arena.enums[ei]
+        while ei < self.arena.enumCount() {
+            val ed: EnumDef = self.arena.enumAt(index: ei)
             if identity.nameLen != 0U64 && ed.defOffset == identity.nameStart {
                 self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
             }
@@ -926,8 +926,8 @@ pub impl Comp {
             gi += 1
         }
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             if !(f.hasRecv) {
                 if !(f.isAssoc) {
                     if f.nameStart == e.nameStart && self.moduleOf(offset: f.nameStart) == surfaceMod {
@@ -949,8 +949,8 @@ pub impl Comp {
             exi += 1
         }
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        while fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             if f.hasRecv || f.isAssoc {
                 if f.isPub {
                     mut val ownerMod: U64 = self.moduleOf(offset: f.defOffset)
@@ -988,22 +988,22 @@ pub impl Comp {
     // `import … with { name }` record into a module→module dependency edge.
     inout fn definingModuleOfName(start: U64, len: U64) -> U64 {
         val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
-        if fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
+        if fi < self.arena.functionCount() {
+            val f: Func = self.arena.functionAt(index: fi)
             return self.moduleOf(offset: f.nameStart)
         }
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val sd: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
             }
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count() {
-            val ed: EnumDef = self.arena.enums[i]
+        while i < self.arena.enumCount() {
+            val ed: EnumDef = self.arena.enumAt(index: i)
             if ed.nameId == qId {
                 if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
             }

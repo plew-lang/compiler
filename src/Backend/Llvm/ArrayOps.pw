@@ -146,10 +146,10 @@ pub impl LlvmCtx {
             // declared type from the base's struct.
             Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count() {
+                if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        return fieldIsBufferType(c: inout c, f: c.arena.structs[bsi].fields[fidx])
+                    if fidx < c.arena.structAt(index: bsi).fields.count() {
+                        return fieldIsBufferType(c: inout c, f: c.arena.structAt(index: bsi).fields[fidx])
                     }
                 }
             }
@@ -181,10 +181,10 @@ pub impl LlvmCtx {
             }
             Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count() {
+                if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        er = bufferFieldElemRef(c: inout c, f: c.arena.structs[bsi].fields[fidx])
+                    if fidx < c.arena.structAt(index: bsi).fields.count() {
+                        er = bufferFieldElemRef(c: inout c, f: c.arena.structAt(index: bsi).fields[fidx])
                     }
                 }
             }

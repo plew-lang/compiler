@@ -18,15 +18,24 @@ fn verify(arena: Arena) {
     while query < 40U64 {
         mut val concrete = false
         mut val parameter = false
-        for val declaration in arena.structs {
+        mut val structIndex: U64 = 0U64
+        while structIndex < arena.structCount() {
+            val declaration = arena.structAt(index: structIndex)
+            structIndex += 1U64
             if declaration.typeParams.count() == 0U64 && declaration.nameId == query { concrete = true }
             for val bind in declaration.typeParams { if bind.nameId == query { parameter = true } }
         }
-        for val declaration in arena.enums {
+        mut val enumIndex: U64 = 0U64
+        while enumIndex < arena.enumCount() {
+            val declaration = arena.enumAt(index: enumIndex)
+            enumIndex += 1U64
             if declaration.typeParams.count() == 0U64 && declaration.nameId == query { concrete = true }
             for val bind in declaration.typeParams { if bind.nameId == query { parameter = true } }
         }
-        for val declaration in arena.funcs {
+        mut val functionIndex: U64 = 0U64
+        while functionIndex < arena.functionCount() {
+            val declaration = arena.functionAt(index: functionIndex)
+            functionIndex += 1U64
             mut val index: U64 = 0U64
             while index < declaration.typeParams.len {
                 if arena.funcBindAt(binds: declaration.typeParams, index: index).nameId == query { parameter = true }

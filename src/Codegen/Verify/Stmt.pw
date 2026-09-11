@@ -352,7 +352,7 @@ pub impl Comp {
                 // consume that frozen binding, never recover a local by name.
                 // The result is intentionally not used for acceptance; the
                 // existing binding/mutability diagnostics remain authoritative.
-                val recordedTarget: I64 = self.recordIdent(id: target, start: start, len: len, tpFn: self.arena.funcs.count())
+                val recordedTarget: I64 = self.recordIdent(id: target, start: start, len: len, tpFn: self.arena.functionCount())
                 // the target must name an existing binding (spec/03: assignment never
                 // declares). Without this, an undeclared name slid past the mutability
                 // check (localIsMutable defaults to true for names it cannot find) and

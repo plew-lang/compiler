@@ -122,7 +122,7 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: c.bodyCalleeBodyId(exprId: callId))
             eprint(text: "\n")
         }
-        val cf0: Func = c.arena.funcs[cfi]
+        val cf0: Func = c.arena.functionAt(index: cfi)
         // Async callees are declared by the entry/resume pipeline, not the
         // ordinary `gf` table.  Select that already-finalized entry before
         // consulting the ordinary frozen free-body table; that table quite correctly
@@ -158,7 +158,7 @@ pub impl LlvmCtx {
         }
         val gslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
         if gslot < self.genFnK.count() {
-            val cf: Func = c.arena.funcs[cfi]
+            val cf: Func = c.arena.functionAt(index: cfi)
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             val savedSelf: U64 = c.cur.selfRef
@@ -184,7 +184,7 @@ pub impl LlvmCtx {
         // declareAsyncFns into the dedicated async-entry table. Resolve it.
             val pslot: U64 = self.asyncEntrySlot(fi: cfi)
             if pslot < self.asyncEntryIdx.count() {
-                val cf: Func = c.arena.funcs[cfi]
+                val cf: Func = c.arena.functionAt(index: cfi)
                 mut val pav: Array[LLVMValueRef] = []
                 self.appendCallArgValues(c: inout c, av: inout pav, f: cf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                 return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
@@ -359,8 +359,8 @@ pub impl LlvmCtx {
         // declaration (isExtern) or to nothing (a backend-synthesized floor op). This is what
         // stops a user `fn write`/`fn truncU8` from being silently replaced by the intrinsic.
         val cfi: U64 = c.bodyCallee(exprId: callId)
-        if cfi < c.arena.funcs.count() {
-            if !(c.arena.funcs[cfi].isExtern) {
+        if cfi < c.arena.functionCount() {
+            if !(c.arena.functionAt(index: cfi).isExtern) {
                 val selectedRecvRef: U64 = c.bodyCalleeReceiverRef(exprId: callId)
                 val uv: LLVMValueRef = self.genLlvmResolvedCallableCall(c: inout c, callId: callId, cfi: cfi, args: args, recvInstRef: selectedRecvRef, callOffset: nameStart)
                 if LLVMIsNull(uv) == 0I32 {
@@ -386,13 +386,13 @@ pub impl LlvmCtx {
                     index += 1U64
                 }
                 val result: LLVMValueRef = LLVMBuildCall2(self.b, self.declTy[slot], self.declFn[slot], arrayCPtr(values), values.count(), anon())
-                if c.arena.funcs[selected.callee].hasRet { return result }
+                if c.arena.functionAt(index: selected.callee).hasRet { return result }
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
         mut val resolvedPlewIntrinsic: Bool = false
-        if cfi < c.arena.funcs.count() {
-            val cfIntrinsic: Func = c.arena.funcs[cfi]
+        if cfi < c.arena.functionCount() {
+            val cfIntrinsic: Func = c.arena.functionAt(index: cfi)
             resolvedPlewIntrinsic = cfIntrinsic.isExtern && !(cfIntrinsic.isCExtern)
         }
         if resolvedPlewIntrinsic {
@@ -545,9 +545,9 @@ pub impl LlvmCtx {
         // name reaches here. `cfi` is the up-front resolution.
         // an extern(c) foreign function (`moduleCreate(…)`): call by its RAW C name
         // with an FFI-mapped signature (opaque handles / CPtr -> ptr, scalars as-is).
-        if cfi < c.arena.funcs.count() {
-            if c.arena.funcs[cfi].isExtern {
-                val ef: Func = c.arena.funcs[cfi]
+        if cfi < c.arena.functionCount() {
+            if c.arena.functionAt(index: cfi).isExtern {
+                val ef: Func = c.arena.functionAt(index: cfi)
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pe: U64 = 0
                 while pe < ef.params.count() {

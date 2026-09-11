@@ -25,7 +25,7 @@ pub impl Comp {
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             val layout: U64 = self.recordStructIndex(ref: ref)
-            if layout < self.arena.structs.count() {
+            if layout < self.arena.structCount() {
                 return <ArcClass.StructVal sidx=layout />
             }
             self.errorAt(offset: t.nameStart, msg: "internal error (compiler bug): record ownership requires a registered layout matching its semantic field types")
@@ -79,14 +79,14 @@ pub impl Comp {
         // a registered struct (any arity: `Point`, `Array[I64]`, any grounded generic
         // instance). Extern structs other than the blessed three are opaque handles.
         val sidx: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if sidx < self.arena.structs.count() {
-            if self.arena.structs[sidx].isExtern {
+        if sidx < self.arena.structCount() {
+            if self.arena.structAt(index: sidx).isExtern {
                 return <ArcClass.Scalar />
             }
             return <ArcClass.StructVal sidx=sidx />
         }
         val eidx: U64 = self.enumIdxByName(start: t.nameStart, len: t.nameLen)
-        if eidx < self.arena.enums.count() {
+        if eidx < self.arena.enumCount() {
             return <ArcClass.EnumVal eidx=eidx />
         }
         return <ArcClass.Scalar />
@@ -113,7 +113,7 @@ pub impl Comp {
     // The `deinit` method index of struct `sidx`, or funcs.count() if it has none.
     // (The Comp-level canonical; the backend's structDeinitFi free fn delegates here.)
     inout fn structOwnDeinitFi(sidx: U64) -> U64 {
-        val sd: StructDef = self.arena.structs[sidx]
+        val sd: StructDef = self.arena.structAt(index: sidx)
         val b: Bind = self.kwSpan(kw: "deinit", kwLen: 6U64)
         val noArgs: Array[Arg] = []
         return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: self.pushArgs(args: noArgs))
@@ -158,10 +158,10 @@ pub impl Comp {
                     vk += 1
                 }
                 visited.append(ref)
-                if self.structOwnDeinitFi(sidx: sidx) < self.arena.funcs.count() {
+                if self.structOwnDeinitFi(sidx: sidx) < self.arena.functionCount() {
                     return true
                 }
-                val sd: StructDef = self.arena.structs[sidx]
+                val sd: StructDef = self.arena.structAt(index: sidx)
                 val savedP: Array[Bind] = self.cur.typeParams
                 val savedA: Array[U64] = self.cur.typeArgs
                 // ground this level's fields under ITS instance env (`Box[Ref[Cell]]`
@@ -212,7 +212,7 @@ pub impl Comp {
                     vk += 1
                 }
                 visited.append(ref)
-                val ed: EnumDef = self.arena.enums[eidx]
+                val ed: EnumDef = self.arena.enumAt(index: eidx)
                 val savedP: Array[Bind] = self.cur.typeParams
                 val savedA: Array[U64] = self.cur.typeArgs
                 if ed.typeParams.count() > 0U64 {

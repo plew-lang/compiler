@@ -209,8 +209,8 @@ pub impl LlvmCtx {
         eprint(text: " fn=")
         self.traceCodegenU64(n: fnIdx)
         eprint(text: " name=")
-        if fnIdx < c.arena.funcs.count() {
-            val function: Func = c.arena.funcs[fnIdx]
+        if fnIdx < c.arena.functionCount() {
+            val function: Func = c.arena.functionAt(index: fnIdx)
             self.traceCodegenName(c: inout c, start: function.nameStart, len: function.nameLen)
         } else {
             eprint(text: "unknown")
@@ -457,7 +457,7 @@ pub impl LlvmCtx {
                         return result.args.count() == 1U64 && rangeEquals(bytes: c.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Array")
                     }
                     MidAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => {
-                        if enumIdx >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIdx].variants.count() { return false }
+                        if enumIdx >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIdx).variants.count() { return false }
                         val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: resultTerm)
                         if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != enumIdx { return false }
                         return true
@@ -484,14 +484,14 @@ pub impl LlvmCtx {
                         return true
                     }
                     ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: val enumIdx, payloads: val payloads) => {
-                        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enums.count() { return false }
+                        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() { return false }
                         val source: TypeRef = c.arena.typeAt(index: sourceRef)
                         val target: TypeRef = c.arena.typeAt(index: targetRef)
                         if source.args.count() != target.args.count() { return false }
                         mut val fieldCount: U64 = 0U64
                         mut val variant: U64 = 0U64
-                        while variant < c.arena.enums[enumIdx].variants.count() {
-                            fieldCount += c.arena.enums[enumIdx].variants[variant].fields.count()
+                        while variant < c.arena.enumAt(index: enumIdx).variants.count() {
+                            fieldCount += c.arena.enumAt(index: enumIdx).variants[variant].fields.count()
                             variant += 1U64
                         }
                         if payloads.count() != fieldCount { return false }
@@ -518,39 +518,39 @@ pub impl LlvmCtx {
             MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: _) => { return false }
             MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
-                if enumIndex >= c.arena.enums.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
+                if enumIndex >= c.arena.enumCount() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
                 if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
-                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
+                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 // Recursive payload boxing is an ownership operation, not an
                 // extractvalue. Keep it outside this copy-only first slice.
-                if c.fieldIsBoxed(f: c.arena.enums[enumIndex].variants[variantIndex].fields[fieldIndex]) { return false }
+                if c.fieldIsBoxed(f: c.arena.enumAt(index: enumIndex).variants[variantIndex].fields[fieldIndex]) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
-                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
+                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
-                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
+                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
-                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
+                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
@@ -603,8 +603,8 @@ pub impl LlvmCtx {
     inout fn traceMidUnsupportedReceiver(c: inout Comp, selected: CallResolution, receiver: MidCallReceiver) {
         if !(c.traceCodegen) { return }
         eprint(text: "[trace-codegen] Mid receiver-preflight callee=")
-        if selected.callee < c.arena.funcs.count() {
-            val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee < c.arena.functionCount() {
+            val callee: Func = c.arena.functionAt(index: selected.callee)
             self.traceCodegenName(c: inout c, start: callee.nameStart, len: callee.nameLen)
         } else {
             eprint(text: "unknown")
@@ -691,8 +691,8 @@ pub impl LlvmCtx {
             CallTarget.RuntimeIntrinsic(intrinsic: _) => {}
             _ => { return <MidCallPreflight.Target /> }
         }
-        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-        val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         // A selected associated function has no receiver and is emitted by
         // the same closed frozen-BodyInstance path as an ordinary free function.
         // Rejecting it here made frontend-resolved operator witnesses fall
@@ -1137,7 +1137,7 @@ pub impl LlvmCtx {
         val selectedTypeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
         val selectedParameterTypes: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
         val selectedArgumentPassings: Array[CallArgumentPassing] = c.copyFinalCalleeArgumentPassings(passings: selected.argumentPassings)
-        val calleeDef: Func = c.arena.funcs[selected.callee]
+        val calleeDef: Func = c.arena.functionAt(index: selected.callee)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
             match intrinsic {
@@ -1720,7 +1720,7 @@ pub impl LlvmCtx {
         } else {
             result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon())
         }
-        if c.arena.funcs[selected.callee].hasRet {
+        if c.arena.functionAt(index: selected.callee).hasRet {
             val projected: LLVMValueRef = self.midProjectCallResult(selected: selected, value: result)
             LLVMBuildStore(self.b, projected, self.midLocalPtr(body: body, local: destination.local))
         }
@@ -1899,14 +1899,14 @@ pub impl LlvmCtx {
             return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: source.args[0U64], targetRef: target.args[0U64], proofId: node.element)
         }
         if node.tag == 4U64 {
-            if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) || node.enumIdx >= c.arena.enums.count() { return false }
+            if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) || node.enumIdx >= c.arena.enumCount() { return false }
             val source: TypeRef = c.arena.typeAt(index: sourceRef)
             val target: TypeRef = c.arena.typeAt(index: targetRef)
             if source.args.count() != target.args.count() || node.payloads > c.arena.conversionPayloadPool.count() || node.payloadCount > c.arena.conversionPayloadPool.count() - node.payloads { return false }
             mut val expected: U64 = 0U64
             mut val variant: U64 = 0U64
-            while variant < c.arena.enums[node.enumIdx].variants.count() {
-                expected += c.arena.enums[node.enumIdx].variants[variant].fields.count()
+            while variant < c.arena.enumAt(index: node.enumIdx).variants.count() {
+                expected += c.arena.enumAt(index: node.enumIdx).variants[variant].fields.count()
                 variant += 1U64
             }
             if expected != node.payloadCount { return false }
@@ -1935,7 +1935,7 @@ pub impl LlvmCtx {
             if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.anyTy) }
             val source: TypeRef = c.arena.typeAt(index: node.sourceRef)
             val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
-            if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+            if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
             return self.boxIntoAny(c: inout c, v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
         }
         if node.tag == 3U64 {
@@ -1962,7 +1962,7 @@ pub impl LlvmCtx {
         if node.tag == 2U64 {
             val source: TypeRef = c.arena.typeAt(index: sourceRef)
             val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
-            if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+            if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
             self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
             return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
         }
@@ -2010,7 +2010,7 @@ pub impl LlvmCtx {
     // declaration variant/field order, so this emitter uses enum metadata
     // only for layout and never infers a conversion from generic arguments.
     inout fn midCanonicalEmitEnumRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, enumIdx: U64, payloadStart: U64, payloadCount: U64) -> LLVMValueRef {
-        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enums.count() || payloadStart > c.arena.conversionPayloadPool.count() || payloadCount > c.arena.conversionPayloadPool.count() - payloadStart { return LLVMConstNull(self.ptrty) }
+        if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() || payloadStart > c.arena.conversionPayloadPool.count() || payloadCount > c.arena.conversionPayloadPool.count() - payloadStart { return LLVMConstNull(self.ptrty) }
         val sourceSlot: U64 = self.genEnumSlot(c: inout c, ref: sourceRef)
         val targetSlot: U64 = self.genEnumSlot(c: inout c, ref: targetRef)
         if sourceSlot >= self.genEnumRefs.count() || targetSlot >= self.genEnumRefs.count() || self.genEnumDefs[sourceSlot] != enumIdx || self.genEnumDefs[targetSlot] != enumIdx { return LLVMConstNull(self.ptrty) }
@@ -2029,15 +2029,15 @@ pub impl LlvmCtx {
         val savedArgs: Array[U64] = c.cur.typeArgs
         mut val payloadIndex: U64 = 0U64
         mut val variant: U64 = 0U64
-        while variant < c.arena.enums[enumIdx].variants.count() {
+        while variant < c.arena.enumAt(index: enumIdx).variants.count() {
             val matched: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.variant"))
             val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.next"))
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
             LLVMPositionBuilderAtEnd(self.b, matched)
-            val fields: Array[FieldDef] = c.arena.enums[enumIdx].variants[variant].fields
+            val fields: Array[FieldDef] = c.arena.enumAt(index: enumIdx).variants[variant].fields
             mut val values: Array[LLVMValueRef] = []
             if fields.count() > 0U64 {
-                c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+                c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
                 c.cur.typeArgs = sourceType.args
                 val sourcePayloadType: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIdx, vi: variant)
                 val payload: LLVMValueRef = LLVMBuildLoad2(self.b, sourcePayloadType, sourcePayloadPtr, anon())
@@ -2052,7 +2052,7 @@ pub impl LlvmCtx {
                     field += 1U64
                 }
             }
-            c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+            c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
             c.cur.typeArgs = targetType.args
             LLVMBuildStore(self.b, self.buildEnumFromValues(c: inout c, eid: enumIdx, ety: targetLlvmType, vi: variant, payloadVals: values), resultSlot)
             c.cur.typeParams = savedParams
@@ -2142,18 +2142,18 @@ pub impl LlvmCtx {
         if value.tag == 7U64 { return false }
         if value.tag >= 8U64 && value.tag <= 10U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.typeCount() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
         if value.tag >= 11U64 && value.tag <= 15U64 {
-            if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enums.count() { return false }
+            if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() { return false }
             val place: MidPlaceNode = c.mid.places[value.place - 1U64]
             if place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
             val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
             if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
             if value.tag == 11U64 { return true }
-            if value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() || value.fieldIndex >= c.arena.enums[value.enumIndex].variants[value.variantIndex].fields.count() { return false }
-            if value.tag == 12U64 && c.fieldIsBoxed(f: c.arena.enums[value.enumIndex].variants[value.variantIndex].fields[value.fieldIndex]) { return false }
+            if value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() || value.fieldIndex >= c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() { return false }
+            if value.tag == 12U64 && c.fieldIsBoxed(f: c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields[value.fieldIndex]) { return false }
             return true
         }
         if value.tag == 16U64 || value.tag == 17U64 {
-            if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enums.count() { return false }
+            if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() { return false }
             val place: MidPlaceNode = c.mid.places[value.place - 1U64]
             if place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
             val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
@@ -2161,13 +2161,13 @@ pub impl LlvmCtx {
             if value.tag == 16U64 { return true }
             // The field declaration may mention the enum's generic parameter;
             // its concrete equality was checked during canonical grounding.
-            return value.variantIndex < c.arena.enums[value.enumIndex].variants.count() && c.arena.enums[value.enumIndex].variants[value.variantIndex].fields.count() == 1U64
+            return value.variantIndex < c.arena.enumAt(index: value.enumIndex).variants.count() && c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() == 1U64
         }
         if value.tag == 18U64 {
-            if value.operand == 0U64 || value.operand > c.mid.operands.count() || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.targetTerm == 0U64 || value.targetTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return false }
+            if value.operand == 0U64 || value.operand > c.mid.operands.count() || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.targetTerm == 0U64 || value.targetTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return false }
             val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
             if operand.tag != 2U64 || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) { return false }
-            if c.arena.enums[value.enumIndex].variants[value.variantIndex].fields.count() != 1U64 { return false }
+            if c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() != 1U64 { return false }
             val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: value.resultTerm)
             return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == value.enumIndex && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm)
         }
@@ -2375,11 +2375,11 @@ pub impl LlvmCtx {
                 return self.genLlvmArrayValues(c: inout c, values: values, elemTy: elemTy, elemRef: elemRef)
             }
             MidAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => {
-                if resultTerm >= c.arena.typeCount() || enumIdx >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIdx].variants.count() { return LLVMConstNull(self.ptrty) }
+                if resultTerm >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIdx).variants.count() { return LLVMConstNull(self.ptrty) }
                 val resultType: TypeRef = c.arena.typeAt(index: resultTerm)
                 val savedParams: Array[Bind] = c.cur.typeParams
                 val savedArgs: Array[U64] = c.cur.typeArgs
-                c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+                c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
                 c.cur.typeArgs = resultType.args
                 mut val values: Array[LLVMValueRef] = []
                 mut val i: U64 = 0U64
@@ -2443,7 +2443,7 @@ pub impl LlvmCtx {
                 if !(c.typeRefEq(a: self.midOperandTypeTerm(operand: operand), b: sourceRef)) { return LLVMConstNull(self.anyTy) }
                 val source: TypeRef = c.arena.typeAt(index: sourceRef)
                 val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
-                if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+                if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
                 val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
                 // The box takes the operand's ownership. Only a borrowed
                 // value still needs a share; Copy acquired it during emission.
@@ -2490,7 +2490,7 @@ pub impl LlvmCtx {
                 if !(c.typeRefEq(a: sourceRef, b: proofSource)) || !(c.typeRefEq(a: targetRef, b: proofTarget)) || c.proofIsMissing(proof: proof) { return LLVMConstNull(self.anyTy) }
                 val source: TypeRef = c.arena.typeAt(index: sourceRef)
                 val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
-                if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
+                if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
                 self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
                 return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
             }
@@ -2544,7 +2544,7 @@ pub impl LlvmCtx {
     // The declaration is consulted only for physical variant/payload layout;
     // no source expression, trait lookup, or compatibility search is reopened.
     inout fn midEmitEnumRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, enumIdx: U64, payloads: Array[EnumPayloadConversion]) -> LLVMValueRef {
-        if sourceRef >= c.arena.typeCount() || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enums.count() { return LLVMConstNull(self.ptrty) }
+        if sourceRef >= c.arena.typeCount() || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() { return LLVMConstNull(self.ptrty) }
         val sourceSlot: U64 = self.genEnumSlot(c: inout c, ref: sourceRef)
         val targetSlot: U64 = self.genEnumSlot(c: inout c, ref: targetRef)
         if sourceSlot >= self.genEnumRefs.count() || targetSlot >= self.genEnumRefs.count() || self.genEnumDefs[sourceSlot] != enumIdx || self.genEnumDefs[targetSlot] != enumIdx { return LLVMConstNull(self.ptrty) }
@@ -2563,15 +2563,15 @@ pub impl LlvmCtx {
         val savedArgs: Array[U64] = c.cur.typeArgs
         mut val payloadIndex: U64 = 0U64
         mut val variant: U64 = 0U64
-        while variant < c.arena.enums[enumIdx].variants.count() {
+        while variant < c.arena.enumAt(index: enumIdx).variants.count() {
             val matched: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.repack.enum.variant"))
             val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.repack.enum.next"))
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
             LLVMPositionBuilderAtEnd(self.b, matched)
-            val fields: Array[FieldDef] = c.arena.enums[enumIdx].variants[variant].fields
+            val fields: Array[FieldDef] = c.arena.enumAt(index: enumIdx).variants[variant].fields
             mut val values: Array[LLVMValueRef] = []
             if fields.count() > 0U64 {
-                c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+                c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
                 c.cur.typeArgs = sourceType.args
                 val sourcePayloadType: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIdx, vi: variant)
                 val payload: LLVMValueRef = LLVMBuildLoad2(self.b, sourcePayloadType, sourcePayloadPtr, anon())
@@ -2588,7 +2588,7 @@ pub impl LlvmCtx {
                     field += 1U64
                 }
             }
-            c.cur.typeParams = c.arena.enums[enumIdx].typeParams
+            c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
             c.cur.typeArgs = targetType.args
             val rebuilt: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: enumIdx, ety: targetLlvmType, vi: variant, payloadVals: values)
             c.cur.typeParams = savedParams
@@ -2777,8 +2777,8 @@ pub impl LlvmCtx {
         if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
         match selected.target { CallTarget.Direct => {} _ => { return <MidCallPreflight.Target /> } }
-        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-        val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         if callee.isAsync { return <MidCallPreflight.Async /> }
         if callee.hasRecv {
             if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing) {
@@ -2859,8 +2859,8 @@ pub impl LlvmCtx {
         if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
         match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <MidCallPreflight.Target /> } }
-        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-        val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         if !callee.isExtern || callee.isCExtern || callee.hasRecv || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
@@ -2903,7 +2903,7 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
-        val callee: Func = c.arena.funcs[selected.callee]
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
@@ -2981,8 +2981,8 @@ pub impl LlvmCtx {
         if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
         match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <MidCallPreflight.Target /> } }
-        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-        val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         if !callee.isExtern || callee.isCExtern || callee.hasRecv || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
@@ -3085,8 +3085,8 @@ pub impl LlvmCtx {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
                     RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
-                        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-                        val callee: Func = c.arena.funcs[selected.callee]
+                        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+                        val callee: Func = c.arena.functionAt(index: selected.callee)
                         if !callee.isExtern || callee.isCExtern || callee.hasRecv || !callee.hasRet || term.args.len != self.numericIntrinsicArity(intrinsic: numeric) || term.destination == 0U64 || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
                         mut val argumentI: U64 = 0U64
                         while argumentI < term.args.len {
@@ -3117,7 +3117,7 @@ pub impl LlvmCtx {
                             values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: argumentI)))
                             argumentI = argumentI + 1U64
                         }
-                        val callee: Func = c.arena.funcs[selected.callee]
+                        val callee: Func = c.arena.functionAt(index: selected.callee)
                         val raw: LLVMValueRef = self.genNumericIntrinsicValues(c: inout c, intrinsic: numeric, values: values, errorOffset: callee.nameStart)
                         LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: raw), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                         return true
@@ -3159,8 +3159,8 @@ pub impl LlvmCtx {
             }
             _ => { return <MidCallPreflight.Target /> }
         }
-        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
-        val callee: Func = c.arena.funcs[selected.callee]
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         if !callee.isExtern || callee.isCExtern || callee.hasRecv || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
         if term.destination != 0U64 && (term.destination > c.mid.places.count() || c.mid.places[term.destination - 1U64].projections.len != 0U64) { return <MidCallPreflight.Buffer /> }
         match selected.target {
@@ -3515,7 +3515,7 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
-        val callee: Func = c.arena.funcs[selected.callee]
+        val callee: Func = c.arena.functionAt(index: selected.callee)
         mut val externalSlot: U64 = self.declId.count()
         if callee.isExtern { externalSlot = self.declareResolvedCFunction(c: inout c, selected: selected) }
         mut val methodSlot: U64 = self.genMethK.count()
@@ -3667,11 +3667,11 @@ pub impl LlvmCtx {
             return self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, elemRef: elementRef)
         }
         if value.tag == 4U64 {
-            if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return LLVMConstNull(self.ptrty) }
+            if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return LLVMConstNull(self.ptrty) }
             val result: TypeRef = c.arena.typeAt(index: value.resultTerm)
             val savedParams: Array[Bind] = c.cur.typeParams
             val savedArgs: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = c.arena.enums[value.enumIndex].typeParams
+            c.cur.typeParams = c.arena.enumAt(index: value.enumIndex).typeParams
             c.cur.typeArgs = result.args
             mut val elements: Array[LLVMValueRef] = []
             mut val elementI: U64 = 0U64
@@ -3712,11 +3712,11 @@ pub impl LlvmCtx {
     // its concrete Err slot have already been frozen by FinalTryResolution;
     // LLVM receives no source-level type or trait lookup responsibility.
     inout fn midCanonicalEmitTryErrResult(c: inout Comp, body: MidBodyNode, destination: MidPlaceNode, value: MidRvalueNode) -> LLVMValueRef {
-        if value.operand == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return LLVMConstNull(self.ptrty) }
+        if value.operand == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return LLVMConstNull(self.ptrty) }
         val result: TypeRef = c.arena.typeAt(index: value.resultTerm)
         val savedParams: Array[Bind] = c.cur.typeParams
         val savedArgs: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = c.arena.enums[value.enumIndex].typeParams
+        c.cur.typeParams = c.arena.enumAt(index: value.enumIndex).typeParams
         c.cur.typeArgs = result.args
         mut val payloads: Array[LLVMValueRef] = []
         payloads.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: value.operand))
@@ -3882,7 +3882,7 @@ pub impl LlvmCtx {
                     LLVMBuildStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot)
                 }
             }
-            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
+            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
             local += 1U64
         }
@@ -3916,7 +3916,7 @@ pub impl LlvmCtx {
                 if declaration.isInout { slot = LLVMGetParam(self.curFn, abiIndex) }
                 else { LLVMBuildStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot) }
             }
-            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
+            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
             local = local + 1U64
         }
@@ -4061,7 +4061,7 @@ pub impl LlvmCtx {
                                 if target.tag == 2U64 && target.resolution < c.arena.finalCallees.count() {
                                     val selected: CallResolution = c.arena.finalCallees[target.resolution]
                                     eprint(text: " callee=")
-                                    if selected.callee < c.arena.funcs.count() { self.traceCodegenName(c: inout c, start: c.arena.funcs[selected.callee].nameStart, len: c.arena.funcs[selected.callee].nameLen) }
+                                    if selected.callee < c.arena.functionCount() { self.traceCodegenName(c: inout c, start: c.arena.functionAt(index: selected.callee).nameStart, len: c.arena.functionAt(index: selected.callee).nameLen) }
                                     else { eprint(text: "<invalid>") }
                                 }
                             }

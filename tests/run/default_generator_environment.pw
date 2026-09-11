@@ -36,8 +36,8 @@ fn main() {
     c.prepareDefaultArgumentGenerators()
     val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
-    if c.globalSeedModeFor(f: c.arena.funcs[0U64]) == 7U64 { write(s: "source-module\n") }
-    val generatorModule = c.globalSeedModeFor(f: c.arena.funcs[free])
+    if c.globalSeedModeFor(f: c.arena.functionAt(index: 0U64)) == 7U64 { write(s: "source-module\n") }
+    val generatorModule = c.globalSeedModeFor(f: c.arena.functionAt(index: free))
     if generatorModule == 7U64 { write(s: "generator-module\n") }
     if c.globalVisibleFrom(useMod: generatorModule, gMod: 7U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "private-global-visible\n") }
     if !c.globalVisibleFrom(useMod: generatorModule, gMod: 8U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "foreign-private-hidden\n") }
@@ -50,7 +50,7 @@ fn main() {
     val providedEnv = c.bodyInstanceEnvironment(fnIdx: 1U64, args: [term], recvInstRef: term, selectedProof: proof)
     val defaultEnv = c.bodyInstanceEnvironment(fnIdx: provided, args: [term], recvInstRef: term, selectedProof: proof)
     if providedEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: defaultEnv) { write(s: "provided-self-and-proof\n") }
-    if !c.arena.funcs[provided].hasRecv && !c.arena.funcs[provided].isProvided { write(s: "independent-value-abi\n") }
+    if !c.arena.functionAt(index: provided).hasRecv && !c.arena.functionAt(index: provided).isProvided { write(s: "independent-value-abi\n") }
     val abstractGenerator = c.defaultArgumentGenerator(ownerFnIdx: 2U64, parameterIndex: 0U64)
     val abstractEnv = c.bodyInstanceEnvironment(fnIdx: abstractGenerator, args: [term], recvInstRef: term, selectedProof: proof)
     if abstractEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: abstractEnv) { write(s: "abstract-source-self\n") }

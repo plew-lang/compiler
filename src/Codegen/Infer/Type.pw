@@ -291,7 +291,7 @@ pub impl Comp {
             // which the backend performs only for `Array` and generic enums (Optional/Result/…).
             // For any OTHER head (Dictionary, a user struct, a tuple/record) the layouts differ
             // but no repack exists, so accepting it would silently miscompile — reject it here.
-            val headErasable: Bool = rangeEquals(bytes: self.arena.bytes, start: te.nameStart, len: te.nameLen, kw: "Array") || self.genericEnumIndex(nameStart: te.nameStart, nameLen: te.nameLen) < self.arena.enums.count()
+            val headErasable: Bool = rangeEquals(bytes: self.arena.bytes, start: te.nameStart, len: te.nameLen, kw: "Array") || self.genericEnumIndex(nameStart: te.nameStart, nameLen: te.nameLen) < self.arena.enumCount()
             mut val i: U64 = 0
             while i < te.args.count() {
                 if !(headErasable) {
@@ -324,7 +324,7 @@ pub impl Comp {
     }
 
     inout fn activeTypeParamConformsToTrait(source: TypeRef, trait: TypeRef) -> Bool {
-        if self.cur.checkFn >= self.arena.funcs.count() {
+        if self.cur.checkFn >= self.arena.functionCount() {
             return false
         }
         val qTp: U64 = source.nameId
@@ -380,9 +380,9 @@ pub impl Comp {
     // see the comment there.
     inout fn genericStructHeadId(start: U64, len: U64) -> U64 {
         val si: U64 = self.structDefByNameAny(start: start, len: len)
-        if si < self.arena.structs.count() {
-            if self.arena.structs[si].typeParams.count() > 0U64 {
-                return self.arena.structs[si].nameId
+        if si < self.arena.structCount() {
+            if self.arena.structAt(index: si).typeParams.count() > 0U64 {
+                return self.arena.structAt(index: si).nameId
             }
         }
         return 0U64
@@ -392,8 +392,8 @@ pub impl Comp {
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val fi: U64 = self.resolvedCallee(id: id)
-                if fi < self.arena.funcs.count() {
-                    return !self.arena.funcs[fi].hasRet
+                if fi < self.arena.functionCount() {
+                    return !self.arena.functionAt(index: fi).hasRet
                 }
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
@@ -401,14 +401,14 @@ pub impl Comp {
                 // final callable.  Value-context checking must consume that decision,
                 // not re-resolve only the bare spelling and accidentally exclude `#`.
                 val mi: U64 = self.resolvedCallee(id: id)
-                if mi < self.arena.funcs.count() {
-                    return !self.arena.funcs[mi].hasRet
+                if mi < self.arena.functionCount() {
+                    return !self.arena.functionAt(index: mi).hasRet
                 }
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 val mi: U64 = self.resolvedCallee(id: id)
-                if mi < self.arena.funcs.count() {
-                    return !self.arena.funcs[mi].hasRet
+                if mi < self.arena.functionCount() {
+                    return !self.arena.functionAt(index: mi).hasRet
                 }
             }
             _ => {}

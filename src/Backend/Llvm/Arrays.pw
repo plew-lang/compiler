@@ -28,10 +28,10 @@ pub impl LlvmCtx {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count() {
+                if sidx < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count() {
-                        return self.fieldLlvmTy(c: inout c, fd: c.arena.structs[sidx].fields[fidx])
+                    if fidx < c.arena.structAt(index: sidx).fields.count() {
+                        return self.fieldLlvmTy(c: inout c, fd: c.arena.structAt(index: sidx).fields[fidx])
                     }
                 }
                 return self.i64ty
@@ -54,8 +54,8 @@ pub impl LlvmCtx {
                     return self.llvmTypeOfRef(c: inout c, ref: resultRef)
                 }
                 val resolved: U64 = c.bodyCallee(exprId: id)
-                if resolved < c.arena.funcs.count() {
-                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
+                if resolved < c.arena.functionCount() {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.functionAt(index: resolved))
                 }
                 // An existential target has no static Func, but Mono records
                 // its concrete result in the same final descriptor. A missing
@@ -72,8 +72,8 @@ pub impl LlvmCtx {
                     return self.llvmTypeOfRef(c: inout c, ref: resultRef)
                 }
                 val resolved: U64 = c.bodyCallee(exprId: id)
-                if resolved < c.arena.funcs.count() {
-                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
+                if resolved < c.arena.functionCount() {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.functionAt(index: resolved))
                 }
                 if c.bodyCalleeTargetKind(exprId: id) == 1U64 {
                     c.errorAt(offset: c.exprOffset(id: id), msg: "internal error: final existential callable is missing its result type")
@@ -93,8 +93,8 @@ pub impl LlvmCtx {
                     return self.llvmTypeOfRef(c: inout c, ref: resultRef)
                 }
                 val cfi: U64 = c.bodyCallee(exprId: id)
-                if cfi < c.arena.funcs.count() {
-                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
+                if cfi < c.arena.functionCount() {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.functionAt(index: cfi))
                 }
                 return self.i64ty
             }
@@ -556,7 +556,7 @@ pub impl LlvmCtx {
     // fallback for an unregistered generic struct). Returns the independent copy. Sub-struct
     // fields recurse through `deepCopyStructValue`, routing each to its own witness call.
     inout fn deepCopyStructWalk(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         mut val agg: LLVMValueRef = v
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
@@ -606,7 +606,7 @@ pub impl LlvmCtx {
                     self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
                 } else {
                     val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
-                    if nsi < c.arena.structs.count() {
+                    if nsi < c.arena.structCount() {
                         val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
                         agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: elem, sidx: nsi), fi, anon())
                     } else {
@@ -805,7 +805,7 @@ pub impl LlvmCtx {
                 return v
             }
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
-            if sidx < c.arena.structs.count() {
+            if sidx < c.arena.structCount() {
                 // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
                 // (rc++) instead of deep-copying them; the first in-place mutation of a field
                 // CoWs via the slot (gateway). emitStructRetain rc-bumps exactly the buffers
@@ -1258,7 +1258,7 @@ pub impl LlvmCtx {
             return
         }
         self.arcPush(sidx: sidx)
-        val sd: StructDef = c.arena.structs[sidx]
+        val sd: StructDef = c.arena.structAt(index: sidx)
         mut val i: U64 = 0
         while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]

@@ -26,7 +26,7 @@ pub impl LlvmCtx {
         if self.thunkSlot(fi: fi) < self.thunkIdx.count() {
             return
         }
-        val f: Func = c.arena.funcs[fi]
+        val f: Func = c.arena.functionAt(index: fi)
         // A free function the backend emits as a frozen `gf` body: mirror that path's
         // acceptance without creating a second instance identity.
         if f.hasRecv {
@@ -60,8 +60,8 @@ pub impl LlvmCtx {
             match c.arena.exprs[i] {
                 Expr.Ident(val start, val len) => {
                     val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
-                    if fvi < c.arena.funcs.count() {
-                        val f: Func = c.arena.funcs[fvi]
+                    if fvi < c.arena.functionCount() {
+                        val f: Func = c.arena.functionAt(index: fvi)
                         if !(f.hasRecv || f.isAssoc || f.typeParams.count() > 0U64) {
                             self.declareThunk(c: inout c, fi: fvi)
                         }
@@ -80,7 +80,7 @@ pub impl LlvmCtx {
         while s < self.thunkIdx.count() {
             val fi: U64 = self.thunkIdx[s]
             val fv: LLVMValueRef = self.thunkVal[s]
-            val f: Func = c.arena.funcs[fi]
+            val f: Func = c.arena.functionAt(index: fi)
             val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
             LLVMPositionBuilderAtEnd(self.b, entry)
             mut val av: Array[LLVMValueRef] = []

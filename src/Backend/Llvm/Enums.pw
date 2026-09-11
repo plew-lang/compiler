@@ -13,7 +13,7 @@ pub impl LlvmCtx {
     // disambiguates a non-generic enum from any generic instance that shares the head name.
     inout fn enumRegSlot(c: inout Comp, start: U64, len: U64) -> U64 {
         val eid: U64 = c.enumIdxByName(start: start, len: len)
-        if eid < c.arena.enums.count() {
+        if eid < c.arena.enumCount() {
             return self.enumRegSlotByEid(c: inout c, eid: eid)
         }
         return self.genEnumRefs.count()
@@ -56,7 +56,7 @@ pub impl LlvmCtx {
         }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
         if sreg < self.genStructRefs.count() {
-            val sd: StructDef = c.arena.structs[self.genStructDefs[sreg]]
+            val sd: StructDef = c.arena.structAt(index: self.genStructDefs[sreg])
             mut val w: U64 = 0
             mut val i: U64 = 0
             while i < sd.fields.count() {
@@ -71,7 +71,7 @@ pub impl LlvmCtx {
         // enclosing enum's payload area, corrupting adjacent fields). Non-boxed value
         // cycles are a front-end error, so the recursion terminates (boxed = 1).
         val ereg: U64 = c.enumIdxByName(start: tyStart, len: tyLen)
-        if ereg < c.arena.enums.count() {
+        if ereg < c.arena.enumCount() {
             return 1U64 + self.enumPayloadWords(c: inout c, eid: ereg)
         }
         return 1U64
@@ -80,7 +80,7 @@ pub impl LlvmCtx {
     // The max payload-word count over an enum's variants (the size of its `[N x i64]`
     // payload area). Shared by registerEnums and fieldWords (an inline enum field).
     inout fn enumPayloadWords(c: inout Comp, eid: U64) -> U64 {
-        val e: EnumDef = c.arena.enums[eid]
+        val e: EnumDef = c.arena.enumAt(index: eid)
         mut val maxW: U64 = 0
         mut val vi: U64 = 0
         while vi < e.variants.count() {
@@ -164,8 +164,8 @@ pub impl LlvmCtx {
     inout fn genInstWords(c: inout Comp, ref: U64) -> U64 {
         val t: TypeRef = c.arena.typeAt(index: ref)
         val gsi: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if gsi < c.arena.structs.count() {
-            val sd: StructDef = c.arena.structs[gsi]
+        if gsi < c.arena.structCount() {
+            val sd: StructDef = c.arena.structAt(index: gsi)
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams
@@ -181,8 +181,8 @@ pub impl LlvmCtx {
             return w
         }
         val gei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if gei < c.arena.enums.count() {
-            val e: EnumDef = c.arena.enums[gei]
+        if gei < c.arena.enumCount() {
+            val e: EnumDef = c.arena.enumAt(index: gei)
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = e.typeParams
@@ -219,8 +219,8 @@ pub impl LlvmCtx {
     // `{ i64 tag, [maxWords x i64] payload }`. Called after registerStructs.
     inout fn registerEnums(c: inout Comp) {
         mut val ei: U64 = 0
-        while ei < c.arena.enums.count() {
-            val e: EnumDef = c.arena.enums[ei]
+        while ei < c.arena.enumCount() {
+            val e: EnumDef = c.arena.enumAt(index: ei)
             if e.typeParams.count() <= 0 {
                 if self.enumAllPrimitive(c: inout c, eid: ei) {
                     val maxWords: U64 = self.enumPayloadWords(c: inout c, eid: ei)
@@ -251,7 +251,7 @@ pub impl LlvmCtx {
 
     // The LLVM struct type of a variant's payload (its fields in declared order).
     inout fn variantPayloadTy(c: inout Comp, eid: U64, vi: U64, instanceRef: U64 = 0U64) -> LLVMTypeRef {
-        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
         mut val elems: Array[LLVMTypeRef] = []
         mut val i: U64 = 0
         while i < fs.count() {
@@ -368,7 +368,7 @@ pub impl LlvmCtx {
     // old name-check chain missed enum payloads and generic-instance struct payloads
     // entirely (their heap was silently skipped).
     inout fn variantHasHeap(c: inout Comp, eid: U64, vi: U64) -> Bool {
-        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count() {
             val fd: FieldDef = fs[fj]
@@ -389,7 +389,7 @@ pub impl LlvmCtx {
     // Whether an enum value of `eid` releases any heap on destruction (any variant has heap).
     inout fn enumNeedsDeinit(c: inout Comp, eid: U64) -> Bool {
         mut val vi: U64 = 0
-        while vi < c.arena.enums[eid].variants.count() {
+        while vi < c.arena.enumAt(index: eid).variants.count() {
             if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
                 return true
             }
@@ -416,7 +416,7 @@ pub impl LlvmCtx {
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
-        while vi < c.arena.enums[eid].variants.count() {
+        while vi < c.arena.enumAt(index: eid).variants.count() {
             if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
                 val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
                 val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumrel.v"))
@@ -425,7 +425,7 @@ pub impl LlvmCtx {
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
                 val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
-                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
@@ -486,7 +486,7 @@ pub impl LlvmCtx {
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
-        while vi < c.arena.enums[eid].variants.count() {
+        while vi < c.arena.enumAt(index: eid).variants.count() {
             if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
                 val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
                 val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumret.v"))
@@ -495,7 +495,7 @@ pub impl LlvmCtx {
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
                 val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
-                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
@@ -744,7 +744,7 @@ pub impl LlvmCtx {
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
-        while vi < c.arena.enums[eid].variants.count() {
+        while vi < c.arena.enumAt(index: eid).variants.count() {
             if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
                 val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
                 val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumcp.v"))
@@ -753,7 +753,7 @@ pub impl LlvmCtx {
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
                 mut val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
-                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
@@ -786,8 +786,8 @@ pub impl LlvmCtx {
                             self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 1U64, anon()))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                            if fsi < c.arena.structs.count() {
-                                if !(c.arena.structs[fsi].isExtern) {
+                            if fsi < c.arena.structCount() {
+                                if !(c.arena.structAt(index: fsi).isExtern) {
                                     if self.structNeedsDeinit(c: inout c, sidx: fsi) {
                                         pv = LLVMBuildInsertValue(self.b, pv, self.deepCopyStructValue(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi), fj, anon())
                                     }
@@ -846,7 +846,7 @@ pub impl LlvmCtx {
                 // of this enum's own fields. `buildEnumValue(instanceRef: ty)`
                 // obtains layout and field expectations from the selected instance;
                 // that is what makes nested `Optional[Optional[I32]]` unambiguous.
-                c.cur.typeParams = concatParams(add: savedP, base: c.arena.enums[self.genEnumDefs[gslot]].typeParams)
+                c.cur.typeParams = concatParams(add: savedP, base: c.arena.enumAt(index: self.genEnumDefs[gslot]).typeParams)
                 c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.typeAt(index: ty).args)
                 val v: LLVMValueRef = self.buildEnumValue(c: inout c, eid: self.genEnumDefs[gslot], ety: self.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields, instanceRef: ty)
                 c.cur.typeParams = savedP
@@ -872,7 +872,7 @@ pub impl LlvmCtx {
         // tag+word structural `==` well-defined.
         LLVMBuildStore(self.b, LLVMConstNull(ety), slot)
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
-        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
         if fs.count() > 0U64 {
             val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
             // start ZERO (not undef) so an omitted field with no default is zero-init,
@@ -1027,7 +1027,7 @@ pub impl LlvmCtx {
                             // payload is independent of the source (mirrors genFieldValue).
                             mut val handled: Bool = false
                             val psi: U64 = self.localStructIdxFor(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-                            if psi < c.arena.structs.count() {
+                            if psi < c.arena.structCount() {
                                 if self.structNeedsDeinit(c: inout c, sidx: psi) {
                                     if exprAliasesPlace(c: inout c, id: valExpr) {
                                         // CoW-SHARE the struct place into the payload (rc++ its

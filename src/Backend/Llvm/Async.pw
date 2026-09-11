@@ -93,11 +93,11 @@ pub impl LlvmCtx {
     // else the field's scalar type), in bind order.
     inout fn collectAsyncMatchBindTys(c: inout Comp, arm: MatchArm, tys: inout Array[LLVMTypeRef]) {
         val eid: U64 = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
-        if eid >= c.arena.enums.count() {
+        if eid >= c.arena.enumCount() {
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
         val binds: BindRange = arm.binds
         mut val bi: U64 = 0
         while bi < binds.len {
@@ -133,7 +133,7 @@ pub impl LlvmCtx {
     // Build (once) an async fn's named frame struct type `{ i32 state, ptr self,
     // ptr sub, <param fields...>, <hoisted-local fields...> }`.
     inout fn buildAsyncFrameTy(c: inout Comp, fi: U64) -> LLVMTypeRef {
-        val f: Func = c.arena.funcs[fi]
+        val f: Func = c.arena.functionAt(index: fi)
         mut val tys: Array[LLVMTypeRef] = []
         tys.append(self.i32ty)
         tys.append(self.ptrty)
@@ -159,13 +159,13 @@ pub impl LlvmCtx {
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
     inout fn declareAsyncFns(c: inout Comp) {
         mut val fi: U64 = 0
-        while fi < c.arena.funcs.count() {
+        while fi < c.arena.functionCount() {
             if isAsyncFn(c: inout c, fi: fi) {
-                if c.arena.funcs[fi].typeParams.count() > 0U64 {
-                    c.errorAt(offset: c.arena.funcs[fi].nameStart, msg: "LLVM backend: generic `async fn` is not yet supported")
+                if c.arena.functionAt(index: fi).typeParams.count() > 0U64 {
+                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: generic `async fn` is not yet supported")
                 }
-                if c.arena.funcs[fi].hasRecv {
-                    c.errorAt(offset: c.arena.funcs[fi].nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
+                if c.arena.functionAt(index: fi).hasRecv {
+                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
                 }
                 val frameTy: LLVMTypeRef = self.buildAsyncFrameTy(c: inout c, fi: fi)
                 // resume fn: void __af<fi>_resume(void*).
@@ -182,8 +182,8 @@ pub impl LlvmCtx {
                 self.asyncFrameTy.append(frameTy)
                 self.asyncResumeFn.append(resumeFn)
                 // entry symbol (non-main): params -> ptr (Promise).
-                if !(c.nameIsMain(f: c.arena.funcs[fi])) {
-                    val entry: Func = c.arena.funcs[fi]
+                if !(c.nameIsMain(f: c.arena.functionAt(index: fi))) {
+                    val entry: Func = c.arena.functionAt(index: fi)
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
                     while pi < entry.params.count() {
@@ -438,7 +438,7 @@ pub impl LlvmCtx {
                 // before any construction of the enum would leave the param ref-less
                 // (its frame-owned drop then skips the payload's deinit). Mirrors
                 // bindOneParam.
-                if c.concreteEnumIdxByName(start: p.tyStart, len: p.tyLen) < c.arena.enums.count() {
+                if c.concreteEnumIdxByName(start: p.tyStart, len: p.tyLen) < c.arena.enumCount() {
                     pRef = c.simpleTypeRef(nameStart: p.tyStart, nameLen: p.tyLen)
                 }
             }
@@ -452,7 +452,7 @@ pub impl LlvmCtx {
         if slot >= self.asyncFnIdx.count() {
             return
         }
-        val f: Func = c.arena.funcs[fi]
+        val f: Func = c.arena.functionAt(index: fi)
         val frameTy: LLVMTypeRef = self.asyncFrameTy[slot]
         val resumeFn: LLVMValueRef = self.asyncResumeFn[slot]
         val isMain: Bool = c.nameIsMain(f: f)
@@ -608,7 +608,7 @@ pub impl LlvmCtx {
     // Emit entry + resume bodies for every async fn (after declareAsyncFns).
     inout fn emitAsyncFns(c: inout Comp) {
         mut val fi: U64 = 0
-        while fi < c.arena.funcs.count() {
+        while fi < c.arena.functionCount() {
             if isAsyncFn(c: inout c, fi: fi) {
                 self.genLlvmAsyncFunc(c: inout c, fi: fi)
             }

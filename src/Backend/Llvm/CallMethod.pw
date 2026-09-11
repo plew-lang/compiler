@@ -48,8 +48,8 @@ pub impl LlvmCtx {
         // state and made a factory such as `<String.checked …/>` diverge from
         // its frontend decision.
         mut val arn: Bind = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
-        if finalMfi < c.arena.funcs.count() {
-            val finalFunc: Func = c.arena.funcs[finalMfi]
+        if finalMfi < c.arena.functionCount() {
+            val finalFunc: Func = c.arena.functionAt(index: finalMfi)
             if finalFunc.isAssoc {
                 arn = <Bind nameStart=finalFunc.recvStart nameLen=finalFunc.recvLen fieldStart=finalFunc.recvStart fieldLen=finalFunc.recvLen />
             }
@@ -70,14 +70,14 @@ pub impl LlvmCtx {
             // op does (spec/12) — no primitive open-code shortcut here (mirrors the concrete
             // operator paths in Expr.pw, which route through the same witnesses).
             val afi: U64 = finalMfi
-            if afi < c.arena.funcs.count() {
+            if afi < c.arena.functionCount() {
                 // A generic associated function (`Box[T].make(v: T)`) rides the
                 // generic free-function machinery.  Its substitutions were fixed
                 // together with finalMfi by Mono; expected-type grounding belongs
                 // there too, never in LLVM.
                 if c.isGenericFreeFn(fi: afi) {
                     val ginf: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
-                    if ginf.count() != c.arena.funcs[afi].typeParams.count() || !(c.fnArgsAllGround(args: ginf)) {
+                    if ginf.count() != c.arena.functionAt(index: afi).typeParams.count() || !(c.fnArgsAllGround(args: ginf)) {
                         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "empty") {
                             c.errorAt(offset: nameStart, msg: "internal error: final associated callable is missing grounded type arguments (empty)")
                         } else if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "fromValue") {
@@ -89,7 +89,7 @@ pub impl LlvmCtx {
                     }
                     val agslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
                     if agslot < self.genFnK.count() {
-                        val gaf: Func = c.arena.funcs[afi]
+                        val gaf: Func = c.arena.functionAt(index: afi)
                         val gsavedP: Array[Bind] = c.cur.typeParams
                         val gsavedA: Array[U64] = c.cur.typeArgs
                         c.cur.typeParams = c.copyFuncBinds(binds: gaf.typeParams)
@@ -105,7 +105,7 @@ pub impl LlvmCtx {
                         return self.projectFinalCallResult(c: inout c, callId: callId, value: grv)
                     }
                 }
-                val af: Func = c.arena.funcs[afi]
+                val af: Func = c.arena.functionAt(index: afi)
                 val aPinMark: U64 = self.pinCells.count()
                 mut val aav: Array[LLVMValueRef] = []
                 self.appendCallArgValues(c: inout c, av: inout aav, f: af, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
@@ -145,7 +145,7 @@ pub impl LlvmCtx {
         }
         if primRecv.nameLen != 0U64 {
             val smfi: U64 = finalMfi
-            if smfi < c.arena.funcs.count() {
+            if smfi < c.arena.functionCount() {
                 // A provided primitive witness has a receiver-specific ABI and
                 // Self environment.  Key it by the final receiver instance,
                 // like every other selected member, instead of the legacy
@@ -158,7 +158,7 @@ pub impl LlvmCtx {
                     }
                 }
                 // a method with its own type params on a primitive (`(self.a:U64).absorb[S](…)`).
-                if c.arena.funcs[smfi].typeParams.count() > 0U64 {
+                if c.arena.functionAt(index: smfi).typeParams.count() > 0U64 {
                     val mtv: LLVMValueRef = self.genMethodOwnTypeParamCall(c: inout c, callId: callId, recv: recv, args: args)
                     if LLVMIsNull(mtv) == 0I32 {
                         return mtv
@@ -166,7 +166,7 @@ pub impl LlvmCtx {
                 }
                 val sslot: U64 = self.ensureProvidedDeclared(c: inout c, fi: smfi)
                 if sslot < self.fnIdx.count() {
-                    val smf: Func = c.arena.funcs[smfi]
+                    val smf: Func = c.arena.functionAt(index: smfi)
                     val sPinMark: U64 = self.pinCells.count()
                     mut val sav: Array[LLVMValueRef] = []
                     if smf.selfInout {
@@ -211,7 +211,7 @@ pub impl LlvmCtx {
                 // exact AST call.  Consume that table directly: a bare re-query drops a
                 // static `#Ext` / `#Trait` view before generic emission.
                 val gmfi: U64 = c.bodyCallee(exprId: callId)
-                if gmfi < c.arena.funcs.count() {
+                if gmfi < c.arena.functionCount() {
                     val gslot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
                     if gslot < self.genMethK.count() {
                         return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: self.genMethK[gslot], slot: gslot, instRef: self.genMethInst[gslot], args: args)
@@ -230,12 +230,12 @@ pub impl LlvmCtx {
         // witnesses `<Prim>.wrappingAdd(a, b)` in std/Core/Num.pw whose bodies bottom out in the
         // `<pfx>Wrap*` intrinsic floor — resolved and emitted like any assoc fn, with identity,
         // so a same-named user extension is no longer hijacked.)
-        mut val rsidx: U64 = c.arena.structs.count()
+        mut val rsidx: U64 = c.arena.structCount()
         if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.typeCount() {
             val selectedTy: TypeRef = c.arena.typeAt(index: selectedRecvRef)
             rsidx = c.structDefByNameAny(start: selectedTy.nameStart, len: selectedTy.nameLen)
         }
-        if rsidx >= c.arena.structs.count() {
+        if rsidx >= c.arena.structCount() {
             // an enum-receiver method (`c.code()` on an enum value): dispatch like a
             // struct method (self by value, or a pointer for `inout fn`).
             val erecvRef: U64 = selectedRecvRef
@@ -244,10 +244,10 @@ pub impl LlvmCtx {
                 val ereg0: U64 = self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
                 if ereg0 < self.genEnumRefs.count() {
                     val emfi: U64 = finalMfi
-                    if emfi < c.arena.funcs.count() {
+                    if emfi < c.arena.functionCount() {
                         // a non-generic method declared on this enum is its 0-type-arg `gm`
                         // instance (B3-2), like a struct method.
-                        if c.arena.funcs[emfi].recvId == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
+                        if c.arena.functionAt(index: emfi).recvId == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
                             val egmslot: U64 = self.ensureFinalGenMethodBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
                             if egmslot < self.genMethK.count() {
                                 return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: self.genMethK[egmslot], slot: egmslot, instRef: self.genMethInst[egmslot], args: args)
@@ -258,7 +258,7 @@ pub impl LlvmCtx {
                             eslot = self.ensureProvidedDeclared(c: inout c, fi: emfi)
                         }
                         if eslot < self.fnIdx.count() {
-                            val emf: Func = c.arena.funcs[emfi]
+                            val emf: Func = c.arena.functionAt(index: emfi)
                             val ePinMark: U64 = self.pinCells.count()
                             mut val eav: Array[LLVMValueRef] = []
                             if emf.selfInout {
@@ -281,14 +281,14 @@ pub impl LlvmCtx {
             c.errorAt(offset: nameStart, msg: "LLVM backend: method call only on a registered struct value (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val sd: StructDef = c.arena.structs[rsidx]
+        val sd: StructDef = c.arena.structAt(index: rsidx)
         // a viewed receiver (a value re-view `v#Ext`, a stacked `v#A#B`, or a
         // param/binding typed `Type#Ext`) resolves the extension's method first
         // (spec/09); the extension shadows a same-name bare method under the view. With
         // stacked views, the name must resolve in exactly one (same-name in two stacked
         // views is ambiguous).
         val mfi: U64 = finalMfi
-        if mfi >= c.arena.funcs.count() {
+        if mfi >= c.arena.functionCount() {
             if c.bodyCalleeTargetKind(exprId: callId) == 3U64 {
                 val ffi: U64 = c.bodyCalleeTargetSlot(exprId: callId)
                 val fnRef: U64 = c.bodyCalleeTargetTypeRef(exprId: callId)
@@ -305,13 +305,13 @@ pub impl LlvmCtx {
         }
         // A method with its own type parameters is already represented by the
         // final BodyInstance; never recreate its argument split here.
-        if c.arena.funcs[mfi].typeParams.count() > 0U64 {
+        if c.arena.functionAt(index: mfi).typeParams.count() > 0U64 {
             val mtv: LLVMValueRef = self.genMethodOwnTypeParamCall(c: inout c, callId: callId, recv: recv, args: args)
             if LLVMIsNull(mtv) == 0I32 {
                 return mtv
             }
         }
-        val mf: Func = c.arena.funcs[mfi]
+        val mf: Func = c.arena.functionAt(index: mfi)
         // A trait-provided copy may be declared on its subject trait B while
         // this final call is on the concrete S selected by a proof/path (for
         // example `S#E.method()` through `extension E { impl B as A }`).  The

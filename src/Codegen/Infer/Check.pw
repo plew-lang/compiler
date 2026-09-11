@@ -371,20 +371,20 @@ pub impl Comp {
                 }
                 if isEnum {
                     val ei: U64 = self.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                    if ei >= self.arena.enums.count() {
+                    if ei >= self.arena.enumCount() {
                         return
                     }
                     val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    if vi >= self.arena.enums[ei].variants.count() {
+                    if vi >= self.arena.enumAt(index: ei).variants.count() {
                         return
                     }
-                    self.tcCheckFieldsUnder(params: self.arena.enums[ei].typeParams, targs: et.args, defFields: self.arena.enums[ei].variants[vi].fields, makeFields: fields)
+                    self.tcCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumAt(index: ei).variants[vi].fields, makeFields: fields)
                 } else {
                     val si: U64 = self.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                    if si >= self.arena.structs.count() {
+                    if si >= self.arena.structCount() {
                         return
                     }
-                    self.tcCheckFieldsUnder(params: self.arena.structs[si].typeParams, targs: et.args, defFields: self.arena.structs[si].fields, makeFields: fields)
+                    self.tcCheckFieldsUnder(params: self.arena.structAt(index: si).typeParams, targs: et.args, defFields: self.arena.structAt(index: si).fields, makeFields: fields)
                 }
             }
             _ => {}

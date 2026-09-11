@@ -1,7 +1,7 @@
 // Part of the LLVM backend (root: _.pw): generic-instance struct-field and type-ref queries.
 
 // The c.arena.structs index for a local/param/return of type (start,len) if that type
-// is a REGISTERED struct, else c.arena.structs.count() (not a struct value).
+// is a REGISTERED struct, else c.arena.structCount() (not a struct value).
 
 pub impl LlvmCtx {
     inout fn localStructIdxFor(c: inout Comp, start: U64, len: U64) -> U64 {
@@ -30,7 +30,7 @@ pub impl LlvmCtx {
         if self.structRegSlot(c: inout c, start: start, len: len) < self.genStructRefs.count() {
             return c.structIndexByName(start: start, len: len)
         }
-        return c.arena.structs.count()
+        return c.arena.structCount()
     }
 }
 
@@ -46,8 +46,8 @@ pub impl LlvmCtx {
         if tr != 0U64 {
             return tr
         }
-        if si < c.arena.structs.count() {
-            val syn: U64 = c.simpleTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
+        if si < c.arena.structCount() {
+            val syn: U64 = c.simpleTypeRef(nameStart: c.arena.structAt(index: si).nameStart, nameLen: c.arena.structAt(index: si).nameLen)
             if self.structIdxOfRef(c: inout c, ref: syn) == si {
                 return syn
             }
@@ -65,10 +65,10 @@ pub impl LlvmCtx {
     // ref is gen-instance-pinned but must map to the Array def, not a gen slot.
     inout fn structIdxOfRef(c: inout Comp, ref: U64) -> U64 {
         if ref == 0U64 {
-            return c.arena.structs.count()
+            return c.arena.structCount()
         }
         if ref >= c.arena.typeCount() {
-            return c.arena.structs.count()
+            return c.arena.structCount()
         }
         val runtimeRef: U64 = c.runtimeTypeRef(ref: ref)
         if runtimeRef != ref { return self.structIdxOfRef(c: inout c, ref: runtimeRef) }
@@ -81,7 +81,7 @@ pub impl LlvmCtx {
         // query dispatches by node kind; this is the equivalent carrier-level
         // boundary during the migration.
         if t.isAny {
-            return c.arena.structs.count()
+            return c.arena.structCount()
         }
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
@@ -94,12 +94,12 @@ pub impl LlvmCtx {
             if gs < self.genStructRefs.count() {
                 return self.genStructDefs[gs]
             }
-            return c.arena.structs.count()
+            return c.arena.structCount()
         }
         return self.localStructIdxFor(c: inout c, start: t.nameStart, len: t.nameLen)
     }
 
-    // The owning struct index of an expression, or c.arena.structs.count() (the sentinel) for a
+    // The owning struct index of an expression, or c.arena.structCount() (the sentinel) for a
     // non-struct value. TOTAL-REF single source: derive it from the expr's TypeRef via
     // structIdxOfRef — the one ref→struct-idx map — so the ref is the sole authority and no
     // per-form classifier can drift from it. The old per-form classifier (exprStructIdxRaw) was
@@ -125,7 +125,7 @@ pub impl LlvmCtx {
                 val emittedLi: U64 = self.findLocal(c: inout c, start: selfStart, len: selfLen)
                 if emittedLi < self.nLocals && self.locTypeRef[emittedLi] != 0U64 {
                     val emittedStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: self.locTypeRef[emittedLi]))
-                    if emittedStruct < c.arena.structs.count() { return emittedStruct }
+                    if emittedStruct < c.arena.structCount() { return emittedStruct }
                 }
                 // Match/destructure binds are locals too.  Their concrete
                 // payload type is installed by the active body environment;
@@ -135,14 +135,14 @@ pub impl LlvmCtx {
                 if li < c.cur.locals.count() {
                     val localRef: U64 = c.groundTypeRef(ref: c.cur.locals[li].ty)
                     val localStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: localRef))
-                    if localStruct < c.arena.structs.count() { return localStruct }
+                    if localStruct < c.arena.structCount() { return localStruct }
                 }
             }
             _ => {}
         }
         if !(c.inCollection) {
             val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
-            if nw < c.arena.structs.count() {
+            if nw < c.arena.structCount() {
                 return nw
             }
         }
@@ -162,7 +162,7 @@ pub impl LlvmCtx {
             val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
             return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
         }
-        return c.arena.structs.count()
+        return c.arena.structCount()
     }
 
     // The LLVM type for a declared type span, honoring array-ness: an array is the

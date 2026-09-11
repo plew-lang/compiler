@@ -67,19 +67,19 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=len nameId=nid fieldStart=start fieldLen=len />
     }
 
-    // Index of the enum named (start,len), or c.arena.enums.count() if none.
+    // Index of the enum named (start,len), or c.arena.enumCount() if none.
     inout fn enumIndexByName(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         mut val i: U64 = 0
-        while i < self.arena.enums.count() {
-            if self.arena.enums[i].nameId == qId {
+        while i < self.arena.enumCount() {
+            if self.arena.enumAt(index: i).nameId == qId {
                 return i
             }
             i += 1
         }
-        return self.arena.enums.count()
+        return self.arena.enumCount()
     }
 
 

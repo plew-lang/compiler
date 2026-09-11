@@ -26,7 +26,7 @@ pub impl LlvmCtx {
                 // an extern generic struct (`Buffer[T]`) is an OPAQUE intrinsic represented
                 // as a pointer — it has no struct layout, so register no `%gs` type for it
                 // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
-                if defIdx < c.arena.structs.count() && !(c.arena.structs[defIdx].isExtern) {
+                if defIdx < c.arena.structCount() && !(c.arena.structAt(index: defIdx).isExtern) {
                     self.genStructRefs.append(ref)
                     // De-pin: `Array[E]` is an ordinary generic-struct instance — it gets its
                     // own fresh named `%gsN` (body `{ptr}` from its single `data: Buffer[E]`
@@ -58,7 +58,7 @@ pub impl LlvmCtx {
         mut val s: U64 = 0
         while s < n {
             val ref: U64 = self.genStructRefs[s]
-            val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
+            val sd: StructDef = c.arena.structAt(index: self.genStructDefs[s])
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams
@@ -174,8 +174,8 @@ pub impl LlvmCtx {
         }
         val t: TypeRef = c.arena.typeAt(index: ref)
         val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if defIdx < c.arena.structs.count() {
-            val sd: StructDef = c.arena.structs[defIdx]
+        if defIdx < c.arena.structCount() {
+            val sd: StructDef = c.arena.structAt(index: defIdx)
             // an extern generic (`Buffer[T]` / `StrongRefCell[T]` / `WeakRefCell[T]`) is an
             // opaque pointer — no `%gs`. Public Ref-family wrappers are normal generic structs.
             if sd.isExtern {
@@ -209,7 +209,7 @@ pub impl LlvmCtx {
             return true
         }
         val eIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if eIdx < c.arena.enums.count() {
+        if eIdx < c.arena.enumCount() {
             // genInstWords sizes a generic-enum instance as 1 (tag) + maxWords under its
             // own env — the same sizing registerGenEnums computes inline.
             val words: U64 = self.genInstWords(c: inout c, ref: ref)
@@ -243,8 +243,8 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.typeAt(index: ref)
                 val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-                if defIdx < c.arena.enums.count() {
-                    val e: EnumDef = c.arena.enums[defIdx]
+                if defIdx < c.arena.enumCount() {
+                    val e: EnumDef = c.arena.enumAt(index: defIdx)
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
                     c.cur.typeParams = e.typeParams
@@ -349,7 +349,7 @@ pub impl LlvmCtx {
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
-            c.cur.typeParams = c.arena.enums[self.genEnumDefs[ge]].typeParams
+            c.cur.typeParams = c.arena.enumAt(index: self.genEnumDefs[ge]).typeParams
             c.cur.typeArgs = c.arena.typeAt(index: ref).args
             return true
         }
@@ -368,8 +368,8 @@ pub impl LlvmCtx {
         if ref < c.arena.typeCount() {
             val t: TypeRef = c.arena.typeAt(index: ref)
             val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if ei < c.arena.enums.count() {
-                c.cur.typeParams = c.arena.enums[ei].typeParams
+            if ei < c.arena.enumCount() {
+                c.cur.typeParams = c.arena.enumAt(index: ei).typeParams
                 c.cur.typeArgs = t.args
                 return true
             }
@@ -386,7 +386,7 @@ pub impl LlvmCtx {
         }
         val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
         if gs < self.genStructRefs.count() {
-            c.cur.typeParams = c.arena.structs[self.genStructDefs[gs]].typeParams
+            c.cur.typeParams = c.arena.structAt(index: self.genStructDefs[gs]).typeParams
             c.cur.typeArgs = c.arena.typeAt(index: ref).args
             return true
         }
@@ -405,8 +405,8 @@ pub impl LlvmCtx {
         if c.isStrongRefInst(ref: ref) || c.isWeakRefLikeInst(ref: ref) {
             val t: TypeRef = c.arena.typeAt(index: ref)
             val di: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if di < c.arena.structs.count() {
-                c.cur.typeParams = c.arena.structs[di].typeParams
+            if di < c.arena.structCount() {
+                c.cur.typeParams = c.arena.structAt(index: di).typeParams
                 c.cur.typeArgs = t.args
                 return true
             }

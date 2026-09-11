@@ -30,8 +30,8 @@ fn main() {
     val original = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val placed = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
     if original == placed { write(s: "shared-declaration\n") }
-    if c.arena.funcs.count() == 3U64 { write(s: "one-record-body\n") }
-    if c.arena.funcs[placed].lexicalOwnerFnId == 1U64 { write(s: "lexical-source-owner\n") }
+    if c.arena.functionCount() == 3U64 { write(s: "one-record-body\n") }
+    if c.arena.functionAt(index: placed).lexicalOwnerFnId == 1U64 { write(s: "lexical-source-owner\n") }
     if c.decls.funcBounds.count() == 3U64 && c.decls.funcBounds[2U64].fnIdx == original { write(s: "source-bounds-once\n") }
     match c.defaultGeneratorTypeArguments(callee: 1U64, generator: placed, args: [99U64, 17U64]) {
         Optional.Some(val v) => {

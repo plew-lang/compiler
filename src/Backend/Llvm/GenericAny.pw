@@ -30,7 +30,7 @@ pub impl LlvmCtx {
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
         if c.arena.typeAt(index: ref).isRecord {
             val layoutIndex: U64 = c.recordStructIndex(ref: ref)
-            if layoutIndex < c.arena.structs.count() {
+            if layoutIndex < c.arena.structCount() {
                 val slot: U64 = self.structSlotForSidx(c: inout c, sidx: layoutIndex)
                 if slot < self.genStructTys.count() { return self.genStructTys[slot] }
             }
@@ -48,8 +48,8 @@ pub impl LlvmCtx {
             // (registerGenStructNames skips it). Ask the representation question once here.
             val gat: TypeRef = c.arena.typeAt(index: ref)
             val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
-            if gxi < c.arena.structs.count() {
-                if c.arena.structs[gxi].isExtern {
+            if gxi < c.arena.structCount() {
+                if c.arena.structAt(index: gxi).isExtern {
                     return self.ptrty
                 }
             }
@@ -72,12 +72,12 @@ pub impl LlvmCtx {
                     val lt: TypeRef = c.arena.typeAt(index: ref)
                     mut val isKnownDef: Bool = false
                     val lsi: U64 = c.genericStructIndex(nameStart: lt.nameStart, nameLen: lt.nameLen)
-                    if lsi < c.arena.structs.count() {
-                        if !(c.arena.structs[lsi].isExtern) {
+                    if lsi < c.arena.structCount() {
+                        if !(c.arena.structAt(index: lsi).isExtern) {
                             isKnownDef = true
                         }
                     }
-                    if c.genericEnumIndex(nameStart: lt.nameStart, nameLen: lt.nameLen) < c.arena.enums.count() {
+                    if c.genericEnumIndex(nameStart: lt.nameStart, nameLen: lt.nameLen) < c.arena.enumCount() {
                         isKnownDef = true
                     }
                     if isKnownDef {
@@ -204,7 +204,7 @@ pub impl LlvmCtx {
 
     // The c.arena.funcs index of the `Eq` witness `T.eq(lhs:rhs:)` for the `==`/`!=`
     // operand `lhs` (a registered struct/enum, or the String lang-item detected by
-    // value-kind), or c.arena.funcs.count() when the operand carries no Eq witness (a
+    // value-kind), or c.arena.functionCount() when the operand carries no Eq witness (a
     // scalar — compared by `icmp` directly — or a non-`@[Eq]` enum — tag-compared).
     // Comparison is trait sugar like arithmetic (spec/12), but `Eq.eq` has a fixed
     // selector, so this resolves by name rather than via `binTraitMethodName`.
@@ -214,7 +214,7 @@ pub impl LlvmCtx {
 
     // The c.arena.funcs index of the `Ord` witness `T.compare(lhs:rhs:)` for the ordering
     // operand `lhs` (a registered struct/enum with a compare witness, or a primitive whose
-    // `impl I8 as Ord` lives in std/Core/Num.pw), or c.arena.funcs.count() when none — the
+    // `impl I8 as Ord` lives in std/Core/Num.pw), or c.arena.functionCount() when none — the
     // caller then keeps the structural/built-in ordering. `< <= > >=` are `Ord` sugar
     // (spec/12); routing through this witness honors a user/derived `compare`.
     inout fn ordWitnessFn(c: inout Comp, callId: U64) -> U64 {
@@ -233,7 +233,7 @@ pub impl LlvmCtx {
     // unary: just lhs). The witness is its own 0-type-arg `gf` instance, declared lazily
     // through its already-frozen body; a missing slot is a loud finalization error.
     inout fn emitWitnessCall(c: inout Comp, callId: U64, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
-        val af: Func = c.arena.funcs[fi]
+        val af: Func = c.arena.functionAt(index: fi)
         mut val av: Array[LLVMValueRef] = []
         // operator operands are view-blind (operators dispatch on the underlying type;
         // the `#Ext` view only adds methods) — `self * 2` in an `impl I64` extension must

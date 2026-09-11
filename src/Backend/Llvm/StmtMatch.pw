@@ -90,20 +90,20 @@ pub impl LlvmCtx {
         val savedMP: Array[Bind] = c.cur.typeParams
         val savedMA: Array[U64] = c.cur.typeArgs
         // the enum: from the first non-wildcard, non-struct arm.
-        mut val eid: U64 = c.arena.enums.count()
+        mut val eid: U64 = c.arena.enumCount()
         mut val ai0: U64 = 0
         while ai0 < arms.len {
             val arm: MatchArm = c.matchArmAt(arms: arms, index: ai0)
             if !(arm.isWildcard) {
                 if !(arm.isStruct) {
-                    if eid == c.arena.enums.count() {
+                    if eid == c.arena.enumCount() {
                         eid = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
                     }
                 }
             }
             ai0 += 1
         }
-        if eid >= c.arena.enums.count() {
+        if eid >= c.arena.enumCount() {
             compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
             return
         }
@@ -248,7 +248,7 @@ pub impl LlvmCtx {
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
         val payloadStorage: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: scrutTy, scrutSlot: scrutSlot, instanceRef: instanceRef)
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadStorage, anon())
-        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
         mut val bi: U64 = 0
         while bi < arm.binds.len {
             val b: Bind = c.bindAt(binds: arm.binds, index: bi)
@@ -381,7 +381,7 @@ pub impl LlvmCtx {
                     // before any OTHER construction of the payload enum would leave the
                     // bind ref-less (the nested match then fails to recover the enum).
                     // Mirrors bindOneParam.
-                    if c.concreteEnumIdxByName(start: fd.tyStart, len: fd.tyLen) < c.arena.enums.count() {
+                    if c.concreteEnumIdxByName(start: fd.tyStart, len: fd.tyLen) < c.arena.enumCount() {
                         tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
                     }
                 }
@@ -421,7 +421,7 @@ pub impl LlvmCtx {
                         // Ident gap, as match-arm binds pervade the compiler). Track the struct's
                         // TypeRef so exprTypeRef recovers it and the struct-idx derives from it.
                         if tref == 0U64 {
-                            if self.localStructIdxFor(c: inout c, start: gns, len: gnl) < c.arena.structs.count() {
+                            if self.localStructIdxFor(c: inout c, start: gns, len: gnl) < c.arena.structCount() {
                                 tref = c.simpleTypeRef(nameStart: gns, nameLen: gnl)
                             }
                         }
@@ -439,7 +439,7 @@ pub impl LlvmCtx {
                 // its struct index is the generic struct DEF (via genStructSlot), not a
                 // lookup by the un-grounded param name `fd.tyStart` (`T`), so field access
                 // `v.field` in the arm body resolves.
-                mut val bindStructIdx: U64 = c.arena.structs.count()
+                mut val bindStructIdx: U64 = c.arena.structCount()
                 if fieldTerm != 0U64 {
                     bindStructIdx = self.structIdxOfRef(c: inout c, ref: fieldTerm)
                 }
@@ -488,7 +488,7 @@ pub impl LlvmCtx {
     // field types (under any generic env the caller set). Discards (`_`, empty name)
     // are skipped.
     inout fn bindStructPattern(c: inout Comp, sidx: U64, binds: BindRange, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
-        val fs: Array[FieldDef] = c.arena.structs[sidx].fields
+        val fs: Array[FieldDef] = c.arena.structAt(index: sidx).fields
         mut val bi: U64 = 0
         while bi < binds.len {
             val b: Bind = c.bindAt(binds: binds, index: bi)

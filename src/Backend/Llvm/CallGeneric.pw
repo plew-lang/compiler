@@ -21,7 +21,7 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     inout fn genGenMethodCall(c: inout Comp, callId: U64 = 0U64, recv: U64, mfi: U64, slot: U64, instRef: U64, args: ArgRange) -> LLVMValueRef {
-        val mf: Func = c.arena.funcs[mfi]
+        val mf: Func = c.arena.functionAt(index: mfi)
         val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
@@ -82,7 +82,7 @@ pub impl LlvmCtx {
                 }
             }
         }
-        val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
+        val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structAt(index: sidx).nameStart, len: c.arena.structAt(index: sidx).nameLen)
         if reg < self.genStructRefs.count() {
             return self.genStructTys[reg]
         }
@@ -95,7 +95,7 @@ pub impl LlvmCtx {
     // as `Store[SyntaxNewtype].inner` has a different LLVM type from `Inner[T]` in
     // the shared body AST.
     inout fn placeStrict(c: inout Comp, id: U64) -> LlvmPlace {
-        val none: LlvmPlace = <LlvmPlace ptr=LLVMConstNull(self.ptrty) pointeeTy=LLVMConstNull(self.ptrty) typeRef=0U64 structIdx=c.arena.structs.count() />
+        val none: LlvmPlace = <LlvmPlace ptr=LLVMConstNull(self.ptrty) pointeeTy=LLVMConstNull(self.ptrty) typeRef=0U64 structIdx=c.arena.structCount() />
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
@@ -107,10 +107,10 @@ pub impl LlvmCtx {
                 val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
                 if LLVMIsNull(basePlace.ptr) == 0I32 {
                     val bsi: U64 = basePlace.structIdx
-                    if bsi < c.arena.structs.count() {
+                    if bsi < c.arena.structCount() {
                         val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                        if fidx < c.arena.structs[bsi].fields.count() {
-                            val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
+                        if fidx < c.arena.structAt(index: bsi).fields.count() {
+                            val fld: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
                             val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: basePlace.typeRef)
                             return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, basePlace.pointeeTy, basePlace.ptr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(basePlace.pointeeTy, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
                         }
@@ -171,9 +171,9 @@ pub impl LlvmCtx {
                 // alias of the MutableRef — without this arm the place fell back to a temp copy
                 // and the callee's write was silently lost.
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count() {
+                if psidx < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count() {
+                    if fidx < c.arena.structAt(index: psidx).fields.count() {
                         val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
                         if !(c.isMutableRefInst(ref: refTy)) {
                             c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: cannot use read-only Ref as an inout place; expected MutableRef")
@@ -181,7 +181,7 @@ pub impl LlvmCtx {
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                         val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
-                        val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
+                        val fld: FieldDef = c.arena.structAt(index: psidx).fields[fidx]
                         val pref: U64 = c.arena.typeAt(index: refTy).args[0U64]
                         val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
                         return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
@@ -587,7 +587,7 @@ pub impl LlvmCtx {
         // to survive a resume.
         val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
         LLVMBuildStore(self.b, v, slot)
-        self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
+        self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
     }
 
     // The grounded TypeRef of a by-value argument VALUE, for ARC classification of a

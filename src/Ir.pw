@@ -2218,9 +2218,9 @@ export struct Arena {
     mut val funcBindPool: Array[Bind] = []
     mut val typeParameterNameIds: Set[U64] = Set.new()
     mut val concreteTypeNameIds: Set[U64] = Set.new()
-    pub(get) mut val funcs: Array[Func] = []
-    pub(get) mut val structs: Array[StructDef] = []
-    pub(get) mut val enums: Array[EnumDef] = []
+    mut val funcs: Array[Func] = []
+    mut val structs: Array[StructDef] = []
+    mut val enums: Array[EnumDef] = []
     // Canonical scalar semantic type rows. `types` is the legacy mirror while
     // consumers migrate; both tables have the same index during that period.
     // New hot-path readers must use typeTerms and these owner-specific pools.

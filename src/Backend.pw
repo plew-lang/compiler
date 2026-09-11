@@ -250,7 +250,7 @@ struct LlvmCtx {
     // unsigned int), so String ==/!= and print pick the right lowering without
     // c.cur.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
     pub mut val locKind: Array[U64]
-    // per-local owning struct index (c.arena.structs.count() = not a struct), so field
+    // per-local owning struct index (c.arena.structCount() = not a struct), so field
     // access x.field can resolve the layout from a struct-typed local.
     pub mut val locStructIdx: Array[U64]
     // per-local array element type + is-array flag (for arr[i] / .append / .count()).
@@ -593,13 +593,13 @@ fn paramLabelsEqual(c: inout Comp, a: FuncParamRange, b: FuncParamRange) -> Bool
 }
 
 // The witness method on concrete struct `sidx` for trait requirement `req` (matched
-// by name + param labels). c.arena.funcs.count() if none.
+// by name + param labels). c.arena.functionCount() if none.
 fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
-    val sd: StructDef = c.arena.structs[sidx]
+    val sd: StructDef = c.arena.structAt(index: sidx)
     val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
     mut val i: U64 = 0
-    while i < c.arena.funcs.count() {
-        val f: Func = c.arena.funcs[i]
+    while i < c.arena.functionCount() {
+        val f: Func = c.arena.functionAt(index: i)
         if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
             if f.nameId == req.nameId && f.recvId == recvId {
                 if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
@@ -609,7 +609,7 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
         }
         i += 1
     }
-    return c.arena.funcs.count()
+    return c.arena.functionCount()
 }
 
 // Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
@@ -644,10 +644,10 @@ fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
     // infinitely-sized type), so restricting the descent to records also avoids their cycles.
     if c.arena.bytes[t.nameStart] == 40U8 {
         val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count() {
+        if sidx < c.arena.structCount() {
             mut val fi: U64 = 0
-            while fi < c.arena.structs[sidx].fields.count() {
-                val fd: FieldDef = c.arena.structs[sidx].fields[fi]
+            while fi < c.arena.structAt(index: sidx).fields.count() {
+                val fd: FieldDef = c.arena.structAt(index: sidx).fields[fi]
                 if rangeEquals(bytes: c.arena.bytes, start: fd.tyStart, len: fd.tyLen, kw: "Self") {
                     return true
                 }
@@ -706,7 +706,7 @@ fn retTySelfErasable(c: inout Comp, ref: U64) -> Bool {
     // `Self` is nested: the head must be one eraseCovariantToAny rebuilds — `Array` or a
     // generic enum. Every arg that itself mentions `Self` must be erasable too.
     val isArr: Bool = rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
-    val isEnum: Bool = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count()
+    val isEnum: Bool = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enumCount()
     if !(isArr) && !(isEnum) {
         return false
     }
@@ -879,7 +879,7 @@ fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
 }
 
 fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
-    return c.arena.funcs[fi].isAsync
+    return c.arena.functionAt(index: fi).isAsync
 }
 
 fn exprIsAwaitLL(c: inout Comp, id: U64) -> Bool {
@@ -939,7 +939,7 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     if c.isPrimType(start: start, len: len) {
         return true
     }
-    if c.structIndexByName(start: start, len: len) < c.arena.structs.count() {
+    if c.structIndexByName(start: start, len: len) < c.arena.structCount() {
         return true
     }
     if c.isEnumName(start: start, len: len) {
@@ -1101,12 +1101,12 @@ export fn emitLlvm(c: inout Comp) {
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
-    while fi < c.arena.funcs.count() {
+    while fi < c.arena.functionCount() {
         // gen mode (spec/16): the program is the synthesized harness main at
         // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
         // functions that don't exist in this build), so it is neither the entry
         // main nor a plain fn. Treat only genMainIdx as main here.
-        mut val isMainFn: Bool = c.nameIsMain(f: c.arena.funcs[fi])
+        mut val isMainFn: Bool = c.nameIsMain(f: c.arena.functionAt(index: fi))
         if c.genMode {
             if isMainFn {
                 if fi != c.genMainIdx {
@@ -1583,7 +1583,7 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
 
 // The declared index of field (start,len) in struct sidx, or sd.fields.count().
 fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
-    val sd: StructDef = c.arena.structs[sidx]
+    val sd: StructDef = c.arena.structAt(index: sidx)
     mut val i: U64 = 0
     while i < sd.fields.count() {
         if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
@@ -2043,7 +2043,7 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
 // struct (struct-of-struct). Enum fields and generic-instance fields are not yet
 // modeled. Value types cannot be cyclic by value, so the recursion terminates.
 fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
-    val sd: StructDef = c.arena.structs[sidx]
+    val sd: StructDef = c.arena.structAt(index: sidx)
     if sd.typeParams.count() > 0 { return false }
     if sd.isExtern { return false }
     // unique structs are now registerable (same field layout); their deinit runs at
@@ -2070,16 +2070,16 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                 // registration order doesn't matter; non-boxed value cycles are a
                 // front-end error, so the mutual recursion terminates).
                 val feid: U64 = c.enumIdxByName(start: f.tyStart, len: f.tyLen)
-                if feid < c.arena.enums.count() {
+                if feid < c.arena.enumCount() {
                     if !(enumRepresentable(c: inout c, eid: feid)) {
                         return false
                     }
                 } else {
                     val fsi: U64 = c.structIndexByName(start: f.tyStart, len: f.tyLen)
-                    if fsi < c.arena.structs.count() {
+                    if fsi < c.arena.structCount() {
                         // an extern struct field is a primitive lang-item (ok); a real
                         // nested struct must itself be registerable (recursively).
-                        if !(c.arena.structs[fsi].isExtern) {
+                        if !(c.arena.structAt(index: fsi).isExtern) {
                             if !(structRegisterable(c: inout c, sidx: fsi)) {
                                 return false
                             }
@@ -2100,7 +2100,7 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
 // through the pure predicates). Non-boxed value cycles are a front-end error, so the
 // mutual recursion with structRegisterable terminates.
 fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
-    val e: EnumDef = c.arena.enums[eid]
+    val e: EnumDef = c.arena.enumAt(index: eid)
     if e.typeParams.count() > 0 { return false }
     mut val vi: U64 = 0
     while vi < e.variants.count() {
@@ -2118,14 +2118,14 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                     fj += 1
                 } else {
                     val peid: U64 = c.enumIdxByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
-                    if peid < c.arena.enums.count() {
+                    if peid < c.arena.enumCount() {
                         if !(enumRepresentable(c: inout c, eid: peid)) {
                             return false
                         }
                     } else {
                         val si: U64 = c.structIndexByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
-                        if si < c.arena.structs.count() {
-                            if !(c.arena.structs[si].isExtern) {
+                        if si < c.arena.structCount() {
+                            if !(c.arena.structAt(index: si).isExtern) {
                                 if !(structRegisterable(c: inout c, sidx: si)) {
                                     return false
                                 }

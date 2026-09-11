@@ -13,8 +13,8 @@ pub impl Comp {
             return true
         }
         val si: U64 = self.structIndexByName(start: start, len: len)
-        if si < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[si]
+        if si < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: si)
             mut val i: U64 = 0
             while i < s.fields.count() {
                 val f: FieldDef = s.fields[i]
@@ -37,8 +37,8 @@ pub impl Comp {
         // transmit uniqueness exactly like a struct field (typeIsUnique already
         // answered a DECLARED `unique enum` above via the shared predicate).
         val ei: U64 = self.anyEnumIndex(nameStart: start, nameLen: len)
-        if ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
+        if ei < self.arena.enumCount() {
+            val e: EnumDef = self.arena.enumAt(index: ei)
             mut val vi: U64 = 0
             while vi < e.variants.count() {
                 val vfs: Array[FieldDef] = e.variants[vi].fields
@@ -66,8 +66,8 @@ pub impl Comp {
     // unsound (copies would multi-run deinit).
     inout fn checkFieldContagion() {
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: i)
             if !(s.isUnique) {
                 mut val j: U64 = 0
                 while j < s.fields.count() {
@@ -89,8 +89,8 @@ pub impl Comp {
         // itself be declared `unique enum` — copies of a copyable enum would multi-run
         // the payload's deinit (double free), same as a struct field.
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
+        while ei < self.arena.enumCount() {
+            val e: EnumDef = self.arena.enumAt(index: ei)
             if !(e.isUnique) {
                 mut val vi: U64 = 0
                 while vi < e.variants.count() {
@@ -397,14 +397,14 @@ pub impl Comp {
         while i < self.decls.deinits.count() {
             val d: Bind = self.decls.deinits[i]
             val ei: U64 = self.enumIdxByName(start: d.nameStart, len: d.nameLen)
-            if ei < self.arena.enums.count() {
-                self.errorAt(offset: self.arena.enums[ei].defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
+            if ei < self.arena.enumCount() {
+                self.errorAt(offset: self.arena.enumAt(index: ei).defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
             } else {
                 if !(self.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
                     val si: U64 = self.structIndexByName(start: d.nameStart, len: d.nameLen)
                     mut val off: U64 = d.nameStart
-                    if si < self.arena.structs.count() {
-                        off = self.arena.structs[si].defOffset
+                    if si < self.arena.structCount() {
+                        off = self.arena.structAt(index: si).defOffset
                     }
                     self.errorAt(offset: off, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)")
                 }
@@ -415,8 +415,8 @@ pub impl Comp {
 
     inout fn checkFieldDefaults() {
         mut val i: U64 = 0
-        while i < self.arena.structs.count() {
-            val s: StructDef = self.arena.structs[i]
+        while i < self.arena.structCount() {
+            val s: StructDef = self.arena.structAt(index: i)
             // sibling field names + `self` — a field default may reference none of them.
             mut val forbidden: Array[U64] = []
             mut val fk: U64 = 0
@@ -486,12 +486,12 @@ pub impl Comp {
     // to no source file). 0 when the name matches no declaration.
     inout fn uniqueDeclAnchor(start: U64, len: U64) -> U64 {
         val usi: U64 = self.structIndexByName(start: start, len: len)
-        if usi < self.arena.structs.count() {
-            return self.arena.structs[usi].defOffset
+        if usi < self.arena.structCount() {
+            return self.arena.structAt(index: usi).defOffset
         }
         val uei: U64 = self.enumIdxByName(start: start, len: len)
-        if uei < self.arena.enums.count() {
-            return self.arena.enums[uei].defOffset
+        if uei < self.arena.enumCount() {
+            return self.arena.enumAt(index: uei).defOffset
         }
         return 0
     }
@@ -558,8 +558,8 @@ pub impl Comp {
     // Run param-mode validity over every function/method declaration.
     inout fn checkAllParamModes() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            self.checkParamModes(params: self.arena.funcs[i].params, anchor: self.fnAnchor(f: self.arena.funcs[i]))
+        while i < self.arena.functionCount() {
+            self.checkParamModes(params: self.arena.functionAt(index: i).params, anchor: self.fnAnchor(f: self.arena.functionAt(index: i)))
             i += 1
         }
     }
@@ -570,8 +570,8 @@ pub impl Comp {
     // so the full type-check catches it). Skipped for array params (separate machinery).
     inout fn checkParamDefaults() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val ps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[i].params)
+        while i < self.arena.functionCount() {
+            val ps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: i).params)
             // sibling parameter names + `self` — a parameter default may reference none.
             mut val forbidden: Array[U64] = []
             mut val pk: U64 = 0
