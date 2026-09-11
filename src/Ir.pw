@@ -2696,7 +2696,10 @@ export struct Decls {
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
     mut val traitOwnerRows: Array[TraitOwner] = []
-    mut val traitNameIds: Set[U64] = Set.new()
+    mut val traitOwnerByOffset: Dictionary[U64, U64] = [:]
+    mut val traitOwnerNameHeads: Dictionary[U64, U64] = [:]
+    mut val traitOwnerNameTails: Dictionary[U64, U64] = [:]
+    mut val traitOwnerNameNext: Array[U64] = []
     // Registration owns the surface and its name index together. Intern IDs
     // are dense; links are one-based so absence survives later registration.
     mut val callableRows: Array[Callable] = []

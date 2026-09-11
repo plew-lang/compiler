@@ -42,7 +42,7 @@ pub impl Comp {
     }
 
     inout fn traitModuleByIdArity(traitId: U64, arity: U64) -> U64 {
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: traitId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == traitId {
@@ -50,19 +50,19 @@ pub impl Comp {
                     return self.moduleOf(offset: t.nameStart)
                 }
             }
-            i += 1
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         return 4000000000U64
     }
 
     inout fn traitDeclOffsetByIdArity(traitId: U64, arity: U64) -> U64 {
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: traitId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == traitId && t.arity == arity {
                 return t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         return 0U64
     }
@@ -72,23 +72,20 @@ pub impl Comp {
     // trait of the same name or an import alias would change the meaning.
     inout fn coreTraitOwner(name: String, arity: U64 = 0U64) -> U64 {
         val id: U64 = self.internBytes(s: name).nameId
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: id)
         while i < self.decls.traitOwnerCount() {
             val owner: TraitOwner = self.decls.traitOwnerAt(index: i)
             if owner.nameId == id && owner.arity == arity && self.moduleOf(offset: owner.nameStart) == self.modules.coreModule {
                 return owner.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         return 0U64
     }
 
     inout fn traitNameLenByOwner(owner: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.traitOwnerCount() {
-            if self.decls.traitOwnerAt(index: i).nameStart == owner { return self.decls.traitOwnerAt(index: i).nameLen }
-            i += 1U64
-        }
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index < self.decls.traitOwnerCount() { return self.decls.traitOwnerAt(index: index).nameLen }
         return 0U64
     }
 
@@ -97,26 +94,26 @@ pub impl Comp {
     // never become a trait merely because another module happens to declare
     // the same text.
     inout fn canonicalTraitOwner(start: U64, len: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.traitOwnerCount() {
-            val owner: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if owner.nameStart == start && owner.nameLen == len { return owner.nameStart }
-            i += 1U64
+        val index = self.decls.traitOwnerIndex(offset: start)
+        if index < self.decls.traitOwnerCount() {
+            val owner = self.decls.traitOwnerAt(index: index)
+            if owner.nameLen == len { return owner.nameStart }
         }
         return 0U64
     }
+
 
     // Resolve a trait declaration inside one module.  TraitOwner is available
     // before trait bodies are lowered, so this is safe during impl lowering.
     inout fn traitOwnerInModule(mod: U64, start: U64, len: U64, arity: U64) -> U64 {
         val nameId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
                 return t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         return 0U64
     }
@@ -128,13 +125,13 @@ pub impl Comp {
     // process-wide name scan.  This is also the correct fallback for `part`
     // declarations, which share their root module's lexical scope.
     inout fn traitOwnerInScopeById(mod: U64, nameId: U64, arity: U64) -> U64 {
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
                 return t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         i = 0U64
         while i < self.modules.importOrigins.count() {
@@ -168,14 +165,14 @@ pub impl Comp {
     // arity by accident.
     inout fn traitOwnerInScopeOpenById(mod: U64, nameId: U64) -> U64 {
         mut val found: U64 = 0U64
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == nameId && self.moduleOf(offset: t.nameStart) == mod {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         if found != 0U64 { return found }
         i = 0U64
@@ -183,14 +180,15 @@ pub impl Comp {
             val origin: Bind = self.modules.importOrigins[i]
             if self.moduleOf(offset: origin.nameStart) == mod {
                 if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
-                    mut val oi: U64 = 0U64
+                    val targetNameId = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+                    mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == intern(c: inout self, start: origin.fieldStart, len: origin.nameId) && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
-                        oi += 1U64
+                        oi = self.decls.nextTraitOwnerNamed(index: oi)
                     }
                 }
             }
@@ -201,14 +199,15 @@ pub impl Comp {
             val origin: Bind = self.modules.reExportOrigins[i]
             if self.moduleOf(offset: origin.nameStart) == mod {
                 if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
-                    mut val oi: U64 = 0U64
+                    val targetNameId = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+                    mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == intern(c: inout self, start: origin.fieldStart, len: origin.nameId) && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
-                        oi += 1U64
+                        oi = self.decls.nextTraitOwnerNamed(index: oi)
                     }
                 }
             }
@@ -251,14 +250,14 @@ pub impl Comp {
     inout fn traitOwnerInModuleForSelector(mod: U64, start: U64, len: U64) -> U64 {
         val textId: U64 = intern(c: inout self, start: start, len: len)
         mut val found: U64 = 0U64
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if self.moduleOf(offset: t.nameStart) == mod && t.nameId == textId {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         return found
     }
@@ -285,16 +284,17 @@ pub impl Comp {
     }
 
     inout fn traitOwnerForSelector(siteOffset: U64, text: String) -> U64 {
+        val textId = self.internBytes(s: text).nameId
         val useMod: U64 = self.moduleOf(offset: siteOffset)
         mut val found: U64 = 0U64
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if self.moduleOf(offset: t.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         if found != 0U64 { return found }
         i = 0U64
@@ -316,16 +316,17 @@ pub impl Comp {
     // the same lexical/import/re-export resolution law while avoiding a copied
     // String solely to query a trait view.
     inout fn traitOwnerForSelectorSpan(siteOffset: U64, start: U64, len: U64) -> U64 {
+        val textId = intern(c: inout self, start: start, len: len)
         val useMod: U64 = self.moduleOf(offset: siteOffset)
         mut val found: U64 = 0U64
-        mut val i: U64 = 0U64
+        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if self.moduleOf(offset: t.nameStart) == useMod && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: start, bLen: len) {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
-            i += 1U64
+            i = self.decls.nextTraitOwnerNamed(index: i)
         }
         if found != 0U64 { return found }
         i = 0U64

@@ -1,18 +1,39 @@
-// Trait spelling membership is not declaration identity. Keep every distinct
-// owner/arity row in registration order; only the existential name query uses
-// the set. Predeclaration is idempotent by its canonical declaration offset.
+// Canonical declaration identity and spelling candidates have separate indexes.
+// Registration order and first-registration precedence belong to this owner.
 pub impl Decls {
     inout fn registerTraitOwner(owner~: TraitOwner) {
-        mut val index: U64 = 0U64
-        while index < self.traitOwnerRows.count() {
-            if self.traitOwnerRows[index].nameStart == owner.nameStart { return }
-            index += 1U64
-        }
+        if self.traitOwnerByOffset.getOr(key: owner.nameStart, fallback: 0U64) != 0U64 { return }
+        val entry = self.traitOwnerRows.count() + 1U64
+        val tail = self.traitOwnerNameTails.getOr(key: owner.nameId, fallback: 0U64)
         self.traitOwnerRows.append(owner)
-        self.traitNameIds.insert(owner.nameId)
+        self.traitOwnerNameNext.append(0U64)
+        self.traitOwnerByOffset[owner.nameStart] = entry
+        if tail == 0U64 {
+            self.traitOwnerNameHeads[owner.nameId] = entry
+        } else {
+            self.traitOwnerNameNext[tail - 1U64] = entry
+        }
+        self.traitOwnerNameTails[owner.nameId] = entry
     }
 
     fn traitOwnerCount() -> U64 { return self.traitOwnerRows.count() }
     fn traitOwnerAt(index: U64) -> TraitOwner { return self.traitOwnerRows[index] }
-    fn hasTraitName(nameId: U64) -> Bool { return self.traitNameIds.contains(nameId) }
+    fn hasTraitName(nameId: U64) -> Bool {
+        return self.traitOwnerNameHeads.getOr(key: nameId, fallback: 0U64) != 0U64
+    }
+    fn traitOwnerIndex(offset: U64) -> U64 {
+        val entry = self.traitOwnerByOffset.getOr(key: offset, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.traitOwnerRows.count()
+    }
+    fn firstTraitOwnerNamed(nameId: U64) -> U64 {
+        val entry = self.traitOwnerNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.traitOwnerRows.count()
+    }
+    fn nextTraitOwnerNamed(index: U64) -> U64 {
+        val entry = self.traitOwnerNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.traitOwnerRows.count()
+    }
 }

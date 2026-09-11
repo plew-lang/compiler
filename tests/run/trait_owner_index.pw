@@ -1,0 +1,42 @@
+import /Ir with { Decls, TraitOwner }
+import @Std/Io with { write }
+
+fn verify(table: Decls, nameId: U64, offset: U64) {
+    mut val candidate = table.firstTraitOwnerNamed(nameId: nameId)
+    mut val position = table.traitOwnerCount()
+    mut val index: U64 = 0U64
+    while index < table.traitOwnerCount() {
+        val owner = table.traitOwnerAt(index: index)
+        if owner.nameStart == offset { position = index }
+        if owner.nameId == nameId {
+            if candidate != index { panic "candidate order differs from rows" }
+            candidate = table.nextTraitOwnerNamed(index: candidate)
+        }
+        index += 1U64
+    }
+    if candidate != table.traitOwnerCount() { panic "extra candidate" }
+    if table.traitOwnerIndex(offset: offset) != position { panic "offset index differs from rows" }
+    if table.hasTraitName(nameId: nameId) != (table.firstTraitOwnerNamed(nameId: nameId) < table.traitOwnerCount()) { panic "membership mismatch" }
+}
+fn main() {
+    mut val table: Decls = <Decls />
+    verify(table: table, nameId: 0U64, offset: 0U64)
+    mut val index: U64 = 0U64
+    while index < 80U64 {
+        table.registerTraitOwner(<TraitOwner nameStart=index * 7U64 nameLen=index + 1U64 nameId=index % 17U64 arity=index % 3U64 />)
+        verify(table: table, nameId: index % 17U64, offset: index * 7U64)
+        verify(table: table, nameId: 99U64, offset: 999U64)
+        index += 1U64
+    }
+    table.registerTraitOwner(<TraitOwner nameStart=0U64 nameLen=999U64 nameId=999U64 arity=999U64 />)
+    if table.traitOwnerCount() != 80U64 || table.hasTraitName(nameId: 999U64) { panic "duplicate changed index" }
+    if table.traitOwnerAt(index: 0U64).nameLen != 1U64 { panic "duplicate overwrote owner" }
+    mut val copy = table
+    table.registerTraitOwner(<TraitOwner nameStart=18446744073709551615U64 nameLen=4U64 nameId=18446744073709551615U64 arity=1U64 />)
+    copy.registerTraitOwner(<TraitOwner nameStart=18446744073709551615U64 nameLen=5U64 nameId=99U64 arity=2U64 />)
+    verify(table: table, nameId: 18446744073709551615U64, offset: 18446744073709551615U64)
+    verify(table: copy, nameId: 99U64, offset: 18446744073709551615U64)
+    if table.hasTraitName(nameId: 99U64) || copy.hasTraitName(nameId: 18446744073709551615U64) { panic "copy mutation escaped" }
+    if table.traitOwnerAt(index: 80U64).nameLen != 4U64 || copy.traitOwnerAt(index: 80U64).nameLen != 5U64 { panic "copy row mutation escaped" }
+    write(s: "trait-owner-index-ok\n")
+}
