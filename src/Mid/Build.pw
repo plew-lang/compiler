@@ -1048,8 +1048,8 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
     val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
     if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
     val operandResult: TypeRef = c.arena.typeAt(index: operandResultTerm)
-    if operandResult.args.count() != 2U64 || state.sourceFunction >= c.arena.functionCount() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
-    val returnResultTerm: U64 = c.arena.functionAt(index: state.sourceFunction).retTy
+    if operandResult.args.count() != 2U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
+    val returnResultTerm: U64 = state.returnTypeTerm
     if returnResultTerm == 0U64 || returnResultTerm >= c.arena.typeCount() || c.arena.typeAt(index: returnResultTerm).args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.InvalidFunction /> /> }
 
     // The yielded Ok value crosses the nested evaluation scope; all Result
@@ -1721,7 +1721,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 if midTermIsUnique(c: inout c, term: term) {
                     resultOperand = <MidOperand.Move place=callDestination />
                 }
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.functionAt(index: state.sourceFunction).retTy operand=resultOperand /> />)
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=resultOperand /> />)
                 midEmitAllScopeExits(state: inout state)
                 midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
                 return <MidBuildError.None />
@@ -1732,7 +1732,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             // only then may lexical cleanup destroy the source locals.
             if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
             val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.functionAt(index: state.sourceFunction).retTy operand=operand.operand /> />)
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=operand.operand /> />)
             midEmitAllScopeExits(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
             return <MidBuildError.None />

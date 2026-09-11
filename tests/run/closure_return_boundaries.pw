@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+fn increment(value: I64) -> I64 { return value + 1I64 }
+
+fn attempt(ok: Bool) -> Result[I64, I64] {
+    if ok { return <Result[I64, I64].Ok value=7I64 /> }
+    return <Result[I64, I64].Err error=9I64 />
+}
+
+fn main() {
+    // Closure body identities are not indices into the source Func table.
+    // Both call results and try propagation use the closure's own return type.
+    val direct: fn(value: I64) -> I64 = fn(value: I64) -> I64 {
+        return increment(value: value)
+    }
+    print(direct(value: 3I64))
+    val propagate: fn(ok: Bool) -> Result[I64, I64] = fn(ok: Bool) -> Result[I64, I64] {
+        val value: I64 = try attempt(ok: ok)
+        return <Result[I64, I64].Ok value=value + 1I64 />
+    }
+    match propagate(ok: true) {
+        Result.Ok(value: val value) => { print(value) }
+        Result.Err(error: val error) => { print(error) }
+    }
+    match propagate(ok: false) {
+        Result.Ok(value: val value) => { print(value) }
+        Result.Err(error: val error) => { print(error) }
+    }
+}

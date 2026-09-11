@@ -3348,32 +3348,32 @@ pub impl Comp {
                 val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                 if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-local template did not ground to a function")
-                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
                 if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
-                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> />
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ClosureField(fieldIndex: val fieldIndex, fnTypeTerm: val fnTypeTerm) => {
                 val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                 if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-field template did not ground to a function")
-                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
                 if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
-                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> />
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
                 if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIdx).reqs.count() {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement")
-                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
                 val resultRef: U64 = self.anyMemberRetInfo(anyRef: receiverRef, req: req).ref
-                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
             }
         }
     }
