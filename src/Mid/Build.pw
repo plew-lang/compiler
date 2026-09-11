@@ -1208,9 +1208,11 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             }
             val source: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: sourceTerm, allowAccessMarker: false)
             match source.error { MidBuildError.None => {} _ => { return source } }
-            val local: U64 = addMidTemporary(state: inout state, typeTerm: selectedTarget)
+            val ownsUnique: Bool = midTermIsUnique(c: inout c, term: selectedTarget)
+            val local: U64 = addMidTemporary(state: inout state, typeTerm: selectedTarget, isUnique: ownsUnique)
             val destination: MidPlace = <MidPlace local=local typeTerm=selectedTarget />
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.CastBoundary exprId=exprId sourceTerm=sourceTerm targetTerm=selectedTarget operand=source.operand /> />)
+            if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=destination /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
         }
         Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
