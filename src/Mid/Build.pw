@@ -554,6 +554,11 @@ fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U6
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
     state.aggregateValues = []
+    // The branch consumes this result after the condition's temporary scope
+    // has closed. Reserve its home in the enclosing scope, just like the
+    // result of a try or aggregate evaluation. Constants keep their operand
+    // form and leave this home uninitialized.
+    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
     val scope: U64 = midOpenScope(state: inout state)
     val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: false)
     match value.error {
@@ -572,7 +577,6 @@ fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U6
                     return value
                 }
                 _ => {
-                    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
                     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=value.operand /> />)
                     midFinishEvaluationScope(state: inout state, scope: scope)
                     state.callValues = parentCalls

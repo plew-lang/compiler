@@ -944,6 +944,20 @@ pub impl LlvmCtx {
                                     }
                                     val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: elaborated)
                                     if c.traceCodegen {
+                                        match verification.error {
+                                            MidVerifyError.None => {}
+                                            _ => {
+                                                eprint(text: "[trace-codegen] Mid verification location fn=")
+                                                self.traceCodegenU64(n: fi)
+                                                eprint(text: " block=")
+                                                self.traceCodegenU64(n: verification.block)
+                                                eprint(text: " local=")
+                                                self.traceCodegenU64(n: verification.local)
+                                                eprint(text: "\n")
+                                            }
+                                        }
+                                    }
+                                    if c.traceCodegen {
                                         eprint(text: "[trace-codegen] Mid verify-done name=")
                                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
                                         eprint(text: " fn=")
