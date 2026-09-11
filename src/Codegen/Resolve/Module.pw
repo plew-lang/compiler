@@ -48,7 +48,7 @@ pub impl Comp {
         // declared in @Std/Lang (its declaration offset falls in the Lang module). The scan
         // looks for a LANG-owned declaration specifically (not the first match), so a user's
         // own `enum Optional` in module 0 does not mask Lang's ownership (→ redefinition gate).
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
         while i < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
@@ -56,7 +56,7 @@ pub impl Comp {
                     if self.moduleOf(offset: sd.defOffset) == lm { return true }
                 }
             }
-            i += 1
+            i = self.arena.nextStructNamed(index: i)
         }
         i = 0
         while i < self.arena.enumCount() {

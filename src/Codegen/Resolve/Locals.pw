@@ -264,7 +264,7 @@ pub impl Comp {
             }
         }
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
         while si < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
@@ -295,7 +295,7 @@ pub impl Comp {
                     fi += 1
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         return scalarInfo()
     }
@@ -304,7 +304,7 @@ pub impl Comp {
         val arS: Bind = self.aliasReal(start: structStart, len: structLen)
         val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
         while si < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
@@ -318,7 +318,7 @@ pub impl Comp {
                     fi += 1
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         return true
     }
@@ -327,7 +327,7 @@ pub impl Comp {
         val arS: Bind = self.aliasReal(start: structStart, len: structLen)
         val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
         while si < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
@@ -341,7 +341,7 @@ pub impl Comp {
                     fi += 1
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         return 3U64
     }

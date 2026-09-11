@@ -748,14 +748,14 @@ pub impl Comp {
         }
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val gi: U64 = 0
+        mut val gi: U64 = self.arena.firstStructNamed(nameId: nid)
         mut val registered: Bool = false
         while gi < self.arena.structCount() {
             if self.arena.structAt(index: gi).nameId == nid {
                 registered = true
                 gi = self.arena.structCount()
             } else {
-                gi += 1
+                gi = self.arena.nextStructNamed(index: gi)
             }
         }
         // the grounded record instance is not yet a real struct: register it (canonical sorted
@@ -1253,7 +1253,7 @@ pub impl Comp {
     inout fn scanGenInstFields(instRef: U64) {
         val inst: TypeRef = self.arena.typeAt(index: instRef)
         val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qInst)
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if sd.nameId == qInst {
@@ -1306,7 +1306,7 @@ pub impl Comp {
                     }
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
     }
 

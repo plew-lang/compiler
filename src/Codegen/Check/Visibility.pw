@@ -183,13 +183,13 @@ pub impl Comp {
 
     inout fn typeDeclVisibleFrom(useMod: U64, start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
         while i < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if self.defModuleVisible(defOffset: sd.defOffset, useMod: useMod) { return true }
             }
-            i += 1
+            i = self.arena.nextStructNamed(index: i)
         }
         i = 0
         while i < self.arena.enumCount() {
@@ -348,13 +348,13 @@ pub impl Comp {
 
     inout fn typeDeclModule(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
         while i < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
             }
-            i += 1
+            i = self.arena.nextStructNamed(index: i)
         }
         i = 0
         while i < self.arena.enumCount() {
@@ -389,13 +389,13 @@ pub impl Comp {
 
     inout fn typeDeclIdentityInModule(mod: U64, start: U64, len: U64) -> Bind {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
         while i < self.arena.structCount() {
             val d: StructDef = self.arena.structAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
-            i += 1
+            i = self.arena.nextStructNamed(index: i)
         }
         i = 0
         while i < self.arena.enumCount() {
@@ -609,7 +609,7 @@ pub impl Comp {
     inout fn checkRecordSurfaceFields(surfaceMod: U64, start: U64, len: U64, offset: U64) {
         if !(self.isRecordSurfaceName(start: start, len: len)) { return }
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qId)
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if sd.nameId == qId {
@@ -620,7 +620,7 @@ pub impl Comp {
                 }
                 return
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
     }
 
@@ -993,13 +993,13 @@ pub impl Comp {
             return self.moduleOf(offset: f.nameStart)
         }
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = 0
+        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
         while i < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: i)
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
             }
-            i += 1
+            i = self.arena.nextStructNamed(index: i)
         }
         i = 0
         while i < self.arena.enumCount() {

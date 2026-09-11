@@ -66,7 +66,7 @@ pub impl Comp {
     inout fn structFieldRawTyRef(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
         val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
         while si < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: si)
             if s.nameId == qStruct {
@@ -78,7 +78,7 @@ pub impl Comp {
                     fi += 1
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         return 0
     }

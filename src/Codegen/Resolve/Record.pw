@@ -640,7 +640,7 @@ pub impl Comp {
             return 0U64
         }
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        mut val si: U64 = 0U64
+        mut val si: U64 = self.arena.firstStructNamed(nameId: qType)
         while si < self.arena.structCount() {
             val st: StructDef = self.arena.structAt(index: si)
             if st.nameId == qType {
@@ -650,7 +650,7 @@ pub impl Comp {
                     fi += 1U64
                 }
             }
-            si += 1U64
+            si = self.arena.nextStructNamed(index: si)
         }
         return 0U64
     }

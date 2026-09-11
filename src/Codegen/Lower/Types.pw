@@ -179,12 +179,12 @@ pub impl Comp {
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: nid)
         while si < self.arena.structCount() {
             if self.arena.structAt(index: si).nameId == nid {
                 return nm
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         // build the StructDef with fields in canonical (sorted) order.
         mut val fields: Array[FieldDef] = []
@@ -290,10 +290,10 @@ pub impl Comp {
         appendBytes(into: inout canonical, from: ")".bytes())
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(canonical))
         val nameId: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val si: U64 = 0U64
+        mut val si: U64 = self.arena.firstStructNamed(nameId: nameId)
         while si < self.arena.structCount() {
             if self.arena.structAt(index: si).nameId == nameId { return nm }
-            si += 1U64
+            si = self.arena.nextStructNamed(index: si)
         }
         mut val fields: Array[FieldDef] = []
         mut val fi: U64 = 0U64
@@ -881,7 +881,7 @@ pub impl Comp {
             }
             return 0U64
         }
-        mut val si: U64 = 0
+        mut val si: U64 = self.arena.firstStructNamed(nameId: tid)
         while si < self.arena.structCount() {
             if self.arena.structAt(index: si).nameId == tid {
                 mut val fk: U64 = 0
@@ -892,7 +892,7 @@ pub impl Comp {
                     fk += 1
                 }
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
         return 0U64
     }
@@ -936,10 +936,10 @@ pub impl Comp {
 
     inout fn appendOmittedMakeDefaultsByTypeId(out: inout Array[MakeField], typeId: U64, isEnum: Bool) {
         if isEnum { return }
-        mut val si: U64 = 0U64
+        mut val si: U64 = self.arena.firstStructNamed(nameId: typeId)
         while si < self.arena.structCount() {
             if self.arena.structAt(index: si).nameId == typeId { break }
-            si += 1U64
+            si = self.arena.nextStructNamed(index: si)
         }
         if si >= self.arena.structCount() { return }
         val declared: Array[FieldDef] = self.arena.structAt(index: si).fields

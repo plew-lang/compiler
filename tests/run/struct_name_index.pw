@@ -1,0 +1,58 @@
+import /Ir with { Arena, Bind, StructDef }
+import @Std/Io with { write }
+
+fn structure(nameId: U64, generic: Bool) -> StructDef {
+    mut val parameters: Array[Bind] = []
+    if generic { parameters.append(<Bind nameStart=0U64 nameLen=0U64 nameId=42U64 fieldStart=0U64 fieldLen=0U64 />) }
+    return <StructDef nameStart=0U64 nameLen=0U64 nameId=nameId typeParams=parameters fields=[] isUnique=false isExtern=false />
+}
+fn verify(arena: Arena, nameId: U64) {
+    mut val first = arena.structCount()
+    mut val generic = arena.structCount()
+    mut val concrete = arena.structCount()
+    mut val candidate = arena.firstStructNamed(nameId: nameId)
+    mut val index: U64 = 0U64
+    while index < arena.structCount() {
+        val declaration = arena.structAt(index: index)
+        if declaration.nameId == nameId {
+            if first == arena.structCount() { first = index }
+            if declaration.typeParams.count() == 0U64 {
+                if concrete == arena.structCount() { concrete = index }
+            } else {
+                if generic == arena.structCount() { generic = index }
+            }
+            if candidate != index { panic "candidate order disagrees with rows" }
+            candidate = arena.nextStructNamed(index: candidate)
+        }
+        index += 1U64
+    }
+    if candidate != arena.structCount() { panic "extra candidate" }
+    if arena.firstStructNamed(nameId: nameId) != first { panic "first mismatch" }
+    if arena.firstGenericStructNamed(nameId: nameId) != generic { panic "generic mismatch" }
+    if arena.firstConcreteStructNamed(nameId: nameId) != concrete { panic "concrete mismatch" }
+}
+fn main() {
+    mut val arena: Arena = <Arena />
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    mut val index: U64 = 0U64
+    while index < 80U64 {
+        arena.registerStruct(structure(nameId: index % 17U64, generic: index % 3U64 == 0U64))
+        mut val query: U64 = 0U64
+        while query < 19U64 {
+            verify(arena: arena, nameId: query)
+            query += 1U64
+        }
+        index += 1U64
+    }
+    mut val copy = arena
+    arena.registerStruct(structure(nameId: 18446744073709551615U64, generic: true))
+    copy.registerStruct(structure(nameId: 18446744073709551615U64, generic: false))
+    arena.registerStruct(structure(nameId: 0U64, generic: false))
+    copy.registerStruct(structure(nameId: 0U64, generic: true))
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: copy, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    verify(arena: copy, nameId: 18446744073709551615U64)
+    write(s: "struct-name-index-ok\n")
+}

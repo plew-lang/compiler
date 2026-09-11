@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+struct Bag {
+    pub mut val entries: Dictionary[U64, U64] = [:]
+    pub val initial: Dictionary[U64, U64] = [1U64: 7U64]
+}
+pub impl Bag { factory }
+fn main() {
+    mut val first: Bag = <Bag />
+    val second: Bag = <Bag />
+    first.entries[3U64] = 9U64
+    print(first.entries[3U64])
+    print(second.entries.count())
+    print(second.initial[1U64])
+}
