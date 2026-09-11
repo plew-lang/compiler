@@ -149,7 +149,7 @@ fn instantiateCanonicalStorageBoundary(c: inout Comp, rvalueId: U64, environment
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
             return 0U64
         }
-        c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=operand />)
+        c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=resolution.targetTypeRef />)
     } else {
         if !c.typeRefEq(a: resolution.sourceTypeRef, b: midConversionSourceRef(c: c, conversion: resolution.conversion)) || !c.typeRefEq(a: target, b: midConversionTargetRef(c: c, conversion: resolution.conversion)) {
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
@@ -1168,7 +1168,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                 if !c.typeRefEq(a: resolution.sourceTypeRef, b: target) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
-                return <MidRvalue.Use operand=operand />
+                return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=resolution.targetTypeRef />
             }
             if !c.typeRefEq(a: resolution.sourceTypeRef, b: midConversionSourceRef(c: c, conversion: resolution.conversion)) || !c.typeRefEq(a: target, b: midConversionTargetRef(c: c, conversion: resolution.conversion)) {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }

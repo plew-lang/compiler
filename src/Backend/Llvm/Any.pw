@@ -946,6 +946,48 @@ pub impl LlvmCtx {
                                                 eprint(text: " local=")
                                                 self.traceCodegenU64(n: verification.local)
                                                 eprint(text: "\n")
+                                                val failedBody = c.mid.bodies[elaborated.body - 1U64]
+                                                if verification.local < failedBody.locals.len {
+                                                    val local = c.mid.locals[failedBody.locals.start + verification.local]
+                                                    eprint(text: "[trace-codegen] Mid failed-local binding=")
+                                                    self.traceCodegenU64(n: local.sourceNameStart)
+                                                    eprint(text: " scope=")
+                                                    self.traceCodegenU64(n: local.sourceScope)
+                                                    eprint(text: " type=")
+                                                    c.traceMonoTypeHead(ref: local.typeTerm)
+                                                    eprint(text: "\n")
+                                                }
+                                                if verification.block < failedBody.blocks.len {
+                                                    val failedBlock = c.mid.blocks[failedBody.blocks.start + verification.block]
+                                                    mut val statementIndex: U64 = 0U64
+                                                    while statementIndex < failedBlock.statements.len {
+                                                        val statement = c.mid.statements[failedBlock.statements.start + statementIndex]
+                                                        eprint(text: "[trace-codegen] Mid failed-block statement=")
+                                                        self.traceCodegenU64(n: statementIndex)
+                                                        eprint(text: " tag=")
+                                                        self.traceCodegenU64(n: statement.tag)
+                                                        if statement.destination != 0U64 {
+                                                            eprint(text: " destination=")
+                                                            self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].local)
+                                                        }
+                                                        if statement.value != 0U64 {
+                                                            val value = c.mid.rvalues[statement.value - 1U64]
+                                                            eprint(text: " rvalue=")
+                                                            self.traceCodegenU64(n: value.tag)
+                                                            if value.operand != 0U64 {
+                                                                val operand = c.mid.operands[value.operand - 1U64]
+                                                                eprint(text: " operand=")
+                                                                self.traceCodegenU64(n: operand.tag)
+                                                                if operand.place != 0U64 {
+                                                                    eprint(text: " source=")
+                                                                    self.traceCodegenU64(n: c.mid.places[operand.place - 1U64].local)
+                                                                }
+                                                            }
+                                                        }
+                                                        eprint(text: "\n")
+                                                        statementIndex += 1U64
+                                                    }
+                                                }
                                             }
                                         }
                                     }
