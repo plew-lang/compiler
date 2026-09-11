@@ -2781,6 +2781,17 @@ pub impl Decls { factory }
 // iff it appears here). `imports`: imported name spans with `fieldStart` = the
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
+// Import spelling and declaration provenance are distinct from generic bindings.
+export struct ImportOrigin {
+    pub val localStart: U64
+    pub val localLength: U64
+    pub val localModule: U64
+    pub val sourceStart: U64
+    pub val sourceLength: U64
+    pub val targetModule: U64
+}
+pub impl ImportOrigin { factory }
+
 export struct Modules {
     mut val files: SourceFiles = <SourceFiles />
     mut val syntaxRootModules: Set[U64] = Set.new()
@@ -2807,8 +2818,8 @@ export struct Modules {
     pub mut val packageRoots: Array[Bind] = []
     // Local import/re-export spelling -> original spelling + target module. This
     // is provenance for declaration-identity resolution, not a visibility table.
-    pub mut val importOrigins: Array[Bind] = []
-    pub mut val reExportOrigins: Array[Bind] = []
+    mut val importOrigins: Array[ImportOrigin] = []
+    mut val reExportOrigins: Array[ImportOrigin] = []
     // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the
     // "none" sentinel 4_000_000_000 when it was not loaded. Lang is THE ambient module
     // (spec/15): the types it declares — the language's built-in types — are in scope

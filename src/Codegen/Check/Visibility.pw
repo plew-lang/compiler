@@ -18,11 +18,11 @@ pub impl Comp {
             i += 1U64
         }
         i = 0U64
-        while i < self.modules.reExportOrigins.count() {
-            val o: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: o.nameStart) == surfaceMod {
-                if spansEqual(c: inout self, aStart: o.nameStart, aLen: o.nameLen, bStart: start, bLen: len) {
-                    return self.importedDeclIdentityFromSurface(surfaceMod: o.fieldLen, start: o.fieldStart, len: o.nameId)
+        while i < self.modules.reExportOriginCount() {
+            val o: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if o.localModule == surfaceMod {
+                if spansEqual(c: inout self, aStart: o.localStart, aLen: o.localLength, bStart: start, bLen: len) {
+                    return self.importedDeclIdentityFromSurface(surfaceMod: o.targetModule, start: o.sourceStart, len: o.sourceLength)
                 }
             }
             i += 1U64
@@ -81,17 +81,17 @@ pub impl Comp {
         // import origins under the same local spelling have no provenance at a
         // bare call site, so require an explicit `as` before resolver lookup.
         i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val a: Bind = self.modules.importOrigins[i]
+        while i < self.modules.importOriginCount() {
+            val a: ImportOrigin = self.modules.importOriginAt(index: i)
             mut val j: U64 = 0U64
             while j < i {
-                val b: Bind = self.modules.importOrigins[j]
-                if self.moduleOf(offset: a.nameStart) == self.moduleOf(offset: b.nameStart) {
-                    if spansEqual(c: inout self, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen) {
-                        val aid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: a.fieldLen, start: a.fieldStart, len: a.nameId)
-                        val bid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: b.fieldLen, start: b.fieldStart, len: b.nameId)
+                val b: ImportOrigin = self.modules.importOriginAt(index: j)
+                if a.localModule == b.localModule {
+                    if spansEqual(c: inout self, aStart: a.localStart, aLen: a.localLength, bStart: b.localStart, bLen: b.localLength) {
+                        val aid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: a.targetModule, start: a.sourceStart, len: a.sourceLength)
+                        val bid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: b.targetModule, start: b.sourceStart, len: b.sourceLength)
                         if aid.nameStart != bid.nameStart || aid.nameLen != bid.nameLen {
-                            self.errorAt(offset: a.nameStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)")
+                            self.errorAt(offset: a.localStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)")
                         }
                     }
                 }
@@ -430,11 +430,11 @@ pub impl Comp {
         val local: Bind = self.typeDeclIdentityInModule(mod: surfaceMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
         mut val i: U64 = 0
-        while i < self.modules.reExportOrigins.count() {
-            val origin: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == surfaceMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.reExportOriginCount() {
+            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if origin.localModule == surfaceMod {
+                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
+                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
                 }
             }
             i += 1
@@ -448,11 +448,11 @@ pub impl Comp {
         val local: Bind = self.typeDeclIdentityInModule(mod: useMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
         mut val i: U64 = 0
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.importOriginCount() {
+            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
+            if origin.localModule == useMod {
+                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
+                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
                 }
             }
             i += 1

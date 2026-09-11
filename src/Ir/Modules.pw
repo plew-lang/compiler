@@ -2,6 +2,15 @@
 // The Syntax compatibility predicate is unchanged; only its evaluation moves
 // from repeated conformance queries to this registration boundary.
 pub impl Modules {
+    inout fn registerImportOrigin(origin~: ImportOrigin, reExport: Bool) {
+        if reExport { self.reExportOrigins.append(origin) }
+        else { self.importOrigins.append(origin) }
+    }
+    fn importOriginCount() -> U64 { return self.importOrigins.count() }
+    fn importOriginAt(index: U64) -> ImportOrigin { return self.importOrigins[index] }
+    fn reExportOriginCount() -> U64 { return self.reExportOrigins.count() }
+    fn reExportOriginAt(index: U64) -> ImportOrigin { return self.reExportOrigins[index] }
+
     inout fn registerSourceFile(start: U64, length: U64, moduleId: U64, path: String) {
         self.files.append(start: start, length: length, moduleId: moduleId, path: path)
         if self.pathIsSyntaxRoot(path: path) {

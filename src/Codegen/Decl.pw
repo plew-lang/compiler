@@ -134,23 +134,23 @@ pub impl Comp {
             i = self.decls.nextTraitOwnerNamed(index: i)
         }
         i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == mod {
-                val surfaceId: U64 = intern(c: inout self, start: origin.nameStart, len: origin.nameLen)
+        while i < self.modules.importOriginCount() {
+            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
+            if origin.localModule == mod {
+                val surfaceId: U64 = intern(c: inout self, start: origin.localStart, len: origin.localLength)
                 if surfaceId == nameId {
-                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+                    return self.traitOwnerFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength, arity: arity)
                 }
             }
             i += 1U64
         }
         i = 0U64
-        while i < self.modules.reExportOrigins.count() {
-            val origin: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == mod {
-                val surfaceId: U64 = intern(c: inout self, start: origin.nameStart, len: origin.nameLen)
+        while i < self.modules.reExportOriginCount() {
+            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if origin.localModule == mod {
+                val surfaceId: U64 = intern(c: inout self, start: origin.localStart, len: origin.localLength)
                 if surfaceId == nameId {
-                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+                    return self.traitOwnerFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength, arity: arity)
                 }
             }
             i += 1U64
@@ -176,15 +176,15 @@ pub impl Comp {
         }
         if found != 0U64 { return found }
         i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == mod {
-                if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
-                    val targetNameId = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.importOriginCount() {
+            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
+            if origin.localModule == mod {
+                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
+                    val targetNameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
                     mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.targetModule {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
@@ -195,15 +195,15 @@ pub impl Comp {
             i += 1U64
         }
         i = 0U64
-        while i < self.modules.reExportOrigins.count() {
-            val origin: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == mod {
-                if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
-                    val targetNameId = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.reExportOriginCount() {
+            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if origin.localModule == mod {
+                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
+                    val targetNameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
                     mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.targetModule {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
@@ -223,11 +223,11 @@ pub impl Comp {
         val local: U64 = self.traitOwnerInModule(mod: surfaceMod, start: start, len: len, arity: arity)
         if local != 0U64 { return local }
         mut val i: U64 = 0U64
-        while i < self.modules.reExportOrigins.count() {
-            val origin: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == surfaceMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+        while i < self.modules.reExportOriginCount() {
+            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if origin.localModule == surfaceMod {
+                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
+                    return self.traitOwnerFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength, arity: arity)
                 }
             }
             i += 1U64
@@ -267,11 +267,11 @@ pub impl Comp {
         if local != 0U64 { return local }
         mut val found: U64 = 0U64
         mut val i: U64 = 0U64
-        while i < self.modules.reExportOrigins.count() {
-            val origin: Bind = self.modules.reExportOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == surfaceMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.reExportOriginCount() {
+            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
+            if origin.localModule == surfaceMod {
+                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
+                    val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
                     if owner != 0U64 {
                         if found != 0U64 && found != owner { return 0U64 }
                         found = owner
@@ -298,10 +298,10 @@ pub impl Comp {
         }
         if found != 0U64 { return found }
         i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: origin.nameStart, len: origin.nameLen, kw: text) {
-                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.importOriginCount() {
+            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
+            if origin.localModule == useMod && rangeEquals(bytes: self.arena.bytes, start: origin.localStart, len: origin.localLength, kw: text) {
+                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
                 if owner != 0U64 {
                     if found != 0U64 && found != owner { return 0U64 }
                     found = owner
@@ -330,10 +330,10 @@ pub impl Comp {
         }
         if found != 0U64 { return found }
         i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod && spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+        while i < self.modules.importOriginCount() {
+            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
+            if origin.localModule == useMod && spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
+                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
                 if owner != 0U64 {
                     if found != 0U64 && found != owner { return 0U64 }
                     found = owner

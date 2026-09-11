@@ -14,7 +14,7 @@ import ./KeywordSpans with { KeywordSpans }
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
-import ./Ir with { SemanticGlobalAddress }
+import ./Ir with { SemanticGlobalAddress, ImportOrigin }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { SyntaxField, SyntaxVariant, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField }
@@ -731,7 +731,7 @@ pub impl Comp {
         return true
     }
 
-    inout fn recordImportOrigins(imp: ImportAst, targetMod: U64, reExport: Bool) {
+    inout fn recordImportOrigins(imp: ImportAst, localModule: U64, targetMod: U64, reExport: Bool) {
         mut val i: U64 = 0
         while i < imp.names.count() {
             val real: Span = imp.nameSpans[i]
@@ -740,9 +740,7 @@ pub impl Comp {
                 val alias: Span = imp.nameAliasSpans[i]
                 if alias.end > alias.start { local = alias }
             }
-            val entry: Bind = <Bind nameStart=local.start nameLen=local.end - local.start nameId=real.end - real.start fieldStart=real.start fieldLen=targetMod />
-            if reExport { self.modules.reExportOrigins.append(entry) }
-            else { self.modules.importOrigins.append(entry) }
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, reExport: reExport)
             i += 1
         }
     }
@@ -751,16 +749,14 @@ pub impl Comp {
     // read as source spans directly from the immutable syntax store; this must
     // remain separate from the legacy value-AST method until lowering itself is
     // migrated, rather than materializing an ImportAst adapter.
-    inout fn recordSyntaxImportOrigins(imp: SyntaxImport, targetMod: U64, reExport: Bool) {
+    inout fn recordSyntaxImportOrigins(imp: SyntaxImport, localModule: U64, targetMod: U64, reExport: Bool) {
         mut val i: U64 = 0U64
         while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
             val real: Span = syntaxImportNameSpan(file: self.syntax, imp: imp, index: i)
             mut val local: Span = real
             val alias: Span = syntaxImportNameAliasSpan(file: self.syntax, imp: imp, index: i)
             if alias.end > alias.start { local = alias }
-            val entry: Bind = <Bind nameStart=local.start nameLen=local.end - local.start nameId=real.end - real.start fieldStart=real.start fieldLen=targetMod />
-            if reExport { self.modules.reExportOrigins.append(entry) }
-            else { self.modules.importOrigins.append(entry) }
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, reExport: reExport)
             i += 1U64
         }
     }
@@ -1418,7 +1414,7 @@ export fn runFrontend(c: inout Comp) {
                                 val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
                                 if tgt != 4000000000U64 {
                                     c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
-                                    c.recordSyntaxImportOrigins(imp: imp, targetMod: tgt, reExport: false)
+                                    c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: tgt, reExport: false)
                                 }
                             }
                         }
@@ -1461,7 +1457,7 @@ export fn runFrontend(c: inout Comp) {
                             val reTgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: rePath)
                             if reTgt != 4000000000U64 {
                                 c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=reTgt />)
-                                c.recordSyntaxImportOrigins(imp: imp, targetMod: reTgt, reExport: true)
+                                c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: reTgt, reExport: true)
                             }
                         }
                     }
