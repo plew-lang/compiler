@@ -54,7 +54,7 @@ pub impl Comp {
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
         while i < cf.traitArgs.count() {
-            out.append(self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams), matchResult: witness))
+            out.append(self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />, matchResult: witness))
             i += 1U64
         }
         return out

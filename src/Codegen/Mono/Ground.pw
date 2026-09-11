@@ -462,15 +462,15 @@ pub impl Comp {
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
     // terms stay rigid: an unmatched binder remains symbolic.
-    inout fn groundWitnessTypeTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
+    inout fn groundWitnessTypeTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         val semantic: TypeRef = self.arena.typeAt(index: ref)
         if semantic.paramId != 0U64 {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
             if byParam < matchResult.binds.count() { return matchResult.binds[byParam].term }
         }
-        val binder: U64 = self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />)
-        if binder < params.count() {
+        val binder: U64 = self.plainBinder(ref: ref, params: params)
+        if binder < self.patternBindCount(input: params) {
             val found: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: binder)
             if found < matchResult.binds.count() { return matchResult.binds[found].term }
             return ref
@@ -995,7 +995,7 @@ pub impl Comp {
                         // generated/conferred witnesses). Ground through the
                         // binding's own ParamId list so the proof substitution
                         // is applied to the terms it actually binds.
-                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: ab.typeParams), matchResult: witness)
+                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness)
                         count += 1U64
                         }
                     }
@@ -1027,7 +1027,7 @@ pub impl Comp {
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {
-                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: ab.typeParams), matchResult: terminal)
+                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: terminal)
                             count += 1U64
                         }
                     }

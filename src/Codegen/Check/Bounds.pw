@@ -91,14 +91,14 @@ pub impl Comp {
         mut val positional: Array[U64] = []
         mut val i: U64 = 0U64
         while i < constraint.key.positionalArgs.count() {
-            positional.append(self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[i], params: params, matchResult: matchResult))
+            positional.append(self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[i], params: <PatternBindInput.Values values=params />, matchResult: matchResult))
             i += 1U64
         }
         mut val predicates: Array[TraitAssocPredicate] = []
         i = 0U64
         while i < constraint.assocPredicates.count() {
             val predicate: TraitAssocPredicate = constraint.assocPredicates[i]
-            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundWitnessTypeTerm(ref: predicate.value, params: params, matchResult: matchResult) span=predicate.span />)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundWitnessTypeTerm(ref: predicate.value, params: <PatternBindInput.Values values=params />, matchResult: matchResult) span=predicate.span />)
             i += 1U64
         }
         return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
@@ -578,7 +578,7 @@ pub impl Comp {
                         val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: witness)
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness)
                         if receiver == 0U64 { return 0U64 }
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: witness), predicates: [])
                     }
@@ -599,7 +599,7 @@ pub impl Comp {
                         val conform: Conform = self.decls.conforms[terminalConformIdx - 1U64]
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: terminal)
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: terminal)
                         if receiver == 0U64 { return 0U64 }
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
                     }
@@ -649,7 +649,7 @@ pub impl Comp {
             while i < self.decls.assocBindings.count() {
                 val ab: AssocBinding = self.decls.assocBindings[i]
                 if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocNames[need] {
-                    val output: U64 = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: cf.typeParams), matchResult: matchResult)
+                    val output: U64 = self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=cf.typeParams />, matchResult: matchResult)
                     if self.typesCompatible(expected: assocValues[need], inferred: output) { found = true }
                 }
                 i += 1U64

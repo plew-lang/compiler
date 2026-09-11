@@ -445,8 +445,8 @@ pub impl Comp {
         return components
     }
 
-    inout fn traitCycleConstructorCount(ref: U64, params: Array[Bind]) -> U64 {
-        if self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />) < params.count() { return 0U64 }
+    inout fn traitCycleConstructorCount(ref: U64, params: PatternBindInput) -> U64 {
+        if self.plainBinder(ref: ref, params: params) < self.patternBindCount(input: params) { return 0U64 }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 1U64 }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 1U64
@@ -458,8 +458,8 @@ pub impl Comp {
         return count
     }
 
-    inout fn traitCycleBinderOccurrences(ref: U64, params: Array[Bind], binder: U64) -> U64 {
-        if self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />) == binder { return 1U64 }
+    inout fn traitCycleBinderOccurrences(ref: U64, params: PatternBindInput, binder: U64) -> U64 {
+        if self.plainBinder(ref: ref, params: params) == binder { return 1U64 }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 0U64
@@ -483,12 +483,12 @@ pub impl Comp {
         mut val targetConstructors: U64 = 0U64
         mut val i: U64 = 0U64
         while i < cf.subjectArgs.count() {
-            subjectConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams))
+            subjectConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />)
             i += 1U64
         }
         i = 0U64
         while i < cf.traitArgs.count() {
-            targetConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams))
+            targetConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />)
             i += 1U64
         }
         if targetConstructors > subjectConstructors { return false }
@@ -498,12 +498,12 @@ pub impl Comp {
             mut val targetUses: U64 = 0U64
             i = 0U64
             while i < cf.subjectArgs.count() {
-                subjectUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams), binder: binder)
+                subjectUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
                 i += 1U64
             }
             i = 0U64
             while i < cf.traitArgs.count() {
-                targetUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams), binder: binder)
+                targetUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
                 i += 1U64
             }
             if targetUses > subjectUses { return false }
