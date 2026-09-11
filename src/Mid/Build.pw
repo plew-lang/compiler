@@ -1920,17 +1920,23 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
             mut val hasScrutineeScope: Bool = false
             mut val scrutineeScope: U64 = 0U64
             if !scrutinee.found {
+                // The evaluation itself creates owned temporaries. They must
+                // belong to the match lifetime as well as the stable copy.
+                scrutineeScope = midOpenScope(state: inout state)
+                hasScrutineeScope = true
                 val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm, allowAccessMarker: false)
                 match value.error {
                     MidBuildError.None => {}
                     _ => {
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "scrutinee-rvalue-unavailable")
+                        midCloseScope(state: inout state, scope: scrutineeScope)
                         return value.error
                     }
                 }
-                if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
-                scrutineeScope = midOpenScope(state: inout state)
-                hasScrutineeScope = true
+                if !midCurrentBlockIsOpen(state: state) {
+                    midCloseScope(state: inout state, scope: scrutineeScope)
+                    return <MidBuildError.None />
+                }
                 val temporary: U64 = addMidTemporary(state: inout state, typeTerm: semantic.scrutineeTerm)
                 val temporaryPlace: MidPlace = <MidPlace local=temporary typeTerm=semantic.scrutineeTerm />
                 midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporaryPlace value=<MidRvalue.Use operand=value.operand /> />)
