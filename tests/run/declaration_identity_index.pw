@@ -1,0 +1,56 @@
+import /Ir with { Arena, Decls, DeclarationName, StructDef, EnumDef, TraitDef, NewtypeDef }
+import @Std/Io with { write }
+
+fn verify(actual: Optional[DeclarationName], start: U64, len: U64, present: Bool) {
+    match actual {
+        Optional.Some(v: val name) => {
+            if !present || name.start != start || name.len != len { panic "wrong declaration name" }
+        }
+        Optional.None => { if present { panic "missing declaration name" } }
+    }
+}
+fn main() {
+    mut val arena = <Arena />
+    mut val decls = <Decls />
+    verify(actual: arena.structNameByOffset(offset: 0U64), start: 0U64, len: 0U64, present: false)
+    arena.registerStruct(<StructDef nameStart=13U64 nameLen=0U64 nameId=1U64 typeParams=[] fields=[] isUnique=false isExtern=false defOffset=0U64 />)
+    arena.registerStruct(<StructDef nameStart=13U64 nameLen=7U64 nameId=1U64 typeParams=[] fields=[] isUnique=false isExtern=false defOffset=0U64 />)
+    verify(actual: arena.structNameByOffset(offset: 0U64), start: 13U64, len: 0U64, present: true)
+    mut val structCopy = arena
+    arena.registerStruct(<StructDef nameStart=19U64 nameLen=3U64 nameId=1U64 typeParams=[] fields=[] isUnique=false isExtern=false defOffset=18446744073709551615U64 />)
+    structCopy.registerStruct(<StructDef nameStart=19U64 nameLen=4U64 nameId=1U64 typeParams=[] fields=[] isUnique=false isExtern=false defOffset=18446744073709551615U64 />)
+    verify(actual: arena.structNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 3U64, present: true)
+    verify(actual: structCopy.structNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 4U64, present: true)
+    verify(actual: arena.structNameByOffset(offset: 123U64), start: 0U64, len: 0U64, present: false)
+    verify(actual: arena.enumNameByOffset(offset: 0U64), start: 0U64, len: 0U64, present: false)
+    arena.registerEnum(<EnumDef nameStart=13U64 nameLen=0U64 nameId=1U64 typeParams=[] variants=[] defOffset=0U64 />)
+    arena.registerEnum(<EnumDef nameStart=13U64 nameLen=7U64 nameId=1U64 typeParams=[] variants=[] defOffset=0U64 />)
+    verify(actual: arena.enumNameByOffset(offset: 0U64), start: 13U64, len: 0U64, present: true)
+    mut val enumCopy = arena
+    arena.registerEnum(<EnumDef nameStart=19U64 nameLen=3U64 nameId=1U64 typeParams=[] variants=[] defOffset=18446744073709551615U64 />)
+    enumCopy.registerEnum(<EnumDef nameStart=19U64 nameLen=4U64 nameId=1U64 typeParams=[] variants=[] defOffset=18446744073709551615U64 />)
+    verify(actual: arena.enumNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 3U64, present: true)
+    verify(actual: enumCopy.enumNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 4U64, present: true)
+    verify(actual: arena.enumNameByOffset(offset: 123U64), start: 0U64, len: 0U64, present: false)
+    verify(actual: arena.newtypeNameByOffset(offset: 0U64), start: 0U64, len: 0U64, present: false)
+    arena.registerNewtype(<NewtypeDef nameStart=13U64 nameLen=0U64 nameId=1U64 underStart=0U64 underLen=0U64 underRef=0U64 defOffset=0U64 />)
+    arena.registerNewtype(<NewtypeDef nameStart=13U64 nameLen=7U64 nameId=1U64 underStart=0U64 underLen=0U64 underRef=0U64 defOffset=0U64 />)
+    verify(actual: arena.newtypeNameByOffset(offset: 0U64), start: 13U64, len: 0U64, present: true)
+    mut val newtypeCopy = arena
+    arena.registerNewtype(<NewtypeDef nameStart=19U64 nameLen=3U64 nameId=1U64 underStart=0U64 underLen=0U64 underRef=0U64 defOffset=18446744073709551615U64 />)
+    newtypeCopy.registerNewtype(<NewtypeDef nameStart=19U64 nameLen=4U64 nameId=1U64 underStart=0U64 underLen=0U64 underRef=0U64 defOffset=18446744073709551615U64 />)
+    verify(actual: arena.newtypeNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 3U64, present: true)
+    verify(actual: newtypeCopy.newtypeNameByOffset(offset: 18446744073709551615U64), start: 19U64, len: 4U64, present: true)
+    verify(actual: arena.newtypeNameByOffset(offset: 123U64), start: 0U64, len: 0U64, present: false)
+    verify(actual: decls.traitNameByOffset(offset: 0U64), start: 0U64, len: 0U64, present: false)
+    decls.registerTrait(<TraitDef nameStart=0U64 nameLen=0U64 nameId=1U64   />)
+    decls.registerTrait(<TraitDef nameStart=0U64 nameLen=7U64 nameId=1U64   />)
+    verify(actual: decls.traitNameByOffset(offset: 0U64), start: 0U64, len: 0U64, present: true)
+    mut val traitCopy = decls
+    decls.registerTrait(<TraitDef nameStart=18446744073709551615U64 nameLen=3U64 nameId=1U64   />)
+    traitCopy.registerTrait(<TraitDef nameStart=18446744073709551615U64 nameLen=4U64 nameId=1U64   />)
+    verify(actual: decls.traitNameByOffset(offset: 18446744073709551615U64), start: 18446744073709551615U64, len: 3U64, present: true)
+    verify(actual: traitCopy.traitNameByOffset(offset: 18446744073709551615U64), start: 18446744073709551615U64, len: 4U64, present: true)
+    verify(actual: decls.traitNameByOffset(offset: 123U64), start: 0U64, len: 0U64, present: false)
+    write(s: "declaration-identity-index-ok\n")
+}
