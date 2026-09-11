@@ -5,14 +5,12 @@
 // lang item's `[k:v]` machinery resolves the hashing it is built on) but force-load is
 // only LOADING — visibility still requires the import.
 
-// Backend-intercepted intrinsics used only by the hashing floor (declared here so this
-// module is self-contained; the LLVM backend resolves them by name regardless of the
-// declaring module). `__dictSeed`: the per-process dictionary hash seed (random once per
-// run, stable after). `bitCastU64`: reinterpret a signed integer's two's-complement bits
-// as U64 (for hashing signed keys; `as U64` is lossless-only and rejects negatives).
+// Signed hashing uses the primitive numeric ABI owned by Core.
+import @Std/Core with { bitCastU64 }
+
+// Per-process dictionary hash seed (random once, then stable).
 extern(plewIntrinsic) {
     fn __dictSeed() -> U64
-    fn bitCastU64(n: I64) -> U64
 }
 
 // A streaming hasher absorbs U64 words and finalizes to a U64 digest.
