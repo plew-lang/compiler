@@ -31,19 +31,19 @@ pub impl LlvmCtx {
         if req.isAssoc {
             return LLVMConstNull(self.ptrty)
         }
-        if reqUsesSelfInInput(c: inout c, req: req) {
+        if c.reqUsesSelfInInput(req: req) {
             return LLVMConstNull(self.ptrty)
         }
         // `Self` in the result that we cannot covariantly erase (nested in a container we
         // don't yet repack) makes the member non-callable through `any P` — the slot stays
         // null so a call site loudly rejects rather than leaking an un-erased concrete.
-        if !(reqRetSelfErasable(c: inout c, req: req)) {
+        if !(c.reqRetSelfErasable(req: req)) {
             return LLVMConstNull(self.ptrty)
         }
         // a `-> Self` requirement re-boxes its single concrete result; a covariant CONTAINER
         // of `Self` (`-> Optional[Self]`, `-> Array[Self]`) is repacked (eraseCovariantToAny).
-        val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && typeRefMentionsSelf(c: inout c, ref: req.retTy)
+        val retsSelf: Bool = c.reqReturnsSelf(req: req)
+        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && c.typeRefMentionsSelf(ref: req.retTy)
         val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
         if wfi >= c.arena.functionCount() {
             return LLVMConstNull(self.ptrty)
@@ -677,18 +677,18 @@ pub impl LlvmCtx {
         // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
         // through `any` (the erased concretes need not match, so a `Self` argument cannot
         // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
-        if reqUsesSelfInInput(c: inout c, req: req) {
+        if c.reqUsesSelfInInput(req: req) {
             c.errorAt(offset: callOffset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // `Self` in the result nested under a head we cannot repack (`Dictionary`, tuple):
         // not callable through `any P` (spec/08). `Optional[Self]`/`Array[Self]` ARE erasable.
-        if !(reqRetSelfErasable(c: inout c, req: req)) {
+        if !(c.reqRetSelfErasable(req: req)) {
             c.errorAt(offset: callOffset, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && typeRefMentionsSelf(c: inout c, ref: req.retTy)
+        val retsSelf: Bool = c.reqReturnsSelf(req: req)
+        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && c.typeRefMentionsSelf(ref: req.retTy)
         mut val fat: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val gotFat: Bool = false
         if req.selfInout {

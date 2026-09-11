@@ -1,0 +1,148 @@
+// Shared existential member availability; frontend and LLVM use one rule.
+
+pub impl Comp {
+// Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
+// Such a member is NOT callable through `any` (spec/08: two `any P` values need not
+// share a concrete type, so a `Self` argument cannot be supplied).
+// Whether TypeRef `ref` mentions `Self` ANYWHERE in its type tree — a bare `Self`, or
+// nested inside a container / generic (`Optional[Self]`, `Array[Ref[Self]]`, a user
+// `Box[Self]`). The `any P` member-availability rule (spec/08, Swift SE-0309) keys off
+// this: `Self` in a contravariant position (any parameter) blocks the member entirely,
+// and `Self` in the result is callable only where it can be covariantly erased.
+inout fn typeRefMentionsSelf(ref: U64) -> Bool {
+    if ref >= self.arena.typeCount() {
+        return false
+    }
+    val t: TypeRef = self.arena.typeAt(index: ref)
+    if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return true
+    }
+    mut val i: U64 = 0
+    while i < t.args.count() {
+        if self.typeRefMentionsSelf(ref: t.args[i]) {
+            return true
+        }
+        i += 1
+    }
+    // an anonymous record type (`(a: Self)`, name starting with '(') lowers to a synthesized
+    // struct whose TypeRef carries NO args — its field types (where a captured `Self` hides)
+    // live in the struct's FieldDefs. Descend into them so `Self` in a record position is seen
+    // by the `any P` callability gates (reqUsesSelfInInput / retTySelfErasable). Records are
+    // structurally acyclic (no anonymous self-reference), so this recursion terminates without a
+    // visited set; user structs never carry a captured `Self` in a field (that would be an
+    // infinitely-sized type), so restricting the descent to records also avoids their cycles.
+    if self.arena.bytes[t.nameStart] == 40U8 {
+        val sidx: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
+        if sidx < self.arena.structCount() {
+            mut val fi: U64 = 0
+            while fi < self.arena.structAt(index: sidx).fields.count() {
+                val fd: FieldDef = self.arena.structFieldAt(structIndex: sidx, fieldIndex: fi)
+                if rangeEquals(bytes: self.arena.bytes, start: fd.tyStart, len: fd.tyLen, kw: "Self") {
+                    return true
+                }
+                if fd.ty != 0U64 {
+                    if self.typeRefMentionsSelf(ref: fd.ty) {
+                        return true
+                    }
+                }
+                fi += 1
+            }
+        }
+    }
+    return false
+}
+
+// Does requirement `req` reference `Self` in any PARAMETER (a non-receiver input)?
+// Such a member is not callable through `any P`: the parameter position is
+// contravariant, so a type-erased value cannot be supplied where the concrete `Self`
+// is required (two `any P` values need not share a concrete type). Walks the whole
+// parameter type tree so a NESTED `Self` (`other: Optional[Self]`, `xs: Array[Self]`)
+// is caught, not just a bare `Self` param — spec/08.
+inout fn reqUsesSelfInInput(req: Func) -> Bool {
+    mut val i: U64 = 0
+    while i < req.params.count() {
+        val param: Param = self.funcParamAt(params: req.params, index: i)
+        if param.ty != 0U64 {
+            if self.typeRefMentionsSelf(ref: param.ty) {
+                return true
+            }
+        } else {
+            if rangeEquals(bytes: self.arena.bytes, start: param.tyStart, len: param.tyLen, kw: "Self") {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether every `Self` in `ref` sits under a covariant container head the thunk can
+// repack — a bare `Self`, or `Self` nested only through `Array[·]` / a generic enum
+// (`Optional[Self]`, `Result[Self, E]`), recursively (spec/08, SE-0309). `Self` under any
+// other head (`Dictionary`, a tuple/record, a user struct) is NOT erasable.
+inout fn retTySelfErasable(ref: U64) -> Bool {
+    if ref >= self.arena.typeCount() {
+        return true
+    }
+    val t: TypeRef = self.arena.typeAt(index: ref)
+    // a bare `Self` here: the leaf boxes into the existential.
+    if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return true
+    }
+    if !(self.typeRefMentionsSelf(ref: ref)) {
+        return true
+    }
+    // `Self` is nested: the head must be one eraseCovariantToAny rebuilds — `Array` or a
+    // generic enum. Every arg that itself mentions `Self` must be erasable too.
+    val isArr: Bool = rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
+    val isEnum: Bool = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enumCount()
+    if !(isArr) && !(isEnum) {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < t.args.count() {
+        if self.typeRefMentionsSelf(ref: t.args[i]) {
+            if !(self.retTySelfErasable(ref: t.args[i])) {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether `req`'s RETURN mentions `Self` only in positions the thunk can covariantly erase.
+// A bare `-> Self` re-boxes its single concrete result; `Self` nested in a covariant
+// container (`Optional[Self]`, `Array[Self]`) is repacked by eraseCovariantToAny. `Self`
+// under a non-repackable head (`Dictionary`, tuple) makes the member non-callable through
+// `any P` (sound: no un-erased concrete escapes as an existential — spec/08, SE-0309).
+inout fn reqRetSelfErasable(req: Func) -> Bool {
+    if !(req.hasRet) || req.retTy == 0U64 {
+        return true
+    }
+    if !(self.typeRefMentionsSelf(ref: req.retTy)) {
+        return true
+    }
+    return self.retTySelfErasable(ref: req.retTy)
+}
+
+// Does requirement `req` return bare `Self`? Such a member IS callable through `any`
+// (spec/08): the output `Self` is re-erased to `any P` — the thunk re-boxes the
+// witness's concrete result into the existential. (A `Self` nested in a generic
+// return like `Optional[Self]` is not handled yet.)
+inout fn reqReturnsSelf(req: Func) -> Bool {
+    if req.hasRet {
+        // a bare `-> Self` only: `-> Array[Self]` shares the legacy `retStart` span "Self"
+        // (the element head view) with retIsArray=true — it is a covariant container, not a
+        // bare Self, and is repacked by the retContainerSelf path (eraseCovariantToAny), not
+        // re-boxed here.
+        if req.retIsArray {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: req.retStart, len: req.retLen, kw: "Self")
+    }
+    return false
+}
+
+
+}
