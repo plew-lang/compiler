@@ -437,9 +437,9 @@ pub impl Comp {
         // satisfies `where T: Format` because String does — `print(u)` type-checks and
         // dispatches to String's witness (the newtype shares String's representation).
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count() {
-            if self.arena.newtypes[ni].nameId == typeId {
-                val underId: U64 = intern(c: inout self, start: self.arena.newtypes[ni].underStart, len: self.arena.newtypes[ni].underLen)
+        while ni < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ni).nameId == typeId {
+                val underId: U64 = intern(c: inout self, start: self.arena.newtypeAt(index: ni).underStart, len: self.arena.newtypeAt(index: ni).underLen)
                 return self.conformExists(typeId: underId, traitId: traitId)
             }
             ni += 1
@@ -462,9 +462,9 @@ pub impl Comp {
             i += 1
         }
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count() {
-            if self.arena.newtypes[ni].nameId == typeId {
-                val underId: U64 = intern(c: inout self, start: self.arena.newtypes[ni].underStart, len: self.arena.newtypes[ni].underLen)
+        while ni < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ni).nameId == typeId {
+                val underId: U64 = intern(c: inout self, start: self.arena.newtypeAt(index: ni).underStart, len: self.arena.newtypeAt(index: ni).underLen)
                 return self.conformExistsTraitInstance(typeId: underId, traitId: traitId, traitArgs: traitArgs, patternParams: patternParams)
             }
             ni += 1
@@ -559,9 +559,9 @@ pub impl Comp {
         }
         // a newtype inherits the underlying type's extensions (spec/10).
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count() {
-            if self.arena.newtypes[ni].nameId == qType {
-                return self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypes[ni].underStart, typeLen: self.arena.newtypes[ni].underLen)
+        while ni < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ni).nameId == qType {
+                return self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen)
             }
             ni += 1
         }
@@ -934,13 +934,13 @@ pub impl Comp {
     inout fn findTraitIdxByName(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            if self.decls.traits[ti].nameId == qId {
+        while ti < self.decls.traitCount() {
+            if self.decls.traitAt(index: ti).nameId == qId {
                 return ti
             }
             ti += 1
         }
-        return self.decls.traits.count()
+        return self.decls.traitCount()
     }
 
     inout fn addFnThunk(fi: U64) {

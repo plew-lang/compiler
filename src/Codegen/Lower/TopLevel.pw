@@ -320,9 +320,9 @@ pub impl Comp {
                 }
             }
             TopItemAst.Trait(val t) => {
-                val tB: U64 = self.decls.traits.count()
+                val tB: U64 = self.decls.traitCount()
                 self.lowerTrait(t: t)
-                self.recordExport(nameStart: self.decls.traits[tB].nameStart, nameLen: self.decls.traits[tB].nameLen)
+                self.recordExport(nameStart: self.decls.traitAt(index: tB).nameStart, nameLen: self.decls.traitAt(index: tB).nameLen)
             }
             TopItemAst.GlobalVal(val s) => {
                 val gB: U64 = self.arena.globals.count()
@@ -334,10 +334,10 @@ pub impl Comp {
             TopItemAst.NewType(val name, nameSpan: _, val ty, isPub: _, val span) => {
                 // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
                 // then record its name as exported so other modules can import it.
-                val ntB: U64 = self.arena.newtypes.count()
+                val ntB: U64 = self.arena.newtypeCount()
                 self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
-                if self.arena.newtypes.count() > ntB {
-                    self.recordExportFrom(nameStart: self.arena.newtypes[ntB].nameStart, nameLen: self.arena.newtypes[ntB].nameLen, moduleOffset: self.arena.newtypes[ntB].defOffset)
+                if self.arena.newtypeCount() > ntB {
+                    self.recordExportFrom(nameStart: self.arena.newtypeAt(index: ntB).nameStart, nameLen: self.arena.newtypeAt(index: ntB).nameLen, moduleOffset: self.arena.newtypeAt(index: ntB).defOffset)
                 }
             }
             _ => { self.lowerTopItem(item: inner) }
@@ -394,9 +394,9 @@ pub impl Comp {
                 }
             }
             SyntaxTopItemKind.Trait => {
-                val before: U64 = self.decls.traits.count()
+                val before: U64 = self.decls.traitCount()
                 self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
-                self.recordExport(nameStart: self.decls.traits[before].nameStart, nameLen: self.decls.traits[before].nameLen)
+                self.recordExport(nameStart: self.decls.traitAt(index: before).nameStart, nameLen: self.decls.traitAt(index: before).nameLen)
             }
             SyntaxTopItemKind.GlobalVal => {
                 val before: U64 = self.arena.globals.count()
@@ -404,9 +404,9 @@ pub impl Comp {
                 if self.arena.globals.count() > before { self.recordExport(nameStart: self.arena.globals[before].nameStart, nameLen: self.arena.globals[before].nameLen) }
             }
             SyntaxTopItemKind.NewType => {
-                val before: U64 = self.arena.newtypes.count()
+                val before: U64 = self.arena.newtypeCount()
                 self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-                if self.arena.newtypes.count() > before { self.recordExportFrom(nameStart: self.arena.newtypes[before].nameStart, nameLen: self.arena.newtypes[before].nameLen, moduleOffset: self.arena.newtypes[before].defOffset) }
+                if self.arena.newtypeCount() > before { self.recordExportFrom(nameStart: self.arena.newtypeAt(index: before).nameStart, nameLen: self.arena.newtypeAt(index: before).nameLen, moduleOffset: self.arena.newtypeAt(index: before).defOffset) }
             }
             _ => { self.lowerSyntaxTopItem(item: item) }
         }
@@ -445,7 +445,7 @@ pub impl Comp {
     // Both source decoders converge here.  The semantic mutation is deliberately
     // shared so SyntaxFile migration cannot create a second newtype lowerer.
     inout fn appendLoweredNewtype(name: Bind, under: PType, defOffset: U64) {
-        self.arena.newtypes.append(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
+        self.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
     inout fn lowerGlobalVal(s: StmtAst) {

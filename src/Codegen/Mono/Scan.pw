@@ -59,10 +59,10 @@ pub impl Comp {
         if et.ref != 0U64 && et.ref < self.arena.typeCount() {
             if self.arena.typeAt(index: et.ref).isAny {
                 val atri: U64 = self.findTraitIdxByName(start: et.nameStart, len: et.nameLen)
-                if atri < self.decls.traits.count() {
+                if atri < self.decls.traitCount() {
                     val nxq: Bind = self.kwSpan(kw: "next", kwLen: 4)
                     val nxId: U64 = intern(c: inout self, start: nxq.nameStart, len: nxq.nameLen)
-                    val areqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traits[atri].reqs)
+                    val areqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traitAt(index: atri).reqs)
                     mut val ari: U64 = 0
                     while ari < areqs.count() {
                         if areqs[ari].nameId == nxId {

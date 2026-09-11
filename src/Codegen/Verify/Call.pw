@@ -22,7 +22,7 @@ pub impl Comp {
         val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         val methodId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val found: Bool = false
-        mut val chosenTrait: U64 = self.decls.traits.count()
+        mut val chosenTrait: U64 = self.decls.traitCount()
         mut val chosenReq: U64 = 0U64
         mut val bi: U64 = 0U64
         while bi < self.decls.funcBounds.count() {
@@ -31,8 +31,8 @@ pub impl Comp {
                 val owner: U64 = bound.constraint.key.owner
                 val traitId: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
                 mut val ti: U64 = 0U64
-                while ti < self.decls.traits.count() {
-                    val traitDef: TraitDef = self.decls.traits[ti]
+                while ti < self.decls.traitCount() {
+                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
                     if traitDef.nameId == traitId {
                         mut val ri: U64 = 0U64
                         while ri < traitDef.reqs.count() {
@@ -54,7 +54,7 @@ pub impl Comp {
             bi += 1U64
         }
         if !found { return false }
-        val chosen: Func = self.traitReqAt(reqs: self.decls.traits[chosenTrait].reqs, index: chosenReq)
+        val chosen: Func = self.traitReqAt(reqs: self.decls.traitAt(index: chosenTrait).reqs, index: chosenReq)
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)
@@ -91,8 +91,8 @@ pub impl Comp {
         // a `newtype` (spec/10) is a distinct named type: give it its own id so the type
         // checker keeps it apart from its underlying (`val x: I64 = meter` needs `as`).
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count() {
-            if self.arena.newtypes[ni].nameId == q {
+        while ni < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ni).nameId == q {
                 return q
             }
             ni += 1

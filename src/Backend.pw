@@ -947,8 +947,8 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     }
     val qid: U64 = intern(c: inout c, start: start, len: len)
     mut val nti: U64 = 0
-    while nti < c.arena.newtypes.count() {
-        if c.arena.newtypes[nti].nameId == qid {
+    while nti < c.arena.newtypeCount() {
+        if c.arena.newtypeAt(index: nti).nameId == qid {
             return true
         }
         nti += 1
@@ -1473,7 +1473,7 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 // requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
 // Returns false if any parameter / associated type is left unbound.
 fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
-    val t: TraitDef = c.decls.traits[traitIdx]
+    val t: TraitDef = c.decls.traitAt(index: traitIdx)
     val ar: TypeRef = c.arena.typeAt(index: anyRef)
     // positional binding refs (argLabels entry 0), in source order.
     mut val positional: Array[U64] = []

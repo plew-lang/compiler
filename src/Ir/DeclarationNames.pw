@@ -22,6 +22,9 @@ pub impl Arena {
     }
 
     inout fn registerStruct(declaration~: StructDef) {
+        if self.structsByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
+            self.structsByOffset[declaration.defOffset] = self.structs.count() + 1U64
+        }
         val entry = self.structs.count() + 1U64
         val tail = self.structNameTails.getOr(key: declaration.nameId, fallback: 0U64)
         self.structNameNext.append(0U64)
@@ -70,6 +73,9 @@ pub impl Arena {
     }
 
     inout fn registerEnum(declaration~: EnumDef) {
+        if self.enumsByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
+            self.enumsByOffset[declaration.defOffset] = self.enums.count() + 1U64
+        }
         if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
         for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }
         self.enums.append(declaration)
@@ -97,5 +103,53 @@ pub impl Arena {
 
     fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
         return self.funcBindPool[binds.start + index]
+    }
+}
+
+// Offset indexes preserve the first declaration within each category.
+pub impl Arena {
+    fn structNameByOffset(offset: U64) -> Optional[DeclarationName] {
+        val entry = self.structsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return <Optional.None /> }
+        val declaration = self.structs[entry - 1U64]
+        return <Optional.Some v=<DeclarationName start=declaration.nameStart len=declaration.nameLen /> />
+    }
+    fn enumNameByOffset(offset: U64) -> Optional[DeclarationName] {
+        val entry = self.enumsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return <Optional.None /> }
+        val declaration = self.enums[entry - 1U64]
+        return <Optional.Some v=<DeclarationName start=declaration.nameStart len=declaration.nameLen /> />
+    }
+    fn newtypeCount() -> U64 { return self.newtypes.count() }
+    fn newtypeAt(index: U64) -> NewtypeDef { return self.newtypes[index] }
+    inout fn registerNewtype(declaration~: NewtypeDef) {
+        if self.newtypesByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
+            self.newtypesByOffset[declaration.defOffset] = self.newtypes.count() + 1U64
+        }
+        self.newtypes.append(declaration)
+    }
+    fn newtypeNameByOffset(offset: U64) -> Optional[DeclarationName] {
+        val entry = self.newtypesByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return <Optional.None /> }
+        val declaration = self.newtypes[entry - 1U64]
+        return <Optional.Some v=<DeclarationName start=declaration.nameStart len=declaration.nameLen /> />
+    }
+}
+
+// Offset indexes preserve the first declaration within each category.
+pub impl Decls {
+    fn traitCount() -> U64 { return self.traits.count() }
+    fn traitAt(index: U64) -> TraitDef { return self.traits[index] }
+    inout fn registerTrait(declaration~: TraitDef) {
+        if self.traitsByOffset.getOr(key: declaration.nameStart, fallback: 0U64) == 0U64 {
+            self.traitsByOffset[declaration.nameStart] = self.traits.count() + 1U64
+        }
+        self.traits.append(declaration)
+    }
+    fn traitNameByOffset(offset: U64) -> Optional[DeclarationName] {
+        val entry = self.traitsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return <Optional.None /> }
+        val declaration = self.traits[entry - 1U64]
+        return <Optional.Some v=<DeclarationName start=declaration.nameStart len=declaration.nameLen /> />
     }
 }

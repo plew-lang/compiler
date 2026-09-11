@@ -863,8 +863,8 @@ pub impl Comp {
             StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { return self.cur.bodyEnvironment.proof }
             _ => {}
         }
-        if traitIdx >= self.decls.traits.count() { return <StaticConformanceProof.Missing /> }
-        val traitDef: TraitDef = self.decls.traits[traitIdx]
+        if traitIdx >= self.decls.traitCount() { return <StaticConformanceProof.Missing /> }
+        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
         return self.concreteConformanceProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: [])
     }
 
@@ -880,8 +880,8 @@ pub impl Comp {
             // conformer, alongside ordinary method/receiver binders.
             if (f.isProvided || self.methodRecvIsTrait(f: f)) && f.provTraitOwner != 0U64 {
                 mut val ti: U64 = 0U64
-                while ti < self.decls.traits.count() {
-                    val traitDef: TraitDef = self.decls.traits[ti]
+                while ti < self.decls.traitCount() {
+                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
                     if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
                         val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
                         params.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=traitDef.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
@@ -2545,8 +2545,8 @@ pub impl Comp {
             // or re-export with the same spelling from changing a conversion
             // proof during finalization.
             val traitIdx: U64 = self.recordAnyTraitIndex(anyRef: targetRef)
-            if traitIdx >= self.decls.traits.count() { return <ValueConversionProof.Missing /> }
-            val trait: TraitDef = self.decls.traits[traitIdx]
+            if traitIdx >= self.decls.traitCount() { return <ValueConversionProof.Missing /> }
+            val trait: TraitDef = self.decls.traitAt(index: traitIdx)
             val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: [])
             if self.proofIsMissing(proof: proof) { return <ValueConversionProof.Missing /> }
             return <ValueConversionProof.ExistentialBox sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
@@ -3133,9 +3133,9 @@ pub impl Comp {
         val t: TypeRef = self.arena.typeAt(index: anyRef)
         if !(t.isAny) { return 0U64 }
         val traitIdx: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
-        if traitIdx >= self.decls.traits.count() { return 0U64 }
+        if traitIdx >= self.decls.traitCount() { return 0U64 }
         val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val tr: TraitDef = self.decls.traits[traitIdx]
+        val tr: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val ri: U64 = 0U64
         while ri < tr.reqs.count() {
             val req: Func = self.traitReqAt(reqs: tr.reqs, index: ri)
@@ -3148,9 +3148,9 @@ pub impl Comp {
     }
 
     inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {
-        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traits.count() }
+        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traitCount() }
         val t: TypeRef = self.arena.typeAt(index: anyRef)
-        if !(t.isAny) { return self.decls.traits.count() }
+        if !(t.isAny) { return self.decls.traitCount() }
         return self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
     }
 
@@ -3225,10 +3225,10 @@ pub impl Comp {
                 if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeAt(index: recvRef).isAny {
                     val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
-                    if traitIdx >= self.decls.traits.count() || reqSlot == 0U64 {
+                    if traitIdx >= self.decls.traitCount() || reqSlot == 0U64 {
                         self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
                     } else {
-                        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqSlot - 1U64)
+                        val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqSlot - 1U64)
                         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
@@ -3239,8 +3239,8 @@ pub impl Comp {
                 if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeAt(index: recvRef).isAny {
                     val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
-                    if traitIdx < self.decls.traits.count() && reqSlot != 0U64 {
-                        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqSlot - 1U64)
+                    if traitIdx < self.decls.traitCount() && reqSlot != 0U64 {
+                        val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqSlot - 1U64)
                         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
@@ -3333,8 +3333,8 @@ pub impl Comp {
             }
             if traitOwner != 0U64 {
                 mut val traitIdx: U64 = 0U64
-                while traitIdx < self.decls.traits.count() {
-                    if self.decls.traits[traitIdx].nameStart == traitOwner && (traitId == 0U64 || self.decls.traits[traitIdx].nameId == traitId) {
+                while traitIdx < self.decls.traitCount() {
+                    if self.decls.traitAt(index: traitIdx).nameStart == traitOwner && (traitId == 0U64 || self.decls.traitAt(index: traitIdx).nameId == traitId) {
                         concreteProof = self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)
                     }
                     traitIdx += 1U64
@@ -3378,11 +3378,11 @@ pub impl Comp {
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
-                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traits.count() || slot == 0U64 || slot > self.decls.traits[traitIdx].reqs.count() {
+                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIdx).reqs.count() {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
                 }
-                val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: slot - 1U64)
+                val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
                 val resultRef: U64 = self.anyMemberRetInfo(anyRef: receiverRef, req: req).ref
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
             }
@@ -3425,8 +3425,8 @@ pub impl Comp {
     // its witness body uses the former.  Selecting the terminal unconditionally
     // loses that distinction and makes nested requirement dispatch impossible.
     inout fn bodyProofConformanceForTrait(traitIdx: U64) -> U64 {
-        if traitIdx >= self.decls.traits.count() { return 0U64 }
-        val requested: TraitDef = self.decls.traits[traitIdx]
+        if traitIdx >= self.decls.traitCount() { return 0U64 }
+        val requested: TraitDef = self.decls.traitAt(index: traitIdx)
         match self.cur.bodyEnvironment.proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conforms.count() {
@@ -3459,11 +3459,11 @@ pub impl Comp {
     // contributes one conferred copy with the same body/definition and the
     // selected path's source trait/extension identity.
     inout fn traitSelfConcreteWitness(traitIdx: U64, reqIdx: U64) -> U64 {
-        if traitIdx >= self.decls.traits.count() || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return self.arena.functionCount() }
+        if traitIdx >= self.decls.traitCount() || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return self.arena.functionCount() }
         val conformIdx: U64 = self.bodyProofConformanceForTrait(traitIdx: traitIdx)
         if conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return self.arena.functionCount() }
         val conform: Conform = self.decls.conforms[conformIdx - 1U64]
-        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqIdx)
+        val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
         mut val wi: U64 = 0U64
         while wi < conform.witnessFuncIds.count() {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
@@ -3478,7 +3478,7 @@ pub impl Comp {
                     // still need the conferred copy below: their receiver is
                     // abstract (for example `impl B as A`) and cannot be
                     // emitted for S without the preceding S-as-B edge.
-                    if !(self.methodRecvIsTrait(f: source)) && source.originTraitId == self.decls.traits[traitIdx].nameId && source.originTraitOwner == self.decls.traits[traitIdx].nameStart {
+                    if !(self.methodRecvIsTrait(f: source)) && source.originTraitId == self.decls.traitAt(index: traitIdx).nameId && source.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                         return sourceIdx
                     }
                     mut val ci: U64 = 0U64
@@ -3492,7 +3492,7 @@ pub impl Comp {
                         // target trait, not its subject).  This keeps a
                         // B-as-A witness distinct from another A witness that
                         // happens to have the same member name.
-                        if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traits[traitIdx].nameId && candidate.originTraitOwner == self.decls.traits[traitIdx].nameStart {
+                        if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traitAt(index: traitIdx).nameId && candidate.originTraitOwner == self.decls.traitAt(index: traitIdx).nameStart {
                             return ci
                         }
                         ci += 1U64
@@ -3513,17 +3513,17 @@ pub impl Comp {
         if resultRef == 0U64 { resultRef = expected }
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traits.count() || reqIdx >= self.decls.traits[traitIdx].reqs.count() {
+                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method template has invalid proof or receiver")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
-                val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqIdx)
+                val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
                 mut val callee: U64 = self.arena.functionCount()
                 match proof {
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
                         callee = self.traitSelfConcreteWitness(traitIdx: traitIdx, reqIdx: reqIdx)
                         if callee >= self.arena.functionCount() {
-                            val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traits[traitIdx].nameStart)
+                            val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traitAt(index: traitIdx).nameStart)
                             val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.typeCount() { give self.arena.typeAt(index: proofReceiver).viewExtId } else { give 0U64 }
                             if req.isAssoc {
                                 callee = self.resolveAssocForResolvedReceiver(surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
@@ -3545,14 +3545,14 @@ pub impl Comp {
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
                 val f: Func = self.arena.functionAt(index: callee)
-                if f.originTraitId != self.decls.traits[traitIdx].nameId || f.originTraitOwner != self.decls.traits[traitIdx].nameStart {
+                if f.originTraitId != self.decls.traitAt(index: traitIdx).nameId || f.originTraitOwner != self.decls.traitAt(index: traitIdx).nameStart {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method selected a callable outside its proved trait")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
                 return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> />
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIdx, callee: val declaration) => {
-                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traits.count() || declaration >= self.arena.functionCount() {
+                if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || traitIdx >= self.decls.traitCount() || declaration >= self.arena.functionCount() {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method template has invalid proof or receiver")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
@@ -3567,7 +3567,7 @@ pub impl Comp {
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
                 val f: Func = self.arena.functionAt(index: callee)
-                if f.originTraitId != self.decls.traits[traitIdx].nameId || f.originTraitOwner != self.decls.traits[traitIdx].nameStart {
+                if f.originTraitId != self.decls.traitAt(index: traitIdx).nameId || f.originTraitOwner != self.decls.traitAt(index: traitIdx).nameStart {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method selected a callable outside its proved trait")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
@@ -5412,10 +5412,10 @@ pub impl Comp {
                         val noArgs: Array[Arg] = []
                         val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
                         val nextSlot: U64 = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs))
-                        if traitIdx >= self.decls.traits.count() || nextSlot == 0U64 {
+                        if traitIdx >= self.decls.traitCount() || nextSlot == 0U64 {
                             self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
                         } else {
-                            val nextReq: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: nextSlot - 1U64)
+                            val nextReq: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: nextSlot - 1U64)
                             self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef resultRef=self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=nextSlot /> />)
                         }
                     }

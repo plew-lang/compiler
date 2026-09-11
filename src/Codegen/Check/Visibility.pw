@@ -200,16 +200,16 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: i)
             if td.nameId == qId {
                 if self.defModuleVisible(defOffset: td.nameStart, useMod: useMod) { return true }
             }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count() {
-            val nt: NewtypeDef = self.arena.newtypes[i]
+        while i < self.arena.newtypeCount() {
+            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
                 if self.defModuleVisible(defOffset: nt.defOffset, useMod: useMod) { return true }
             }
@@ -230,14 +230,14 @@ pub impl Comp {
         if self.anyStructIndex(nameStart: start, nameLen: len) < self.arena.structCount() { return true }
         if self.anyEnumIndex(nameStart: start, nameLen: len) < self.arena.enumCount() { return true }
         mut val i: U64 = 0
-        while i < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: i)
             if td.nameId == qId { return true }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count() {
-            val nt: NewtypeDef = self.arena.newtypes[i]
+        while i < self.arena.newtypeCount() {
+            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) { return true }
             i += 1
         }
@@ -365,14 +365,14 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: i)
             if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count() {
-            val nt: NewtypeDef = self.arena.newtypes[i]
+        while i < self.arena.newtypeCount() {
+            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
             if nt.nameId == qId {
                 if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
             }
@@ -406,16 +406,16 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count() {
-            val d: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val d: TraitDef = self.decls.traitAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.nameStart) == mod {
                 return <Bind nameStart=d.nameStart nameLen=1 fieldStart=0 fieldLen=0 />
             }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count() {
-            val d: NewtypeDef = self.arena.newtypes[i]
+        while i < self.arena.newtypeCount() {
+            val d: NewtypeDef = self.arena.newtypeAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
@@ -489,29 +489,21 @@ pub impl Comp {
     }
 
     inout fn declIdentityHasName(identity: Bind, start: U64, len: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.arena.structCount() {
-            val d: StructDef = self.arena.structAt(index: i)
-            if d.defOffset == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
-            i += 1
+        match self.arena.structNameByOffset(offset: identity.nameStart) {
+            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.None => {}
         }
-        i = 0
-        while i < self.arena.enumCount() {
-            val d: EnumDef = self.arena.enumAt(index: i)
-            if d.defOffset == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
-            i += 1
+        match self.arena.enumNameByOffset(offset: identity.nameStart) {
+            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.None => {}
         }
-        i = 0
-        while i < self.decls.traits.count() {
-            val d: TraitDef = self.decls.traits[i]
-            if d.nameStart == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
-            i += 1
+        match self.decls.traitNameByOffset(offset: identity.nameStart) {
+            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.None => {}
         }
-        i = 0
-        while i < self.arena.newtypes.count() {
-            val d: NewtypeDef = self.arena.newtypes[i]
-            if d.defOffset == identity.nameStart { return spansEqual(c: inout self, aStart: d.nameStart, aLen: d.nameLen, bStart: start, bLen: len) }
-            i += 1
+        match self.arena.newtypeNameByOffset(offset: identity.nameStart) {
+            Optional.Some(v: val name) => { return spansEqual(c: inout self, aStart: name.start, aLen: name.len, bStart: start, bLen: len) }
+            Optional.None => {}
         }
         return false
     }
@@ -797,8 +789,8 @@ pub impl Comp {
     inout fn traitIdArityExportedInModule(traitId: U64, arity: U64, mod: U64) -> Bool {
         val surfaceMod: U64 = self.packageRootModuleOf(mod: mod)
         mut val i: U64 = 0
-        while i < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: i)
             if td.nameId == traitId {
                 if td.typeParams.count() == arity {
                     if self.packageRootModuleOf(mod: self.moduleOf(offset: td.nameStart)) == surfaceMod {
@@ -884,16 +876,16 @@ pub impl Comp {
             ei += 1
         }
         mut val nti: U64 = 0
-        while nti < self.arena.newtypes.count() {
-            val nt: NewtypeDef = self.arena.newtypes[nti]
+        while nti < self.arena.newtypeCount() {
+            val nt: NewtypeDef = self.arena.newtypeAt(index: nti)
             if identity.nameLen != 0U64 && nt.defOffset == identity.nameStart {
                 self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
             }
             nti += 1
         }
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: ti)
             if identity.nameLen != 0U64 && td.nameStart == identity.nameStart {
                 self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
             }
@@ -992,14 +984,14 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: i)
             if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count() {
-            val nt: NewtypeDef = self.arena.newtypes[i]
+        while i < self.arena.newtypeCount() {
+            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
                 if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
             }

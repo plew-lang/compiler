@@ -11,7 +11,7 @@ fn main() {
     val name = c.internTmpName(prefix: "declaration", n: 0U64)
     c.modules.registerSourceFile(start: name.nameStart, length: name.nameLen, moduleId: 7U64, path: "<test>")
     val traitName = c.internTmpName(prefix: "Trait", n: 0U64)
-    c.decls.traits.append(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
+    c.decls.registerTrait(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
     c.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
     val binds = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
     val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)

@@ -6,8 +6,8 @@
 pub impl Comp {
     inout fn traitHasAssocId(traitId: U64, assocId: U64) -> Bool {
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val tr: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val tr: TraitDef = self.decls.traitAt(index: ti)
             if tr.nameId == traitId {
                 mut val ai: U64 = 0
                 while ai < tr.assocTypes.count() {
@@ -24,8 +24,8 @@ pub impl Comp {
 
     inout fn traitPositionalArity(traitId: U64) -> U64 {
         mut val ti: U64 = 0U64
-        while ti < self.decls.traits.count() {
-            val tr: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val tr: TraitDef = self.decls.traitAt(index: ti)
             if tr.nameId == traitId { return tr.typeParams.count() }
             ti += 1U64
         }

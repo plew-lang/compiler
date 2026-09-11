@@ -841,10 +841,10 @@ pub impl Comp {
         // construction type name to the underlying struct so `<Brand code=255 />` finds the
         // `code` field's type for the literal's context (Brand = Rgb).
         mut val ntI: U64 = 0
-        while ntI < self.arena.newtypes.count() {
-            if self.arena.newtypes[ntI].nameId == tid {
-                tid = intern(c: inout self, start: self.arena.newtypes[ntI].underStart, len: self.arena.newtypes[ntI].underLen)
-                ntI = self.arena.newtypes.count()
+        while ntI < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ntI).nameId == tid {
+                tid = intern(c: inout self, start: self.arena.newtypeAt(index: ntI).underStart, len: self.arena.newtypeAt(index: ntI).underLen)
+                ntI = self.arena.newtypeCount()
             } else {
                 ntI += 1
             }

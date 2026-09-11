@@ -15,6 +15,12 @@ part ./Ir/DeclarationNames
 // `Comp` itself lives in `./Frontend` (its behavior is `impl Comp`, which must sit
 // in the type's defining module — spec/15).
 
+export struct DeclarationName {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl DeclarationName { factory }
+
 // ---- AST (arena, indexed by U64) ----
 //
 // Expressions and statements live in flat arenas (Array[Expr]/Array[Stmt]);
@@ -2222,12 +2228,14 @@ export struct Arena {
     mut val concreteTypeNameIds: Set[U64] = Set.new()
     mut val funcs: Array[Func] = []
     mut val structs: Array[StructDef] = []
+    mut val structsByOffset: Dictionary[U64, U64] = [:]
     mut val structNameHeads: Dictionary[U64, U64] = [:]
     mut val structNameTails: Dictionary[U64, U64] = [:]
     mut val genericStructNameHeads: Dictionary[U64, U64] = [:]
     mut val concreteStructNameHeads: Dictionary[U64, U64] = [:]
     mut val structNameNext: Array[U64] = []
     mut val enums: Array[EnumDef] = []
+    mut val enumsByOffset: Dictionary[U64, U64] = [:]
     // Canonical scalar semantic type rows. `types` is the legacy mirror while
     // consumers migrate; both tables have the same index during that period.
     // New hot-path readers must use typeTerms and these owner-specific pools.
@@ -2243,7 +2251,8 @@ export struct Arena {
     mut val typeRows: Array[TypeRef] = []
     mut val bareTypeNameRefs: Array[U64] = []
     pub mut val globals: Array[Global] = []
-    pub mut val newtypes: Array[NewtypeDef] = []
+    mut val newtypes: Array[NewtypeDef] = []
+    mut val newtypesByOffset: Dictionary[U64, U64] = [:]
     // Final static call selections belong to the analyzed program, not to
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
@@ -2694,7 +2703,8 @@ pub impl DestructureSite { factory }
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
 // deferred item source (see ForTypeRecipe).
 export struct Decls {
-    pub mut val traits: Array[TraitDef] = []
+    mut val traits: Array[TraitDef] = []
+    mut val traitsByOffset: Dictionary[U64, U64] = [:]
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
     mut val traitOwnerRows: Array[TraitOwner] = []

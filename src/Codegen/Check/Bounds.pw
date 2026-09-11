@@ -169,23 +169,23 @@ pub impl Comp {
     // later obtains the concrete target conformance, while Record never has
     // to reopen syntax or pretend that the user authored `T: Super`.
     inout fn staticMemberInSupertraits(boundIdx: U64, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[U64], depth: U64 = 0U64) -> StaticMemberResolution {
-        if depth > 64U64 || traitIdx >= self.decls.traits.count() { return <StaticMemberResolution.Missing /> }
-        val traitDef: TraitDef = self.decls.traits[traitIdx]
+        if depth > 64U64 || traitIdx >= self.decls.traitCount() { return <StaticMemberResolution.Missing /> }
+        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val si: U64 = 0U64
         while si < traitDef.supertraits.count() {
             val superBind: Bind = self.traitBindAt(binds: traitDef.supertraits, index: si)
             val superId: U64 = intern(c: inout self, start: superBind.nameStart, len: superBind.nameLen)
-            mut val nextTrait: U64 = self.decls.traits.count()
+            mut val nextTrait: U64 = self.decls.traitCount()
             mut val ti: U64 = 0U64
-            while ti < self.decls.traits.count() {
-                if self.decls.traits[ti].nameId == superId && self.traitArityMatches(actual: self.decls.traits[ti].typeParams.count(), expected: 4000000000U64) { nextTrait = ti }
+            while ti < self.decls.traitCount() {
+                if self.decls.traitAt(index: ti).nameId == superId && self.traitArityMatches(actual: self.decls.traitAt(index: ti).typeParams.count(), expected: 4000000000U64) { nextTrait = ti }
                 ti += 1U64
             }
-            if nextTrait < self.decls.traits.count() {
+            if nextTrait < self.decls.traitCount() {
                 mut val nextPath: Array[U64] = path
                 nextPath.append(nextTrait)
                 val proof: StaticConformanceProof = <StaticConformanceProof.AssumedSupertraitPath boundIdx=boundIdx traits=nextPath />
-                val target: TraitDef = self.decls.traits[nextTrait]
+                val target: TraitDef = self.decls.traitAt(index: nextTrait)
                 mut val ri: U64 = 0U64
                 while ri < target.reqs.count() {
                     val req: Func = self.traitReqAt(reqs: target.reqs, index: ri)
@@ -235,8 +235,8 @@ pub impl Comp {
                 match proof {
                     StaticConformanceProof.AssumedBound(boundIdx: _) => {
                         mut val ti: U64 = 0U64
-                        while ti < self.decls.traits.count() {
-                            val traitDef: TraitDef = self.decls.traits[ti]
+                        while ti < self.decls.traitCount() {
+                            val traitDef: TraitDef = self.decls.traitAt(index: ti)
                             if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                 mut val ri: U64 = 0U64
                                 while ri < traitDef.reqs.count() {
@@ -280,8 +280,8 @@ pub impl Comp {
                 match direct {
                     StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
                         mut val ti: U64 = 0U64
-                        while ti < self.decls.traits.count() {
-                            if self.decls.traits[ti].nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: self.decls.traits[ti].typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
+                        while ti < self.decls.traitCount() {
+                            if self.decls.traitAt(index: ti).nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: self.decls.traitAt(index: ti).typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                 val inherited: StaticMemberResolution = self.staticMemberInSupertraits(boundIdx: boundIdx, traitIdx: ti, memberId: memberId, args: args, path: [])
                                 match inherited {
                                     StaticMemberResolution.Missing => {}
@@ -311,8 +311,8 @@ pub impl Comp {
                             val edge: Conform = self.decls.conforms[ci]
                             if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
                                 mut val ti: U64 = 0U64
-                                while ti < self.decls.traits.count() {
-                                    val traitDef: TraitDef = self.decls.traits[ti]
+                                while ti < self.decls.traitCount() {
+                                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
                                     if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
                                         val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath boundIdx=boundIdx edges=[ci] />
                                         mut val fi: U64 = 0U64
@@ -353,8 +353,8 @@ pub impl Comp {
             val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
             if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
                 mut val ti: U64 = 0U64
-                while ti < self.decls.traits.count() {
-                    val traitDef: TraitDef = self.decls.traits[ti]
+                while ti < self.decls.traitCount() {
+                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
                     // In `impl B as A`, the implementation's conformance
                     // target is A (`provTraitOwner`), but its body receiver is
                     // B.  The implicit proof for `self.base()` is therefore
@@ -407,8 +407,8 @@ pub impl Comp {
                     match proof {
                         StaticConformanceProof.AssumedBound(boundIdx: _) => {
                             mut val ti: U64 = 0U64
-                            while ti < self.decls.traits.count() {
-                                val traitDef: TraitDef = self.decls.traits[ti]
+                            while ti < self.decls.traitCount() {
+                                val traitDef: TraitDef = self.decls.traitAt(index: ti)
                                 if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                     mut val ri: U64 = 0U64
                                     while ri < traitDef.reqs.count() {
@@ -442,8 +442,8 @@ pub impl Comp {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 match proof {
                     StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
-                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
@@ -460,8 +460,8 @@ pub impl Comp {
                         return out
                     }
                     StaticConformanceProof.AssumedSupertraitPath(boundIdx: val boundIdx, traits: _) => {
-                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
@@ -472,8 +472,8 @@ pub impl Comp {
                         return self.funcParamAt(params: req.params, index: paramIdx).ty
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
-                        if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
@@ -574,9 +574,9 @@ pub impl Comp {
                     // dropping them made `Index.Output` appear as the bare
                     // `Index[]` projection and forced later phases to guess.
                     StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
                         val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: witness)
                         if receiver == 0U64 { return 0U64 }
@@ -588,7 +588,7 @@ pub impl Comp {
                     // the path's first edge would incorrectly retain source
                     // trait arguments after a rewriting conformance.
                     StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminalConformIdx) => {
-                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
                         mut val terminal: WitnessMatch = <WitnessMatch />
                         mut val edgeIdx: U64 = 0U64
                         while edgeIdx < edges.count() {
@@ -597,31 +597,31 @@ pub impl Comp {
                         }
                         if terminal.conformIdx == 0U64 { return 0U64 }
                         val conform: Conform = self.decls.conforms[terminalConformIdx - 1U64]
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: terminal)
                         if receiver == 0U64 { return 0U64 }
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
                     }
                     StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
-                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
                     }
                     StaticConformanceProof.AssumedSupertraitPath(boundIdx: val boundIdx, traits: _) => {
-                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: [], predicates: [])
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
-                        if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: proofReceiver, traitArgs: traitArgs, predicates: [])
                     }
@@ -834,8 +834,8 @@ pub impl Comp {
 
     inout fn resolveTraitDef(cf: Conform) -> U64 {
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val t: TraitDef = self.decls.traitAt(index: ti)
             // `Conform.traitStart` is the declaration owner selected while
             // lowering the authored `as Trait` occurrence.  Do not recover a
             // trait from spelling/arity here: same-spelling declarations may
@@ -843,7 +843,7 @@ pub impl Comp {
             if t.nameStart == cf.traitStart { return ti }
             ti += 1
         }
-        return self.decls.traits.count()
+        return self.decls.traitCount()
     }
 
     inout fn checkAnyFormation() {
@@ -852,8 +852,8 @@ pub impl Comp {
             val t: TypeRef = self.arena.typeAt(index: ti)
             if t.isAny {
                 val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
-                if tri < self.decls.traits.count() {
-                    val tr: TraitDef = self.decls.traits[tri]
+                if tri < self.decls.traitCount() {
+                    val tr: TraitDef = self.decls.traitAt(index: tri)
                     // count positional bindings (argLabels entry 0 / absent).
                     mut val positional: U64 = 0
                     mut val ai: U64 = 0
@@ -921,8 +921,8 @@ pub impl Comp {
             // resolveTraitDef); a conformance to an undeclared/unimported trait is a
             // loud error (spec/08: explicit conformance).
             val ti: U64 = self.resolveTraitDef(cf: cf)
-            if ti < self.decls.traits.count() {
-                val t: TraitDef = self.decls.traits[ti]
+            if ti < self.decls.traitCount() {
+                val t: TraitDef = self.decls.traitAt(index: ti)
                 // Re-check the requirements of the exact declaration owner.
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
@@ -1014,9 +1014,9 @@ pub impl Comp {
         // (spec/10), so `UserId = String` satisfies `where T: Format` because String
         // does — `print(u)` type-checks and dispatches to the underlying's witness.
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count() {
-            if self.arena.newtypes[ni].nameId == qType {
-                return self.typeConformsTo(typeStart: self.arena.newtypes[ni].underStart, typeLen: self.arena.newtypes[ni].underLen, traitStart: traitStart, traitLen: traitLen)
+        while ni < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: ni).nameId == qType {
+                return self.typeConformsTo(typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen, traitStart: traitStart, traitLen: traitLen)
             }
             ni += 1
         }
@@ -1098,18 +1098,18 @@ pub impl Comp {
             return true
         }
         // conditional impl: check the impl-level `where` bounds against THIS instance's args.
-        mut val traitIdx: U64 = self.decls.traits.count()
+        mut val traitIdx: U64 = self.decls.traitCount()
         mut val traitScan: U64 = 0U64
-        while traitScan < self.decls.traits.count() {
-            if self.decls.traits[traitScan].nameStart == traitStart && self.decls.traits[traitScan].nameLen == traitLen {
+        while traitScan < self.decls.traitCount() {
+            if self.decls.traitAt(index: traitScan).nameStart == traitStart && self.decls.traitAt(index: traitScan).nameLen == traitLen {
                 traitIdx = traitScan
             }
             traitScan += 1U64
         }
-        if traitIdx >= self.decls.traits.count() {
+        if traitIdx >= self.decls.traitCount() {
             return true
         }
-        val tr: TraitDef = self.decls.traits[traitIdx]
+        val tr: TraitDef = self.decls.traitAt(index: traitIdx)
         if tr.reqs.count() == 0U64 {
             return true
         }

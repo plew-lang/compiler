@@ -376,8 +376,8 @@ pub impl Comp {
 
     inout fn appendTraitAssocTypes(scope: inout Array[Bind], nameId: U64) {
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: ti)
             if td.nameId == nameId {
                 mut val ai: U64 = 0
                 while ai < td.assocTypes.count() {
@@ -393,8 +393,8 @@ pub impl Comp {
     // The source spelling is shared, but identity is declaration-owned.
     inout fn appendTraitSelfBinder(scope: inout Array[Bind], owner: U64) {
         mut val ti: U64 = 0U64
-        while ti < self.decls.traits.count() {
-            val td: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val td: TraitDef = self.decls.traitAt(index: ti)
             if td.nameStart == owner && td.selfParamId != 0U64 {
                 val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
                 scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=td.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
@@ -1067,7 +1067,7 @@ pub impl Comp {
             ri += 1
         }
         self.cur.typeParams = savedTP
-        self.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
+        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
@@ -1122,7 +1122,7 @@ pub impl Comp {
             i += 1U64
         }
         self.cur.typeParams = savedTP
-        self.decls.traits.append(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
+        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
     }
 }

@@ -16,8 +16,8 @@ pub impl Comp {
     inout fn abstractProvidedItemRef(f: Func) -> U64 {
         if !(self.methodRecvIsTrait(f: f)) { return 0U64 }
         mut val ti: U64 = 0U64
-        while ti < self.decls.traits.count() {
-            val traitDef: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val traitDef: TraitDef = self.decls.traitAt(index: ti)
             if traitDef.nameStart == f.provTraitOwner {
                 val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
                 val raw: U64 = self.simpleTypeRef(nameStart: item.nameStart, nameLen: item.nameLen)
@@ -144,8 +144,8 @@ pub impl Comp {
             return false
         }
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val t: TraitDef = self.decls.traitAt(index: ti)
             if t.nameId == traitNameId && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
                 val concreteArity: U64 = t.typeParams.count()
                 // requirement of this trait

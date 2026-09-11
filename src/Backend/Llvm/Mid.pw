@@ -473,7 +473,7 @@ pub impl LlvmCtx {
                 }
                 match c.thawValueConversionProof(id: conversion) {
                     ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
-                        return sourceRef != 0U64 && sourceRef < c.arena.typeCount() && targetRef != 0U64 && targetRef < c.arena.typeCount() && traitIdx < c.decls.traits.count() && !(c.proofIsMissing(proof: proof))
+                        return sourceRef != 0U64 && sourceRef < c.arena.typeCount() && targetRef != 0U64 && targetRef < c.arena.typeCount() && traitIdx < c.decls.traitCount() && !(c.proofIsMissing(proof: proof))
                     }
                     ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
                         if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() { return false }
@@ -1873,7 +1873,7 @@ pub impl LlvmCtx {
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
         if node.tag == 0U64 { return true }
         if node.tag == 2U64 {
-            if node.sourceRef == 0U64 || node.sourceRef >= c.arena.typeCount() || node.targetRef == 0U64 || node.targetRef >= c.arena.typeCount() || node.traitIdx >= c.decls.traits.count() { return false }
+            if node.sourceRef == 0U64 || node.sourceRef >= c.arena.typeCount() || node.targetRef == 0U64 || node.targetRef >= c.arena.typeCount() || node.traitIdx >= c.decls.traitCount() { return false }
             // StaticProofNode.tag=0 is the frozen Missing sentinel.  The
             // backend does not interpret the witness path, but must not erase
             // a value through an absent proof.
@@ -2447,7 +2447,7 @@ pub impl LlvmCtx {
     inout fn midEmitValueConversion(c: inout Comp, body: MidBody, operand: MidOperand, conversion: ValueConversionProof) -> LLVMValueRef {
         match conversion {
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
-                if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || traitIdx >= c.decls.traits.count() || c.proofIsMissing(proof: proof) { return LLVMConstNull(self.anyTy) }
+                if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || traitIdx >= c.decls.traitCount() || c.proofIsMissing(proof: proof) { return LLVMConstNull(self.anyTy) }
                 if !(c.typeRefEq(a: self.midOperandTypeTerm(operand: operand), b: sourceRef)) { return LLVMConstNull(self.anyTy) }
                 val source: TypeRef = c.arena.typeAt(index: sourceRef)
                 val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)

@@ -1170,8 +1170,8 @@ pub impl Comp {
         // a newtype name is a type name too (it can be an assoc-fn/factory receiver
         // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
         mut val nti: U64 = 0
-        while nti < self.arena.newtypes.count() {
-            if self.arena.newtypes[nti].nameId == qId {
+        while nti < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: nti).nameId == qId {
                 return true
             }
             nti += 1
@@ -1189,8 +1189,8 @@ pub impl Comp {
         // `Hash.derive(input)` rides on this). This is `isTypeName`'s only caller
         // (assocRecvName), so traits qualify only for that routing.
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            if self.decls.traits[ti].nameId == qId {
+        while ti < self.decls.traitCount() {
+            if self.decls.traitAt(index: ti).nameId == qId {
                 return true
             }
             ti += 1

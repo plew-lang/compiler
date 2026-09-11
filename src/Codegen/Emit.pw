@@ -151,14 +151,14 @@ pub impl Comp {
     // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
     // Codegen resolves a newtype to its underlying for representation / method dispatch.
     inout fn newtypeUnderRef(start: U64, len: U64) -> U64 {
-        if self.arena.newtypes.count() == 0U64 {
+        if self.arena.newtypeCount() == 0U64 {
             return 0U64
         }
         val nid: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.newtypes.count() {
-            if self.arena.newtypes[i].nameId == nid {
-                return self.arena.newtypes[i].underRef
+        while i < self.arena.newtypeCount() {
+            if self.arena.newtypeAt(index: i).nameId == nid {
+                return self.arena.newtypeAt(index: i).underRef
             }
             i += 1
         }
@@ -168,12 +168,12 @@ pub impl Comp {
     // The underlying type's head-name span for a `newtype` named (start, len), or the
     // input span unchanged when it is not a newtype.
     inout fn newtypeUnderName(start: U64, len: U64) -> Bind {
-        if self.arena.newtypes.count() != 0U64 {
+        if self.arena.newtypeCount() != 0U64 {
             val nid: U64 = intern(c: inout self, start: start, len: len)
             mut val i: U64 = 0
-            while i < self.arena.newtypes.count() {
-                if self.arena.newtypes[i].nameId == nid {
-                    return <Bind nameStart=self.arena.newtypes[i].underStart nameLen=self.arena.newtypes[i].underLen fieldStart=0 fieldLen=0 />
+            while i < self.arena.newtypeCount() {
+                if self.arena.newtypeAt(index: i).nameId == nid {
+                    return <Bind nameStart=self.arena.newtypeAt(index: i).underStart nameLen=self.arena.newtypeAt(index: i).underLen fieldStart=0 fieldLen=0 />
                 }
                 i += 1
             }

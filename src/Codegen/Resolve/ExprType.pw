@@ -18,8 +18,8 @@ pub impl Comp {
             return scalarInfo()
         }
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[ti]
+        while ti < self.decls.traitCount() {
+            val t: TraitDef = self.decls.traitAt(index: ti)
             if t.nameId == traitNameId && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
                 val concreteArity: U64 = t.typeParams.count()
                 mut val ri: U64 = 0
@@ -354,9 +354,9 @@ pub impl Comp {
                 val owner: U64 = fb.constraint.key.owner
                 val qTrait: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
                 mut val traitIdx: U64 = 0U64
-                while traitIdx < self.decls.traits.count() {
-                    if self.decls.traits[traitIdx].nameId == qTrait && self.traitArityMatches(actual: self.decls.traits[traitIdx].typeParams.count(), expected: fb.constraint.key.positionalArgs.count()) {
-                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                while traitIdx < self.decls.traitCount() {
+                    if self.decls.traitAt(index: traitIdx).nameId == qTrait && self.traitArityMatches(actual: self.decls.traitAt(index: traitIdx).typeParams.count(), expected: fb.constraint.key.positionalArgs.count()) {
+                        val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         mut val reqIdx: U64 = 0U64
                         while reqIdx < traitDef.reqs.count() {
                             val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
@@ -375,7 +375,7 @@ pub impl Comp {
                             }
                             reqIdx += 1U64
                         }
-                        traitIdx = self.decls.traits.count()
+                        traitIdx = self.decls.traitCount()
                     } else {
                         traitIdx += 1U64
                     }
@@ -400,8 +400,8 @@ pub impl Comp {
     // concrete witness or an existential thunk. Both ends use this same
     // substitution; a Cursor selfRef is not a substitute for its ParamId.
     inout fn groundTraitRequirementType(ref: U64, traitIdx: U64, receiverRef: U64, params: Array[Bind], args: Array[U64]) -> U64 {
-        if traitIdx >= self.decls.traits.count() { return ref }
-        val trait: TraitDef = self.decls.traits[traitIdx]
+        if traitIdx >= self.decls.traitCount() { return ref }
+        val trait: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val boundParams: Array[Bind] = []
         mut val boundArgs: Array[U64] = []
         if trait.selfParamId != 0U64 {
@@ -425,10 +425,10 @@ pub impl Comp {
         }
         val t: TypeRef = self.arena.typeAt(index: anyRef)
         val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
-        if tri >= self.decls.traits.count() {
+        if tri >= self.decls.traitCount() {
             return scalarInfo()
         }
-        val tr: TraitDef = self.decls.traits[tri]
+        val tr: TraitDef = self.decls.traitAt(index: tri)
         mut val tp: Array[Bind] = []
         mut val ta: Array[U64] = []
         mut val pos: U64 = 0
@@ -1139,9 +1139,9 @@ pub impl Comp {
                                 val qTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                                 val qMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                                 mut val ti: U64 = 0
-                                while ti < self.decls.traits.count() {
-                                    if self.decls.traits[ti].nameId == qTrait {
-                                        val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traits[ti].reqs)
+                                while ti < self.decls.traitCount() {
+                                    if self.decls.traitAt(index: ti).nameId == qTrait {
+                                        val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traitAt(index: ti).reqs)
                                         mut val ri: U64 = 0
                                         while ri < reqs.count() {
                                             if reqs[ri].nameId == qMethod {

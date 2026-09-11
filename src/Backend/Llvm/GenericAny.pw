@@ -9,7 +9,7 @@
 pub impl LlvmCtx {
 
     // If expression `recv` has an existential `any P` type, the trait def index of P;
-    // else c.decls.traits.count(). (Resolved later than refIsAny so the forward reference to
+    // else c.decls.traitCount(). (Resolved later than refIsAny so the forward reference to
     // findTraitIdxByName is fine — the module is one compilation unit.)
     inout fn anyRecvTraitIdx(c: inout Comp, recv: U64) -> U64 {
         val r: U64 = self.exprTypeRef(c: inout c, id: recv)
@@ -21,7 +21,7 @@ pub impl LlvmCtx {
         if refIsAny(c: inout c, ref: r) {
             return c.findTraitIdxByName(start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen)
         }
-        return c.decls.traits.count()
+        return c.decls.traitCount()
     }
 }
 

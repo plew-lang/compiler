@@ -305,13 +305,13 @@ pub impl Comp {
     // Prefer that owner over a spelling scan so an import/re-export cannot
     // redirect an existential slot after the source resolver selected it.
     inout fn recordAnyTraitIndex(anyRef: U64) -> U64 {
-        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traits.count() }
+        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traitCount() }
         val anyTy: TypeRef = self.arena.typeAt(index: anyRef)
-        if !(anyTy.isAny) { return self.decls.traits.count() }
+        if !(anyTy.isAny) { return self.decls.traitCount() }
         if anyTy.hasDecl {
             mut val i: U64 = 0U64
-            while i < self.decls.traits.count() {
-                if self.decls.traits[i].nameStart == anyTy.declOffset { return i }
+            while i < self.decls.traitCount() {
+                if self.decls.traitAt(index: i).nameStart == anyTy.declOffset { return i }
                 i += 1U64
             }
         }
@@ -320,9 +320,9 @@ pub impl Comp {
 
     inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: anyRef)
-        if traitIndex >= self.decls.traits.count() { return 0U64 }
+        if traitIndex >= self.decls.traitCount() { return 0U64 }
         val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val tr: TraitDef = self.decls.traits[traitIndex]
+        val tr: TraitDef = self.decls.traitAt(index: traitIndex)
         mut val i: U64 = 0U64
         while i < tr.reqs.count() {
             val req: Func = self.traitReqAt(reqs: tr.reqs, index: i)
@@ -361,7 +361,7 @@ pub impl Comp {
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
             val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
-            if traitIndex < self.decls.traits.count() && slot != 0U64 {
+            if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
             }
             return
@@ -533,8 +533,8 @@ pub impl Comp {
         if self.methodRecvIsTrait(f: f) {
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
             mut val ti: U64 = 0U64
-            while ti < self.decls.traits.count() {
-                val traitDef: TraitDef = self.decls.traits[ti]
+            while ti < self.decls.traitCount() {
+                val traitDef: TraitDef = self.decls.traitAt(index: ti)
                 if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
                     return self.pushType(t: <TypeRef nameStart=sb.nameStart nameLen=sb.nameLen paramId=traitDef.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                 }
