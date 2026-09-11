@@ -1,0 +1,46 @@
+import /Frontend with { Comp }
+import /Ir with { Bind, TypeRef, UnifyBind, PatternBindInput, PatternTypeInput }
+import @Std/Io with { write }
+
+fn check(compiler: inout Comp, parameters: PatternBindInput, declared: PatternTypeInput, actual: PatternTypeInput, variable: U64, concrete: U64, nested: U64) {
+    if compiler.patternBindCount(input: parameters) != 1U64 { panic "binder count" }
+    if compiler.patternBindAt(input: parameters, index: 0U64).paramId != 71U64 { panic "binder identity" }
+    mut val bindings: Array[UnifyBind] = []
+    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: concrete, bSide: 1U64, aParams: parameters, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "matching failed" }
+    if bindings.count() != 1U64 || bindings[0U64].ref != concrete { panic "substitution" }
+    val witness = compiler.witnessMatchFromUnify(conformIdx: 3U64, typeParams: parameters, binds: bindings)
+    if witness.conformIdx != 4U64 || witness.binds.count() != 1U64 { panic "witness count" }
+    if witness.binds[0U64].paramId != 71U64 || witness.binds[0U64].term != concrete { panic "witness identity" }
+    bindings = []
+    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nested, bSide: 0U64, aParams: parameters, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "occurs check" }
+    val matchedWitness = compiler.conformancePatternWitnessMatch(conformIdx: 3U64, subjectId: 0U64, subjectTy: variable, subjectArgs: <PatternTypeInput.Values values=[] />, typeParams: parameters, declaredTraitArgs: declared, typeRef: concrete, traitArgs: actual)
+    if matchedWitness.conformIdx != 4U64 || matchedWitness.binds.count() != 1U64 { panic "shared receiver and trait substitution" }
+}
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Parameter")
+    val other = compiler.internBytes(s: "Concrete")
+    val parameter = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />
+    val variable = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=71U64 />)
+    val concrete = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[] />)
+    val nested = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[variable] />)
+    val binderRange = compiler.pushConformBinds(binds: [parameter])
+    val functionRange = compiler.arena.registerFuncBinds(binds: [parameter])
+    val patternRange = compiler.pushConformTypes(types: [variable])
+    val actualRange = compiler.pushConformTypes(types: [concrete])
+    val binders: Array[PatternBindInput] = [<PatternBindInput.Values values=[parameter] />, <PatternBindInput.Conformance range=binderRange />, <PatternBindInput.Function range=functionRange />]
+    val patterns: Array[PatternTypeInput] = [<PatternTypeInput.Values values=[variable] />, <PatternTypeInput.Conformance range=patternRange />]
+    val actuals: Array[PatternTypeInput] = [<PatternTypeInput.Values values=[concrete] />, <PatternTypeInput.Conformance range=actualRange />]
+    // Later pool growth must not alter any previously issued range.
+    val later = compiler.pushConformTypes(types: [nested, variable, nested])
+    val laterBinders = compiler.pushConformBinds(binds: [parameter, parameter])
+    for val parameters in binders {
+        for val declared in patterns {
+            for val actual in actuals {
+                check(compiler: inout compiler, parameters: parameters, declared: declared, actual: actual, variable: variable, concrete: concrete, nested: nested)
+            }
+        }
+    }
+    write(s: "pattern-input-storage-ok\n")
+}
