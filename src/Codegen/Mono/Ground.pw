@@ -748,16 +748,7 @@ pub impl Comp {
         }
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val gi: U64 = self.arena.firstStructNamed(nameId: nid)
-        mut val registered: Bool = false
-        while gi < self.arena.structCount() {
-            if self.arena.structAt(index: gi).nameId == nid {
-                registered = true
-                gi = self.arena.structCount()
-            } else {
-                gi = self.arena.nextStructNamed(index: gi)
-            }
-        }
+        val registered = self.arena.firstStructNamed(nameId: nid) < self.arena.structCount()
         // the grounded record instance is not yet a real struct: register it (canonical sorted
         // layout inherited from the template) so its fields carry the grounded types
         // (`value: I32`, not the template's `value: E` i64-defaulting), and registerGenStructBodies

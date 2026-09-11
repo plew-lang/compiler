@@ -179,13 +179,7 @@ pub impl Comp {
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
-        mut val si: U64 = self.arena.firstStructNamed(nameId: nid)
-        while si < self.arena.structCount() {
-            if self.arena.structAt(index: si).nameId == nid {
-                return nm
-            }
-            si = self.arena.nextStructNamed(index: si)
-        }
+        if self.arena.firstStructNamed(nameId: nid) < self.arena.structCount() { return nm }
         // build the StructDef with fields in canonical (sorted) order.
         mut val fields: Array[FieldDef] = []
         mut val f: U64 = 0
@@ -290,11 +284,7 @@ pub impl Comp {
         appendBytes(into: inout canonical, from: ")".bytes())
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(canonical))
         val nameId: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: nameId)
-        while si < self.arena.structCount() {
-            if self.arena.structAt(index: si).nameId == nameId { return nm }
-            si = self.arena.nextStructNamed(index: si)
-        }
+        if self.arena.firstStructNamed(nameId: nameId) < self.arena.structCount() { return nm }
         mut val fields: Array[FieldDef] = []
         mut val fi: U64 = 0U64
         while fi < order.count() {
@@ -936,11 +926,7 @@ pub impl Comp {
 
     inout fn appendOmittedMakeDefaultsByTypeId(out: inout Array[MakeField], typeId: U64, isEnum: Bool) {
         if isEnum { return }
-        mut val si: U64 = self.arena.firstStructNamed(nameId: typeId)
-        while si < self.arena.structCount() {
-            if self.arena.structAt(index: si).nameId == typeId { break }
-            si = self.arena.nextStructNamed(index: si)
-        }
+        val si = self.arena.firstStructNamed(nameId: typeId)
         if si >= self.arena.structCount() { return }
         val declared: Array[FieldDef] = self.arena.structAt(index: si).fields
         mut val fi: U64 = 0U64
