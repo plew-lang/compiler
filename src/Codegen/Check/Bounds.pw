@@ -1234,7 +1234,7 @@ pub impl Comp {
     inout fn methodReceiverEnvironment(f: Func, instRef: U64) -> WitnessMatch {
         if f.recvTy == 0U64 || instRef == 0U64 { return <WitnessMatch /> }
         val noArgs: Array[U64] = []
-        return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: noArgs, typeParams: self.copyFuncBinds(binds: f.typeParams), declaredTraitArgs: noArgs, typeRef: instRef, traitArgs: noArgs)
+        return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: <PatternTypeInput.Values values=noArgs />, typeParams: <PatternBindInput.Function range=f.typeParams />, declaredTraitArgs: <PatternTypeInput.Values values=noArgs />, typeRef: instRef, traitArgs: <PatternTypeInput.Values values=noArgs />)
     }
 
     // A receiver pattern such as `impl[T] Box[Array[T]]` does not map the

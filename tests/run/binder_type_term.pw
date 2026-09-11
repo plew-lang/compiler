@@ -1,3 +1,4 @@
+import /Ir with { PatternBindInput }
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { TypeRef, Bind }
@@ -15,28 +16,28 @@ fn main() {
     val lexical = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=22U64 args=[] />)
     val absent = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=33U64 args=[] />)
     val unknown = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[] />)
-    if compiler.plainBinder(ref: bare, params: parameters) != 0U64 { panic "name binder changed" }
-    if compiler.plainBinder(ref: lexical, params: parameters) != 1U64 { panic "lexical identity lost" }
-    if compiler.plainBinder(ref: absent, params: parameters) != 2U64 { panic "foreign binder matched by name" }
-    if compiler.plainBinder(ref: unknown, params: parameters) != 2U64 { panic "unknown name matched" }
-    if compiler.plainBinder(ref: bare, params: []) != 0U64 { panic "empty scope changed" }
+    if compiler.plainBinder(ref: bare, params: <PatternBindInput.Values values=parameters />) != 0U64 { panic "name binder changed" }
+    if compiler.plainBinder(ref: lexical, params: <PatternBindInput.Values values=parameters />) != 1U64 { panic "lexical identity lost" }
+    if compiler.plainBinder(ref: absent, params: <PatternBindInput.Values values=parameters />) != 2U64 { panic "foreign binder matched by name" }
+    if compiler.plainBinder(ref: unknown, params: <PatternBindInput.Values values=parameters />) != 2U64 { panic "unknown name matched" }
+    if compiler.plainBinder(ref: bare, params: <PatternBindInput.Values values=[] />) != 0U64 { panic "empty scope changed" }
     if compiler.hasTopLevelView(ref: bare) { panic "bare type has view" }
     val single = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewExtId=7U64 />)
     val multiple = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[7U64, 8U64] />)
     val both = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewExtId=7U64 viewIds=[7U64, 8U64] />)
     for val viewed in [single, multiple, both] {
         if !compiler.hasTopLevelView(ref: viewed) { panic "view source lost" }
-        if compiler.plainBinder(ref: viewed, params: parameters) != 2U64 { panic "view became binder" }
+        if compiler.plainBinder(ref: viewed, params: <PatternBindInput.Values values=parameters />) != 2U64 { panic "view became binder" }
     }
     val applied = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[bare] />)
     val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 />)
     for val structural in [applied, projection] {
         if compiler.hasTopLevelView(ref: structural) { panic "structure became view" }
-        if compiler.plainBinder(ref: structural, params: parameters) != 2U64 { panic "structure became binder" }
+        if compiler.plainBinder(ref: structural, params: <PatternBindInput.Values values=parameters />) != 2U64 { panic "structure became binder" }
     }
     for val invalid in [0U64, compiler.arena.typeCount(), compiler.arena.typeCount() + 1U64] {
         if compiler.hasTopLevelView(ref: invalid) { panic "invalid view" }
-        if compiler.plainBinder(ref: invalid, params: parameters) != 2U64 { panic "invalid binder" }
+        if compiler.plainBinder(ref: invalid, params: <PatternBindInput.Values values=parameters />) != 2U64 { panic "invalid binder" }
     }
     write(s: "binder-type-term-ok\n")
 }

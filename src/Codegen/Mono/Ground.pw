@@ -469,7 +469,7 @@ pub impl Comp {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
             if byParam < matchResult.binds.count() { return matchResult.binds[byParam].term }
         }
-        val binder: U64 = self.plainBinder(ref: ref, params: params)
+        val binder: U64 = self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />)
         if binder < params.count() {
             val found: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: binder)
             if found < matchResult.binds.count() { return matchResult.binds[found].term }

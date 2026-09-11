@@ -339,7 +339,7 @@ pub impl Comp {
                         mut val ai: U64 = 0U64
                         mut val matches: Bool = true
                         while ai < fb.constraint.key.positionalArgs.count() {
-                            if !(self.unifyPatterns(a: fb.constraint.key.positionalArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
+                            if !(self.unifyPatterns(a: fb.constraint.key.positionalArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: <PatternBindInput.Values values=self.cur.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
                                 matches = false
                             }
                             ai += 1U64

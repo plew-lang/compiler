@@ -1,10 +1,11 @@
+import /Ir with { PatternBindInput }
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { TypeRef, Bind, UnifyBind }
 
 fn check(compiler: inout Comp, pattern: U64, actual: U64, expected: Bool, ignoreTopView: Bool = false) {
     mut val bindings: Array[UnifyBind] = []
-    val matched = compiler.unifyPatterns(a: pattern, aSide: 0U64, b: actual, bSide: 1U64, aParams: [], bParams: [], binds: inout bindings, ignoreTopView: ignoreTopView)
+    val matched = compiler.unifyPatterns(a: pattern, aSide: 0U64, b: actual, bSide: 1U64, aParams: <PatternBindInput.Values values=[] />, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings, ignoreTopView: ignoreTopView)
     if matched != expected { panic "structural matching changed" }
     if bindings.count() != 0U64 { panic "concrete match produced binding" }
 }
@@ -74,15 +75,15 @@ fn main() {
     val variable = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=11U64 />)
     val nestedVariable = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[variable] />)
     mut val bindings: Array[UnifyBind] = []
-    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: different, bSide: 1U64, aParams: [parameter], bParams: [], binds: inout bindings) { panic "binder failed" }
+    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: different, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "binder failed" }
     if bindings.count() != 1U64 { panic "binding count" }
     val binding = bindings[0]
     if binding.side != 0U64 || binding.nameId != 11U64 || binding.ref != different || binding.refSide != 1U64 { panic "binding provenance" }
-    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: bare, bSide: 1U64, aParams: [parameter], bParams: [], binds: inout bindings) { panic "existing substitution ignored" }
+    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: bare, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "existing substitution ignored" }
     bindings = []
-    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nestedVariable, bSide: 1U64, aParams: [parameter], bParams: [parameter], binds: inout bindings) { panic "occurs check ignored" }
+    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nestedVariable, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[parameter] />, binds: inout bindings) { panic "occurs check ignored" }
     if bindings.count() != 0U64 { panic "occurs check appended binding" }
-    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: variable, bSide: 1U64, aParams: [parameter], bParams: [parameter], binds: inout bindings) { panic "corresponding binder changed" }
+    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: variable, bSide: 1U64, aParams: <PatternBindInput.Values values=[parameter] />, bParams: <PatternBindInput.Values values=[parameter] />, binds: inout bindings) { panic "corresponding binder changed" }
     compiler.arena.resolveTypeDeclaration(index: ownedOther, hasDecl: true, declOffset: 10U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
     check(compiler: inout compiler, pattern: owned, actual: ownedOther, expected: true)
     write(s: "unify-type-term-ok\n")

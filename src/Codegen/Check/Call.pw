@@ -89,7 +89,7 @@ pub impl Comp {
                     // Only a bare parameter position contributes an inverse
                     // binding.  A projection such as `T#Parser.Output` has
                     // the same legacy head spelling but cannot determine T.
-                    if self.plainBinder(ref: p.ty, params: self.copyFuncBinds(binds: f.typeParams)) == tpi {
+                    if self.plainBinder(ref: p.ty, params: <PatternBindInput.Function range=f.typeParams />) == tpi {
                         val ar: U64 = self.inferType(id: self.argAt(args: args, index: ai).expr)
                         if ar != 0U64 {
                             if firstRef == 0U64 {

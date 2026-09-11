@@ -1052,7 +1052,7 @@ pub impl Comp {
                     // legacy zero subject sentinel.  It is an already concrete
                     // subject (conformanceSubjectMatches accepted it), so no
                     // structural binder map is needed to ground its trait args.
-                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: self.copyConformBinds(binds: cf.typeParams), bParams: [], binds: inout binds, ignoreTopView: true) {
+                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
                         mut val subst: Array[U64] = []
                         mut val pi: U64 = 0U64
                         while pi < cf.typeParams.count() {

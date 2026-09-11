@@ -723,7 +723,7 @@ pub impl Comp {
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
         while i < pattern.count() {
-            if !(self.unifyPatterns(a: pattern[i], aSide: 0U64, b: actual[i], bSide: 1U64, aParams: patternParams, bParams: [], binds: inout binds)) {
+            if !(self.unifyPatterns(a: pattern[i], aSide: 0U64, b: actual[i], bSide: 1U64, aParams: <PatternBindInput.Values values=patternParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
                 return false
             }
             i += 1U64

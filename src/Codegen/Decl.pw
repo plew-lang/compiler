@@ -522,7 +522,7 @@ pub impl Comp {
                         return true
                     }
                     mut val binds: Array[UnifyBind] = []
-                    if self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: self.copyFuncBinds(binds: f.typeParams), bParams: [], binds: inout binds, ignoreTopView: true) {
+                    if self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: <PatternBindInput.Function range=f.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
                         return true
                     }
                 }

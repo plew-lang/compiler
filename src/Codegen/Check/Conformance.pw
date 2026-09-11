@@ -111,7 +111,7 @@ pub impl Comp {
     inout fn traitCycleBinder(ref: U64, scope: U64) -> U64 {
         val decl: U64 = self.traitCycleDecl(scope: scope)
         if decl >= self.decls.conforms.count() { return 4000000000U64 }
-        return self.plainBinder(ref: ref, params: self.copyConformBinds(binds: self.decls.conforms[decl].typeParams))
+        return self.plainBinder(ref: ref, params: <PatternBindInput.Conformance range=self.decls.conforms[decl].typeParams />)
     }
 
     inout fn traitCycleBindIndex(binds: Array[TraitCycleBind], scope: U64, nameId: U64) -> U64 {
@@ -446,7 +446,7 @@ pub impl Comp {
     }
 
     inout fn traitCycleConstructorCount(ref: U64, params: Array[Bind]) -> U64 {
-        if self.plainBinder(ref: ref, params: params) < params.count() { return 0U64 }
+        if self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />) < params.count() { return 0U64 }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 1U64 }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 1U64
@@ -459,7 +459,7 @@ pub impl Comp {
     }
 
     inout fn traitCycleBinderOccurrences(ref: U64, params: Array[Bind], binder: U64) -> U64 {
-        if self.plainBinder(ref: ref, params: params) == binder { return 1U64 }
+        if self.plainBinder(ref: ref, params: <PatternBindInput.Values values=params />) == binder { return 1U64 }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 0U64

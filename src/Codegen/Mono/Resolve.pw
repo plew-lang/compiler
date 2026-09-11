@@ -70,10 +70,10 @@ pub impl Comp {
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
         while i < cf.subjectArgs.count() {
-            if !(self.unifyPatterns(a: self.conformTypeAt(types: cf.subjectArgs, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: self.copyConformBinds(binds: cf.typeParams), bParams: [], binds: inout binds)) { return <WitnessMatch /> }
+            if !(self.unifyPatterns(a: self.conformTypeAt(types: cf.subjectArgs, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
             i += 1U64
         }
-        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: self.copyConformBinds(binds: cf.typeParams), binds: binds)
+        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, binds: binds)
     }
 
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
@@ -330,10 +330,10 @@ pub impl Comp {
         if self.cur.bodyFnIdx >= self.arena.functionCount() { return 0U64 }
         val bodyFn: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
         if bodyFn.recvTy == 0U64 { return 0U64 }
-        val binder: U64 = self.plainBinder(ref: termRef, params: self.copyFuncBinds(binds: bodyFn.typeParams))
+        val binder: U64 = self.plainBinder(ref: termRef, params: <PatternBindInput.Function range=bodyFn.typeParams />)
         if binder >= bodyFn.typeParams.count() { return 0U64 }
         mut val binds: Array[UnifyBind] = []
-        val matches: Bool = self.unifyPatterns(a: bodyFn.recvTy, aSide: 0U64, b: ref, bSide: 1U64, aParams: self.copyFuncBinds(binds: bodyFn.typeParams), bParams: [], binds: inout binds, ignoreTopView: true)
+        val matches: Bool = self.unifyPatterns(a: bodyFn.recvTy, aSide: 0U64, b: ref, bSide: 1U64, aParams: <PatternBindInput.Function range=bodyFn.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)
         if !(matches) { return 0U64 }
         val binderId: U64 = self.binderIdentity(b: self.funcBindAt(binds: bodyFn.typeParams, index: binder))
         val found: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: binderId)
