@@ -3,11 +3,18 @@
 // which makes the evaluation order of `items[index]` explicit in the CFG.
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Expr, SemanticExprType, Stmt, identValueCode }
-import /Mid with { MidBlock, MidBuildError, MidBuildState, MidOperand, MidProjection, MidRvalue, MidStatement, addMidLocal, buildMidLet }
+import /Ir with { Expr, SemanticExprType, Stmt, TypeRef, identValueCode }
+import /Mid with { MidBuildError, MidBuildState, MidOperand, MidProjection, MidRvalue, MidStatement, addMidLocal, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val integerName = c.internBytes(s: "I64")
+    val integerTerm = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val arrayName = c.internBytes(s: "Array")
+    // The Array place fast path requires frozen declaration identity, not spelling.
+    c.langArrayDeclOffset = arrayName.nameStart
+    val arrayTerm = c.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen args=[integerTerm] hasDecl=true declOffset=c.langArrayDeclOffset />)
     // `val selected: I64 = items[index]`, with `items` and `index` already
     // bound by Record.  Terms only identify frozen semantic facts in this
     // builder test; no source name lookup is involved.
@@ -20,14 +27,14 @@ fn main() {
     c.typeCache.identTarget.append(20U64)
     c.typeCache.identBind.append(0I64)
     c.typeCache.identTarget.append(0U64)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=1U64 />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=2U64 />)
-    c.arena.semanticExprTypes.append(<SemanticExprType term=3U64 />)
-    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=30U64 nameLen=8U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=3U64 init=2U64 />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=arrayTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=integerTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=integerTerm />)
+    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=30U64 nameLen=8U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=integerTerm init=2U64 />)
 
-    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
-    val items = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: 1U64, isUnique: false, isParameter: true, ownsAtEntry: true)
-    val index = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: 2U64, isUnique: false, isParameter: true, ownsAtEntry: true)
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
+    val items = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: arrayTerm, isUnique: false, isParameter: true, ownsAtEntry: true)
+    val index = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: integerTerm, isUnique: false, isParameter: true, ownsAtEntry: true)
     val result = buildMidLet(c: inout c, state: inout state, stmtId: 0U64)
 
     mut val correctPlace: Bool = false
@@ -37,10 +44,10 @@ fn main() {
                 MidRvalue.Use(operand: val operand) => {
                     match operand {
                         MidOperand.Copy(place: val place) => {
-                            if destination.local == 2U64 && place.local == items && place.typeTerm == 3U64 && place.projections.count() == 1U64 {
+                            if destination.local == 2U64 && place.local == items && place.typeTerm == integerTerm && place.projections.count() == 1U64 {
                                 match place.projections[0U64] {
                                     MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
-                                        correctPlace = indexLocal == index && typeTerm == 3U64
+                                        correctPlace = indexLocal == index && typeTerm == integerTerm
                                     }
                                     _ => {}
                                 }
