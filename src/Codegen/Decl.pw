@@ -346,6 +346,8 @@ pub impl Comp {
 
     inout fn traitModuleByOwner(owner: U64) -> U64 {
         if owner == 0U64 { return 4000000000U64 }
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index < self.decls.traitOwnerCount() { return self.decls.traitOwnerAt(index: index).sourceModule }
         return self.moduleOf(offset: owner)
     }
 

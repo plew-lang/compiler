@@ -14,5 +14,7 @@ fn main() {
     if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 2U64) != 0U64 { panic "missing arity accepted" }
     if compiler.traitDeclOffsetByIdArity(traitId: 8U64, arity: 0U64) != 0U64 { panic "missing name accepted" }
     if compiler.traitModuleByIdArity(traitId: 7U64, arity: 1U64) != 3U64 { panic "stored module lost" }
+    if compiler.traitModuleByOwner(owner: 20U64) != 3U64 { panic "canonical owner module lost" }
+    if compiler.traitModuleByOwner(owner: 0U64) != 4000000000U64 || compiler.traitModuleByOwner(owner: 99U64) != 0U64 { panic "owner fallback changed" }
     write(s: "trait-owner-queries-ok\n")
 }
