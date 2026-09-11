@@ -1,0 +1,52 @@
+// spec/03: initializer evaluation precedes the shadow commit. Only ownership
+// remaining in an old unique binding ends there; copyable bindings keep their
+// lexical lifetime. These assertions concern observable language semantics.
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Cell {
+    pub val value: I64
+    deinit { print(self.value) }
+}
+pub impl Cell { factory }
+
+fn replacement(previous: borrow Cell) -> Cell {
+    print(previous.value + 100I64)
+    return <Cell value=2I64 />
+}
+
+fn retainedOwner() {
+    val cell = <Cell value=1I64 />
+    val cell = replacement(previous: borrow cell)
+    print(200I64)
+}
+
+fn transferredOwner() {
+    val cell = <Cell value=3I64 />
+    val cell = move cell
+    print(300I64)
+}
+
+fn consumedReplacement(previous: move Cell) -> Cell {
+    print(400I64)
+    return <Cell value=5I64 />
+}
+
+fn consumedOwner() {
+    val cell = <Cell value=4I64 />
+    val cell = consumedReplacement(previous: move cell)
+    print(500I64)
+}
+
+fn copyableOwner() {
+    val cell = <MutableRef value=<Cell value=6I64 /> />
+    val cell = <MutableRef value=<Cell value=7I64 /> />
+    print(600I64)
+}
+
+fn main() {
+    retainedOwner()
+    transferredOwner()
+    consumedOwner()
+    copyableOwner()
+}
