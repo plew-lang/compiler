@@ -26,10 +26,10 @@ fn main() {
     val terminator = arena.terminators[block.terminator - 1U64]
     val message = arena.operands[terminator.value - 1U64]
     if !canonicalMidBodyIsWellFormed(arena: arena, body: frozen) { write(s: "malformed\n") }
-    write(s: "body=" + frozen.body.toString() + "\n")
-    write(s: "projection=" + firstProjection.tag.toString() + ":" + firstProjection.index.toString() + "\n")
-    write(s: "aggregate=" + rvalue.exprId.toString() + ":" + element.conversion.toString() + "\n")
-    write(s: "enum-place=" + enumRvalue.place.toString() + ":" + enumRvalue.operand.toString() + "\n")
-    write(s: "enum-source=" + enumRvalue.sourceTag.toString() + ":" + enumRvalue.sourceStmt.toString() + "\n")
-    write(s: "panic=" + message.stringStart.toString() + ":" + message.stringLen.toString() + "\n")
+    write(s: "body=" + frozen.body.format(format: "") + "\n")
+    write(s: "projection=" + firstProjection.tag.format(format: "") + ":" + firstProjection.index.format(format: "") + "\n")
+    write(s: "aggregate=" + rvalue.exprId.format(format: "") + ":" + element.conversion.format(format: "") + "\n")
+    write(s: "enum-place=" + enumRvalue.place.format(format: "") + ":" + enumRvalue.operand.format(format: "") + "\n")
+    write(s: "enum-source=" + enumRvalue.sourceTag.format(format: "") + ":" + enumRvalue.sourceStmt.format(format: "") + "\n")
+    write(s: "panic=" + message.stringStart.format(format: "") + ":" + message.stringLen.format(format: "") + "\n")
 }

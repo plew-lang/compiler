@@ -26,8 +26,12 @@ fn main() {
     val kept: MidBlock = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
     val join: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val body: MidBody = <MidBody locals=[file, result] blocks=[entry, moved, kept, join] entry=0U64 />
-    printState(state: analyzeMidOwnership(body: body)[3U64][0U64])
-    printAccessibility(state: analyzeMidAccessibility(body: body)[3U64][0U64])
+    val ownership = analyzeMidOwnership(body: body)
+    val joinOwnership = ownership[3U64]
+    printState(state: joinOwnership[0U64])
+    val accessibility = analyzeMidAccessibility(body: body)
+    val joinAccessibility = accessibility[3U64]
+    printAccessibility(state: joinAccessibility[0U64])
     val elaborated: MidBody = elaborateMidDrops(body: body)
     match elaborated.blocks[3U64].statements[0U64] {
         MidStatement.ConditionalDrop(place: _, flag: _) => { write(s: "conditional-drop\n") }
