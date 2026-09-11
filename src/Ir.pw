@@ -1800,6 +1800,17 @@ pub impl FinalMatchResolution { factory }
 // canonical BodyInstance.  A return has one ABI target but may be reached by
 // many source branches, so its key is the returned expression rather than a
 // backend return-place local.
+// Concrete existential conversion contract, closed before LLVM emission.
+export struct FinalExistentialResolution {
+    pub val sourceRef: U64
+    pub val targetRef: U64
+    pub val traitIdx: U64
+    pub val proof: StaticConformanceProof
+    // One BodyId per requirement; zero denotes a non-dispatchable member.
+    pub val bodies: Array[U64] = []
+}
+pub impl FinalExistentialResolution { factory }
+
 export struct FinalReturnResolution {
     pub val bodyId: U64
     pub val exprId: U64
@@ -2322,6 +2333,7 @@ export struct Arena {
     pub mut val finalAggregateIndexSlots: Array[U64] = []
     // Concrete ABI return conversions, keyed by (BodyInstance, returned ExprId).
     // Like finalAggregates this is frontend semantic output, never a Mid cache.
+    pub mut val finalExistentials: Array[FinalExistentialResolution] = []
     pub mut val finalReturns: Array[FinalReturnResolution] = []
     // Derived open-addressed index for finalReturns; slots are one-based table
     // positions and are rebuilt whenever the semantic table changes.

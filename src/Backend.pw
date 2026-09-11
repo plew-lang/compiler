@@ -146,9 +146,7 @@ struct LlvmCtx {
     // built vtables, cached by (concrete struct idx, traitId, binding key) -> the LLVM
     // global value. The binding key distinguishes existentials whose associated-type /
     // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
-    pub mut val anyVtType: Array[U64]
-    pub mut val anyVtTrait: Array[U64]
-    pub mut val anyVtBindKey: Array[U64]
+    pub mut val anyVtResolution: Array[U64]
     pub mut val anyVtVal: Array[LLVMValueRef]
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
@@ -594,26 +592,6 @@ fn paramLabelsEqual(c: inout Comp, a: FuncParamRange, b: FuncParamRange) -> Bool
     return true
 }
 
-// The witness method on concrete struct `sidx` for trait requirement `req` (matched
-// by name + param labels). c.arena.functionCount() if none.
-fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
-    val sd: StructDef = c.arena.structAt(index: sidx)
-    val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.functionCount() {
-        val f: Func = c.arena.functionAt(index: i)
-        if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
-            if f.nameId == req.nameId && f.recvId == recvId {
-                if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
-                    return i
-                }
-            }
-        }
-        i += 1
-    }
-    return c.arena.functionCount()
-}
-
 // ---- checked arithmetic (overflow / divide-by-zero panic) ----
 //
 // add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
@@ -903,7 +881,7 @@ export fn emitLlvm(c: inout Comp) {
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
@@ -1321,30 +1299,6 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
         return c.arena.typeAt(index: ref).isAny
     }
     return false
-}
-
-// Build the substitution env for an `any P[bindings]` existential (spec/08,12): map
-// each of trait `traitIdx`'s type parameters and associated types to its binding
-// from the any TypeRef. Positional any-args (argLabels entry 0) fill the type
-// parameters in order; named any-args bind a parameter or associated type by name.
-// Fills the parallel (names, args) lists used as c.cur.typeParams/curTypeArgs so
-// requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
-// Returns false if any parameter / associated type is left unbound.
-// A cache key distinguishing existential vtables whose concrete bindings differ
-// (`any Add[I32,…]` vs `any Add[I64,…]`): a fold over the bound type refs' head name
-// ids. 0 when there are no bindings (the canonical case, keyed only by sidx+trait).
-fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
-    mut val k: U64 = 0
-    mut val i: U64 = 0
-    while i < args.count() {
-        mut val nid: U64 = 0
-        if args[i] < c.arena.typeCount() {
-            nid = c.arena.typeAt(index: args[i]).nameId
-        }
-        k = k * 1000003U64 + nid + 1U64
-        i += 1
-    }
-    return k
 }
 
 // Is this type name a fixed-width primitive integer (the operator-witness owners).

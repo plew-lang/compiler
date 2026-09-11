@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalExistentialResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -331,6 +331,16 @@ pub impl Comp {
             out = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
         }
         if out == 0U64 || out >= self.arena.typeCount() { return out }
+        if f.hasRecv && out != 0U64 && out < self.arena.typeCount() {
+            val actual: TypeRef = self.arena.typeAt(index: out)
+            val underlying: U64 = self.newtypeUnderRef(start: actual.nameStart, len: actual.nameLen)
+            if underlying != 0U64 && underlying < self.arena.typeCount() {
+                val underTy: TypeRef = self.arena.typeAt(index: underlying)
+                if spansEqual(c: inout self, aStart: underTy.nameStart, aLen: underTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    out = underlying
+                }
+            }
+        }
         val base: TypeRef = self.arena.typeAt(index: out)
         if base.viewExtId != 0U64 || base.viewIds.count() != 0U64 {
             val noViews: Array[U64] = []
@@ -1223,16 +1233,6 @@ pub impl Comp {
         val callArgs: ArgRange = selection.args
         if f.hasRecv && recvInst == 0U64 {
             recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-        }
-        if f.hasRecv && recvInst != 0U64 && recvInst < self.arena.typeCount() {
-            val actual: TypeRef = self.arena.typeAt(index: recvInst)
-            val underlying: U64 = self.newtypeUnderRef(start: actual.nameStart, len: actual.nameLen)
-            if underlying != 0U64 && underlying < self.arena.typeCount() {
-                val underTy: TypeRef = self.arena.typeAt(index: underlying)
-                if spansEqual(c: inout self, aStart: underTy.nameStart, aLen: underTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
-                    recvInst = underlying
-                }
-            }
         }
         if f.isAssoc && recvInst == 0U64 {
             recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
@@ -2582,12 +2582,87 @@ pub impl Comp {
         return <ValueConversionProof.Missing />
     }
 
+    inout fn finalExistentialIndex(sourceRef: U64, targetRef: U64) -> U64 {
+        mut val index: U64 = 0U64
+        while index < self.arena.finalExistentials.count() {
+            val resolution: FinalExistentialResolution = self.arena.finalExistentials[index]
+            if self.typeRefEq(a: resolution.sourceRef, b: sourceRef) && self.typeRefEq(a: resolution.targetRef, b: targetRef) { return index }
+            index += 1U64
+        }
+        return self.arena.finalExistentials.count()
+    }
+
+    inout fn finalizeConversionDependencies(conversion: ValueConversionProof) {
+        match conversion {
+            ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
+                if self.finalExistentialIndex(sourceRef: sourceRef, targetRef: targetRef) < self.arena.finalExistentials.count() { return }
+                val index: U64 = self.arena.finalExistentials.count()
+                self.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />)
+                val trait: TraitDef = self.decls.traitAt(index: traitIdx)
+                val witness: WitnessMatch = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
+                mut val bodies: Array[U64] = []
+                mut val requirement: U64 = 0U64
+                while requirement < trait.reqs.count() {
+                    val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
+                    mut val bodyId: U64 = 0U64
+                    if !req.isAssoc && !self.reqUsesSelfInInput(req: req) && self.reqRetSelfErasable(req: req) {
+                        val functionIndex: U64 = self.proofConcreteWitness(proof: proof, receiverRef: sourceRef, traitIdx: traitIdx, reqIdx: requirement)
+                        if functionIndex >= self.arena.functionCount() {
+                            self.errorAt(offset: req.nameStart, msg: "internal error: existential proof has no selected requirement implementation")
+                        }
+                        val function: Func = self.arena.functionAt(index: functionIndex)
+                        mut val args: Array[U64] = []
+                        mut val parameter: U64 = 0U64
+                        while parameter < function.typeParams.count() {
+                            val binding: Bind = self.funcBindAt(binds: function.typeParams, index: parameter)
+                            val bindIndex: U64 = self.witnessBindParamIndex(binds: witness.binds, paramId: binding.paramId)
+                            if bindIndex >= witness.binds.count() {
+                                self.errorAt(offset: function.nameStart, msg: "internal error: existential witness has an unbound implementation parameter")
+                            }
+                            args.append(witness.binds[bindIndex].term)
+                            parameter += 1U64
+                        }
+                        bodyId = self.enqueueFinalBody(fnIdx: functionIndex, args: args, recvInstRef: sourceRef, selectedProof: proof)
+                        if bodyId == 0U64 { self.errorAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") }
+                    }
+                    bodies.append(bodyId)
+                    requirement += 1U64
+                }
+                self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof bodies=bodies />)
+                mut val visited: Array[Bool] = []
+                self.enqueueFinalDestruction(typeRef: sourceRef, visited: inout visited)
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { self.finalizeConversionDependencies(conversion: element) }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+                mut val index: U64 = 0U64
+                while index < payloads.count() {
+                    self.finalizeConversionDependencies(conversion: payloads[index].conversion)
+                    index += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+
+    inout fn finalValueConversion(sourceRef: U64, targetRef: U64) -> ValueConversionProof {
+        val conversion: ValueConversionProof = self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef)
+        self.finalizeConversionDependencies(conversion: conversion)
+        return conversion
+    }
+
+    inout fn finalizeStorageConversion(exprId: U64, targetTerm: U64) {
+        if self.currentBodyInstanceId() == 0U64 { return }
+        val sourceRef: U64 = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
+    }
+
     inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64]) -> Array[ValueConversionProof] {
         mut val conversions: Array[ValueConversionProof] = []
         mut val i: U64 = 0U64
         while i < parameterTypeRefs.count() {
             if i < sources.count() {
-                conversions.append(self.callArgumentConversion(sourceRef: self.groundCallArgumentSource(source: sources[i].source), targetRef: parameterTypeRefs[i]))
+                conversions.append(self.finalValueConversion(sourceRef: self.groundCallArgumentSource(source: sources[i].source), targetRef: parameterTypeRefs[i]))
             } else {
                 // Omitted defaults own their conversion at the default's
                 // semantic boundary, not at this caller.
@@ -2804,7 +2879,7 @@ pub impl Comp {
             val sourceRef: U64 = self.groundTermForBody(ref: element.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             val targetRef: U64 = self.groundTermForBody(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             targets.append(targetRef)
-            conversions.append(self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef))
+            conversions.append(self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
             i += 1U64
         }
         self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=self.groundTermForBody(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) elementTargetRefs=targets elementConversions=conversions />)
@@ -2939,7 +3014,7 @@ pub impl Comp {
                         val source: U64 = self.groundTermForBody(ref: element.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                         val fieldTarget: U64 = target.recordFieldTerms[element.fieldIndex]
                         targets.append(fieldTarget)
-                        conversions.append(self.callArgumentConversion(sourceRef: source, targetRef: fieldTarget))
+                        conversions.append(self.finalValueConversion(sourceRef: source, targetRef: fieldTarget))
                     }
                     i += 1U64
                 }
@@ -2949,7 +3024,7 @@ pub impl Comp {
                 }
             }
         }
-        self.putFinalReturn(fact: <FinalReturnResolution bodyId=bodyId exprId=exprId targetTypeRef=targetRef conversion=self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef) />)
+        self.putFinalReturn(fact: <FinalReturnResolution bodyId=bodyId exprId=exprId targetTypeRef=targetRef conversion=self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef) />)
     }
 
     // A final descriptor records the source value type, while codegen gets
@@ -3490,9 +3565,9 @@ pub impl Comp {
     // declaration which supplied the requirement; a trait-subject edge then
     // contributes one conferred copy with the same body/definition and the
     // selected path's source trait/extension identity.
-    inout fn traitSelfConcreteWitness(traitIdx: U64, reqIdx: U64) -> U64 {
+    inout fn proofConcreteWitness(proof: StaticConformanceProof, receiverRef: U64, traitIdx: U64, reqIdx: U64) -> U64 {
         if traitIdx >= self.decls.traitCount() || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return self.arena.functionCount() }
-        val witness: WitnessMatch = self.proofWitnessForTrait(proof: self.cur.bodyEnvironment.proof, traitIdx: traitIdx)
+        val witness: WitnessMatch = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
         val conformIdx: U64 = witness.conformIdx
         if conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return self.arena.functionCount() }
         val conform: Conform = self.decls.conforms[conformIdx - 1U64]
@@ -3502,7 +3577,7 @@ pub impl Comp {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.functionCount() {
                 val source: Func = self.arena.functionAt(index: sourceIdx)
-                if self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: self.cur.bodyEnvironment.receiverRef, proof: self.cur.bodyEnvironment.proof) {
+                if self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: receiverRef, proof: proof) {
                     // A concrete impl owns its witness body directly.  The
                     // proof's witnessFuncIds is already the exact semantic
                     // selection, so do not require an imaginary provided
@@ -3554,7 +3629,7 @@ pub impl Comp {
                 mut val callee: U64 = self.arena.functionCount()
                 match proof {
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
-                        callee = self.traitSelfConcreteWitness(traitIdx: traitIdx, reqIdx: reqIdx)
+                        callee = self.proofConcreteWitness(proof: self.cur.bodyEnvironment.proof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx)
                         if callee >= self.arena.functionCount() {
                             val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traitAt(index: traitIdx).nameStart)
                             val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.typeCount() { give self.arena.typeAt(index: proofReceiver).viewExtId } else { give 0U64 }
@@ -4288,6 +4363,7 @@ pub impl Comp {
         self.arena.finalCalleeIndexSlots = []
         self.arena.finalAggregates = []
         self.arena.finalAggregateIndexSlots = []
+        self.arena.finalExistentials = []
         self.arena.finalReturns = []
         self.arena.finalReturnIndexSlots = []
         self.arena.finalTries = []
@@ -5316,6 +5392,7 @@ pub impl Comp {
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                self.finalizeStorageConversion(exprId: init, targetTerm: le.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like
@@ -5337,6 +5414,7 @@ pub impl Comp {
             Stmt.Assign(val target, val value) => {
                 self.scanPlaceInsts(exprId: target)
                 self.scanExprInsts(exprId: value)
+                self.finalizeStorageConversion(exprId: value, targetTerm: self.semanticExprTerm(exprId: target))
             }
             Stmt.ExprStmt(val expr) => { self.scanExprInsts(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {

@@ -1936,7 +1936,7 @@ pub impl LlvmCtx {
             val source: TypeRef = c.arena.typeAt(index: node.sourceRef)
             val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
             if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
-            return self.boxIntoAny(c: inout c, v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
+            return self.boxIntoAny(c: inout c, sourceRef: node.sourceRef, v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
         }
         if node.tag == 3U64 {
             if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return LLVMConstNull(self.ptrty) }
@@ -1964,7 +1964,7 @@ pub impl LlvmCtx {
             val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
             if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
             self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
-            return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
+            return self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
         }
         if node.tag == 3U64 { return self.midCanonicalEmitArrayRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, elementProof: node.element) }
         if node.tag == 4U64 { return self.midCanonicalEmitEnumRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount) }
@@ -2458,7 +2458,7 @@ pub impl LlvmCtx {
                 if self.midOperandNeedsOwnedDestination(operand: operand) {
                     self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
                 }
-                return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
+                return self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
             }
             ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
                 // A structural repack reads its source as a borrow and creates
@@ -2500,7 +2500,7 @@ pub impl LlvmCtx {
                 val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
                 if structIdx >= c.arena.structCount() { return LLVMConstNull(self.anyTy) }
                 self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
-                return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
+                return self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
             }
             ValueConversionProof.ArrayRepack(sourceRef: val proofSource, targetRef: val proofTarget, element: val child) => {
                 if !(c.typeRefEq(a: sourceRef, b: proofSource)) || !(c.typeRefEq(a: targetRef, b: proofTarget)) { return LLVMConstNull(self.ptrty) }

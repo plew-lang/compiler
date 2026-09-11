@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+trait Reader[Output] { fn read() -> Output }
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+pub impl[T] Box[T] as Reader[T] {
+    fn read() -> T { return self.value }
+}
+fn main() {
+    val integer: any Reader[I64] = <Box[I64] value=42I64 />
+    val string: any Reader[String] = <Box[String] value="generic" />
+    print(integer.read())
+    print(string.read())
+}
