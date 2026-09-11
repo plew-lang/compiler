@@ -491,7 +491,7 @@ pub impl LlvmCtx {
                         mut val fieldCount: U64 = 0U64
                         mut val variant: U64 = 0U64
                         while variant < c.arena.enumAt(index: enumIdx).variants.count() {
-                            fieldCount += c.arena.enumAt(index: enumIdx).variants[variant].fields.count()
+                            fieldCount += c.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields.count()
                             variant += 1U64
                         }
                         if payloads.count() != fieldCount { return false }
@@ -526,31 +526,31 @@ pub impl LlvmCtx {
             MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
                 if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if fieldIndex >= c.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 // Recursive payload boxing is an ownership operation, not an
                 // extractvalue. Keep it outside this copy-only first slice.
-                if c.fieldIsBoxed(f: c.arena.enumAt(index: enumIndex).variants[variantIndex].fields[fieldIndex]) { return false }
+                if c.fieldIsBoxed(f: c.arena.enumFieldAt(enumIndex: enumIndex, variantIndex: variantIndex, fieldIndex: fieldIndex)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
                 if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if fieldIndex >= c.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
                 if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if fieldIndex >= c.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.typeCount() { return false }
                 if enumIndex >= c.arena.enumCount() || variantIndex >= c.arena.enumAt(index: enumIndex).variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-                if fieldIndex >= c.arena.enumAt(index: enumIndex).variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                if fieldIndex >= c.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
@@ -1906,7 +1906,7 @@ pub impl LlvmCtx {
             mut val expected: U64 = 0U64
             mut val variant: U64 = 0U64
             while variant < c.arena.enumAt(index: node.enumIdx).variants.count() {
-                expected += c.arena.enumAt(index: node.enumIdx).variants[variant].fields.count()
+                expected += c.arena.enumVariantAt(enumIndex: node.enumIdx, variantIndex: variant).fields.count()
                 variant += 1U64
             }
             if expected != node.payloadCount { return false }
@@ -2034,7 +2034,7 @@ pub impl LlvmCtx {
             val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.next"))
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
             LLVMPositionBuilderAtEnd(self.b, matched)
-            val fields: Array[FieldDef] = c.arena.enumAt(index: enumIdx).variants[variant].fields
+            val fields: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
             mut val values: Array[LLVMValueRef] = []
             if fields.count() > 0U64 {
                 c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
@@ -2576,7 +2576,7 @@ pub impl LlvmCtx {
             val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.repack.enum.next"))
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
             LLVMPositionBuilderAtEnd(self.b, matched)
-            val fields: Array[FieldDef] = c.arena.enumAt(index: enumIdx).variants[variant].fields
+            val fields: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
             mut val values: Array[LLVMValueRef] = []
             if fields.count() > 0U64 {
                 c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams

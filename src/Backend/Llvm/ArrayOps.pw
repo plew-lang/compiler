@@ -149,7 +149,7 @@ pub impl LlvmCtx {
                 if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
                     if fidx < c.arena.structAt(index: bsi).fields.count() {
-                        return fieldIsBufferType(c: inout c, f: c.arena.structAt(index: bsi).fields[fidx])
+                        return fieldIsBufferType(c: inout c, f: c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx))
                     }
                 }
             }
@@ -184,7 +184,7 @@ pub impl LlvmCtx {
                 if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
                     if fidx < c.arena.structAt(index: bsi).fields.count() {
-                        er = bufferFieldElemRef(c: inout c, f: c.arena.structAt(index: bsi).fields[fidx])
+                        er = bufferFieldElemRef(c: inout c, f: c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx))
                     }
                 }
             }

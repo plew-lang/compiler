@@ -20,5 +20,5 @@ fn main() {
     print(c.decls.deinits.count())
     print(c.arena.enumCount())
     print(c.arena.enumAt(index: 0U64).variants.count())
-    print(c.arena.enumAt(index: 0U64).variants[0U64].fields.count())
+    print(c.arena.enumVariantAt(enumIndex: 0U64, variantIndex: 0U64).fields.count())
 }

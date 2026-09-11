@@ -201,7 +201,7 @@ pub impl Comp {
                         mut val vfound: Bool = false
                         mut val vk: U64 = 0
                         while vk < self.arena.enumAt(index: cei).variants.count() {
-                            if spansEqual(c: inout self, aStart: self.arena.enumAt(index: cei).variants[vk].nameStart, aLen: self.arena.enumAt(index: cei).variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
+                            if spansEqual(c: inout self, aStart: self.arena.enumVariantAt(enumIndex: cei, variantIndex: vk).nameStart, aLen: self.arena.enumVariantAt(enumIndex: cei, variantIndex: vk).nameLen, bStart: variantStart, bLen: variantLen) {
                                 vfound = true
                             }
                             vk += 1
@@ -211,7 +211,7 @@ pub impl Comp {
                         }
                         val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                         if cvi < self.arena.enumAt(index: cei).variants.count() {
-                            val cfs: Array[FieldDef] = self.arena.enumAt(index: cei).variants[cvi].fields
+                            val cfs: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: cei, variantIndex: cvi).fields
                             // for a NON-generic enum, also category-check each provided
                             // payload value against the field's declared type (`<E.V a="s"/>`
                             // for `a: I64`). Generic enums (payload types need env grounding)
@@ -757,7 +757,7 @@ pub impl Comp {
         if ei < self.arena.enumCount() {
             val vi: U64 = self.variantIndex(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
             if vi < self.arena.enumAt(index: ei).variants.count() {
-                val fs: Array[FieldDef] = self.arena.enumAt(index: ei).variants[vi].fields
+                val fs: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields
                 mut val fi: U64 = 0
                 while fi < fs.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {

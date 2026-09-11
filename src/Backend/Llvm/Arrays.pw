@@ -31,7 +31,7 @@ pub impl LlvmCtx {
                 if sidx < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                     if fidx < c.arena.structAt(index: sidx).fields.count() {
-                        return self.fieldLlvmTy(c: inout c, fd: c.arena.structAt(index: sidx).fields[fidx])
+                        return self.fieldLlvmTy(c: inout c, fd: c.arena.structFieldAt(structIndex: sidx, fieldIndex: fidx))
                     }
                 }
                 return self.i64ty

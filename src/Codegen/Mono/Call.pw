@@ -2511,7 +2511,7 @@ pub impl Comp {
         val savedArgs: Array[U64] = self.cur.typeArgs
         mut val variant: U64 = 0U64
         while variant < self.arena.enumAt(index: enumIdx).variants.count() {
-            val fields: Array[FieldDef] = self.arena.enumAt(index: enumIdx).variants[variant].fields
+            val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
             mut val field: U64 = 0U64
             while field < fields.count() {
                 self.cur.typeParams = self.arena.enumAt(index: enumIdx).typeParams
@@ -3165,11 +3165,11 @@ pub impl Comp {
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val fi: U64 = 0U64
         while fi < self.arena.structAt(index: sidx).fields.count() {
-            if self.arena.structAt(index: sidx).fields[fi].nameId == fieldName { break }
+            if self.arena.structFieldAt(structIndex: sidx, fieldIndex: fi).nameId == fieldName { break }
             fi += 1U64
         }
         if fi >= self.arena.structAt(index: sidx).fields.count() { return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> }
-        val fnRef: U64 = self.groundTypeRef(ref: self.arena.structAt(index: sidx).fields[fi].ty)
+        val fnRef: U64 = self.groundTypeRef(ref: self.arena.structFieldAt(structIndex: sidx, fieldIndex: fi).ty)
         if fnRef != 0U64 && self.isFnType(ref: fnRef) {
             val fnTy: TypeRef = self.arena.typeAt(index: fnRef)
             mut val resultRef: U64 = 0U64

@@ -97,7 +97,7 @@ pub impl LlvmCtx {
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
         val binds: BindRange = arm.binds
         mut val bi: U64 = 0
         while bi < binds.len {

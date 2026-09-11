@@ -594,7 +594,7 @@ pub impl LlvmCtx {
                                 if li < self.nLocals && sidx < c.arena.structCount() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
                                     if fidx < c.arena.structAt(index: sidx).fields.count() {
-                                        val fld: FieldDef = c.arena.structAt(index: sidx).fields[fidx]
+                                        val fld: FieldDef = c.arena.structFieldAt(structIndex: sidx, fieldIndex: fidx)
                                         val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.locTy[li], self.locPtr[li], fidx, anon())
                                         // a boxed (recursive) field (`a.next = <Optional.None/>`):
                                         // build the value (its type is the expected type, so a
@@ -656,7 +656,7 @@ pub impl LlvmCtx {
                                     if fidx < c.arena.structAt(index: bsi).fields.count() {
                                         val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
                                         if LLVMIsNull(baseTy) == 0I32 {
-                                            val fld: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
+                                            val fld: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
                                             val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
                                             val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
                                             // route through the single store choke point. (The
@@ -689,7 +689,7 @@ pub impl LlvmCtx {
                         if psidx < c.arena.structCount() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
                             if fidx < c.arena.structAt(index: psidx).fields.count() {
-                                val fld: FieldDef = c.arena.structAt(index: psidx).fields[fidx]
+                                val fld: FieldDef = c.arena.structFieldAt(structIndex: psidx, fieldIndex: fidx)
                                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: abase)
                                 if !(c.isMutableRefInst(ref: refTy)) {
                                     c.errorAt(offset: c.exprOffset(id: abase), msg: "LLVM backend: cannot assign through read-only Ref; expected MutableRef")

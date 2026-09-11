@@ -865,11 +865,11 @@ pub impl Comp {
                 if self.arena.enumAt(index: ei).nameId == tid {
                     mut val vi: U64 = 0
                     while vi < self.arena.enumAt(index: ei).variants.count() {
-                        if intern(c: inout self, start: self.arena.enumAt(index: ei).variants[vi].nameStart, len: self.arena.enumAt(index: ei).variants[vi].nameLen) == variantId {
+                        if intern(c: inout self, start: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameStart, len: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameLen) == variantId {
                             mut val fj: U64 = 0
-                            while fj < self.arena.enumAt(index: ei).variants[vi].fields.count() {
-                                if intern(c: inout self, start: self.arena.enumAt(index: ei).variants[vi].fields[fj].nameStart, len: self.arena.enumAt(index: ei).variants[vi].fields[fj].nameLen) == fieldId {
-                                    return self.arena.enumAt(index: ei).variants[vi].fields[fj].ty
+                            while fj < self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields.count() {
+                                if intern(c: inout self, start: self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).nameStart, len: self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).nameLen) == fieldId {
+                                    return self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).ty
                                 }
                                 fj += 1
                             }
@@ -886,8 +886,8 @@ pub impl Comp {
             if self.arena.structAt(index: si).nameId == tid {
                 mut val fk: U64 = 0
                 while fk < self.arena.structAt(index: si).fields.count() {
-                    if intern(c: inout self, start: self.arena.structAt(index: si).fields[fk].nameStart, len: self.arena.structAt(index: si).fields[fk].nameLen) == fieldId {
-                        return self.arena.structAt(index: si).fields[fk].ty
+                    if intern(c: inout self, start: self.arena.structFieldAt(structIndex: si, fieldIndex: fk).nameStart, len: self.arena.structFieldAt(structIndex: si, fieldIndex: fk).nameLen) == fieldId {
+                        return self.arena.structFieldAt(structIndex: si, fieldIndex: fk).ty
                     }
                     fk += 1
                 }

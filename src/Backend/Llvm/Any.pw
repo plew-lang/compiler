@@ -573,7 +573,7 @@ pub impl LlvmCtx {
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon()), thenBB, nextBB)
             LLVMPositionBuilderAtEnd(self.b, thenBB)
             mut val payloadVals: Array[LLVMValueRef] = []
-            val fs: Array[FieldDef] = c.arena.enumAt(index: srcEid).variants[vi].fields
+            val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: srcEid, variantIndex: vi).fields
             if fs.count() > 0U64 {
                 // load the source payload under the SOURCE env (so `v: T` sizes as the concrete).
                 c.cur.typeParams = c.arena.enumAt(index: srcEid).typeParams

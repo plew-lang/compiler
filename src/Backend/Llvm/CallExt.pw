@@ -151,7 +151,7 @@ pub impl LlvmCtx {
                 if bsi < c.arena.structCount() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                     if fidx < c.arena.structAt(index: bsi).fields.count() {
-                        val fd: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
+                        val fd: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
                         if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
                             return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
                         }

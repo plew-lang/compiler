@@ -8,6 +8,19 @@ pub impl Arena {
     fn enumCount() -> U64 { return self.enums.count() }
     fn enumAt(index: U64) -> EnumDef { return self.enums[index] }
 
+    fn enumVariantAt(enumIndex: U64, variantIndex: U64) -> Variant {
+        val declaration = self.enums[enumIndex]
+        return declaration.variants[variantIndex]
+    }
+    fn enumFieldAt(enumIndex: U64, variantIndex: U64, fieldIndex: U64) -> FieldDef {
+        val variant = self.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex)
+        return variant.fields[fieldIndex]
+    }
+    fn structFieldAt(structIndex: U64, fieldIndex: U64) -> FieldDef {
+        val declaration = self.structs[structIndex]
+        return declaration.fields[fieldIndex]
+    }
+
     inout fn registerStruct(declaration~: StructDef) {
         if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
         for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }

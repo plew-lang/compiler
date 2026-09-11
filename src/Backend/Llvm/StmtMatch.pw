@@ -248,7 +248,7 @@ pub impl LlvmCtx {
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
         val payloadStorage: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: scrutTy, scrutSlot: scrutSlot, instanceRef: instanceRef)
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadStorage, anon())
-        val fs: Array[FieldDef] = c.arena.enumAt(index: eid).variants[vi].fields
+        val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
         mut val bi: U64 = 0
         while bi < arm.binds.len {
             val b: Bind = c.bindAt(binds: arm.binds, index: bi)

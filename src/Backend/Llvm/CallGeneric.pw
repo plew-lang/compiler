@@ -110,7 +110,7 @@ pub impl LlvmCtx {
                     if bsi < c.arena.structCount() {
                         val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                         if fidx < c.arena.structAt(index: bsi).fields.count() {
-                            val fld: FieldDef = c.arena.structAt(index: bsi).fields[fidx]
+                            val fld: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
                             val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: basePlace.typeRef)
                             return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, basePlace.pointeeTy, basePlace.ptr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(basePlace.pointeeTy, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
                         }
@@ -181,7 +181,7 @@ pub impl LlvmCtx {
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                         val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
-                        val fld: FieldDef = c.arena.structAt(index: psidx).fields[fidx]
+                        val fld: FieldDef = c.arena.structFieldAt(structIndex: psidx, fieldIndex: fidx)
                         val pref: U64 = c.arena.typeAt(index: refTy).args[0U64]
                         val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
                         return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />

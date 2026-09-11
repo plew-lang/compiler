@@ -647,7 +647,7 @@ fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
         if sidx < c.arena.structCount() {
             mut val fi: U64 = 0
             while fi < c.arena.structAt(index: sidx).fields.count() {
-                val fd: FieldDef = c.arena.structAt(index: sidx).fields[fi]
+                val fd: FieldDef = c.arena.structFieldAt(structIndex: sidx, fieldIndex: fi)
                 if rangeEquals(bytes: c.arena.bytes, start: fd.tyStart, len: fd.tyLen, kw: "Self") {
                     return true
                 }

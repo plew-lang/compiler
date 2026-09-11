@@ -684,7 +684,7 @@ pub impl Comp {
                     mut val isBoxed: Bool = false
                     if isEnum {
                         if enumIndex < self.arena.enumCount() && variantIndex < self.arena.enumAt(index: enumIndex).variants.count() {
-                            val declaredFields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
+                            val declaredFields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
                     } else if resultTerm < self.arena.typeCount() && !(self.arena.typeAt(index: resultTerm).isRecord) {
@@ -914,7 +914,7 @@ pub impl Comp {
             } else {
                 val variantIndex: U64 = self.variantIndex(enumStart: scrutinee.nameStart, enumLen: scrutinee.nameLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
                 if variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return }
-                val fields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
+                val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                 mut val payloads: Array[SemanticMatchPayload] = []
                 mut val bindIndex: U64 = 0U64
                 while bindIndex < arm.binds.len {
@@ -929,7 +929,7 @@ pub impl Comp {
                         if fieldIndex >= fields.count() { return }
                         val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: scrutineeTerm, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
                         if fieldTerm == 0U64 { return }
-                        val fields: Array[FieldDef] = self.arena.enumAt(index: enumIndex).variants[variantIndex].fields
+                        val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                         if fieldIndex >= fields.count() { return }
                         payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm isBoxed=self.fieldIsBoxed(f: fields[fieldIndex]) />)
                     }

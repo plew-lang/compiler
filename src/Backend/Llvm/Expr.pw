@@ -197,7 +197,7 @@ pub impl LlvmCtx {
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
                     }
                     if fidx < c.arena.structAt(index: sidx).fields.count() {
-                        val fd: FieldDef = c.arena.structAt(index: sidx).fields[fidx]
+                        val fd: FieldDef = c.arena.structFieldAt(structIndex: sidx, fieldIndex: fidx)
                         val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
                         val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, bv, fidx, anon())
                         // projecting a field OUT OF AN OWNED TEMPORARY (`xs[i].items`,

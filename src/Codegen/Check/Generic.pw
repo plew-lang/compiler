@@ -710,7 +710,7 @@ pub impl Comp {
                     if ei >= self.arena.enumCount() { return false }
                     val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     if vi >= self.arena.enumAt(index: ei).variants.count() { return false }
-                    self.genericCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumAt(index: ei).variants[vi].fields, makeFields: fields)
+                    self.genericCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields, makeFields: fields)
                     return true
                 }
                 val si: U64 = self.anyStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
