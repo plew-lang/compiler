@@ -19,9 +19,9 @@ fn main() {
         hasRecv=true recvStart=21U64 recvLen=3U64 recvId=12U64 recvTy=19U64
         selfInout=true selfMove=false isAssoc=false isAsync=false isExtern=false
         extId=31U64 originConformIdx=4U64 sourceConformIdx=6U64 defOffset=9U64 />
-    c.arena.funcs.append(source)
+    c.arena.registerFunction(source)
     // Distinct owners sharing a parameter range must not share a generator.
-    c.arena.funcs.append(source)
+    c.arena.registerFunction(source)
     c.decls.funcBounds.append(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=23U64 paramNameId=7U64 />)
     c.prepareDefaultArgumentGenerators()
     val first = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 1U64)

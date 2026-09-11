@@ -372,7 +372,7 @@ pub impl Comp {
             sourceConformIdx=source.sourceConformIdx providedOwnerMod=source.providedOwnerMod
             provTraitArity=source.provTraitArity provTraitOwner=source.provTraitOwner
             defOffset=source.defOffset />
-        self.arena.funcs.append(generator)
+        self.arena.registerFunction(generator)
         return functionIdx
     }
 }

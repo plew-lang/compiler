@@ -596,7 +596,7 @@ pub impl Comp {
 
     inout fn registerDeclaredFunc(f: Func) -> U64 {
         val idx: U64 = self.arena.funcs.count()
-        self.arena.funcs.append(f)
+        self.arena.registerFunction(f)
         self.registerCallable(funcIdx: idx, checkCollisions: true)
         return idx
     }

@@ -515,61 +515,7 @@ pub impl Comp {
         // struct `B` vs `MapIter[I, F, B]`'s `B`). Concrete types win the global check;
         // a template's own parameter is resolved by the active env before this matters.
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val ni: U64 = 0
-        while ni < self.arena.structs.count() {
-            if self.arena.structs[ni].typeParams.count() == 0U64 {
-                if self.arena.structs[ni].nameId == qId {
-                    return false
-                }
-            }
-            ni += 1
-        }
-        mut val nj: U64 = 0
-        while nj < self.arena.enums.count() {
-            if self.arena.enums[nj].typeParams.count() == 0U64 {
-                if self.arena.enums[nj].nameId == qId {
-                    return false
-                }
-            }
-            nj += 1
-        }
-        mut val si: U64 = 0
-        while si < self.arena.structs.count() {
-            val tp: Array[Bind] = self.arena.structs[si].typeParams
-            mut val k: U64 = 0
-            while k < tp.count() {
-                if tp[k].nameId == qId {
-                    return true
-                }
-                k += 1
-            }
-            si += 1
-        }
-        mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val tp2: Array[Bind] = self.arena.enums[ei].typeParams
-            mut val k2: U64 = 0
-            while k2 < tp2.count() {
-                if tp2[k2].nameId == qId {
-                    return true
-                }
-                k2 += 1
-            }
-            ei += 1
-        }
-        mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val tp3: Array[Bind] = self.copyFuncBinds(binds: self.arena.funcs[fi].typeParams)
-            mut val k3: U64 = 0
-            while k3 < tp3.count() {
-                if tp3[k3].nameId == qId {
-                    return true
-                }
-                k3 += 1
-            }
-            fi += 1
-        }
-        return false
+        return self.arena.hasTypeParameterName(nameId: qId)
     }
 
     inout fn tyRefIsGround(ref: U64) -> Bool {

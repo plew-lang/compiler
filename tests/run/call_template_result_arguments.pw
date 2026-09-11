@@ -5,7 +5,7 @@ import /Ir with { Bind, CallArgumentSource, CallTemplateKind, CallTemplateReceiv
 fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBindRange) -> U64 {
     val valueParams = c.pushFuncParams(params: [])
     val callee = c.arena.funcs.count()
-    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 typeParams=params params=valueParams
+    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 typeParams=params params=valueParams
         hasRet=true retStart=0U64 retLen=0U64 retIsArray=false retTy=pattern body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     val kind = c.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=[] calleeTypeArgs=[0U64] proof=<StaticConformanceProof.Missing /> />, expectedTerm: expected)
@@ -44,10 +44,10 @@ fn main() {
     val valueParams = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen
         tyStart=array.nameStart tyLen=array.nameLen tyIsArray=false ty=returnTerm
         isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=defaultExpr />])
-    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
         hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
         hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
         hasRecv=true recvStart=array.nameStart recvLen=array.nameLen recvTy=returnTerm selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     c.cur.checkFn = 0U64
@@ -86,7 +86,7 @@ fn main() {
     val plainParams = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen
         tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=integerTerm
         isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=defaultExpr />])
-    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=c.pushFuncBinds(binds: []) params=plainParams
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=c.pushFuncBinds(binds: []) params=plainParams
         hasRet=true retStart=integer.nameStart retLen=integer.nameLen retIsArray=false retTy=integerTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     c.prepareDefaultArgumentGenerators()

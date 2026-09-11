@@ -344,17 +344,11 @@ pub impl Comp {
     // gateways for their signature payloads; compatibility copies are explicit
     // at APIs which still require a transient Array.
     inout fn pushFuncBinds(binds: Array[Bind]) -> FuncBindRange {
-        val start: U64 = self.decls.funcBindPool.count()
-        mut val i: U64 = 0U64
-        while i < binds.count() {
-            self.decls.funcBindPool.append(binds[i])
-            i += 1U64
-        }
-        return <FuncBindRange start=start len=binds.count() />
+        return self.arena.registerFuncBinds(binds: binds)
     }
 
     fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
-        return self.decls.funcBindPool[binds.start + index]
+        return self.arena.funcBindAt(binds: binds, index: index)
     }
 
     inout fn copyFuncBinds(binds: FuncBindRange) -> Array[Bind] {

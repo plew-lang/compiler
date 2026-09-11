@@ -3,7 +3,7 @@ import /Frontend with { Comp }
 import /Ir with { ArgRange, Bind, Func, MethodAlias }
 fn add(c: inout Comp, receiver: Bind, name: Bind, traitId: U64 = 0U64, extensionId: U64 = 0U64, viewOnly: Bool = false, hasReceiver: Bool = true) -> U64 {
     val index = c.arena.funcs.count()
-    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
         hasRecv=hasReceiver recvStart=receiver.nameStart recvLen=receiver.nameLen recvId=receiver.nameId
         selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false

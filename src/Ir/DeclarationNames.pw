@@ -1,0 +1,39 @@
+// These append-only declarations and their name summaries have one owner.
+// Name membership is the legacy global query, not lexical binder resolution.
+pub impl Arena {
+    inout fn registerStruct(declaration~: StructDef) {
+        if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
+        for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }
+        self.structs.append(declaration)
+    }
+
+    inout fn registerEnum(declaration~: EnumDef) {
+        if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
+        for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }
+        self.enums.append(declaration)
+    }
+
+    inout fn registerFunction(declaration~: Func) {
+        mut val index: U64 = 0U64
+        while index < declaration.typeParams.len {
+            val parameter = self.funcBindAt(binds: declaration.typeParams, index: index)
+            self.typeParameterNameIds.insert(parameter.nameId)
+            index += 1U64
+        }
+        self.funcs.append(declaration)
+    }
+
+    fn hasTypeParameterName(nameId: U64) -> Bool {
+        return !self.concreteTypeNameIds.contains(nameId) && self.typeParameterNameIds.contains(nameId)
+    }
+
+    inout fn registerFuncBinds(binds: Array[Bind]) -> FuncBindRange {
+        val start: U64 = self.funcBindPool.count()
+        for val bind in binds { self.funcBindPool.append(bind) }
+        return <FuncBindRange start=start len=binds.count() />
+    }
+
+    fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
+        return self.funcBindPool[binds.start + index]
+    }
+}

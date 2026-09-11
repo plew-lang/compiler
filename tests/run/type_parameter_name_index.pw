@@ -1,0 +1,70 @@
+import /Ir with { Arena, Bind, StructDef, EnumDef, Func, FuncBindRange }
+import @Std/Io with { write }
+
+fn binder(nameId: U64) -> Bind {
+    return <Bind nameStart=0U64 nameLen=0U64 nameId=nameId fieldStart=0U64 fieldLen=0U64 />
+}
+fn function(parameters: FuncBindRange) -> Func {
+    return <Func nameStart=0U64 nameLen=0U64 typeParams=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+}
+fn structure(nameId: U64, parameters: Array[Bind]) -> StructDef {
+    return <StructDef nameStart=0U64 nameLen=0U64 nameId=nameId typeParams=parameters fields=[] isUnique=false isExtern=false />
+}
+fn enumeration(nameId: U64, parameters: Array[Bind]) -> EnumDef {
+    return <EnumDef nameStart=0U64 nameLen=0U64 nameId=nameId typeParams=parameters variants=[] isUnique=false />
+}
+fn verify(arena: Arena) {
+    mut val query: U64 = 0U64
+    while query < 40U64 {
+        mut val concrete = false
+        mut val parameter = false
+        for val declaration in arena.structs {
+            if declaration.typeParams.count() == 0U64 && declaration.nameId == query { concrete = true }
+            for val bind in declaration.typeParams { if bind.nameId == query { parameter = true } }
+        }
+        for val declaration in arena.enums {
+            if declaration.typeParams.count() == 0U64 && declaration.nameId == query { concrete = true }
+            for val bind in declaration.typeParams { if bind.nameId == query { parameter = true } }
+        }
+        for val declaration in arena.funcs {
+            mut val index: U64 = 0U64
+            while index < declaration.typeParams.len {
+                if arena.funcBindAt(binds: declaration.typeParams, index: index).nameId == query { parameter = true }
+                index += 1U64
+            }
+        }
+        if arena.hasTypeParameterName(nameId: query) != (parameter && !concrete) { panic "index disagrees with declaration oracle" }
+        query += 1U64
+    }
+}
+fn main() {
+    mut val arena: Arena = <Arena />
+    verify(arena: arena)
+    val unused = arena.registerFuncBinds(binds: [binder(nameId: 9U64)])
+    verify(arena: arena)
+    if arena.hasTypeParameterName(nameId: 9U64) { panic "unregistered function indexed" }
+    arena.registerStruct(structure(nameId: 30U64, parameters: [binder(nameId: 1U64), binder(nameId: 2U64)]))
+    verify(arena: arena)
+    arena.registerEnum(enumeration(nameId: 31U64, parameters: [binder(nameId: 2U64), binder(nameId: 3U64)]))
+    verify(arena: arena)
+    arena.registerFunction(function(parameters: unused))
+    verify(arena: arena)
+    mut val copy = arena
+    arena.registerStruct(structure(nameId: 2U64, parameters: []))
+    verify(arena: arena)
+    verify(arena: copy)
+    if !copy.hasTypeParameterName(nameId: 2U64) || arena.hasTypeParameterName(nameId: 2U64) { panic "concrete priority or copy isolation" }
+    arena.registerEnum(enumeration(nameId: 9U64, parameters: []))
+    verify(arena: arena)
+    val later = arena.registerFuncBinds(binds: [binder(nameId: 2U64), binder(nameId: 9U64), binder(nameId: 0U64)])
+    arena.registerFunction(function(parameters: later))
+    arena.registerFunction(function(parameters: later))
+    verify(arena: arena)
+    copy.registerStruct(structure(nameId: 3U64, parameters: []))
+    verify(arena: copy)
+    if !arena.hasTypeParameterName(nameId: 3U64) { panic "copy mutation escaped" }
+    val sparse = arena.registerFuncBinds(binds: [binder(nameId: 18446744073709551615U64)])
+    arena.registerFunction(function(parameters: sparse))
+    if !arena.hasTypeParameterName(nameId: 18446744073709551615U64) { panic "sparse name missing" }
+    write(s: "type-parameter-name-index-ok\n")
+}

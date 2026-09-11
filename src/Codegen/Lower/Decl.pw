@@ -301,7 +301,7 @@ pub impl Comp {
             self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
             self.decls.deinits.append(<Bind nameStart=d.name.start nameLen=d.name.end - d.name.start fieldStart=d.name.start fieldLen=d.name.end - d.name.start />)
         }
-        self.arena.structs.append(<StructDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
+        self.arena.registerStruct(<StructDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
@@ -323,7 +323,7 @@ pub impl Comp {
             variants.append(<Variant nameStart=v.name.start nameLen=v.name.end - v.name.start nameId=intern(c: inout self, start: v.name.start, len: v.name.end - v.name.start) fields=fields />)
             i += 1U64
         }
-        self.arena.enums.append(<EnumDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
+        self.arena.registerEnum(<EnumDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
@@ -408,7 +408,7 @@ pub impl Comp {
             self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
             self.decls.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
         }
-        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
+        self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
@@ -433,7 +433,7 @@ pub impl Comp {
             variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen nameId=intern(c: inout self, start: vn.nameStart, len: vn.nameLen) fields=vfields />)
             i += 1
         }
-        self.arena.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
+        self.arena.registerEnum(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }

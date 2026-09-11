@@ -768,7 +768,7 @@ pub impl Comp {
         if !(registered) {
             if self.inCollection {
                 val noTP: Array[Bind] = []
-                self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset />)
+                self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset />)
             }
         }
         return self.recordTypeTermForLayout(name: nm)

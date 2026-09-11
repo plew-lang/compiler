@@ -15,7 +15,7 @@ fn main() {
         arguments.append(<Arg expr=index isInout=false labelStart=name.nameStart labelLen=name.nameLen hasLabel=true />)
         index += 1U64
     }
-    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: parameters)
+    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: parameters)
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
         isAssoc=false isAsync=false isExtern=false />)
@@ -23,7 +23,7 @@ fn main() {
         tyIsArray=false ty=0U64 isInout=false isMove=false isBorrow=false
         noLabel=true hasDefault=false defaultExpr=0U64 />
     val mixedParameters = c.pushFuncParams(params: [required, parameters[2U64]])
-    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 params=mixedParameters
+    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=mixedParameters
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
         isAssoc=false isAsync=false isExtern=false />)

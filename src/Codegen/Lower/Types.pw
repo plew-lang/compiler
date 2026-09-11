@@ -196,7 +196,7 @@ pub impl Comp {
             f += 1
         }
         val noTP: Array[Bind] = []
-        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
+        self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
         return nm
     }
 
@@ -305,7 +305,7 @@ pub impl Comp {
             fi += 1U64
         }
         val noTypeParams: Array[Bind] = []
-        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nameId typeParams=noTypeParams fields=fields isUnique=false isExtern=false />)
+        self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nameId typeParams=noTypeParams fields=fields isUnique=false isExtern=false />)
         return nm
     }
 

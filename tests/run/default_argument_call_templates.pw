@@ -13,7 +13,7 @@ fn main() {
     val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
         tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=term
         isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
-    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen params=parameters
+    c.arena.registerFunction(<Func nameStart=name.nameStart nameLen=name.nameLen params=parameters
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
         isAssoc=false isAsync=false isExtern=false />)
