@@ -1056,6 +1056,24 @@ fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool
             i = i + 1U64
         }
     }
+    if node.tag == 16U64 || node.tag == 17U64 {
+        if !midCanonicalPlaceIsWellFormed(arena: arena, place: node.place) || node.resultTerm == 0U64 { return false }
+        if node.tag == 17U64 && node.variantIndex > 1U64 { return false }
+        return true
+    }
+    if node.tag == 18U64 {
+        return node.resultTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand)
+    }
+    if node.tag == 19U64 {
+        if node.closureBodyKey == 0U64 || node.resultTerm == 0U64 || !midRangeFits(range: node.elements, count: arena.closureCaptures.count()) { return false }
+        mut val captureI: U64 = 0U64
+        while captureI < node.elements.len {
+            val capture: MidClosureCaptureNode = arena.closureCaptures[node.elements.start + captureI]
+            if capture.typeTerm == 0U64 || (capture.mode != 1U64 && capture.mode != 2U64) || !midCanonicalOperandIsWellFormed(arena: arena, operand: capture.operand) { return false }
+            captureI += 1U64
+        }
+        return true
+    }
     return node.tag >= 1U64 && node.tag <= 15U64
 }
 
@@ -1088,7 +1106,9 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
         if terminator.callTarget != 0U64 && terminator.callTarget > arena.callTargets.count() { return false }
         if terminator.callReceiver != 0U64 && terminator.callReceiver > arena.callReceivers.count() { return false }
         if terminator.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: terminator.destination) { return false }
-        if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }
+        if terminator.tag == 11U64 {
+            if !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.discriminant) || terminator.target >= node.blocks.len || terminator.otherwise >= node.blocks.len { return false }
+        } else if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }
         blockI = blockI + 1U64
     }
     return true

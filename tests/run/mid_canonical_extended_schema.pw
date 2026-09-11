@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidBlockNode, MidStatementNode, MidTerminatorNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidRange }
+
+// Structural validation must follow the current canonical schema, including
+// rejection of malformed references in the newer closure and try operations.
+fn main() {
+    mut val arena: MidCanonicalArena = <MidCanonicalArena />
+    arena.places.append(<MidPlaceNode rootTag=1U64 local=0U64 typeTerm=1U64 />)
+    arena.operands.append(<MidOperandNode tag=1U64 place=1U64 />)
+    arena.closureCaptures.append(<MidClosureCaptureNode bindingTarget=1U64 typeTerm=1U64 mode=1U64 operand=1U64 />)
+    val closure: MidRvalueNode = <MidRvalueNode tag=19U64 closureBodyKey=1U64 resultTerm=2U64 elements=<MidRange start=0U64 len=1U64 /> />
+    arena.rvalues.append(closure)
+    arena.statements.append(<MidStatementNode tag=1U64 destination=1U64 value=1U64 />)
+    arena.terminators.append(<MidTerminatorNode tag=5U64 />)
+    arena.blocks.append(<MidBlockNode statements=<MidRange start=0U64 len=1U64 /> terminator=1U64 />)
+    arena.bodies.append(<MidBodyNode blocks=<MidRange start=0U64 len=1U64 /> entry=0U64 />)
+    val body: MidCanonicalBody = <MidCanonicalBody body=1U64 />
+    print(arena.isWellFormed(body: body))
+    arena.closureCaptures.set(i: 0U64, value: <MidClosureCaptureNode typeTerm=1U64 mode=3U64 operand=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.closureCaptures.set(i: 0U64, value: <MidClosureCaptureNode typeTerm=1U64 mode=1U64 operand=0U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=19U64 closureBodyKey=1U64 resultTerm=2U64 elements=<MidRange start=0U64 len=2U64 /> />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=16U64 place=1U64 resultTerm=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=17U64 place=0U64 resultTerm=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=18U64 operand=1U64 resultTerm=1U64 />)
+    arena.terminators.set(i: 0U64, value: <MidTerminatorNode tag=11U64 discriminant=1U64 target=0U64 otherwise=0U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.terminators.set(i: 0U64, value: <MidTerminatorNode tag=11U64 discriminant=1U64 target=1U64 otherwise=0U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.terminators.set(i: 0U64, value: <MidTerminatorNode tag=5U64 />)
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=20U64 />)
+    print(arena.isWellFormed(body: body))
+}
