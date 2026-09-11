@@ -1,0 +1,89 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, Bind, UnifyBind }
+
+fn check(compiler: inout Comp, pattern: U64, actual: U64, expected: Bool, ignoreTopView: Bool = false) {
+    mut val bindings: Array[UnifyBind] = []
+    val matched = compiler.unifyPatterns(a: pattern, aSide: 0U64, b: actual, bSide: 1U64, aParams: [], bParams: [], binds: inout bindings, ignoreTopView: ignoreTopView)
+    if matched != expected { panic "structural matching changed" }
+    if bindings.count() != 0U64 { panic "concrete match produced binding" }
+}
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "UnifyTerm")
+    val other = compiler.internBytes(s: "DifferentTerm")
+    val bare = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val different = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[] />)
+    check(compiler: inout compiler, pattern: bare, actual: bare, expected: true)
+    check(compiler: inout compiler, pattern: bare, actual: different, expected: false)
+    val owned = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=10U64 />)
+    check(compiler: inout compiler, pattern: bare, actual: owned, expected: true)
+    val ownedOther = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=20U64 />)
+    check(compiler: inout compiler, pattern: bare, actual: ownedOther, expected: true)
+    val viewed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewExtId=7U64 />)
+    check(compiler: inout compiler, pattern: bare, actual: viewed, expected: false)
+    val views = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[7U64, 8U64] />)
+    check(compiler: inout compiler, pattern: bare, actual: views, expected: false)
+    val reordered = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[8U64, 7U64, 7U64] />)
+    check(compiler: inout compiler, pattern: bare, actual: reordered, expected: false)
+    val wrongViews = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[7U64, 9U64] />)
+    check(compiler: inout compiler, pattern: bare, actual: wrongViews, expected: false)
+    val anyType = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isAny=true />)
+    check(compiler: inout compiler, pattern: bare, actual: anyType, expected: false)
+    val sendableType = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isSendable=true />)
+    check(compiler: inout compiler, pattern: bare, actual: sendableType, expected: false)
+    val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 />)
+    check(compiler: inout compiler, pattern: bare, actual: projection, expected: false)
+    val projectionOther = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=9U64 />)
+    check(compiler: inout compiler, pattern: bare, actual: projectionOther, expected: false)
+    check(compiler: inout compiler, pattern: owned, actual: ownedOther, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: views, actual: reordered, expected: true, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: reordered, actual: views, expected: true, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: views, actual: wrongViews, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: bare, actual: viewed, expected: true, ignoreTopView: true)
+    check(compiler: inout compiler, pattern: views, actual: wrongViews, expected: true, ignoreTopView: true)
+    check(compiler: inout compiler, pattern: projection, actual: projectionOther, expected: false, ignoreTopView: false)
+    val nested = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[bare]  />)
+    val nestedView = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[viewed]  />)
+    val nestedOther = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[different]  />)
+    val twoArgs = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[bare, bare]  />)
+    val associated = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[bare] />)
+    val associatedZero = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[bare] assocTraitArgLabels=[0U64] />)
+    val associatedLabel = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[bare] assocTraitArgLabels=[9U64] />)
+    val associatedOther = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[different] />)
+    val associatedOwner = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[bare] hasAssocTraitDecl=true assocTraitDeclOffset=10U64 />)
+    val associatedOwnerOther = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=7U64 assocNameId=8U64 assocTraitArgs=[bare] hasAssocTraitDecl=true assocTraitDeclOffset=20U64 />)
+    check(compiler: inout compiler, pattern: nested, actual: nested, expected: true, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: nested, actual: nestedOther, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: nested, actual: twoArgs, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: nested, actual: nestedView, expected: false, ignoreTopView: true)
+    check(compiler: inout compiler, pattern: projection, actual: associated, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associated, actual: associatedZero, expected: true, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associated, actual: associatedLabel, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associated, actual: associatedOther, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associated, actual: associatedOwner, expected: true, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associatedOwner, actual: associatedOwnerOther, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: 0U64, actual: 0U64, expected: true)
+    check(compiler: inout compiler, pattern: 0U64, actual: bare, expected: false)
+    val invalid = compiler.arena.typeCount() + 10U64
+    check(compiler: inout compiler, pattern: invalid, actual: invalid, expected: true)
+    check(compiler: inout compiler, pattern: invalid, actual: bare, expected: false)
+    val parameter = <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val variable = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=11U64 />)
+    val nestedVariable = compiler.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[variable] />)
+    mut val bindings: Array[UnifyBind] = []
+    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: different, bSide: 1U64, aParams: [parameter], bParams: [], binds: inout bindings) { panic "binder failed" }
+    if bindings.count() != 1U64 { panic "binding count" }
+    val binding = bindings[0]
+    if binding.side != 0U64 || binding.nameId != 11U64 || binding.ref != different || binding.refSide != 1U64 { panic "binding provenance" }
+    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: bare, bSide: 1U64, aParams: [parameter], bParams: [], binds: inout bindings) { panic "existing substitution ignored" }
+    bindings = []
+    if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nestedVariable, bSide: 1U64, aParams: [parameter], bParams: [parameter], binds: inout bindings) { panic "occurs check ignored" }
+    if bindings.count() != 0U64 { panic "occurs check appended binding" }
+    if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: variable, bSide: 1U64, aParams: [parameter], bParams: [parameter], binds: inout bindings) { panic "corresponding binder changed" }
+    compiler.arena.resolveTypeDeclaration(index: ownedOther, hasDecl: true, declOffset: 10U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
+    check(compiler: inout compiler, pattern: owned, actual: ownedOther, expected: true)
+    write(s: "unify-type-term-ok\n")
+}
