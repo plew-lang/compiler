@@ -30,7 +30,7 @@ fn main() {
         mut val views: Array[U64] = []
         if kind == 1U64 { args.append(0U64) }
         if kind == 3U64 { views.append(1U64) }
-        val result = arena.registerType(t: <TypeRef nameStart=index nameLen=1U64 nameId=name args=args viewExtId=if kind == 2U64 { 1U64 } else { 0U64 } viewIds=views isAny=kind == 4U64 isSendable=kind == 5U64 paramId=index isRecord=kind == 6U64 />, nameCount: 219U64)
+        val result = arena.registerType(t: <TypeRef nameStart=index nameLen=1U64 nameId=name args=args viewExtId=if kind == 2U64 { give 1U64 } else { give 0U64 } viewIds=views isAny=kind == 4U64 isSendable=kind == 5U64 paramId=index isRecord=kind == 6U64 />, nameCount: 219U64)
         if result != index + 1U64 || arena.typeTerms.count() != arena.typeCount() { panic "registration changed arena ids" }
         index += 1U64
     }
