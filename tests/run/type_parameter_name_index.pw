@@ -49,6 +49,10 @@ fn main() {
     verify(arena: arena)
     arena.registerFunction(function(parameters: unused))
     verify(arena: arena)
+    arena.registerStruct(structure(nameId: 2U64, parameters: [binder(nameId: 4U64)]))
+    arena.registerEnum(enumeration(nameId: 3U64, parameters: [binder(nameId: 5U64)]))
+    verify(arena: arena)
+    if !arena.hasTypeParameterName(nameId: 2U64) || !arena.hasTypeParameterName(nameId: 3U64) { panic "generic declaration incorrectly shadows parameter" }
     mut val copy = arena
     arena.registerStruct(structure(nameId: 2U64, parameters: []))
     verify(arena: arena)
