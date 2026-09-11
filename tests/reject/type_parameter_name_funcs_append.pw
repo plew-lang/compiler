@@ -1,0 +1,5 @@
+import /Ir with { Arena }
+fn main() {
+    mut val arena: Arena = <Arena />
+    arena.funcs.append(arena.funcs[0U64])
+}
