@@ -1,5 +1,5 @@
 import /Ir with { Decls }
 fn main() {
     val declarations: Decls = <Decls />
-    val value = declarations.traitNameIds
+    val value = declarations.traitOwnerNameHeads
 }

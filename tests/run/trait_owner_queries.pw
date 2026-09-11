@@ -1,0 +1,17 @@
+import /Frontend with { Comp }
+import /Ir with { TraitOwner }
+import @Std/Io with { write }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.decls.registerTraitOwner(<TraitOwner nameStart=10U64 nameLen=4U64 nameId=7U64 arity=0U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner nameStart=20U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner nameStart=30U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
+    if compiler.canonicalTraitOwner(start: 10U64, len: 4U64) != 10U64 { panic "canonical span lost" }
+    if compiler.canonicalTraitOwner(start: 10U64, len: 3U64) != 0U64 { panic "incorrect length accepted" }
+    if compiler.canonicalTraitOwner(start: 11U64, len: 4U64) != 0U64 { panic "noncanonical offset accepted" }
+    if compiler.traitNameLenByOwner(owner: 20U64) != 4U64 || compiler.traitNameLenByOwner(owner: 21U64) != 0U64 { panic "owner length differs" }
+    if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 1U64) != 20U64 { panic "first arity match lost" }
+    if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 2U64) != 0U64 { panic "missing arity accepted" }
+    if compiler.traitDeclOffsetByIdArity(traitId: 8U64, arity: 0U64) != 0U64 { panic "missing name accepted" }
+    write(s: "trait-owner-queries-ok\n")
+}
