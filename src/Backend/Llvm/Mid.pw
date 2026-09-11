@@ -3,7 +3,7 @@
 // places, semantic constants, and explicit ownership operations.
 
 import @Std/Core with { truncU32, bitCastU64 }
-import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion }
+import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion, CaptureEntry }
 
 pub impl LlvmCtx {
 
@@ -2109,9 +2109,73 @@ pub impl LlvmCtx {
         return false
     }
 
+    inout fn midCanonicalClosureCaptures(c: inout Comp, value: MidRvalueNode) -> Array[CaptureEntry] {
+        mut val captures: Array[CaptureEntry] = []
+        mut val index: U64 = 0U64
+        while index < value.elements.len {
+            val capture = c.mid.closureCaptures[value.elements.start + index]
+            val type: TypeRef = c.arena.typeAt(index: capture.typeTerm)
+            captures.append(<CaptureEntry closureId=value.exprId nameStart=capture.bindingTarget nameLen=0U64 tyStart=type.nameStart tyLen=type.nameLen isArray=false ty=capture.typeTerm boxed=capture.mode == 2U64 />)
+            index += 1U64
+        }
+        return captures
+    }
+
+    inout fn midCanonicalMakeClosureSupported(c: inout Comp, body: MidBodyNode, value: MidRvalueNode) -> Bool {
+        if value.closureBodyKey == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || self.closureSlot(id: value.exprId) >= self.cloIdx.count() { return false }
+        if value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return false }
+        mut val index: U64 = 0U64
+        while index < value.elements.len {
+            val capture = c.mid.closureCaptures[value.elements.start + index]
+            if capture.typeTerm == 0U64 || capture.typeTerm >= c.arena.typeCount() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: capture.operand) { return false }
+            if capture.mode == 2U64 {
+                val operand: MidOperandNode = c.mid.operands[capture.operand - 1U64]
+                if operand.place == 0U64 || operand.place > c.mid.places.count() { return false }
+                val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= body.locals.len || !c.mid.locals[body.locals.start + place.local].isCaptureCell { return false }
+            } else if capture.mode == 1U64 {
+                val operand: MidOperandNode = c.mid.operands[capture.operand - 1U64]
+                if operand.tag != 1U64 && operand.tag != 2U64 { return false }
+            } else { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn midCanonicalEmitMakeClosure(c: inout Comp, body: MidBodyNode, value: MidRvalueNode) -> LLVMValueRef {
+        val slot: U64 = self.closureSlot(id: value.exprId)
+        mut val environment: LLVMValueRef = LLVMConstNull(self.ptrty)
+        if value.elements.len > 0U64 {
+            val captures: Array[CaptureEntry] = self.midCanonicalClosureCaptures(c: inout c, value: value)
+            val environmentType: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: captures)
+            environment = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(environmentType), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+            val drop: LLVMValueRef = self.buildClosureDropThunk(c: inout c, cloId: value.exprId, caps: captures)
+            LLVMBuildStore(self.b, drop, LLVMBuildStructGEP2(self.b, environmentType, environment, 0U64, anon()))
+            mut val index: U64 = 0U64
+            while index < value.elements.len {
+                val capture = c.mid.closureCaptures[value.elements.start + index]
+                mut val captured: LLVMValueRef = LLVMConstNull(self.ptrty)
+                if capture.mode == 2U64 {
+                    val operand: MidOperandNode = c.mid.operands[capture.operand - 1U64]
+                    val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+                    captured = LLVMBuildLoad2(self.b, self.ptrty, self.midCanonicalLocalPtr(body: body, local: place.local), anon())
+                    self.rawbufRetain(c: inout c, cell: captured)
+                } else {
+                    captured = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: capture.operand)
+                }
+                LLVMBuildStore(self.b, captured, LLVMBuildStructGEP2(self.b, environmentType, environment, index + 1U64, anon()))
+                index += 1U64
+            }
+        }
+        mut val closure: LLVMValueRef = LLVMGetUndef(self.closureTy)
+        closure = LLVMBuildInsertValue(self.b, closure, self.cloVal[slot], 0U64, anon())
+        return LLVMBuildInsertValue(self.b, closure, environment, 1U64, anon())
+    }
+
     inout fn midCanonicalInitialRvalueSupported(c: inout Comp, body: MidBodyNode, rvalueId: U64) -> Bool {
         if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return false }
         val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+        if value.tag == 19U64 { return self.midCanonicalMakeClosureSupported(c: inout c, body: body, value: value) }
         if value.tag == 1U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
         if value.tag == 2U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.typeCount() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm) }
         if value.tag >= 3U64 && value.tag <= 5U64 {
@@ -3842,9 +3906,10 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
-            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 6U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 && rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { return false }
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 6U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 && rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 && rvalue.tag != 19U64 { return false }
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-            if rvalue.tag == 6U64 { value = self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: rvalue.operand, proofId: rvalue.conversion) }
+            if rvalue.tag == 19U64 { value = self.midCanonicalEmitMakeClosure(c: inout c, body: body, value: rvalue) }
+            else if rvalue.tag == 6U64 { value = self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: rvalue.operand, proofId: rvalue.conversion) }
             else if rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand) }
             if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag >= 11U64 && rvalue.tag <= 17U64 { value = self.midCanonicalEmitEnumLayoutRvalue(c: inout c, body: body, value: rvalue) }
