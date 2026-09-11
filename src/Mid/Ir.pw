@@ -1091,8 +1091,10 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
             if statement.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.destination) { return false }
             if statement.source != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.source) { return false }
             if statement.value != 0U64 && !midCanonicalRvalueIsWellFormed(arena: arena, rvalue: statement.value) { return false }
-            if statement.tag == 9U64 {
-                if statement.destination == 0U64 || statement.value == 0U64 { return false }
+            if statement.tag == 9U64 || statement.tag == 10U64 {
+                if statement.destination == 0U64 { return false }
+                if statement.tag == 9U64 && statement.value == 0U64 { return false }
+                if statement.tag == 10U64 && (statement.value != 0U64 || statement.source != 0U64) { return false }
                 val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
                 if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= node.locals.len || !arena.locals[node.locals.start + destination.local].isCaptureCell { return false }
             } else if statement.tag < 1U64 || statement.tag > 8U64 { return false }
