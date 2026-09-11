@@ -531,7 +531,9 @@ pub impl Comp {
         self.addKwSpan(kw: "iterator")
         self.addKwSpan(kw: "next")
         val langModule: U64 = self.modules.langModule
-        mut val i: U64 = 0U64
+        val arrayName = self.kwSpan(kw: "Array", kwLen: 5U64)
+        val arrayNameId = intern(c: inout self, start: arrayName.nameStart, len: arrayName.nameLen)
+        mut val i = self.arena.firstStructNamed(nameId: arrayNameId)
         while i < self.arena.structCount() {
             val candidate: StructDef = self.arena.structAt(index: i)
             // StructDef.nameStart can be a re-interned span, whereas the
@@ -547,7 +549,7 @@ pub impl Comp {
                 self.langArrayDeclOffset = candidate.defOffset
                 return
             }
-            i += 1U64
+            i = self.arena.nextStructNamed(index: i)
         }
     }
 
