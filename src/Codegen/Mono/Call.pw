@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalExistentialResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2722,11 +2722,12 @@ pub impl Comp {
         return conversion
     }
 
-    inout fn finalizeStorageConversion(exprId: U64, targetTerm: U64) {
+    inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64) {
         if self.currentBodyInstanceId() == 0U64 { return }
         val sourceRef: U64 = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
+        val conversion: ValueConversionProof = self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
+        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
     }
 
     inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64]) -> Array[ValueConversionProof] {
@@ -2810,6 +2811,64 @@ pub impl Comp {
             slot = (slot + 1U64) % capacity
         }
         self.arena.finalAggregateIndexSlots.set(i: slot, value: self.arena.finalAggregates.count())
+    }
+
+    inout fn rebuildFinalStorageIndex(capacity: U64) {
+        self.arena.finalStorageIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.arena.finalStorageIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.arena.finalStorages.count() {
+            val fact: FinalStorageResolution = self.arena.finalStorages[entry]
+            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+            while self.arena.finalStorageIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.arena.finalStorageIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalStorageIndex(nextCount: U64) {
+        if self.arena.finalStorageIndexSlots.count() == 0U64 {
+            self.rebuildFinalStorageIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.arena.finalStorageIndexSlots.count() * 7U64 {
+            self.rebuildFinalStorageIndex(capacity: self.arena.finalStorageIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Returns the table-count sentinel when no frozen storage conversion exists.
+    inout fn finalStorageIndex(bodyId: U64, stmtId: U64) -> U64 {
+        val capacity: U64 = self.arena.finalStorageIndexSlots.count()
+        if capacity == 0U64 { return self.arena.finalStorages.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
+        while self.arena.finalStorageIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.arena.finalStorageIndexSlots[slot] - 1U64
+            val fact: FinalStorageResolution = self.arena.finalStorages[entry]
+            if fact.bodyId == bodyId && fact.stmtId == stmtId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.arena.finalStorages.count()
+    }
+
+    inout fn putFinalStorage(fact: FinalStorageResolution) {
+        val prior: U64 = self.finalStorageIndex(bodyId: fact.bodyId, stmtId: fact.stmtId)
+        if prior < self.arena.finalStorages.count() {
+            self.arena.finalStorages.set(i: prior, value: fact)
+            return
+        }
+        self.ensureFinalStorageIndex(nextCount: self.arena.finalStorages.count() + 1U64)
+        self.arena.finalStorages.append(fact)
+        val capacity: U64 = self.arena.finalStorageIndexSlots.count()
+        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+        while self.arena.finalStorageIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.arena.finalStorageIndexSlots.set(i: slot, value: self.arena.finalStorages.count())
     }
 
     inout fn rebuildFinalReturnIndex(capacity: U64) {
@@ -4436,6 +4495,8 @@ pub impl Comp {
         self.arena.finalAggregates = []
         self.arena.finalAggregateIndexSlots = []
         self.arena.finalExistentials = []
+        self.arena.finalStorages = []
+        self.arena.finalStorageIndexSlots = []
         self.arena.finalReturns = []
         self.arena.finalReturnIndexSlots = []
         self.arena.finalTries = []
@@ -5464,7 +5525,7 @@ pub impl Comp {
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                self.finalizeStorageConversion(exprId: init, targetTerm: le.ty)
+                self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like
@@ -5486,7 +5547,7 @@ pub impl Comp {
             Stmt.Assign(val target, val value) => {
                 self.scanPlaceInsts(exprId: target)
                 self.scanExprInsts(exprId: value)
-                self.finalizeStorageConversion(exprId: value, targetTerm: self.semanticExprTerm(exprId: target))
+                self.finalizeStorageConversion(stmtId: stmtId, exprId: value, targetTerm: self.semanticExprTerm(exprId: target))
             }
             Stmt.ExprStmt(val expr) => { self.scanExprInsts(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
