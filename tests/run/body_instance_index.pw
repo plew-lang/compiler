@@ -1,0 +1,72 @@
+import /Frontend with { Comp }
+import /Ir with { Bind, TypeRef, InstanceEnvironment, StaticConformanceProof }
+import @Std/Io with { write }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Concrete")
+    val otherName = compiler.internBytes(s: "Other")
+    val concrete = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val duplicate = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val other = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen args=[] />)
+    val parameter = <Bind nameStart=name.nameStart nameLen=name.nameLen paramId=41U64 fieldStart=0U64 fieldLen=0U64 />
+    val otherParameter = <Bind nameStart=name.nameStart nameLen=name.nameLen paramId=42U64 fieldStart=0U64 fieldLen=0U64 />
+    val empty = <InstanceEnvironment />
+    if compiler.findBodyInstance(fnIdx: 0U64, environment: empty) != 0U64 { panic "empty miss" }
+    if compiler.arena.bodyInstanceCount() != 0U64 { panic "find must not register" }
+    val first = compiler.internBodyInstance(fnIdx: 0U64, environment: empty)
+    if first != 1U64 { panic "one-based id" }
+    val base = <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete />
+    val equivalent = <InstanceEnvironment params=[parameter] args=[duplicate] receiverRef=duplicate />
+    val baseId = compiler.internBodyInstance(fnIdx: 0U64, environment: base)
+    if compiler.internBodyInstance(fnIdx: 0U64, environment: equivalent) != baseId { panic "structural type equality" }
+    val environments: Array[InstanceEnvironment] = [empty, base,
+        <InstanceEnvironment params=[parameter] args=[other] receiverRef=concrete />,
+        <InstanceEnvironment params=[otherParameter] args=[concrete] receiverRef=concrete />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=other />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedBound boundIdx=0U64 /> />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedBound boundIdx=1U64 /> />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath boundIdx=0U64 edges=[1U64,2U64] /> />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath boundIdx=0U64 edges=[2U64,1U64] /> />,
+        <InstanceEnvironment params=[parameter,otherParameter] args=[concrete,other] />,
+        <InstanceEnvironment params=[otherParameter,parameter] args=[other,concrete] />]
+    // Interleave functions so candidate links cannot accidentally follow global order.
+    mut val round: U64 = 0U64
+    while round < environments.count() {
+        mut val function: U64 = 0U64
+        while function < 9U64 {
+            val before = compiler.arena.bodyInstanceCount()
+            val found = compiler.findBodyInstance(fnIdx: function, environment: environments[round])
+            if compiler.arena.bodyInstanceCount() != before { panic "lookup mutates table" }
+            val actual = compiler.internBodyInstance(fnIdx: function, environment: environments[round])
+            if found != 0U64 && found != actual { panic "lookup/intern mismatch" }
+            if compiler.findBodyInstance(fnIdx: function, environment: environments[round]) != actual { panic "registration visibility" }
+            function += 1U64
+        }
+        round += 1U64
+    }
+    if compiler.arena.bodyInstanceCount() != 99U64 { panic "environment distinctions" }
+    mut val function: U64 = 0U64
+    while function < 9U64 {
+        mut val id = compiler.arena.firstBodyInstanceForFunction(functionIndex: function)
+        mut val previous: U64 = 0U64
+        mut val count: U64 = 0U64
+        while id != 0U64 {
+            if id <= previous || compiler.arena.bodyInstanceAt(index: id - 1U64).fnIdx != function { panic "candidate ordering" }
+            previous = id
+            id = compiler.arena.nextBodyInstanceForFunction(bodyId: id)
+            count += 1U64
+        }
+        if count != environments.count() { panic "candidate coverage" }
+        function += 1U64
+    }
+    mut val snapshot = compiler
+    val later = compiler.internBodyInstance(fnIdx: 18446744073709551615U64, environment: base)
+    if snapshot.findBodyInstance(fnIdx: 18446744073709551615U64, environment: base) != 0U64 { panic "copy independence" }
+    if compiler.findBodyInstance(fnIdx: 18446744073709551615U64, environment: equivalent) != later { panic "full U64 function key" }
+    val branchId = snapshot.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=other />)
+    if compiler.findBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=other />) != 0U64 { panic "candidate tail independence" }
+    if snapshot.findBodyInstance(fnIdx: 0U64, environment: empty) != first { panic "first identity retained" }
+    write(s: "body-instance-index-ok\n")
+}

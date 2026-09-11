@@ -1726,7 +1726,7 @@ export fn runFrontend(c: inout Comp) {
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "finalize-callables:scan-exprs", count: c.traceExprInstScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-scans", count: c.traceFinalBodyScans)
-    tracePhaseCount(c: inout c, label: "finalize-callables:body-identities", count: c.arena.bodyInstances.count())
+    tracePhaseCount(c: inout c, label: "finalize-callables:body-identities", count: c.arena.bodyInstanceCount())
     tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCallees.count())
     c.traceFinalBodyInstanceSummary()
     tracePhase(c: inout c, label: "finalize-callables:done")

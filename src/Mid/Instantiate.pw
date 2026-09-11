@@ -897,11 +897,11 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
 // arguments receive their own cleanup continuation, while every pre-existing
 // CFG edge is remapped around those inserted blocks.
 export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
-    if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
+    if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
         return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
     }
     val source: MidBodyNode = c.mid.bodies[body.body - 1U64]
-    val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+    val environment: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
     mut val itemRef: U64 = 0U64
     if environment.fnIdx < c.arena.functionCount() {
         itemRef = c.bodyProvidedItemTerm(f: c.arena.functionAt(index: environment.fnIdx), environment: environment.environment)
@@ -1419,10 +1419,10 @@ fn midWithTypeTerm(local: MidLocalDecl, typeTerm: U64) -> MidLocalDecl {
 // A remaining Template is an internal frontend/Mid phase error: the final
 // callable freeze must have published every descriptor before this point.
 export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidInstantiation {
-    if bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
+    if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
         return <MidInstantiation body=body error=<MidInstantiateError.InvalidBodyInstance /> />
     }
-    val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+    val environment: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
     if environment.fnIdx >= c.arena.functionCount() {
         return <MidInstantiation body=body error=<MidInstantiateError.InvalidBodyInstance /> />
     }

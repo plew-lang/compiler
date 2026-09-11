@@ -157,10 +157,10 @@ pub impl LlvmCtx {
     // method declaration is driven exclusively by BodyInstance.
     inout fn declareGenMethods(c: inout Comp) {
         mut val bodyIndex: U64 = 0U64
-        while bodyIndex < c.arena.bodyInstances.count() {
+        while bodyIndex < c.arena.bodyInstanceCount() {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: bodyIndex, stride: 64U64)
             val bodyId: U64 = bodyIndex + 1U64
-            val body: BodyInstance = c.arena.bodyInstances[bodyIndex]
+            val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyIndex)
             if body.fnIdx < c.arena.functionCount() {
                 val f: Func = c.arena.functionAt(index: body.fnIdx)
                 // A `provided` body has a trait-proof environment and belongs
@@ -200,7 +200,7 @@ pub impl LlvmCtx {
         // descriptor, allowing `Array[Item]` and `Array[I64]` to become
         // distinct LLVM nominal instances for one callable.
         mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
-        if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() { environment = c.arena.bodyInstances[bodyId - 1U64].environment }
+        if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() { environment = c.arena.bodyInstanceAt(index: bodyId - 1U64).environment }
         // bind Self/Item to the receiver instance for a provided method, so a param/return
         // type naming `Item` resolves to the receiver's real item: a terminal returning
         // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
@@ -267,7 +267,7 @@ pub impl LlvmCtx {
         self.curRecvInstRef = instRef
         mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
         val bodyId: U64 = self.genMethBody[slot]
-        if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() { environment = c.arena.bodyInstances[bodyId - 1U64].environment }
+        if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() { environment = c.arena.bodyInstanceAt(index: bodyId - 1U64).environment }
         // a provided method with method-own type params (`fold[B]` on a generic receiver):
         // its body refers to the element by the associated `Item`, while the env carries
         // two same-named params (the receiver's `B` = item, the method-own `B` = accumulator)
@@ -337,10 +337,10 @@ pub impl LlvmCtx {
     // receiver, proof environment, and method-owned argument suffix. Never
     // recreate that key from an AST call site in the LLVM backend.
     inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64) -> U64 {
-        if bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
             return self.genMethK.count()
         }
-        val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+        val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val instRef: U64 = body.environment.receiverRef
         if body.fnIdx >= c.arena.functionCount() || instRef == 0U64 || instRef >= c.arena.typeCount() {
             return self.genMethK.count()

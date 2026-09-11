@@ -1,0 +1,28 @@
+// Body IDs and candidate links are one-based; zero is always a miss.
+// The registry owns navigation, while Comp owns semantic environment equality.
+pub impl Arena {
+    fn bodyInstanceCount() -> U64 { return self.bodyInstances.count() }
+    fn bodyInstanceAt(index: U64) -> BodyInstance { return self.bodyInstances[index] }
+
+    inout fn registerBodyInstance(instance~: BodyInstance) -> U64 {
+        val bodyId = self.bodyInstances.count() + 1U64
+        val tail = self.bodyFunctionTails.getOr(key: instance.fnIdx, fallback: 0U64)
+        self.bodyInstances.append(instance)
+        self.bodyFunctionNext.append(0U64)
+        if tail == 0U64 {
+            self.bodyFunctionHeads[instance.fnIdx] = bodyId
+        } else {
+            self.bodyFunctionNext[tail - 1U64] = bodyId
+        }
+        self.bodyFunctionTails[instance.fnIdx] = bodyId
+        return bodyId
+    }
+
+    fn firstBodyInstanceForFunction(functionIndex: U64) -> U64 {
+        return self.bodyFunctionHeads.getOr(key: functionIndex, fallback: 0U64)
+    }
+
+    fn nextBodyInstanceForFunction(bodyId: U64) -> U64 {
+        return self.bodyFunctionNext[bodyId - 1U64]
+    }
+}

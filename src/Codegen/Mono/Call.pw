@@ -951,29 +951,18 @@ pub impl Comp {
     // equality remains structural at this boundary, but it is paid once when a
     // body context is entered rather than once per call descriptor lookup.
     inout fn internBodyInstance(fnIdx: U64, environment: InstanceEnvironment) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.arena.bodyInstances.count() {
-            val prior: BodyInstance = self.arena.bodyInstances[i]
-            if prior.fnIdx == fnIdx && self.sameInstanceEnvironment(a: prior.environment, b: environment) {
-                return i + 1U64
-            }
-            i += 1U64
-        }
-        self.arena.bodyInstances.append(<BodyInstance fnIdx=fnIdx environment=environment />)
-        return self.arena.bodyInstances.count()
+        val existing = self.findBodyInstance(fnIdx: fnIdx, environment: environment)
+        if existing != 0U64 { return existing }
+        return self.arena.registerBodyInstance(<BodyInstance fnIdx=fnIdx environment=environment />)
     }
 
-    // Read the frontend-frozen identity without interning.  Backend consumers
-    // use this at the Mid boundary: creating a BodyInstance after callable
-    // finalization would make a semantic descriptor that was never scanned.
+    // Backend consumers read only: never publish a new semantic body after finalization.
     inout fn findBodyInstance(fnIdx: U64, environment: InstanceEnvironment) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.arena.bodyInstances.count() {
-            val prior: BodyInstance = self.arena.bodyInstances[i]
-            if prior.fnIdx == fnIdx && self.sameInstanceEnvironment(a: prior.environment, b: environment) {
-                return i + 1U64
-            }
-            i += 1U64
+        mut val bodyId = self.arena.firstBodyInstanceForFunction(functionIndex: fnIdx)
+        while bodyId != 0U64 {
+            val prior = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+            if self.sameInstanceEnvironment(a: prior.environment, b: environment) { return bodyId }
+            bodyId = self.arena.nextBodyInstanceForFunction(bodyId: bodyId)
         }
         return 0U64
     }
@@ -2285,7 +2274,7 @@ pub impl Comp {
         while i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
             if e.bodyId != currentBodyId && e.siteIsStmt == siteIsStmt && e.slot == slot && e.exprId == exprId {
-                val priorBody: BodyInstance = self.arena.bodyInstances[e.bodyId - 1U64]
+                val priorBody: BodyInstance = self.arena.bodyInstanceAt(index: e.bodyId - 1U64)
                 if !(self.sameBodyReceiver(a: priorBody.environment.receiverRef, b: self.cur.bodyEnvironment.receiverRef)) {
                     mismatchedReceiver = true
                 } else {
@@ -3850,7 +3839,7 @@ pub impl Comp {
     // nested calls.  This is the only place generic bodies acquire their
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
-        val instance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
+        val instance: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         val f: Func = self.arena.functionAt(index: instance.fnIdx)
         if self.tracePhases {
             self.traceFinalBodyScans += 1U64
@@ -3931,8 +3920,8 @@ pub impl Comp {
             fi += 1U64
         }
         mut val bi: U64 = 0U64
-        while bi < self.arena.bodyInstances.count() {
-            val fnIdx: U64 = self.arena.bodyInstances[bi].fnIdx
+        while bi < self.arena.bodyInstanceCount() {
+            val fnIdx: U64 = self.arena.bodyInstanceAt(index: bi).fnIdx
             if fnIdx < counts.count() {
                 counts[fnIdx] = counts[fnIdx] + 1U64
             }

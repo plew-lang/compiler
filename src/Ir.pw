@@ -6,6 +6,7 @@ part ./Ir/Callables
 part ./Ir/TraitOwners
 part ./Ir/Types
 part ./Ir/DeclarationNames
+part ./Ir/BodyInstances
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2300,7 +2301,10 @@ export struct Arena {
     // Canonical semantic body instances. Mono interns a complete body key here;
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
-    pub mut val bodyInstances: Array[BodyInstance] = []
+    mut val bodyInstances: Array[BodyInstance] = []
+    mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]
+    mut val bodyFunctionTails: Dictionary[U64, U64] = [:]
+    mut val bodyFunctionNext: Array[U64] = []
     // Derived open-addressed index for finalCallees. Slots hold a 1-based
     // finalCallees index and are rebuilt from CallResolution's semantic key only.
     pub mut val finalCalleeIndexSlots: Array[U64] = []

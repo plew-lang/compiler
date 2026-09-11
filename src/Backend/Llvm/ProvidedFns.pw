@@ -86,8 +86,8 @@ pub impl LlvmCtx {
         mut val bodyIndex: U64 = 0U64
         while bodyIndex < c.monoWork.bodyInstances.count() {
             val bodyId: U64 = c.monoWork.bodyInstances[bodyIndex]
-            if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() {
-                val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+            if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() {
+                val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
                 if body.fnIdx < c.arena.functionCount() {
                     val f: Func = c.arena.functionAt(index: body.fnIdx)
                     // Receiver methods have their own ABI table. Async entry/resume and main
@@ -149,8 +149,8 @@ pub impl LlvmCtx {
     // identity and can lose a provided body's proof.
     inout fn emitOneGenFn(c: inout Comp, slot: U64) {
         val bodyId: U64 = self.genFnK[slot]
-        if bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() { return }
-        val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return }
+        val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         if body.fnIdx >= c.arena.functionCount() { return }
         val f: Func = c.arena.functionAt(index: body.fnIdx)
         val savedP: Array[Bind] = c.cur.typeParams

@@ -325,8 +325,8 @@ pub impl LlvmCtx {
         mut val bodyI: U64 = 0U64
         while bodyI < c.monoWork.bodyInstances.count() {
             val bodyId: U64 = c.monoWork.bodyInstances[bodyI]
-            if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() {
-                val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+            if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() {
+                val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
                 if body.fnIdx < c.arena.functionCount() {
                     self.scanBlockClosures(c: inout c, id: c.arena.functionAt(index: body.fnIdx).body)
                 }
