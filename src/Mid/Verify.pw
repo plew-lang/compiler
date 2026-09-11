@@ -44,7 +44,7 @@ fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
     return false
 }
 
-fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], operandId: U64, block: U64) -> MidVerification {
+fn canonicalMidVerifyConsumeOperand(c: Comp, body: MidBodyNode, states: inout Array[MidOwnership], operandId: U64, block: U64) -> MidVerification {
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag == 8U64 { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
@@ -52,6 +52,7 @@ fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], 
     if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
     if place.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
+    if place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isInout { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     if place.projections.len != 0U64 { return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local /> }
     if place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     match states[place.local] {
@@ -61,7 +62,7 @@ fn canonicalMidVerifyConsumeOperand(c: Comp, states: inout Array[MidOwnership], 
     return <MidVerification />
 }
 
-fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool) -> MidVerification {
+fn canonicalMidVerifyConsumeRvalue(c: Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool) -> MidVerification {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
@@ -71,7 +72,7 @@ fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], r
     if value.tag >= 3U64 && value.tag <= 5U64 {
         mut val elementI: U64 = 0U64
         while elementI < value.elements.len {
-            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block)
+            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             elementI = elementI + 1U64
         }
@@ -83,13 +84,13 @@ fn canonicalMidVerifyConsumeRvalue(c: Comp, states: inout Array[MidOwnership], r
         while captureI < value.elements.len {
             val capture: MidClosureCaptureNode = c.mid.closureCaptures[value.elements.start + captureI]
             if (capture.mode != 1U64 && capture.mode != 2U64) || capture.typeTerm == 0U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
-            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: capture.operand, block: block)
+            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: capture.operand, block: block)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             captureI += 1U64
         }
         return <MidVerification />
     }
-    if value.operand != 0U64 { return canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: value.operand, block: block) }
+    if value.operand != 0U64 { return canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: value.operand, block: block) }
     return <MidVerification />
 }
 
@@ -263,7 +264,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
             if statement.tag == 1U64 {
-                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: c, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64)
+                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -272,7 +273,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 }
             }
             if statement.tag == 9U64 {
-                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: c, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64)
+                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -380,7 +381,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
         val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
         if term.tag == 2U64 && !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 3U64 {
-            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: term.discriminant, block: blockI)
+            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: term.discriminant, block: blockI)
             match result.error { MidVerifyError.None => {} _ => { return result } }
             mut val caseI: U64 = 0U64
             while caseI < term.cases.len {
@@ -393,14 +394,14 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if term.callReceiver == 0U64 || term.callReceiver > c.mid.callReceivers.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
             val callReceiver = c.mid.callReceivers[term.callReceiver - 1U64]
             if callReceiver.tag == 2U64 {
-                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: callReceiver.operand, block: blockI)
+                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: callReceiver.operand, block: blockI)
                 match receiver.error { MidVerifyError.None => {} _ => { return receiver } }
             } else if callReceiver.tag != 1U64 {
                 return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI />
             }
             mut val argumentI: U64 = 0U64
             while argumentI < term.args.len {
-                val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: c.mid.callArguments[term.args.start + argumentI], block: blockI)
+                val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: c.mid.callArguments[term.args.start + argumentI], block: blockI)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 argumentI = argumentI + 1U64
             }
@@ -412,7 +413,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
         }
         if term.tag == 10U64 && !canonicalMidTargetIsValid(body: body, target: term.resume) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 6U64 || term.tag == 7U64 {
-            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, states: inout states, operandId: term.value, block: blockI)
+            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: c, body: body, states: inout states, operandId: term.value, block: blockI)
             match result.error { MidVerifyError.None => {} _ => { return result } }
         }
         blockI = blockI + 1U64
@@ -420,12 +421,13 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
     return <MidVerification />
 }
 
-fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand, block: U64) -> MidVerification {
+fn midVerifyConsumeOperand(body: MidBody, states: inout Array[MidOwnership], operand: MidOperand, block: U64) -> MidVerification {
     match operand {
         MidOperand.Access(candidate: _) => {
             return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block />
         }
         MidOperand.Move(place: val place) => {
+            if place.local < body.locals.count() && body.locals[place.local].isInout { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
             if place.rootTag != 1U64 {
                 return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local />
             }
@@ -445,9 +447,9 @@ fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperan
     return <MidVerification />
 }
 
-fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, block: U64, isGrounded: Bool) -> MidVerification {
+fn midVerifyConsumeRvalue(body: MidBody, states: inout Array[MidOwnership], value: MidRvalue, block: U64, isGrounded: Bool) -> MidVerification {
     match value {
-        MidRvalue.Use(operand: val operand) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
+        MidRvalue.Use(operand: val operand) => { return midVerifyConsumeOperand(body: body, states: inout states, operand: operand, block: block) }
         // Parametric bodies are never verifier input in the production path;
         // their ABI target has not been selected yet.  After BodyInstance
         // grounding, however, ReturnBoundary deliberately remains explicit so
@@ -455,22 +457,22 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
         MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: _) => { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
         MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: val operand) => {
             if !isGrounded || targetTerm == 0U64 { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
-            return midVerifyConsumeOperand(states: inout states, operand: operand, block: block)
+            return midVerifyConsumeOperand(body: body, states: inout states, operand: operand, block: block)
         }
         MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
             mut val i: U64 = 0U64
             while i < elements.count() {
-                val verified: MidVerification = midVerifyConsumeOperand(states: inout states, operand: elements[i].operand, block: block)
+                val verified: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: elements[i].operand, block: block)
                 match verified.error { MidVerifyError.None => {} _ => { return verified } }
                 i += 1U64
             }
             return <MidVerification />
         }
-        MidRvalue.Convert(operand: val operand, conversion: _) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
+        MidRvalue.Convert(operand: val operand, conversion: _) => { return midVerifyConsumeOperand(body: body, states: inout states, operand: operand, block: block) }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
         MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
             if !isGrounded || targetTerm == 0U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
-            return midVerifyConsumeOperand(states: inout states, operand: operand, block: block)
+            return midVerifyConsumeOperand(body: body, states: inout states, operand: operand, block: block)
         }
         MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
@@ -479,11 +481,11 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
         MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return <MidVerification /> }
-        MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { return midVerifyConsumeOperand(states: inout states, operand: error, block: block) }
+        MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { return midVerifyConsumeOperand(body: body, states: inout states, operand: error, block: block) }
         MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
             mut val i: U64 = 0U64
             while i < captures.count() {
-                val checked = midVerifyConsumeOperand(states: inout states, operand: captures[i].operand, block: block)
+                val checked = midVerifyConsumeOperand(body: body, states: inout states, operand: captures[i].operand, block: block)
                 match checked.error { MidVerifyError.None => {} _ => { return checked } }
                 i += 1U64
             }
@@ -624,7 +626,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
         while si < body.blocks[bi].statements.count() {
             match body.blocks[bi].statements[si] {
                 MidStatement.Assign(destination: val destination, value: val value) => {
-                    val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
+                    val result: MidVerification = midVerifyConsumeRvalue(body: body, states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
                     match result.error { MidVerifyError.None => {} _ => { return result } }
                     if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
                     if destination.rootTag == 1U64 && destination.projections.count() == 0U64 && destination.local < states.count() {
@@ -632,7 +634,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     }
                 }
                 MidStatement.InitializeCaptureCell(destination: val destination, value: val value) => {
-                    val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
+                    val result: MidVerification = midVerifyConsumeRvalue(body: body, states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
                     match result.error { MidVerifyError.None => {} _ => { return result } }
                     if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || destination.local >= body.locals.count() || !body.locals[destination.local].isCaptureCell {
                         return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local />
@@ -767,7 +769,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 if !(midTargetIsValid(body: body, target: target)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.Switch(discriminant: val discriminant, values: _, targets: val targets, otherwise: val otherwise) => {
-                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: discriminant, block: bi)
+                val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: discriminant, block: bi)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 mut val ti: U64 = 0U64
                 while ti < targets.count() {
@@ -777,21 +779,21 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 if !(midTargetIsValid(body: body, target: otherwise)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => {
-                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: discriminant, block: bi)
+                val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: discriminant, block: bi)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if !(midTargetIsValid(body: body, target: okTarget)) || !(midTargetIsValid(body: body, target: errTarget)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
                 match receiver {
                     MidCallReceiver.Value(operand: val operand) => {
-                        val receiverResult: MidVerification = midVerifyConsumeOperand(states: inout states, operand: operand, block: bi)
+                        val receiverResult: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: operand, block: bi)
                         match receiverResult.error { MidVerifyError.None => {} _ => { return receiverResult } }
                     }
                     _ => {}
                 }
                 mut val ai: U64 = 0U64
                 while ai < args.count() {
-                    val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: args[ai], block: bi)
+                    val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: args[ai], block: bi)
                     match result.error { MidVerifyError.None => {} _ => { return result } }
                     ai += 1U64
                 }
@@ -804,11 +806,11 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 if !(midTargetIsValid(body: body, target: resume)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.ReturnValue(value: val value) => {
-                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: value, block: bi)
+                val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: value, block: bi)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
             MidTerminator.Panic(message: val message) => {
-                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: message, block: bi)
+                val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: message, block: bi)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
             _ => {}

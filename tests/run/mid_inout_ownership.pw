@@ -1,0 +1,19 @@
+import @Std/Io with { write }
+import /Mid with { MidPlace, MidOwnership, MidOperand, MidCallReceiver, MidCallTarget, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeMidOwnership, verifyMidBody }
+
+fn main() {
+    val borrowed: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=true isInout=true ownsAtEntry=false />
+    val result: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false />
+    val entry: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Move place=<MidPlace local=0U64 typeTerm=1U64 /> />] destination=<MidPlace local=1U64 typeTerm=1U64 /> target=1U64 /> />
+    val body: MidBody = <MidBody locals=[borrowed, result] blocks=[entry, <MidBlock terminator=<MidTerminator.Return /> />] entry=0U64 />
+    val states = analyzeMidOwnership(body: body)
+    val entryStates = states[0U64]
+    match entryStates[0U64] {
+        MidOwnership.Owned => { write(s: "initialized\n") }
+        _ => { write(s: "missing\n") }
+    }
+    match verifyMidBody(body: body).error {
+        MidVerifyError.MoveUnavailable => { write(s: "move-rejected\n") }
+        _ => { write(s: "invalid-verdict\n") }
+    }
+}

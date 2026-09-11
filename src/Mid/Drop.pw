@@ -151,7 +151,7 @@ export fn analyzeCanonicalMidOwnership(c: Comp, canonical: MidCanonicalBody) -> 
     mut val initial: Array[MidOwnership] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if c.mid.locals[body.locals.start + localI].ownsAtEntry { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
+        if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
         localI = localI + 1U64
     }
     mut val blockI: U64 = 0U64
@@ -314,7 +314,7 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
     mut val initial: Array[MidAccessibility] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if c.mid.locals[body.locals.start + localI].ownsAtEntry { initial.append(<MidAccessibility.Available />) } else { initial.append(<MidAccessibility.Unavailable />) }
+        if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidAccessibility.Available />) } else { initial.append(<MidAccessibility.Unavailable />) }
         localI = localI + 1U64
     }
     mut val blockI: U64 = 0U64
@@ -576,7 +576,7 @@ fn canonicalMidOwnershipAfterCliffs(c: Comp, canonical: MidCanonicalBody, plan: 
     mut val initial: Array[MidOwnership] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if c.mid.locals[body.locals.start + localI].ownsAtEntry { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
+        if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
         localI = localI + 1U64
     }
     mut val blockI: U64 = 0U64
@@ -836,13 +836,13 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                                 // tag=3 to drop only the current logical T.
                                 MidOwnership.Owned => {
                                     val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
-                                    if declaration.isBorrowed { }
+                                    if declaration.isBorrowed || declaration.isInout { }
                                     else if declaration.isCaptureCell { c.mid.statements.append(<MidStatementNode tag=10U64 destination=place />) }
                                     else { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
                                 }
                                 MidOwnership.MaybeOwned => {
                                     val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
-                                    if !declaration.isBorrowed && plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                                    if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
                                 }
                                 _ => {}
                             }
@@ -1141,7 +1141,7 @@ export fn analyzeMidOwnership(body: MidBody) -> Array[Array[MidOwnership]] {
     mut val initial: Array[MidOwnership] = []
     mut val li: U64 = 0U64
     while li < body.locals.count() {
-        if body.locals[li].ownsAtEntry {
+        if body.locals[li].ownsAtEntry || body.locals[li].isInout {
             initial.append(<MidOwnership.Owned />)
         } else {
             initial.append(<MidOwnership.Consumed />)
@@ -1374,7 +1374,7 @@ export fn analyzeMidAccessibility(body: MidBody) -> Array[Array[MidAccessibility
     mut val initial: Array[MidAccessibility] = []
     mut val li: U64 = 0U64
     while li < body.locals.count() {
-        if body.locals[li].ownsAtEntry {
+        if body.locals[li].ownsAtEntry || body.locals[li].isInout {
             initial.append(<MidAccessibility.Available />)
         } else {
             initial.append(<MidAccessibility.Unavailable />)
@@ -1761,12 +1761,12 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         if local < originalCount && local < currentOwnership.count() {
                             match currentOwnership[local] {
                                 MidOwnership.Owned => {
-                                    if body.locals[local].isBorrowed { }
+                                    if body.locals[local].isBorrowed || body.locals[local].isInout { }
                                     else if body.locals[local].isCaptureCell { statements.append(<MidStatement.ReleaseCaptureCell place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
                                     else { statements.append(<MidStatement.Drop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
                                 }
                                 MidOwnership.MaybeOwned => {
-                                    if needsFlag[local] { statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> flag=flagFor[local] />) }
+                                    if !body.locals[local].isInout && needsFlag[local] { statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> flag=flagFor[local] />) }
                                 }
                                 _ => {}
                             }
