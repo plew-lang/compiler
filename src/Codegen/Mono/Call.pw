@@ -1936,15 +1936,85 @@ pub impl Comp {
         if self.callTargetIsDirect(target: selection.target) && callee < self.arena.functionCount() {
             return
         }
+        mut val parameterTypes: Array[U64] = []
+        mut val passings: Array[CallArgumentPassing] = []
+        mut val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
+        mut val functionType: U64 = 0U64
+        mut val dynamic: Bool = false
+        match selection.target {
+            CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: val ref) => {
+                functionType = ref
+                dynamic = true
+            }
+            CallTarget.ClosureField(fieldIndex: _, fnTypeRef: val ref) => {
+                functionType = ref
+                dynamic = true
+            }
+            CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val requirementSlot) => {
+                dynamic = true
+                if traitIndex >= self.decls.traitCount() || requirementSlot == 0U64 || requirementSlot > self.decls.traitAt(index: traitIndex).reqs.count() || selection.receiverRef == 0U64 || selection.receiverRef >= self.arena.typeCount() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: invalid dynamic requirement signature")
+                    return
+                }
+                val requirement: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementSlot - 1U64)
+                mut val parameters: Array[Bind] = []
+                mut val values: Array[U64] = []
+                if !self.anyBindingEnv(anyRef: selection.receiverRef, traitIdx: traitIndex, outParams: inout parameters, outArgs: inout values) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: incomplete dynamic requirement environment")
+                    return
+                }
+                if requirement.selfInout { receiverPassing = <CallReceiverPassing.Inout /> }
+                else if requirement.selfMove { receiverPassing = <CallReceiverPassing.Move /> }
+                else { receiverPassing = <CallReceiverPassing.Borrow /> }
+                mut val index: U64 = 0U64
+                while index < requirement.params.count() {
+                    val parameter: Param = self.funcParamAt(params: requirement.params, index: index)
+                    parameterTypes.append(self.groundTermInEnvironment(ref: parameter.ty, params: parameters, values: values, selfRef: selection.receiverRef))
+                    if parameter.isInout { passings.append(<CallArgumentPassing.Inout />) }
+                    else if parameter.isMove { passings.append(<CallArgumentPassing.Move />) }
+                    else { passings.append(<CallArgumentPassing.Borrow />) }
+                    index += 1U64
+                }
+            }
+            _ => {}
+        }
+        if functionType != 0U64 {
+            if functionType >= self.arena.typeCount() || !self.isFnType(ref: functionType) || self.arena.typeAt(index: functionType).args.count() == 0U64 {
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: invalid dynamic closure signature")
+                return
+            }
+            val signature: TypeRef = self.arena.typeAt(index: functionType)
+            mut val index: U64 = 1U64
+            while index < signature.args.count() {
+                parameterTypes.append(signature.args[index])
+                passings.append(<CallArgumentPassing.Borrow />)
+                index += 1U64
+            }
+        }
+        if dynamic {
+            if parameterTypes.count() != selection.argumentSources.count() {
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic signature argument count mismatch")
+                return
+            }
+            mut val index: U64 = 0U64
+            while index < parameterTypes.count() {
+                if parameterTypes[index] == 0U64 || !self.tyRefIsGround(ref: parameterTypes[index]) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: unresolved dynamic parameter type")
+                    return
+                }
+                index += 1U64
+            }
+        }
+        val conversions: Array[ValueConversionProof] = self.callArgumentConversions(sources: selection.argumentSources, parameterTypeRefs: parameterTypes)
         val priorIdx: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if priorIdx < self.finalCalleeCount() {
             val prior: CallResolution = self.arena.finalCallees[priorIdx]
-            if !(self.samePublishedNonStaticSelection(prior: prior, selection: selection)) {
+            if !(self.samePublishedNonStaticSelection(prior: prior, selection: selection)) || !self.sameResolvedTypeRefs(a: self.copyFinalCalleeParameterTypes(types: prior.parameterTypeRefs), b: parameterTypes) || !self.sameCallReceiverPassing(a: prior.receiverPassing, b: receiverPassing) || !self.sameCallArgumentPassings(a: self.copyFinalCalleeArgumentPassings(passings: prior.argumentPassings), b: passings) || !self.sameFrozenValueConversionProofs(a: self.copyFinalCalleeConversions(conversions: prior.argumentConversions), b: conversions) {
                 self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: conflicting CallResolution republish")
             }
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, arguments: selection.argumentSources, resultProjection: selection.resultProjection, target: selection.target)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: selection.receiverRef, resultTypeRef: selection.resultRef, arguments: selection.argumentSources, parameterTypeRefs: parameterTypes, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: passings, resultProjection: selection.resultProjection, target: selection.target)
     }
 
     inout fn samePublishedNonStaticSelection(prior: CallResolution, selection: CallSiteSelection) -> Bool {
