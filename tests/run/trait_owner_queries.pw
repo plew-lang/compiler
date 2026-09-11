@@ -4,7 +4,7 @@ import @Std/Io with { write }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=10U64 nameLen=4U64 nameId=7U64 arity=0U64 />)
-    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=20U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=3U64 nameStart=20U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
     compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=30U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
     if compiler.canonicalTraitOwner(start: 10U64, len: 4U64) != 10U64 { panic "canonical span lost" }
     if compiler.canonicalTraitOwner(start: 10U64, len: 3U64) != 0U64 { panic "incorrect length accepted" }
@@ -13,5 +13,6 @@ fn main() {
     if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 1U64) != 20U64 { panic "first arity match lost" }
     if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 2U64) != 0U64 { panic "missing arity accepted" }
     if compiler.traitDeclOffsetByIdArity(traitId: 8U64, arity: 0U64) != 0U64 { panic "missing name accepted" }
+    if compiler.traitModuleByIdArity(traitId: 7U64, arity: 1U64) != 3U64 { panic "stored module lost" }
     write(s: "trait-owner-queries-ok\n")
 }
