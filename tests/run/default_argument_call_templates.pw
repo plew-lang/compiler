@@ -1,12 +1,15 @@
+// Internal contract test: default evaluation identity, idempotent recording,
+// and preservation of previously resolved argument provenance. Public usage
+// is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
 
 fn main() {
     mut val c: Comp = <Comp />
-    val unit = c.kwSpan(kw: "", kwLen: 0U64)
-    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
-    val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
+    c.arena.reserveTypeSentinel()
+    val unitTerm: U64 = 0U64
+    val integer = c.internBytes(s: "I64")
     val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
     val name = c.internTmpName(prefix: "item", n: 0U64)
     val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
@@ -26,7 +29,9 @@ fn main() {
     val firstKey = c.templateCallSiteKey(fnIdx: 0U64, exprId: first)
     val template = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: first)
     match template.kind {
-        CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proof: _) => {
+        CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val argumentRange, calleeTypeArgs: val typeRange, proofId: _) => {
+            val args = c.callTemplateArguments(range: argumentRange)
+            val typeArgs = c.callTemplateTypeArgs(range: typeRange)
             if callee == generator && args.count() == 0U64 && typeArgs.count() == 1U64 && typeArgs[0U64] == term { write(s: "ordinary-selected-call\n") }
             match receiver {
                 CallTemplateReceiver.Term(term: val receiverTerm) => {

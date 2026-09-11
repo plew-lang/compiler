@@ -1,3 +1,6 @@
+// Internal contract test: frozen call records, repeatable completion, and
+// caller/callee binder identity. Public usage is covered by
+// mid_default_argument_result_context.pw and generic_array_ret_infer.pw.
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { Bind, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, Param, StaticConformanceProof, TypeRef }
@@ -8,16 +11,20 @@ fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBind
     c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 typeParams=params params=valueParams
         hasRet=true retStart=0U64 retLen=0U64 retIsArray=false retTy=pattern body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
-    val kind = c.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=[] calleeTypeArgs=[0U64] proof=<StaticConformanceProof.Missing /> />, expectedTerm: expected)
+    val kind = c.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: []) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: [0U64]) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) />, expectedTerm: expected)
     match kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val args, proof: _) => { return args[0U64] }
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
+            val args = c.callTemplateTypeArgs(range: range)
+            return args[0U64]
+        }
         _ => { return 0U64 }
     }
 }
 
 fn savedArgument(c: inout Comp, expression: U64) -> U64 {
     match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: expression).kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val args, proof: _) => {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
+            val args = c.callTemplateTypeArgs(range: range)
             if args.count() == 1U64 { return args[0U64] }
         }
         _ => {}
@@ -28,8 +35,8 @@ fn savedArgument(c: inout Comp, expression: U64) -> U64 {
 fn main() {
     mut val c: Comp = <Comp />
     // Production arenas reserve zero for the missing-type sentinel.
-    val unit = c.kwSpan(kw: "", kwLen: 0U64)
-    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
+    c.arena.reserveTypeSentinel()
+    val unitTerm: U64 = 0U64
     val name = c.internTmpName(prefix: "T", n: 0U64)
     val array = c.internTmpName(prefix: "Array", n: 0U64)
     val integer = c.internTmpName(prefix: "Integer", n: 0U64)
@@ -95,14 +102,17 @@ fn main() {
     if c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) { write(s: "completed-parent-plan\n") }
     if c.cur.checkFn == 999U64 && !c.cur.recordCallTemplates { write(s: "record-cursor-restored\n") }
     match c.decls.callTemplates[index].kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: val completed, calleeTypeArgs: _, proof: _) => {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val range, calleeTypeArgs: _, proofId: _) => {
+            val completed = c.callTemplateArguments(range: range)
             if completed.count() == 1U64 {
                 match completed[0U64].source {
                     CallArgumentSource.PriorCallResult(exprId: val generated, siteKey: val site) => {
                         if site.ownerFnIdx == 0U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: generated), b: expectedTerm) { write(s: "caller-parametric-default-result\n") }
                         val generatorTemplate = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: generated)
                         match generatorTemplate.kind {
-                            CallTemplateKind.Direct(callee: val generator, receiver: _, args: val generatorArgs, calleeTypeArgs: val typeArgs, proof: _) => {
+                            CallTemplateKind.Direct(callee: val generator, receiver: _, args: val argumentRange, calleeTypeArgs: val typeRange, proofId: _) => {
+                                val generatorArgs = c.callTemplateArguments(range: argumentRange)
+                                val typeArgs = c.callTemplateTypeArgs(range: typeRange)
                                 if generator == c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64) && generatorArgs.count() == 0U64 && typeArgs.count() == 1U64 && typeArgs[0U64] == callerTerm { write(s: "selected-generator-environment\n") }
                             }
                             _ => {}
@@ -141,7 +151,8 @@ fn main() {
     c.cur.recordCallTemplates = false
     if c.completeRecordedDefaultCalls() == 1U64 { write(s: "frontier-reports-incomplete\n") }
     match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).kind {
-        CallTemplateKind.Direct(callee: _, receiver: _, args: val completed, calleeTypeArgs: _, proof: _) => {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val range, calleeTypeArgs: _, proofId: _) => {
+            val completed = c.callTemplateArguments(range: range)
             if completed.count() == 1U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: c.callArgumentExprId(source: completed[0U64].source)), b: expectedTerm) { write(s: "frontier-completes-method-default\n") }
         }
         _ => {}
