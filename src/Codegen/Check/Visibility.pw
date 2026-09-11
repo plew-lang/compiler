@@ -22,7 +22,7 @@ pub impl Comp {
             val o: Bind = self.modules.reExportOrigins[i]
             if self.moduleOf(offset: o.nameStart) == surfaceMod {
                 if spansEqual(c: inout self, aStart: o.nameStart, aLen: o.nameLen, bStart: start, bLen: len) {
-                    return self.importedDeclIdentityFromSurface(surfaceMod: o.fieldLen, start: o.fieldStart, len: self.nameLenAt(start: o.fieldStart))
+                    return self.importedDeclIdentityFromSurface(surfaceMod: o.fieldLen, start: o.fieldStart, len: o.nameId)
                 }
             }
             i += 1U64
@@ -434,7 +434,7 @@ pub impl Comp {
             val origin: Bind = self.modules.reExportOrigins[i]
             if self.moduleOf(offset: origin.nameStart) == surfaceMod {
                 if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: self.nameLenAt(start: origin.fieldStart))
+                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
                 }
             }
             i += 1
@@ -444,24 +444,6 @@ pub impl Comp {
 
     // The real import-name length is stored in the source span itself; recover it
     // through the matching import/re-export provenance entry instead of guessing.
-    inout fn nameLenAt(start: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.modules.importOrigins.count() {
-            val o: Bind = self.modules.importOrigins[i]
-            if o.fieldStart == start { return o.nameId }
-            i += 1
-        }
-        i = 0
-        while i < self.modules.reExportOrigins.count() {
-            val o: Bind = self.modules.reExportOrigins[i]
-            if o.fieldStart == start { return o.nameId }
-            i += 1
-        }
-        // A direct source spelling has no provenance record. Its interned length
-        // cannot be recovered from the offset alone, so callers pass it directly.
-        return 0U64
-    }
-
     inout fn typeDeclIdentityAt(useMod: U64, start: U64, len: U64) -> Bind {
         val local: Bind = self.typeDeclIdentityInModule(mod: useMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
