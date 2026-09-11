@@ -1,3 +1,4 @@
+import ./TraitCycleGraph with { TraitCycleGraph }
 import ./KeywordSpans with { KeywordSpans }
 // @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler. It
 // DEFINES the shared compiler state `Comp` (＋ the name interner) and all analysis

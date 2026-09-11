@@ -1,0 +1,132 @@
+// One active source-set owns this topology. Edge ids are one-based, with zero
+// terminating adjacency chains; original conformance indices remain unchanged.
+export struct TraitCycleGraph {
+    mut val ownerIndices: Dictionary[U64, U64] = [:]
+    mut val owners: Array[U64] = []
+    mut val conformIndices: Array[U64] = []
+    mut val sources: Array[U64] = []
+    mut val targets: Array[U64] = []
+    mut val outgoingHeads: Array[U64] = []
+    mut val outgoingTails: Array[U64] = []
+    mut val incomingHeads: Array[U64] = []
+    mut val incomingTails: Array[U64] = []
+    mut val outgoingNext: Array[U64] = []
+    mut val incomingNext: Array[U64] = []
+}
+
+impl TraitCycleGraph {
+    inout fn registerOwner(owner: U64) -> U64 {
+        val existing = self.ownerIndices.getOr(key: owner, fallback: self.owners.count())
+        if existing < self.owners.count() { return existing }
+        val index = self.owners.count()
+        self.ownerIndices[owner] = index
+        self.owners.append(owner)
+        self.outgoingHeads.append(0U64)
+        self.outgoingTails.append(0U64)
+        self.incomingHeads.append(0U64)
+        self.incomingTails.append(0U64)
+        return index
+    }
+}
+
+pub impl TraitCycleGraph {
+    factory
+
+    inout fn append(conformIndex: U64, source: U64, target: U64) {
+        val sourceIndex = self.registerOwner(owner: source)
+        val targetIndex = self.registerOwner(owner: target)
+        self.conformIndices.append(conformIndex)
+        self.sources.append(sourceIndex)
+        self.targets.append(targetIndex)
+        self.outgoingNext.append(0U64)
+        self.incomingNext.append(0U64)
+        val edge = self.conformIndices.count()
+        val outgoingTail = self.outgoingTails[sourceIndex]
+        if outgoingTail == 0U64 { self.outgoingHeads[sourceIndex] = edge }
+        else { self.outgoingNext[outgoingTail - 1U64] = edge }
+        self.outgoingTails[sourceIndex] = edge
+        val incomingTail = self.incomingTails[targetIndex]
+        if incomingTail == 0U64 { self.incomingHeads[targetIndex] = edge }
+        else { self.incomingNext[incomingTail - 1U64] = edge }
+        self.incomingTails[targetIndex] = edge
+    }
+
+    fn ownerCount() -> U64 { return self.owners.count() }
+    fn edgeCount() -> U64 { return self.conformIndices.count() }
+    fn ownerIndex(owner: U64) -> U64 {
+        return self.ownerIndices.getOr(key: owner, fallback: self.owners.count())
+    }
+    fn conformIndex(edge: U64) -> U64 { return self.conformIndices[edge - 1U64] }
+    fn sourceIndex(edge: U64) -> U64 { return self.sources[edge - 1U64] }
+    fn targetIndex(edge: U64) -> U64 { return self.targets[edge - 1U64] }
+    fn firstOutgoing(ownerIndex: U64) -> U64 { return self.outgoingHeads[ownerIndex] }
+    fn nextOutgoing(edge: U64) -> U64 { return self.outgoingNext[edge - 1U64] }
+    fn firstIncoming(ownerIndex: U64) -> U64 { return self.incomingHeads[ownerIndex] }
+    fn nextIncoming(edge: U64) -> U64 { return self.incomingNext[edge - 1U64] }
+
+    // Iterative Kosaraju: preserve registration and adjacency order without
+    // using the compiler stack or scanning unrelated edges at each vertex.
+    fn components() -> Array[U64] {
+        mut val visited: Array[Bool] = []
+        mut val result: Array[U64] = []
+        mut val owner: U64 = 0U64
+        while owner < self.ownerCount() {
+            visited.append(false)
+            result.append(0U64)
+            owner += 1U64
+        }
+        mut val finish: Array[U64] = []
+        owner = 0U64
+        while owner < self.ownerCount() {
+            if !visited[owner] {
+                mut val nodes: Array[U64] = [owner]
+                mut val edges: Array[U64] = [self.firstOutgoing(ownerIndex: owner)]
+                visited[owner] = true
+                while nodes.count() > 0U64 {
+                    val top = nodes.count() - 1U64
+                    val edge = edges[top]
+                    if edge == 0U64 {
+                        finish.append(nodes[top])
+                        nodes.removeLast()
+                        edges.removeLast()
+                    } else {
+                        edges[top] = self.nextOutgoing(edge: edge)
+                        val target = self.targetIndex(edge: edge)
+                        if !visited[target] {
+                            visited[target] = true
+                            nodes.append(target)
+                            edges.append(self.firstOutgoing(ownerIndex: target))
+                        }
+                    }
+                }
+            }
+            owner += 1U64
+        }
+        mut val component: U64 = 1U64
+        mut val remaining = finish.count()
+        while remaining > 0U64 {
+            remaining -= 1U64
+            val root = finish[remaining]
+            if result[root] == 0U64 {
+                mut val pending: Array[U64] = [root]
+                result[root] = component
+                mut val cursor: U64 = 0U64
+                while cursor < pending.count() {
+                    val current = pending[cursor]
+                    cursor += 1U64
+                    mut val edge = self.firstIncoming(ownerIndex: current)
+                    while edge != 0U64 {
+                        val source = self.sourceIndex(edge: edge)
+                        if result[source] == 0U64 {
+                            result[source] = component
+                            pending.append(source)
+                        }
+                        edge = self.nextIncoming(edge: edge)
+                    }
+                }
+                component += 1U64
+            }
+        }
+        return result
+    }
+}

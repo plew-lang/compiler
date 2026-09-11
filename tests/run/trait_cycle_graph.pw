@@ -1,0 +1,76 @@
+import /TraitCycleGraph with { TraitCycleGraph }
+import @Std/Io with { write }
+
+fn main() {
+    mut val mask: U64 = 0U64
+    while mask < 512U64 {
+        mut val graph = <TraitCycleGraph />
+        mut val reachable: Array[Bool] = [true,false,false,false,true,false,false,false,true]
+        mut val bits = mask
+        mut val position: U64 = 0U64
+        while position < 9U64 {
+            if bits % 2U64 == 1U64 {
+                graph.append(conformIndex: position * 7U64, source: position / 3U64 * 100U64, target: position % 3U64 * 100U64)
+                reachable[position] = true
+            }
+            bits /= 2U64
+            position += 1U64
+        }
+        mut val via: U64 = 0U64
+        while via < 3U64 {
+            mut val source: U64 = 0U64
+            while source < 3U64 {
+                mut val target: U64 = 0U64
+                while target < 3U64 {
+                    if reachable[source * 3U64 + via] && reachable[via * 3U64 + target] {
+                        reachable[source * 3U64 + target] = true
+                    }
+                    target += 1U64
+                }
+                source += 1U64
+            }
+            via += 1U64
+        }
+        val components = graph.components()
+        mut val source: U64 = 0U64
+        while source < 3U64 {
+            val sourceIndex = graph.ownerIndex(owner: source * 100U64)
+            if sourceIndex < graph.ownerCount() {
+                mut val target: U64 = 0U64
+                while target < 3U64 {
+                    val targetIndex = graph.ownerIndex(owner: target * 100U64)
+                    if targetIndex < graph.ownerCount() {
+                        if (components[sourceIndex] == components[targetIndex]) != (reachable[source * 3U64 + target] && reachable[target * 3U64 + source]) { panic "SCC differs from transitive closure" }
+                    }
+                    target += 1U64
+                }
+                mut val edge = graph.firstOutgoing(ownerIndex: sourceIndex)
+                mut val previous: U64 = 0U64
+                while edge != 0U64 {
+                    if edge <= previous || graph.sourceIndex(edge: edge) != sourceIndex { panic "outgoing order" }
+                    if graph.conformIndex(edge: edge) % 7U64 != 0U64 { panic "original index" }
+                    previous = edge
+                    edge = graph.nextOutgoing(edge: edge)
+                }
+                edge = graph.firstIncoming(ownerIndex: sourceIndex)
+                previous = 0U64
+                while edge != 0U64 {
+                    if edge <= previous || graph.targetIndex(edge: edge) != sourceIndex { panic "incoming order" }
+                    previous = edge
+                    edge = graph.nextIncoming(edge: edge)
+                }
+            }
+            source += 1U64
+        }
+        mask += 1U64
+    }
+    mut val graph = <TraitCycleGraph />
+    graph.append(conformIndex: 9U64, source: 0U64, target: 18446744073709551615U64)
+    mut val snapshot = graph
+    graph.append(conformIndex: 12U64, source: 0U64, target: 18446744073709551615U64)
+    snapshot.append(conformIndex: 20U64, source: 18446744073709551615U64, target: 0U64)
+    if graph.nextOutgoing(edge: 1U64) != 2U64 || snapshot.nextOutgoing(edge: 1U64) != 0U64 { panic "copy adjacency" }
+    if graph.components()[0U64] == graph.components()[1U64] { panic "parallel acyclic" }
+    if snapshot.components()[0U64] != snapshot.components()[1U64] { panic "copy cycle" }
+    write(s: "trait-cycle-graph-ok\n")
+}
