@@ -718,12 +718,12 @@ pub impl Comp {
     // `impl[Element] B[Element]`, extension receiver applicability, and
     // trait-subject proof edges -- alpha equality would incorrectly reject
     // the ordinary instance B[I64].
-    inout fn typeRefListPatternMatches(pattern: Array[U64], patternParams: Array[Bind], actual: Array[U64]) -> Bool {
-        if pattern.count() != actual.count() { return false }
+    inout fn typeRefListPatternMatches(pattern: PatternTypeInput, patternParams: PatternBindInput, actual: PatternTypeInput) -> Bool {
+        if self.patternTypeCount(input: pattern) != self.patternTypeCount(input: actual) { return false }
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
-        while i < pattern.count() {
-            if !(self.unifyPatterns(a: pattern[i], aSide: 0U64, b: actual[i], bSide: 1U64, aParams: <PatternBindInput.Values values=patternParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
+        while i < self.patternTypeCount(input: pattern) {
+            if !(self.unifyPatterns(a: self.patternTypeAt(input: pattern, index: i), aSide: 0U64, b: self.patternTypeAt(input: actual, index: i), bSide: 1U64, aParams: patternParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
                 return false
             }
             i += 1U64

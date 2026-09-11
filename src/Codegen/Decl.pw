@@ -447,12 +447,12 @@ pub impl Comp {
         return false
     }
 
-    inout fn conformExistsTraitInstance(typeId: U64, traitId: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> Bool {
+    inout fn conformExistsTraitInstance(typeId: U64, traitId: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput) -> Bool {
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             if self.decls.conforms[i].typeId == typeId {
                 if self.decls.conforms[i].traitId == traitId {
-                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: self.copyConformTypes(types: self.decls.conforms[i].traitArgs)) {
+                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.decls.conforms[i].traitArgs />) {
                         if self.decls.conforms[i].viewRootId == 0U64 {
                             return true
                         }
@@ -511,7 +511,7 @@ pub impl Comp {
                 // B[String].
                 if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
                     val traitOwner: U64 = self.canonicalTraitOwner(start: f.recvStart, len: f.recvLen)
-                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: self.copyFuncBinds(binds: f.typeParams))
+                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: <PatternBindInput.Function range=f.typeParams />)
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => { return true }
@@ -548,7 +548,7 @@ pub impl Comp {
                 // must not be compared to T.
                 if typeRef != 0U64 && self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
                     val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
-                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams))
+                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />)
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => { return true }
@@ -568,16 +568,16 @@ pub impl Comp {
         return false
     }
 
-    inout fn subjectPathCount(tId: U64, aTraitId: U64, aTraitArgs: Array[U64], patternParams: Array[Bind]) -> U64 {
+    inout fn subjectPathCount(tId: U64, aTraitId: U64, aTraitArgs: PatternTypeInput, patternParams: PatternBindInput) -> U64 {
         mut val count: U64 = 0
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) && cf.extId == 0U64 {
-                if cf.traitId == aTraitId && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: self.copyConformTypes(types: cf.traitArgs)) {
+                if cf.traitId == aTraitId && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
                     if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
-                        if self.conformExistsTraitInstance(typeId: tId, traitId: cf.typeId, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams)) {
+                        if self.conformExistsTraitInstance(typeId: tId, traitId: cf.typeId, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
                             count += 1
                         }
                     }
@@ -606,7 +606,7 @@ pub impl Comp {
                 }
             }
             val noParams: Array[Bind] = []
-            if cf.traitId == targetId && self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: noParams, actual: self.copyConformTypes(types: cf.traitArgs)) {
+            if cf.traitId == targetId && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=noParams />, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
                 // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
                 // a bare inter-trait conform whose subject trait is the view, or an
                 // extension conform whose extId is the view.
@@ -623,7 +623,7 @@ pub impl Comp {
                     }
                     if viaView {
                         // does the underlying type conform to the subject trait B?
-                        if self.conformExistsTraitInstance(typeId: typeId, traitId: cf.typeId, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams)) {
+                        if self.conformExistsTraitInstance(typeId: typeId, traitId: cf.typeId, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
                             return true
                         }
                     }
@@ -655,7 +655,7 @@ pub impl Comp {
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
-                        if cand.traitId == cf.typeId && self.traitInstanceArgsMatch(pattern: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams), actual: self.copyConformTypes(types: cand.traitArgs)) {
+                        if cand.traitId == cf.typeId && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=cand.traitArgs />) {
                             if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
@@ -666,7 +666,7 @@ pub impl Comp {
                                 // is THIS impl's subject. A single bare path → root 0 (bare).
                                 mut val vr: U64 = cand.viewRootId
                                 if vr == 0U64 {
-                                    if self.subjectPathCount(tId: cand.typeId, aTraitId: cf.traitId, aTraitArgs: self.copyConformTypes(types: cf.traitArgs), patternParams: self.copyConformBinds(binds: cf.typeParams)) > 1U64 {
+                                    if self.subjectPathCount(tId: cand.typeId, aTraitId: cf.traitId, aTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) > 1U64 {
                                         vr = cf.typeId
                                     }
                                 }
@@ -810,7 +810,7 @@ pub impl Comp {
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
-                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: self.copyFuncBinds(binds: f.typeParams), actual: self.copyConformTypes(types: cf.traitArgs)) {
+                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
                         // Two conformed traits providing the same name both copy here, each tagged with
                         // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                         // then a use-site ambiguity (findMethod), while `a#P.foo()` selects

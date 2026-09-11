@@ -221,7 +221,7 @@ pub impl Comp {
         if f.isProvided && f.originTraitOwner != 0U64 {
             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
             val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />)
             itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
         }
         return itemRef

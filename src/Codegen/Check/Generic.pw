@@ -245,7 +245,7 @@ pub impl Comp {
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         val boundOwner: U64 = bound.constraint.key.owner
                         if boundOwner == f.provTraitOwner {
-                            if self.typeRefListPatternMatches(pattern: recvArgs, patternParams: self.copyFuncBinds(binds: f.typeParams), actual: bound.constraint.key.positionalArgs) { return true }
+                            if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=recvArgs />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
                         }
                     }
                     bi += 1U64
@@ -269,7 +269,7 @@ pub impl Comp {
                         // Both ids are resolved during lowering.  Compare them rather
                         // than their source spans: a bound may use an imported alias.
                         if subjectOwner != 0U64 && cf.typeStart == bound.constraint.key.owner {
-                            if self.typeRefListPatternMatches(pattern: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams), actual: bound.constraint.key.positionalArgs) { return true }
+                            if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
                         }
                     }
                     bi += 1U64

@@ -227,7 +227,7 @@ pub impl Comp {
             if traitOwner == 0U64 { traitOwner = p.assocTraitStart }
             mut val output: U64 = self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: p.assocNameId)
             if output == 0U64 {
-                val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: traitArgs)
+                val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />)
                 output = self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId)
             }
             if output == 0U64 || output == projection { return projection }
@@ -539,22 +539,24 @@ pub impl Comp {
     // canonical record-instantiation routine; installing this *explicit*
     // witness environment only adapts the old carrier representation, rather
     // than re-selecting a witness or reading a caller's ambient body scope.
-    inout fn groundWitnessRecordTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
+    inout fn groundWitnessRecordTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> U64 {
         mut val values: Array[U64] = []
+        mut val environmentParams: Array[Bind] = []
         mut val i: U64 = 0U64
-        while i < params.count() {
+        while i < self.patternBindCount(input: params) {
+            environmentParams.append(self.patternBindAt(input: params, index: i))
             val matchIdx: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: i)
             if matchIdx < matchResult.binds.count() {
                 values.append(matchResult.binds[matchIdx].term)
             } else {
-                val p: Bind = params[i]
+                val p: Bind = self.patternBindAt(input: params, index: i)
                 values.append(self.pushType(t: <TypeRef nameStart=p.nameStart nameLen=p.nameLen paramId=p.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
             }
             i += 1U64
         }
         val savedParams: Array[Bind] = self.cur.typeParams
         val savedArgs: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = params
+        self.cur.typeParams = environmentParams
         self.cur.typeArgs = values
         val grounded: U64 = self.groundTypeRef(ref: ref)
         self.cur.typeParams = savedParams

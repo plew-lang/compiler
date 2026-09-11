@@ -152,7 +152,7 @@ pub impl Comp {
     // applicability must consume this proof rather than special-case generic
     // parameter names: `x#E` is valid exactly when E's receiver constraint is
     // statically proved for x.
-    inout fn staticTraitPatternProof(receiverRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> StaticConformanceProof {
+    inout fn staticTraitPatternProof(receiverRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: PatternBindInput) -> StaticConformanceProof {
         if self.cur.checkFn < self.arena.functionCount() {
             val requested: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=traitOwner positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=[] />
             val assumed: StaticConformanceProof = self.assumedBoundProof(fnIdx: self.cur.checkFn, receiverRef: receiverRef, constraint: requested)
@@ -161,7 +161,7 @@ pub impl Comp {
                 _ => { return assumed }
             }
         }
-        return self.concreteTraitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams)
+        return self.concreteTraitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams)
     }
 
     // A `where T: Sub` bound entails members of Sub's declared supertrait

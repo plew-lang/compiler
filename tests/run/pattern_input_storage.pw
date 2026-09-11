@@ -11,6 +11,7 @@ fn check(compiler: inout Comp, parameters: PatternBindInput, declared: PatternTy
     val witness = compiler.witnessMatchFromUnify(conformIdx: 3U64, typeParams: parameters, binds: bindings)
     if witness.conformIdx != 4U64 || witness.binds.count() != 1U64 { panic "witness count" }
     if witness.binds[0U64].paramId != 71U64 || witness.binds[0U64].term != concrete { panic "witness identity" }
+    if compiler.groundWitnessTypeTerm(ref: variable, params: parameters, matchResult: witness) != concrete { panic "witness grounding" }
     bindings = []
     if compiler.unifyPatterns(a: variable, aSide: 0U64, b: nested, bSide: 0U64, aParams: parameters, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "occurs check" }
     val matchedWitness = compiler.conformancePatternWitnessMatch(conformIdx: 3U64, subjectId: 0U64, subjectTy: variable, subjectArgs: <PatternTypeInput.Values values=[] />, typeParams: parameters, declaredTraitArgs: declared, typeRef: concrete, traitArgs: actual)
