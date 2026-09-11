@@ -1,0 +1,48 @@
+import @Std/Io with { write }
+import /Ir with { Decls, TraitOwner }
+fn check(table: Decls, names: Array[U64]) {
+    if table.traitOwnerCount() != names.count() { panic "owner count changed" }
+    mut val query: U64 = 0U64
+    while query < 260U64 {
+        mut val expected = false
+        mut val index: U64 = 0U64
+        while index < names.count() {
+            if names[index] == query { expected = true }
+            val owner = table.traitOwnerAt(index: index)
+            if owner.nameStart != index + 1U64 || owner.nameId != names[index] || owner.arity != index % 3U64 { panic "owner identity or order changed" }
+            index += 1U64
+        }
+        if table.hasTraitName(nameId: query) != expected { panic "name index differs from linear oracle" }
+        query += 1U64
+    }
+}
+fn add(table: inout Decls, names: inout Array[U64], name: U64) {
+    val index = names.count()
+    table.registerTraitOwner(<TraitOwner nameStart=index + 1U64 nameLen=1U64 nameId=name arity=index % 3U64 />)
+    names.append(name)
+}
+fn main() {
+    mut val table: Decls = <Decls />
+    mut val names: Array[U64] = []
+    check(table: table, names: names)
+    mut val index: U64 = 0U64
+    while index < 257U64 {
+        add(table: inout table, names: inout names, name: index * 37U64 % 193U64)
+        index += 1U64
+    }
+    check(table: table, names: names)
+    // A duplicate declaration must not overwrite its row or publish a new name.
+    table.registerTraitOwner(<TraitOwner nameStart=1U64 nameLen=99U64 nameId=259U64 arity=99U64 />)
+    check(table: table, names: names)
+    mut val copy = table
+    mut val copiedNames = names
+    add(table: inout table, names: inout names, name: 259U64)
+    check(table: copy, names: copiedNames)
+    add(table: inout copy, names: inout copiedNames, name: 258U64)
+    check(table: table, names: names)
+    check(table: copy, names: copiedNames)
+    if table.hasTraitName(nameId: 18446744073709551615U64) { panic "unknown sparse name" }
+    add(table: inout table, names: inout names, name: 18446744073709551615U64)
+    if !table.hasTraitName(nameId: 18446744073709551615U64) || copy.hasTraitName(nameId: 18446744073709551615U64) { panic "sparse name or copy isolation" }
+    write(s: "trait-name-index-ok\n")
+}

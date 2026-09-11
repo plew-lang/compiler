@@ -1,0 +1,5 @@
+import /Ir with { Decls }
+fn main() {
+    val declarations: Decls = <Decls />
+    val value = declarations.traitOwnerRows
+}

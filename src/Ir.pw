@@ -3,6 +3,7 @@ import @Std/Set with { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
+part ./Ir/TraitOwners
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2683,7 +2684,8 @@ export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitBindPool: Array[Bind] = []
     pub mut val traitReqPool: Array[Func] = []
-    pub mut val traitOwners: Array[TraitOwner] = []
+    mut val traitOwnerRows: Array[TraitOwner] = []
+    mut val traitNameIds: Set[U64] = Set.new()
     // Registration owns the surface and its name index together. Intern IDs
     // are dense; links are one-based so absence survives later registration.
     mut val callableRows: Array[Callable] = []

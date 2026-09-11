@@ -1,0 +1,22 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.internBytes(s: "padding")
+    val first = compiler.internBytes(s: "Shared")
+    val second = compiler.internBytes(s: "Shared")
+    val later = compiler.internBytes(s: "Later")
+    if compiler.isTraitName(start: first.nameStart, len: first.nameLen) { panic "unregistered trait" }
+    compiler.predeclareTraitIdentity(nameStart: first.nameStart, nameLen: first.nameLen, arity: 0U64)
+    compiler.predeclareTraitIdentity(nameStart: second.nameStart, nameLen: second.nameLen, arity: 1U64)
+    compiler.predeclareTraitIdentity(nameStart: first.nameStart, nameLen: first.nameLen, arity: 9U64)
+    if compiler.decls.traitOwnerCount() != 2U64 { panic "predeclaration idempotence" }
+    if !compiler.isTraitName(start: second.nameStart, len: second.nameLen) { panic "shared spelling missing" }
+    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 0U64) != first.nameStart { panic "zero arity owner changed" }
+    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 1U64) != second.nameStart { panic "one arity owner changed" }
+    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 9U64) != 0U64 { panic "duplicate changed arity" }
+    if compiler.isTraitName(start: later.nameStart, len: later.nameLen) { panic "query created trait" }
+    compiler.predeclareTraitIdentity(nameStart: later.nameStart, nameLen: later.nameLen, arity: 0U64)
+    if !compiler.isTraitName(start: later.nameStart, len: later.nameLen) { panic "negative lookup remained stale" }
+    write(s: "trait-name-registration-ok\n")
+}

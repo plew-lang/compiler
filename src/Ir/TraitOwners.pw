@@ -1,0 +1,18 @@
+// Trait spelling membership is not declaration identity. Keep every distinct
+// owner/arity row in registration order; only the existential name query uses
+// the set. Predeclaration is idempotent by its canonical declaration offset.
+pub impl Decls {
+    inout fn registerTraitOwner(owner~: TraitOwner) {
+        mut val index: U64 = 0U64
+        while index < self.traitOwnerRows.count() {
+            if self.traitOwnerRows[index].nameStart == owner.nameStart { return }
+            index += 1U64
+        }
+        self.traitOwnerRows.append(owner)
+        self.traitNameIds.insert(owner.nameId)
+    }
+
+    fn traitOwnerCount() -> U64 { return self.traitOwnerRows.count() }
+    fn traitOwnerAt(index: U64) -> TraitOwner { return self.traitOwnerRows[index] }
+    fn hasTraitName(nameId: U64) -> Bool { return self.traitNameIds.contains(nameId) }
+}

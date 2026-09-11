@@ -281,12 +281,7 @@ pub impl Comp {
     // The sole semantic mutation for trait predeclaration.  AST and SyntaxFile
     // inputs decode to source identity/arity and then converge here.
     inout fn predeclareTraitIdentity(nameStart: U64, nameLen: U64, arity: U64) {
-        mut val i: U64 = 0U64
-        while i < self.decls.traitOwners.count() {
-            if self.decls.traitOwners[i].nameStart == nameStart { return }
-            i += 1U64
-        }
-        self.decls.traitOwners.append(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
+        self.decls.registerTraitOwner(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
     }
 
     inout fn predeclareTraitItem(item: TopItemAst) {
