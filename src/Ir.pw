@@ -1282,6 +1282,8 @@ pub impl WitnessBind { factory }
 // A direct selected witness. `conformIdx` is one-based (0 means no match), and
 // its bindings map only that witness's impl-binder slots to semantic TypeRefs.
 export struct WitnessMatch {
+    // Semantic Self of the selected conformance, including newtype inheritance.
+    pub val selfRef: U64 = 0U64
     pub val conformIdx: U64 = 0U64
     pub val binds: Array[WitnessBind] = []
 }
@@ -1355,6 +1357,7 @@ export struct StaticProofNode {
     pub val conformIdx: U64 = 0U64
     pub val witnessBinds: U64 = 0U64
     pub val witnessBindCount: U64 = 0U64
+    pub val witnessSelfRef: U64 = 0U64
     pub val boundIdx: U64 = 0U64
     pub val path: U64 = 0U64
     pub val pathCount: U64 = 0U64
@@ -1365,6 +1368,7 @@ export struct StaticProofNode {
 pub impl StaticProofNode { factory }
 
 export struct FrozenWitnessMatch {
+    pub val selfRef: U64 = 0U64
     pub val conformIdx: U64
     pub val binds: U64 = 0U64
     pub val bindCount: U64 = 0U64

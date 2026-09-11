@@ -26,7 +26,7 @@ pub impl Comp {
             self.arena.staticProofWitnessBindPool.append(witness.binds[i])
             i += 1U64
         }
-        return <FrozenWitnessMatch conformIdx=witness.conformIdx binds=start bindCount=witness.binds.count() />
+        return <FrozenWitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=start bindCount=witness.binds.count() />
     }
 
     inout fn freezeStaticConformanceProof(proof: StaticConformanceProof) -> U64 {
@@ -37,7 +37,7 @@ pub impl Comp {
             }
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 val frozen: FrozenWitnessMatch = self.freezeWitnessMatch(witness: witness)
-                self.arena.staticProofs.append(<StaticProofNode tag=1U64 conformIdx=frozen.conformIdx witnessBinds=frozen.binds witnessBindCount=frozen.bindCount />)
+                self.arena.staticProofs.append(<StaticProofNode tag=1U64 conformIdx=frozen.conformIdx witnessBinds=frozen.binds witnessBindCount=frozen.bindCount witnessSelfRef=frozen.selfRef />)
             }
             StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
                 self.arena.staticProofs.append(<StaticProofNode tag=2U64 boundIdx=boundIdx />)
@@ -127,7 +127,7 @@ pub impl Comp {
             binds.append(self.arena.staticProofWitnessBindPool[witness.binds + i])
             i += 1U64
         }
-        return <WitnessMatch conformIdx=witness.conformIdx binds=binds />
+        return <WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=binds />
     }
 
     // Transitional compatibility reader. It is used only while Mid's draft
@@ -138,7 +138,7 @@ pub impl Comp {
         val node: StaticProofNode = self.arena.staticProofs[id - 1U64]
         if node.tag == 0U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 1U64 {
-            return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
+            return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
         }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound boundIdx=node.boundIdx /> }
         if node.tag == 3U64 {
@@ -795,6 +795,7 @@ pub impl Comp {
 
     inout fn sameWitnessMatch(a: WitnessMatch, b: WitnessMatch) -> Bool {
         if a.conformIdx != b.conformIdx || a.binds.count() != b.binds.count() { return false }
+        if a.selfRef != b.selfRef && !self.typeRefEq(a: a.selfRef, b: b.selfRef) { return false }
         mut val i: U64 = 0U64
         while i < a.binds.count() {
             val left: WitnessBind = a.binds[i]

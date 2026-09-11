@@ -232,8 +232,9 @@ pub impl LlvmCtx {
         // so a same-named user extension is no longer hijacked.)
         mut val rsidx: U64 = c.arena.structCount()
         if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.typeCount() {
-            val selectedTy: TypeRef = c.arena.typeAt(index: selectedRecvRef)
-            rsidx = c.structDefByNameAny(start: selectedTy.nameStart, len: selectedTy.nameLen)
+            // Keep the finalized semantic receiver intact; the shared layout
+            // query resolves views and inherited newtype representations.
+            rsidx = self.structIdxOfRef(c: inout c, ref: selectedRecvRef)
         }
         if rsidx >= c.arena.structCount() {
             // an enum-receiver method (`c.code()` on an enum value): dispatch like a

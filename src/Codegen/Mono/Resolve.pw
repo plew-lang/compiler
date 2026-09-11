@@ -63,7 +63,7 @@ pub impl Comp {
     // Match one `impl B[U] as A[...]` edge against the already-ground B
     // instance in a proof path.  The edge's own impl binders are the only
     // variables that can bind; the incoming path arguments are rigid.
-    inout fn traitSubjectWitnessMatch(conformIdx: U64, subjectArgs: Array[U64]) -> WitnessMatch {
+    inout fn traitSubjectWitnessMatch(conformIdx: U64, subjectArgs: Array[U64], selfRef: U64) -> WitnessMatch {
         if conformIdx >= self.decls.conforms.count() { return <WitnessMatch /> }
         val cf: Conform = self.decls.conforms[conformIdx]
         if cf.subjectArgs.count() != subjectArgs.count() { return <WitnessMatch /> }
@@ -73,7 +73,8 @@ pub impl Comp {
             if !(self.unifyPatterns(a: self.conformTypeAt(types: cf.subjectArgs, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
             i += 1U64
         }
-        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, binds: binds)
+        val selected: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, binds: binds)
+        return <WitnessMatch conformIdx=selected.conformIdx binds=selected.binds selfRef=selfRef />
     }
 
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
@@ -135,7 +136,7 @@ pub impl Comp {
             while ci < self.decls.conforms.count() {
                 val edge: Conform = self.decls.conforms[ci]
                 if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
-                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs)
+                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs, selfRef: baseRef)
                     if witness.conformIdx != 0U64 {
                         mut val edges: Array[WitnessMatch] = state.edges
                         edges.append(witness)

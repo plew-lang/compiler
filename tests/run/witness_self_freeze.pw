@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { WitnessMatch, StaticConformanceProof, PatternBindInput }
+
+// Proof storage must preserve the semantic receiver independently of its
+// conformance ID: inherited and underlying witnesses share that declaration.
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val underlyingName = compiler.internBytes(s: "Count")
+    val wrapperName = compiler.internBytes(s: "WrappedCount")
+    val selfName = compiler.internBytes(s: "Self")
+    val underlying = compiler.simpleTypeRef(nameStart: underlyingName.nameStart, nameLen: underlyingName.nameLen)
+    val wrapper = compiler.simpleTypeRef(nameStart: wrapperName.nameStart, nameLen: wrapperName.nameLen)
+    val selfType = compiler.simpleTypeRef(nameStart: selfName.nameStart, nameLen: selfName.nameLen)
+    val inherited: StaticConformanceProof = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=wrapper /> />
+    val original: StaticConformanceProof = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=underlying /> />
+    val frozen = compiler.freezeStaticConformanceProof(proof: inherited)
+    val restored = compiler.thawStaticConformanceProof(id: frozen)
+    print(compiler.sameStaticConformanceProof(a: inherited, b: restored))
+    print(compiler.sameStaticConformanceProof(a: original, b: restored))
+    match restored {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: selfType, params: <PatternBindInput.Values values=[] />, matchResult: witness), b: wrapper))
+            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: underlying, params: <PatternBindInput.Values values=[] />, matchResult: witness), b: underlying))
+        }
+        _ => { print(false) }
+    }
+}

@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+trait Same[Input] { fn accept(value: Input) -> I64 }
+trait Concrete[Input] { fn read(value: Input) -> I64 }
+struct Count { pub val value: I64 }
+pub impl Count { factory }
+pub impl Count as Same[Self] {
+    fn accept(value: Self) -> I64 { return value.value }
+}
+pub impl Count as Concrete[Count] {
+    fn read(value: Count) -> I64 { return value.value }
+}
+newtype WrappedCount = Count
+fn same[T](value: T) -> I64 where T: Same[T] { return value.accept(value: value) }
+fn concrete[T](value: T, input: Count) -> I64 where T: Concrete[Count] { return value.read(value: input) }
+fn main() {
+    val wrapped: WrappedCount = (<Count value=9I64 /> as WrappedCount)
+    print(same(value: wrapped))
+    print(concrete(value: wrapped, input: <Count value=11I64 />))
+}

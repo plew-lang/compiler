@@ -465,6 +465,21 @@ pub impl Comp {
     inout fn groundWitnessTypeTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         val semantic: TypeRef = self.arena.typeAt(index: ref)
+        // A projection contains its receiver; substituting Self must not
+        // replace the projection itself and discard the associated name.
+        if semantic.assocNameId != 0U64 {
+            val receiver: U64 = self.groundWitnessTypeTerm(ref: self.typeTermProjectionReceiver(t: semantic), params: params, matchResult: matchResult)
+            mut val traitArgs: Array[U64] = []
+            mut val argument: U64 = 0U64
+            while argument < semantic.assocTraitArgs.count() {
+                traitArgs.append(self.groundWitnessTypeTerm(ref: semantic.assocTraitArgs[argument], params: params, matchResult: matchResult))
+                argument += 1U64
+            }
+            return self.rebuildProjectionTerm(t: semantic, receiver: receiver, traitArgs: traitArgs)
+        }
+        if matchResult.selfRef != 0U64 && semantic.args.count() == 0U64 && rangeEquals(bytes: self.arena.bytes, start: semantic.nameStart, len: semantic.nameLen, kw: "Self") {
+            return self.typeRefWithAddedViewSources(ref: matchResult.selfRef, additions: self.typeRefViewSources(ref: ref))
+        }
         if semantic.paramId != 0U64 {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
             if byParam < matchResult.binds.count() { return matchResult.binds[byParam].term }

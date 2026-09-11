@@ -843,10 +843,20 @@ pub impl Comp {
     }
 
     inout fn confWitnessesAll(cf: Conform, t: TraitDef) -> Bool {
+        // Substitute Self through complete trait arguments before comparing
+        // requirement signatures, including Self nested in a container.
+        mut val selfParams: Array[Bind] = []
+        self.appendTraitSelfBinder(scope: inout selfParams, owner: t.nameStart)
+        mut val traitArgs: Array[U64] = []
+        mut val argument: U64 = 0U64
+        while argument < cf.traitArgs.count() {
+            traitArgs.append(self.groundTermInEnvironment(ref: self.conformTypeAt(types: cf.traitArgs, index: argument), params: selfParams, values: [cf.subjectTy], selfRef: cf.subjectTy))
+            argument += 1U64
+        }
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
-            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: self.copyConformTypes(types: cf.traitArgs))) {
+            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: traitArgs)) {
                 return false
             }
             ri += 1
@@ -945,14 +955,8 @@ pub impl Comp {
             val ti: U64 = self.resolveTraitDef(cf: cf)
             if ti < self.decls.traitCount() {
                 val t: TraitDef = self.decls.traitAt(index: ti)
-                // Re-check the requirements of the exact declaration owner.
-                mut val ri: U64 = 0
-                while ri < t.reqs.count() {
-                    val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
-                    if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: self.copyConformTypes(types: cf.traitArgs))) {
-                        self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
-                    }
-                    ri += 1
+                if !self.confWitnessesAll(cf: cf, t: t) {
+                    self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                 }
                 // supertraits (spec/08): conforming to Sub requires conforming to
                 // each Super (a constraint, not auto-implemented).
@@ -1087,16 +1091,6 @@ pub impl Comp {
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.assocNameId != 0U64 {
             return false
-        }
-        // Newtypes inherit the underlying type's conformance surface.  This
-        // must happen before the full-subject candidate scan below: the scan is
-        // deliberately exact for generic subjects, but a newtype has no copied
-        // `Conform` entry of its own.  Delegating through the underlying
-        // TypeRef keeps direct bounds, generic bounds, and method bounds on the
-        // same `conformsInstance` authority.
-        val underlying: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
-        if underlying != 0U64 && underlying != ref {
-            return self.conformsInstance(ref: underlying, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)
         }
         // Candidate existence is not conformance.  Match the full subject
         // pattern here, so `impl Box[I64] as P` never grants P to Box[String].

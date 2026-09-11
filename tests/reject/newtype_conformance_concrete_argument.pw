@@ -1,0 +1,10 @@
+trait Concrete[Input] {}
+struct Count {}
+pub impl Count { factory }
+impl Count as Concrete[Count] {}
+newtype WrappedCount = Count
+fn requireSame[T](value: T) -> I64 where T: Concrete[T] { return 0I64 }
+fn main() {
+    val wrapped: WrappedCount = (<Count /> as WrappedCount)
+    requireSame(value: wrapped)
+}

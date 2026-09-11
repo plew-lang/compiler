@@ -403,17 +403,28 @@ pub impl Comp {
     // returns that substitution instead of erasing it to a Bool.
     inout fn conformancePatternWitnessMatch(conformIdx: U64, subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> WitnessMatch {
         if !traitArgsOpen && self.patternTypeCount(input: declaredTraitArgs) != self.patternTypeCount(input: traitArgs) { return <WitnessMatch /> }
+        // Match the inherited implementation against its physical subject,
+        // but preserve the authored receiver as Self in the returned proof.
+        mut val matchRef: U64 = typeRef
+        mut val depth: U64 = 0U64
+        while matchRef != 0U64 && matchRef < self.arena.typeCount() && depth < self.arena.newtypeCount() {
+            val receiver: TypeRef = self.arena.typeAt(index: matchRef)
+            val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
+            if underlying == 0U64 || underlying == matchRef { break }
+            matchRef = underlying
+            depth += 1U64
+        }
         mut val binds: Array[UnifyBind] = []
         if subjectTy != 0U64 {
-            if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)) { return <WitnessMatch /> }
+            if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: matchRef, bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)) { return <WitnessMatch /> }
         } else {
             // A trait subject (`impl Sub as Marker`) has no nominal TypeRef
             // body in the receiver table.  That is not a wildcard subject:
             // preserve the same head-and-arguments match used by a structured
             // receiver, or the blanket declaration would incorrectly apply to
             // every concrete type before trait-subject conferral materializes it.
-            if typeRef >= self.arena.typeCount() { return <WitnessMatch /> }
-            val actual: TypeRef = self.arena.typeAt(index: typeRef)
+            if matchRef >= self.arena.typeCount() { return <WitnessMatch /> }
+            val actual: TypeRef = self.arena.typeAt(index: matchRef)
             // `nameId` is an interning cache, not a semantic name. Synthetic
             // TypeRefs (including the receiver used while finalizing a
             // provided call) legitimately carry 0, so matching a legacy
@@ -435,11 +446,15 @@ pub impl Comp {
         if !traitArgsOpen {
             mut val i: U64 = 0U64
             while i < self.patternTypeCount(input: declaredTraitArgs) {
-                if !(self.unifyPatterns(a: self.patternTypeAt(input: declaredTraitArgs, index: i), aSide: 0U64, b: self.patternTypeAt(input: traitArgs, index: i), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
+                val partial: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
+                val selected: WitnessMatch = <WitnessMatch conformIdx=partial.conformIdx binds=partial.binds selfRef=typeRef />
+                val declared: U64 = self.groundWitnessTypeTerm(ref: self.patternTypeAt(input: declaredTraitArgs, index: i), params: typeParams, matchResult: selected)
+                if !(self.unifyPatterns(a: declared, aSide: 0U64, b: self.patternTypeAt(input: traitArgs, index: i), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
                 i += 1U64
             }
         }
-        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
+        val selected: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
+        return <WitnessMatch conformIdx=selected.conformIdx binds=selected.binds selfRef=typeRef />
     }
 
     // Compatibility projection for consumers still migrating to the witness
