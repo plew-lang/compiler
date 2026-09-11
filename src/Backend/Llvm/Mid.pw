@@ -2148,8 +2148,11 @@ pub impl LlvmCtx {
             val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
             if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
             if value.tag == 11U64 { return true }
-            if value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() || value.fieldIndex >= c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() { return false }
-            if value.tag == 12U64 && c.fieldIsBoxed(f: c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields[value.fieldIndex]) { return false }
+            val declaration = c.arena.enumAt(index: value.enumIndex)
+            if value.variantIndex >= declaration.variants.count() { return false }
+            val variant = declaration.variants[value.variantIndex]
+            if value.fieldIndex >= variant.fields.count() { return false }
+            if value.tag == 12U64 && c.fieldIsBoxed(f: variant.fields[value.fieldIndex]) { return false }
             return true
         }
         if value.tag == 16U64 || value.tag == 17U64 {
@@ -2161,13 +2164,18 @@ pub impl LlvmCtx {
             if value.tag == 16U64 { return true }
             // The field declaration may mention the enum's generic parameter;
             // its concrete equality was checked during canonical grounding.
-            return value.variantIndex < c.arena.enumAt(index: value.enumIndex).variants.count() && c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() == 1U64
+            val declaration = c.arena.enumAt(index: value.enumIndex)
+            if value.variantIndex >= declaration.variants.count() { return false }
+            val variant = declaration.variants[value.variantIndex]
+            return variant.fields.count() == 1U64
         }
         if value.tag == 18U64 {
             if value.operand == 0U64 || value.operand > c.mid.operands.count() || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.targetTerm == 0U64 || value.targetTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return false }
             val operand: MidOperandNode = c.mid.operands[value.operand - 1U64]
             if operand.tag != 2U64 || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) { return false }
-            if c.arena.enumAt(index: value.enumIndex).variants[value.variantIndex].fields.count() != 1U64 { return false }
+            val declaration = c.arena.enumAt(index: value.enumIndex)
+            val variant = declaration.variants[value.variantIndex]
+            if variant.fields.count() != 1U64 { return false }
             val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: value.resultTerm)
             return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == value.enumIndex && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm)
         }
