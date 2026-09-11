@@ -4,8 +4,8 @@ import @Std/Io with { write }
 
 fn main() {
     mut val c = <Comp />
-    val first = c.kwSpan(kw: "First", kwLen: 5U64)
-    val second = c.kwSpan(kw: "Second", kwLen: 6U64)
+    val first = c.internTmpName(prefix: "First", n: 0U64)
+    val second = c.internTmpName(prefix: "Second", n: 0U64)
     val identity = <Bind nameStart=first.nameStart nameLen=1U64 fieldStart=0U64 fieldLen=0U64 />
     if c.declIdentityHasName(identity: identity, start: first.nameStart, len: first.nameLen) { panic "unregistered identity" }
     c.arena.registerNewtype(<NewtypeDef nameStart=second.nameStart nameLen=second.nameLen nameId=second.nameId underStart=0U64 underLen=0U64 underRef=0U64 defOffset=first.nameStart />)
