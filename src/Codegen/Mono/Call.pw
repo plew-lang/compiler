@@ -3897,14 +3897,21 @@ pub impl Comp {
         // This is deliberately beside the final semantic call closure: the
         // old provisional AST collector discovered these as an incidental
         // side effect before it later discarded its call decisions.
+        mut val signatureParameters: Array[U64] = []
         mut val pi: U64 = 0U64
         while pi < f.params.count() {
             val p: Param = self.funcParamAt(params: f.params, index: pi)
+            signatureParameters.append(self.groundTermForBody(ref: p.ty, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-            self.scanType(ref: p.ty)
+            self.scanType(ref: signatureParameters[pi])
             pi += 1U64
         }
-        if f.hasRet { self.scanType(ref: f.retTy) }
+        mut val signatureResult: U64 = 0U64
+        if f.hasRet {
+            signatureResult = self.groundTermForBody(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            self.scanType(ref: signatureResult)
+        }
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, result: signatureResult)
         self.scanBlockInsts(blkId: f.body)
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
     }

@@ -797,13 +797,14 @@ pub impl LlvmCtx {
         if didSelf {
             c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
         }
-        self.curRetTy = self.llvmFnRetTy(c: inout c, f: f)
+        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
+        self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: f)
         self.curRetTyStart = f.retStart
         self.curRetTyLen = f.retLen
         // ground the return ref under any active generic env (a monomorphized method
         // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
         // can infer the concrete instance.
-        self.curRetRef = c.groundTypeRef(ref: f.retTy)
+        self.curRetRef = self.bodyResultType(c: inout c, bodyId: bodyId)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-metadata-ready name=")
             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -815,7 +816,7 @@ pub impl LlvmCtx {
         // Coverage identifies the frontend's concrete body instance before any
         // Mid stage runs.  The stages below must not substitute a source-level
         // function identity or spelling when a frozen instance is unavailable.
-        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
+
         // Select a complete Mid body before beginning LLVM emission.  The
         // initial ordinary-body slice is deliberately exact: source receiver
         // (when by-value) and parameters form the checked Mid-local ABI prefix.
@@ -1207,7 +1208,7 @@ pub impl LlvmCtx {
         mut val pi: U64 = 0
         while pi < f.params.count() {
             val param: Param = c.funcParamAt(params: f.params, index: pi)
-            self.bindOneParam(c: inout c, p: param, fv: fv, argIdx: pi + base)
+            self.bindOneParam(c: inout c, p: param, fv: fv, argIdx: pi + base, typeRef: c.arena.bodySignature(bodyId: bodyId).parameterTypes[pi])
             // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
             self.setLocalOwned(owned: param.isMove)
             pi += 1

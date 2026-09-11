@@ -1873,6 +1873,14 @@ pub impl CallSiteSelection { factory }
 // and the frontend drains the list before LLVM begins.  `recvInstRef` is kept
 // even for an argless receiver so a shared provided body can substitute Self
 // to the actual conformer.
+// Final ABI types belong to a body, but do not participate in its identity.
+export struct BodySignature {
+    pub val ready: Bool = false
+    pub val parameterTypes: Array[U64] = []
+    pub val resultType: U64 = 0U64
+}
+pub impl BodySignature { factory }
+
 export struct BodyInstance {
     pub val fnIdx: U64
     pub val environment: InstanceEnvironment
@@ -2302,6 +2310,7 @@ export struct Arena {
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
     mut val bodyInstances: Array[BodyInstance] = []
+    mut val bodySignatures: Array[BodySignature] = []
     mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]
     mut val bodyFunctionTails: Dictionary[U64, U64] = [:]
     mut val bodyFunctionNext: Array[U64] = []

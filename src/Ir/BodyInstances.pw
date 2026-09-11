@@ -8,6 +8,7 @@ pub impl Arena {
         val bodyId = self.bodyInstances.count() + 1U64
         val tail = self.bodyFunctionTails.getOr(key: instance.fnIdx, fallback: 0U64)
         self.bodyInstances.append(instance)
+        self.bodySignatures.append(<BodySignature />)
         self.bodyFunctionNext.append(0U64)
         if tail == 0U64 {
             self.bodyFunctionHeads[instance.fnIdx] = bodyId
@@ -16,6 +17,15 @@ pub impl Arena {
         }
         self.bodyFunctionTails[instance.fnIdx] = bodyId
         return bodyId
+    }
+
+    fn bodySignature(bodyId: U64) -> BodySignature {
+        if bodyId == 0U64 || bodyId > self.bodySignatures.count() { return <BodySignature /> }
+        return self.bodySignatures[bodyId - 1U64]
+    }
+
+    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], result: U64) {
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters resultType=result />
     }
 
     fn firstBodyInstanceForFunction(functionIndex: U64) -> U64 {

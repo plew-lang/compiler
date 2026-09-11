@@ -201,6 +201,7 @@ pub impl LlvmCtx {
         // distinct LLVM nominal instances for one callable.
         mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
         if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() { environment = c.arena.bodyInstanceAt(index: bodyId - 1U64).environment }
+        val signatureBodyId: U64 = c.findBodyInstance(fnIdx: mfi, environment: environment)
         // bind Self/Item to the receiver instance for a provided method, so a param/return
         // type naming `Item` resolves to the receiver's real item: a terminal returning
         // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
@@ -222,10 +223,10 @@ pub impl LlvmCtx {
         }
         mut val pi: U64 = 0
         while pi < mf.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: mf.params, index: pi)))
+            ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: signatureBodyId, index: pi, p: c.funcParamAt(params: mf.params, index: pi)))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: signatureBodyId, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "gm".bytes())
         appendU64Dec(into: inout nm, n: mfi)
@@ -357,279 +358,27 @@ pub impl LlvmCtx {
     // array param is the {ptr,i64} value; a generic-instance / Ref / enum param tracks
     // its instance/enum ref; an `inout` param binds the caller pointer directly, else
     // the value is stored into a fresh alloca.
-    inout fn bindOneParam(c: inout Comp, p: Param, fv: LLVMValueRef, argIdx: U64) {
-        // a `Self`-typed param (`fn eqTo(other: Self)` inside `impl P as MyEq`): ground
-        // the head-name span through the active env (curSelfRef resolves `Self` -> the
-        // receiver type) so the struct/enum-index + scalar-type lookups see `P`, not the
-        // literal `Self` (which is not a registered type — field access would then fail).
-        // The `p.ty`-based predicates below stay on the raw ref (groundTypeRef does not
-        // preserve isAny/viewExtId, and Self carries neither, so this is span-only).
-        mut val pgStart: U64 = p.tyStart
-        mut val pgLen: U64 = p.tyLen
-        // The effective param type — `Self` resolved to the receiver. A `Self` param stands
-        // for the receiver type, so the representation branches below must bind it EXACTLY as
-        // that type: not just the name span (pgStart/pgLen) but the array flag and the full
-        // ref too. Without this a `Self` on `impl[T] Array[T] as Eq` (Self = Array[T]) fell
-        // through the scalar path and its `.data` field access failed. A `Self` grounding to
-        // a plain struct/enum already flows through pgStart/pgLen; only the array case needs
-        // the flag flip (its repr is the buffer floor, not a scalar). effRef/effIsArray equal
-        // the raw p.ty/p.tyIsArray for a non-`Self` param, so existing bindings are unchanged.
-        mut val effRef: U64 = p.ty
-        mut val effIsArray: Bool = p.tyIsArray
-        if p.ty != 0U64 {
-            if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
-                effRef = c.groundTypeRef(ref: p.ty)
-                pgStart = c.arena.typeAt(index: effRef).nameStart
-                pgLen = c.arena.typeAt(index: effRef).nameLen
-                if rangeEquals(bytes: c.arena.bytes, start: pgStart, len: pgLen, kw: "Array") {
-                    effIsArray = true
-                }
-            }
+    // Storage consumes a concrete signature type. Source spans and ambient
+    // generic bindings cannot replace this ABI decision.
+    inout fn bindOneParam(c: inout Comp, p: Param, fv: LLVMValueRef, argIdx: U64, typeRef: U64) {
+        val term = c.arena.typeAt(index: typeRef)
+        val pty = self.llvmTypeOfRef(c: inout c, ref: typeRef)
+        val kind = kindFromTySpan(c: inout c, tyStart: term.nameStart, tyLen: term.nameLen)
+        val structIndex = self.structIdxOfRef(c: inout c, ref: typeRef)
+        val isArray = rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Array") && term.args.count() == 1U64
+        mut val elementType: LLVMTypeRef = self.i64ty
+        mut val elementKind: U64 = kind
+        if isArray {
+            elementType = self.llvmTypeOfRef(c: inout c, ref: term.args[0])
+            val element = c.arena.typeAt(index: term.args[0])
+            elementKind = kindFromTySpan(c: inout c, tyStart: element.nameStart, tyLen: element.nameLen)
         }
-        // ground the param ref under the active instance env, mirroring paramLlvmTy (the
-        // DECLARED signature grounds `Box[T]` -> `Box[I64]`, so the body's binding must
-        // bind the same representation). Without this the generic-instance branch below
-        // matched the raw template ref against the registered instances, missed every
-        // slot, and fell through to the i64 scalar default — the body then extractvalue'd
-        // a non-aggregate (null → SIGSEGV) on any use of the param (`fn unwrap[T](box:
-        // Box[T]) -> T { return box.v }`, audit-5 L2). An array param keeps its spans:
-        // p.tyStart/tyLen name the ELEMENT (kind-3), which the array branch below needs
-        // for pElem; it grounds effRef itself.
-        if effRef != 0U64 && !(effIsArray) {
-            if c.cur.typeParams.count() > 0U64 {
-                val eg: U64 = c.groundTypeRef(ref: effRef)
-                if eg != effRef {
-                    effRef = eg
-                    pgStart = c.arena.typeAt(index: eg).nameStart
-                    pgLen = c.arena.typeAt(index: eg).nameLen
-                }
-            }
+        mut val slot: LLVMValueRef = LLVMGetParam(fv, argIdx)
+        if !p.isInout {
+            slot = self.entryAlloca(ty: pty)
+            LLVMBuildStore(self.b, LLVMGetParam(fv, argIdx), slot)
         }
-        mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: pgStart, tyLen: pgLen)
-        mut val pElem: LLVMTypeRef = self.i64ty
-        mut val pSidx: U64 = self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen)
-        mut val pRef: U64 = 0
-        // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
-        // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
-        if p.ty != 0U64 {
-            if c.arena.typeAt(index: p.ty).viewExtId != 0U64 || c.arena.typeAt(index: p.ty).viewIds.count() > 0U64 {
-                pRef = p.ty
-            }
-        }
-        // a generic type-parameter param whose substituted argument carries a view
-        // (`T -> S#P`, from a `#`-viewed call argument `f(a: s#P)` / `g(x#Ext)`): track
-        // the grounded viewed ref so a bare `x.m()` in the body resolves via the view
-        // (spec/09 view-aware monomorphization). resolveTy returns the env's arg ref
-        // verbatim, so its viewExtId survives grounding.
-        if pRef == 0U64 {
-            if p.ty != 0U64 {
-                if c.cur.typeParams.count() > 0U64 {
-                    val pgv: U64 = c.groundTypeRef(ref: p.ty)
-                    if pgv != p.ty {
-                        if pgv < c.arena.typeCount() {
-                            // Preserve the fully grounded receiver ref, not only a
-                            // view-bearing one.  The final callable is source-aware,
-                            // and primitive / provided generic receivers need the
-                            // concrete ref too (`T: Format` -> I64.format).  Keeping
-                            // only `#` facets made bare generic calls disappear in
-                            // LLVM after the front end had resolved them correctly.
-                            pRef = pgv
-                        }
-                    }
-                }
-            }
-        }
-        // an existential `any P` param (spec/08): its LLVM type is the fat pointer and
-        // its TypeRef is tracked so a bare `x.m()` in the body dispatches dynamically.
-        // A generic type param bound to an existential (`T = any P`) is caught by the
-        // grounded effRef re-check: the raw p.ty (a bare `T`) is not `any`, so without
-        // it the signature bound the fat pointer (paramLlvmTy grounds the same way) while
-        // the body alloca stayed a scalar — the ABI split SIGSEGV'd on any use of the param.
-        if p.ty != 0U64 {
-            if refIsAny(c: inout c, ref: p.ty) {
-                pty = self.anyTy
-                pRef = p.ty
-            } else {
-                if refIsAny(c: inout c, ref: effRef) {
-                    pty = self.anyTy
-                    pRef = effRef
-                }
-            }
-        }
-        if effIsArray {
-            pElem = pty
-            // an `Array[any P]` param: its element is the existential fat pointer.
-            if effRef != 0U64 {
-                if c.arena.typeAt(index: effRef).args.count() > 0U64 {
-                    if refIsAny(c: inout c, ref: c.arena.typeAt(index: effRef).args[0]) {
-                        pElem = self.anyTy
-                    }
-                }
-            }
-            pty = self.arrayTy
-            // E3 step (a): track the array param as a generic-struct value `Array[E]` (the
-            // ref grounded under the active instantiation env) + Array's arena struct index,
-            // so a use resolves through the uniform generic path (drops exprIsArray dispatch).
-            if effRef != 0U64 {
-                mut val gpr: U64 = effRef
-                if c.cur.typeParams.count() > 0U64 {
-                    gpr = c.groundTypeRef(ref: effRef)
-                }
-                pRef = gpr
-                // de-pin: the param's LLVM type is the per-instance `%gs` of `Array[E]`.
-                pty = self.llvmTypeOfRef(c: inout c, ref: gpr)
-            }
-            pSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
-        } else {
-            if c.isGenericInst(ref: effRef) {
-                pty = self.llvmTypeOfRef(c: inout c, ref: effRef)
-                pRef = effRef
-                val pgs: U64 = self.genStructSlot(c: inout c, ref: effRef)
-                if pgs < self.genStructRefs.count() {
-                    pSidx = self.genStructDefs[pgs]
-                }
-            }
-            if c.isStrongRefInst(ref: effRef) || c.isWeakRefLikeInst(ref: effRef) {
-                pty = self.llvmTypeOfRef(c: inout c, ref: effRef)
-                pRef = effRef
-            }
-            // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a
-            // call `f(n: x)` resolves the closure signature for the indirect call.
-            if c.isFnType(ref: effRef) {
-                pRef = effRef
-            }
-            if pRef == 0U64 {
-                // grounded span so a `Self` param on an enum receiver tracks the enum.
-                // Test against the DECLARATION (concreteEnumIdxByName), not the
-                // registered instances (enumRegSlot): registration is demand-driven, so
-                // a fn emitted before any construction of the enum missed here and the
-                // param stayed ref-less — its scope-exit drop (a `move` param owns
-                // its value) never ran the payload's deinit. The drop path itself
-                // demand-registers (genEnumSlot), so a bare ref is enough.
-                if c.concreteEnumIdxByName(start: pgStart, len: pgLen) < c.arena.enumCount() {
-                    pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
-                }
-            }
-        }
-        // a primitive param (an int, or a generic `v: K` with K -> U64 / Bool): track its
-        // (grounded) type name so a method on the primitive (`v.hash[H](…)`) dispatches.
-        // An enum-grounded generic param (`x: T` with T -> Color) is tracked the same way,
-        // so a trait method on it (`x.describe()` in `fn f[T](x:T) where T: Describe`)
-        // resolves through the enum-receiver dispatch — the pre-ground enum check above
-        // only sees the Self-grounded span, missing a `T`-named param.
-        if pRef == 0U64 {
-            if !(effIsArray) {
-                mut val gs2: U64 = p.tyStart
-                mut val gl2: U64 = p.tyLen
-                if p.ty != 0U64 {
-                    if c.cur.typeParams.count() > 0U64 {
-                        val pg2: U64 = c.groundTypeRef(ref: p.ty)
-                        gs2 = c.arena.typeAt(index: pg2).nameStart
-                        gl2 = c.arena.typeAt(index: pg2).nameLen
-                    }
-                }
-                // a grounded scalar type param (`v: T` with T -> I32 / F64 / Bool): pin BOTH
-                // its tracked type name (so an operator/method on it dispatches through the
-                // instance's witness) AND its alloca LLVM type to the GROUNDED scalar — the
-                // ungrounded-`T` default (i64) would put a float's bits in an i64 slot. This
-                // matches paramLlvmTy's grounded signature type.
-                if isPrimIntName(c: inout c, start: gs2, len: gl2) {
-                    pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
-                }
-                if c.isFloatType(start: gs2, len: gl2) {
-                    pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
-                }
-                if rangeEquals(bytes: c.arena.bytes, start: gs2, len: gl2, kw: "Bool") {
-                    pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
-                }
-                // a grounded newtype over a primitive (`v: T` with T -> `Meter = I64` /
-                // `Ratio = F64`): track the NEWTYPE ref (preserving its identity, so its own
-                // methods still resolve) but pin the alloca to the UNDERLYING scalar's LLVM
-                // type — an inherited lang-item method (`value.format()` in `print[Meter]`)
-                // unwraps to the underlying at the dispatch site (spec/10). The direct-prim
-                // branches above already handle a non-newtype scalar, so this only fires for a
-                // newtype (newtypeUnderName is a no-op otherwise, guarded by pRef == 0).
-                if pRef == 0U64 {
-                    val ntu2: Bind = c.newtypeUnderName(start: gs2, len: gl2)
-                    if isPrimIntName(c: inout c, start: ntu2.nameStart, len: ntu2.nameLen) {
-                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
-                    }
-                    if c.isFloatType(start: ntu2.nameStart, len: ntu2.nameLen) {
-                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
-                    }
-                    if rangeEquals(bytes: c.arena.bytes, start: ntu2.nameStart, len: ntu2.nameLen, kw: "Bool") {
-                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
-                    }
-                }
-                if pRef == 0U64 {
-                    // declaration-keyed for emission-order independence (see the enum
-                    // arm above).
-                    if c.enumIdxByName(start: gs2, len: gl2) < c.arena.enumCount() {
-                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                    }
-                }
-                // TOTAL-REF: a bare (non-generic) registered-struct param (`fn f(p: Point)`).
-                // Formerly left 0 (recovered via localStructIdxFor at each use), leaving
-                // exprTypeRef(p) unpopulated and forcing exprStructIdx onto the classifier. Track
-                // the struct's TypeRef so the struct-idx derives from the ref uniformly. gs2/gl2
-                // covers a generic-`T` param grounded to a struct; pgStart/pgLen covers a `Self`
-                // param (`assoc fn eq(lhs~: Self)` on a struct conformance) grounded to the recv.
-                if pRef == 0U64 {
-                    if self.localStructIdxFor(c: inout c, start: gs2, len: gl2) < c.arena.structCount() {
-                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
-                    }
-                }
-                if pRef == 0U64 {
-                    if self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen) < c.arena.structCount() {
-                        pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
-                    }
-                }
-            }
-        }
-        // ground a generic param type for its kind (a `key: K` with K -> String must be
-        // kind 1 so a String method dispatches; K -> U64 unsigned, etc.). Start from the
-        // Self-grounded span so a `Self` param gets the receiver type's kind.
-        mut val pKindStart: U64 = pgStart
-        mut val pKindLen: U64 = pgLen
-        if p.ty != 0U64 {
-            if c.cur.typeParams.count() > 0U64 {
-                val pg: U64 = c.groundTypeRef(ref: p.ty)
-                pKindStart = c.arena.typeAt(index: pg).nameStart
-                pKindLen = c.arena.typeAt(index: pg).nameLen
-            }
-        }
-        val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
-        if p.isInout {
-            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: effIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
-        } else {
-            val slot2: LLVMValueRef = self.entryAlloca(ty: pty)
-            LLVMBuildStore(self.b, LLVMGetParam(fv, argIdx), slot2)
-            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: effIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
-        }
-        // an array param: track the element's TypeRef so `param[i]` recovers the
-        // element (mirrors the Let handler).
-        if effIsArray {
-            // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg,
-            // GROUNDED under the active instantiation env so a generic element `Array[E]` in
-            // `impl[E]` records the concrete element (`I64` for `Box[I64].from`), not the bare
-            // param `E` — else a `.count()`/index over the param can't synthesize its Array
-            // receiver (the element ref must be a concrete type). Mirrors pKind's grounding.
-            if effRef != 0U64 {
-                mut val gpty: U64 = effRef
-                if c.cur.typeParams.count() > 0U64 {
-                    gpty = c.groundTypeRef(ref: effRef)
-                }
-                val at: TypeRef = c.arena.typeAt(index: gpty)
-                if at.args.count() > 0U64 {
-                    self.setLocalElemTypeRef(ref: at.args[0])
-                }
-            }
-        }
+        self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot, ty: pty, kind: kind, structIdx: structIndex, isArr: isArray, elemTy: elementType, elemKind: elementKind, typeRef: typeRef)
+        if isArray { self.setLocalElemTypeRef(ref: term.args[0]) }
     }
 }

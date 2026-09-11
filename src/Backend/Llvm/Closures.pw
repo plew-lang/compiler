@@ -484,7 +484,7 @@ pub impl LlvmCtx {
                     }
                     mut val pi: U64 = 0
                     while pi < params.count() {
-                        self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                        self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64, typeRef: c.groundTypeRef(ref: params[pi].ty))
                         // a `move` param is owned (deinit'd here); by-value is a +0
                         // borrow — mirrors the regular-fn binding. Without this a
                         // String/struct-classed closure param rode the ungated

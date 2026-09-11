@@ -1,6 +1,34 @@
 // Part of the LLVM backend (root: _.pw): parameter / return LLVM-type lowering.
 
 pub impl LlvmCtx {
+    inout fn bodyResultType(c: inout Comp, bodyId: U64) -> U64 {
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        if !signature.ready {
+            c.errorAt(offset: 0U64, msg: "internal error: body ABI signature was not finalized")
+        }
+        return signature.resultType
+    }
+
+    inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64, f: Func) -> LLVMTypeRef {
+        val result = self.bodyResultType(c: inout c, bodyId: bodyId)
+        if !f.hasRet { return self.voidty }
+        if result == 0U64 {
+            c.errorAt(offset: f.nameStart, msg: "internal error: finalized body result type is missing")
+            return self.voidty
+        }
+        return self.llvmTypeOfRef(c: inout c, ref: result)
+    }
+
+    inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64, p: Param) -> LLVMTypeRef {
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        if !signature.ready || index >= signature.parameterTypes.count() {
+            c.errorAt(offset: p.nameStart, msg: "internal error: finalized body parameter type is missing")
+            return self.voidty
+        }
+        if p.isInout { return self.ptrty }
+        return self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])
+    }
+
 
     // The LLVM type of a parameter: a pointer for an `inout` parameter (it receives
     // the caller's address and mutates in place), else the value type (array-aware).

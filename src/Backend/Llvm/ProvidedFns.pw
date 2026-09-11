@@ -118,10 +118,10 @@ pub impl LlvmCtx {
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
                     while pi < f.params.count() {
-                        ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: f.params, index: pi)))
+                        ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi, p: c.funcParamAt(params: f.params, index: pi)))
                         pi += 1
                     }
-                    val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), f.params.count(), 0I32)
+                    val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: f), arrayCPtr(ptys), f.params.count(), 0I32)
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)

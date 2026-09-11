@@ -1,0 +1,20 @@
+import @Std/Core with { Index }
+import @Std/Io with { print }
+
+struct Shelf[T] { pub val item: T }
+pub impl Shelf { factory }
+pub impl[T] Shelf[T] as Index[U64] {
+    type Output = T
+    fn index(key: U64) -> T { return self.item }
+}
+
+// The same projection is an ABI parameter and result, under two distinct
+// concrete body environments. Neither may fall back to the receiver type T.
+fn echo[T](source: T, value: T#Index[U64].Output) -> T#Index[U64].Output where T: Index[U64] {
+    return value
+}
+
+fn main() {
+    print(echo(source: <Shelf[I64] item=0I64 />, value: 42I64))
+    print(echo(source: <Shelf[String] item="" />, value: "ok"))
+}
