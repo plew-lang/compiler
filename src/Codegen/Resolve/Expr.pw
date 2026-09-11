@@ -815,6 +815,68 @@ pub impl Comp {
     // recover a call from Expr spelling. Default-expression origin fallback is
     // deliberately excluded here: it belongs to the materializing caller,
     // whereas a parametric source body owns only its own recorded templates.
+    // Unit is a known result of a selected signature, not a fallback for an
+    // absent expression type. Keep that distinction at the frontend boundary.
+    inout fn callTemplateReturnsUnit(template: CallTemplate) -> Bool {
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                return callee < self.arena.functionCount() && self.functionDeclarationReturnsUnit(f: self.arena.functionAt(index: callee))
+            }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
+                return self.staticMemberReturnsUnit(resolution: resolution)
+            }
+            CallTemplateKind.Operator(op: _, operands: _, resolution: val resolution, resultTerm: _) => {
+                return self.staticMemberReturnsUnit(resolution: resolution)
+            }
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { return self.functionTypeReturnsUnit(ref: term) }
+                    DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { return self.functionTypeReturnsUnit(ref: term) }
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
+                        if slot == 0U64 { return false }
+                        return self.traitRequirementReturnsUnit(traitIdx: traitIdx, reqIdx: slot - 1U64)
+                    }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn staticMemberReturnsUnit(resolution: StaticMemberResolution) -> Bool {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => { return self.traitRequirementReturnsUnit(traitIdx: traitIdx, reqIdx: reqIdx) }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => { return callee < self.arena.functionCount() && self.functionDeclarationReturnsUnit(f: self.arena.functionAt(index: callee)) }
+            _ => { return false }
+        }
+    }
+
+    inout fn traitRequirementReturnsUnit(traitIdx: U64, reqIdx: U64) -> Bool {
+        if traitIdx >= self.decls.traitCount() { return false }
+        val declaration = self.decls.traitAt(index: traitIdx)
+        if reqIdx >= declaration.reqs.count() { return false }
+        return self.functionDeclarationReturnsUnit(f: self.traitReqAt(reqs: declaration.reqs, index: reqIdx))
+    }
+
+    fn functionDeclarationReturnsUnit(f: Func) -> Bool {
+        // An async declaration's omitted payload result still yields a
+        // Promise at the call site; it is not a Unit-valued call.
+        return !f.hasRet && !f.isAsync
+    }
+
+    inout fn functionTypeReturnsUnit(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeCount() || !self.isFnType(ref: ref) { return false }
+        val signature: TypeRef = self.arena.typeAt(index: ref)
+        if signature.args.count() == 0U64 { return false }
+        val result: U64 = signature.args[0U64]
+        if result == 0U64 { return true }
+        if result >= self.arena.typeCount() { return false }
+        val term: TypeRef = self.arena.typeAt(index: result)
+        // Function signatures preserve an omitted result as the parser's
+        // empty type node. This interpretation is valid only in this known
+        // signature result slot, never for an arbitrary missing expression.
+        return (term.isRecord && term.recordFieldTerms.count() == 0U64) || (term.nameLen == 0U64 && term.args.count() == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isAny)
+    }
+
     inout fn callTemplateForSourceBody(fnIdx: U64, exprId: U64) -> CallTemplate {
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)

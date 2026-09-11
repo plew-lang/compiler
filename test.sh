@@ -148,6 +148,13 @@ else
     fail=$((fail + 1)); failed="$failed call-template-scalar-storage"
 fi
 
+# Unit results must remain distinct from missing call-result type facts.
+if sh ./test-mid-unit-call-results.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-unit-call-results"
+fi
+
 # Lifetime output alone must not pass through a legacy caller unnoticed.
 if sh ./test-mid-temporary-lifetime.sh; then
     :

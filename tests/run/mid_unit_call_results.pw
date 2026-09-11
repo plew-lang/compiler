@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Unit calls execute in value-discarding statement position without a
+// fabricated result type. Cover declaration, requirement and closure targets.
+fn emit(value: I64) { print(value) }
+trait Emit { fn emit() }
+struct Message {}
+pub impl Message { factory }
+pub impl Message as Emit { fn emit() { print(2I64) } }
+fn emitGeneric[T](value: T) where T: Emit { value.emit() }
+fn emitErased(value: any Emit) { value.emit() }
+fn main() {
+    emit(value: 1I64)
+    emitGeneric(value: <Message />)
+    val callback: fn() = fn() { print(3I64) }
+    callback()
+    emitErased(value: <Message />)
+}

@@ -781,7 +781,7 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
     }
     val term: U64 = c.semanticExprTerm(exprId: exprId)
-    if term == 0U64 {
+    if term == 0U64 && !c.callTemplateReturnsUnit(template: template) {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid call result term missing expr=")
             eprintU64(n: exprId)
