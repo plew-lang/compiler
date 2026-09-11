@@ -1,0 +1,32 @@
+// These readers do not materialize a range or freeze a mutable pool snapshot.
+// Matching may append inferred types; existing range contents remain stable.
+pub impl Comp {
+    fn patternBindCount(input: PatternBindInput) -> U64 {
+        match input {
+            PatternBindInput.Values(val values) => { return values.count() }
+            PatternBindInput.Conformance(val range) => { return range.len }
+            PatternBindInput.Function(val range) => { return range.len }
+        }
+    }
+    fn patternBindAt(input: PatternBindInput, index: U64) -> Bind {
+        if index >= self.patternBindCount(input: input) { panic "pattern binder index out of bounds" }
+        match input {
+            PatternBindInput.Values(val values) => { return values[index] }
+            PatternBindInput.Conformance(val range) => { return self.conformBindAt(binds: range, index: index) }
+            PatternBindInput.Function(val range) => { return self.arena.funcBindAt(binds: range, index: index) }
+        }
+    }
+    fn patternTypeCount(input: PatternTypeInput) -> U64 {
+        match input {
+            PatternTypeInput.Values(val values) => { return values.count() }
+            PatternTypeInput.Conformance(val range) => { return range.len }
+        }
+    }
+    fn patternTypeAt(input: PatternTypeInput, index: U64) -> U64 {
+        if index >= self.patternTypeCount(input: input) { panic "pattern type index out of bounds" }
+        match input {
+            PatternTypeInput.Values(val values) => { return values[index] }
+            PatternTypeInput.Conformance(val range) => { return self.conformTypeAt(types: range, index: index) }
+        }
+    }
+}

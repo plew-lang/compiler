@@ -15,6 +15,18 @@ part ./Ir/DeclarationNames
 // `Comp` itself lives in `./Frontend` (its behavior is `impl Comp`, which must sit
 // in the type's defining module — spec/15).
 
+// Read-only matching inputs retain their storage provenance. Pool-backed
+// inputs hold ranges, never snapshots of the entire append-only pool.
+export enum PatternBindInput {
+    Values(values: Array[Bind])
+    Conformance(range: ConformBindRange)
+    Function(range: FuncBindRange)
+}
+export enum PatternTypeInput {
+    Values(values: Array[U64])
+    Conformance(range: ConformTypeRange)
+}
+
 export struct DeclarationName {
     pub val start: U64
     pub val len: U64
