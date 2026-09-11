@@ -564,7 +564,7 @@ pub impl Comp {
         return self.callableFormsMayOverlapAt(a: a, b: b, ai: 0U64, bi: 0U64, binds: binds)
     }
 
-    inout fn checkFuncRegistration(f: Func) {
+    inout fn checkFuncRegistration(f: Func, sourceModule: U64) {
         mut val i: U64 = 0
         while i < self.decls.callableCount() {
             val priorEntry: Callable = self.decls.callableAt(index: i)
@@ -575,7 +575,7 @@ pub impl Comp {
                 // qualifier at a call site, so every declaration named Ext must
                 // enter this one collision domain even when loaded from another
                 // module.
-                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == f.extId) || self.funcDeclModule(f: prior) == self.funcDeclModule(f: f)
+                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == f.extId) || priorEntry.sourceModule == sourceModule
                 if sameNamespace {
                     if self.sameFuncCandidateBucket(a: prior, b: f) {
                         // Raw foreign/intrinsic functions have one linker symbol,
@@ -637,12 +637,13 @@ pub impl Comp {
     inout fn registerCallable(funcIdx: U64, checkCollisions: Bool = false) {
         if funcIdx >= self.arena.functionCount() { return }
         val f: Func = self.arena.functionAt(index: funcIdx)
+        val sourceModule = self.funcDeclModule(f: f)
         // Source declarations cannot enter a surface which already has a
         // call-indistinguishable candidate.  Provided copies are synthesized
         // dispatch artifacts; their source trait is selected separately and
         // therefore deliberately bypass this source-declaration check.
         if checkCollisions {
-            self.checkFuncRegistration(f: f)
+            self.checkFuncRegistration(f: f, sourceModule: sourceModule)
         }
         self.checkProvidedExtensionSurfaceCollision(f: f)
         mut val sourceKind: U64 = 0U64
@@ -668,7 +669,7 @@ pub impl Comp {
             sourceOwner = f.srcTraitOwner
             if sourceOwner == 0U64 { sourceOwner = f.provTraitOwner }
         }
-        self.decls.registerCallable(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=self.funcDeclModule(f: f) />, nameId: f.nameId, nameCount: self.interner.entries.count())
+        self.decls.registerCallable(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=sourceModule />, nameId: f.nameId, nameCount: self.interner.entries.count())
     }
 
     inout fn callableIsBare(c: Callable) -> Bool {
