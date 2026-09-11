@@ -1693,6 +1693,19 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
 // Return is a terminator rather than an ad-hoc cleanup action.  Its operand
 // owns the transfer to the ABI return place; later drop elaboration sees only
 // the normal CFG exit and is responsible for the remaining locals.
+// Returning a unique value transfers its ownership into the ABI result.
+// Keep the transfer in the operand so ordinary drop elaboration accounts for
+// each exit independently, including returns from conditional branches.
+fn midReturnOperand(c: inout Comp, operand: MidOperand, typeTerm: U64) -> MidOperand {
+    if midTermIsUnique(c: inout c, term: typeTerm) {
+        match operand {
+            MidOperand.Copy(place: val place) => { return <MidOperand.Move place=place /> }
+            _ => {}
+        }
+    }
+    return operand
+}
+
 export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
@@ -1721,10 +1734,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 val callResult: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: callDestination)
                 match callResult { MidBuildError.None => {} _ => { return callResult } }
                 val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
-                mut val resultOperand: MidOperand = <MidOperand.Copy place=callDestination />
-                if midTermIsUnique(c: inout c, term: term) {
-                    resultOperand = <MidOperand.Move place=callDestination />
-                }
+                val resultOperand: MidOperand = midReturnOperand(c: inout c, operand: <MidOperand.Copy place=callDestination />, typeTerm: term)
                 midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=resultOperand /> />)
                 midEmitAllScopeExits(state: inout state)
                 midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
@@ -1736,7 +1746,7 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             // only then may lexical cleanup destroy the source locals.
             if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
             val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=operand.operand /> />)
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=midReturnOperand(c: inout c, operand: operand.operand, typeTerm: term) /> />)
             midEmitAllScopeExits(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
             return <MidBuildError.None />
