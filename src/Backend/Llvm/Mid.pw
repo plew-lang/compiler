@@ -51,6 +51,7 @@ pub impl LlvmCtx {
             MidVerifyError.DropUnavailable => { return 4U64 }
             MidVerifyError.InvalidDropFlag => { return 5U64 }
             MidVerifyError.UninitializedDropFlag => { return 9U64 }
+            MidVerifyError.UnelaboratedBindingEnd => { return 6U64 }
             MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
             MidVerifyError.UnelaboratedAccess => { return 7U64 }
             MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
@@ -1012,6 +1013,8 @@ pub impl LlvmCtx {
                     }
                     MidStatement.SetDropFlag(local: _, isSet: _) => {}
                     MidStatement.Nop => {}
+                    MidStatement.StorageCommit(stmtId: _) => { return <MidLlvmPreflight.ScopeExit /> }
+                    MidStatement.EndBinding(local: _) => { return <MidLlvmPreflight.ScopeExit /> }
                     MidStatement.ScopeExit(scope: _) => { return <MidLlvmPreflight.ScopeExit /> }
                 }
                 statement += 1U64
@@ -2807,6 +2810,8 @@ pub impl LlvmCtx {
             // A verified body must have erased every ScopeExit. Leave a loud
             // unreachable marker if this invariant is violated in a release
             // build where diagnostics continue after c.errorAt.
+            MidStatement.StorageCommit(stmtId: _) => { LLVMBuildUnreachable(self.b) }
+            MidStatement.EndBinding(local: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.ScopeExit(scope: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.Nop => {}
         }

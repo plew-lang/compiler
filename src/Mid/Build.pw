@@ -1621,6 +1621,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
                 midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandResult.operand, typeTerm: c.semanticExprTerm(exprId: init)) /> />)
             }
             midFinishEvaluationScope(state: inout state, scope: evaluation)
+            midAppendStatement(state: inout state, statement: <MidStatement.StorageCommit stmtId=stmtId />)
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }

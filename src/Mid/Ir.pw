@@ -169,6 +169,8 @@ export struct MidStatementNode {
     pub val flag: U64 = 0U64
     pub val isSet: Bool = false
     pub val scope: U64 = 0U64
+    pub val sourceStmt: U64 = 0U64
+    pub val bindingLocal: U64 = 0U64
 }
 pub impl MidStatementNode { factory }
 
@@ -569,6 +571,11 @@ export enum MidStatement {
     // lowering emits it; drop elaboration consumes it into explicit Drop /
     // ConditionalDrop statements, so LLVM never receives this marker.
     ScopeExit(scope: U64)
+    // Resolves the frontend storage fact after initializer temporaries end.
+    StorageCommit(stmtId: U64)
+    // Ends one binding, even if its value has already been moved. Only drop
+    // elaboration decides whether any ownership remains to destroy.
+    EndBinding(local: U64)
     Nop
 }
 
@@ -912,6 +919,8 @@ fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { arena.statements.append(<MidStatementNode tag=4U64 destination=midFreezePlace(arena: inout arena, place: place) flag=flag />) }
         MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { arena.statements.append(<MidStatementNode tag=5U64 flag=local isSet=isSet />) }
         MidStatement.ScopeExit(scope: val scope) => { arena.statements.append(<MidStatementNode tag=6U64 scope=scope />) }
+        MidStatement.StorageCommit(stmtId: val stmtId) => { arena.statements.append(<MidStatementNode tag=11U64 sourceStmt=stmtId />) }
+        MidStatement.EndBinding(local: val local) => { arena.statements.append(<MidStatementNode tag=12U64 bindingLocal=local />) }
         MidStatement.Nop => { arena.statements.append(<MidStatementNode tag=7U64 />) }
     }
 }
@@ -1096,7 +1105,10 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
             if statement.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.destination) { return false }
             if statement.source != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.source) { return false }
             if statement.value != 0U64 && !midCanonicalRvalueIsWellFormed(arena: arena, rvalue: statement.value) { return false }
-            if statement.tag == 9U64 || statement.tag == 10U64 {
+            if statement.tag == 11U64 || statement.tag == 12U64 {
+                if statement.destination != 0U64 || statement.source != 0U64 || statement.value != 0U64 { return false }
+                if statement.tag == 12U64 && statement.bindingLocal >= node.locals.len { return false }
+            } else if statement.tag == 9U64 || statement.tag == 10U64 {
                 if statement.destination == 0U64 { return false }
                 if statement.tag == 9U64 && statement.value == 0U64 { return false }
                 if statement.tag == 10U64 && (statement.value != 0U64 || statement.source != 0U64) { return false }

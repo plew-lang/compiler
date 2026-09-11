@@ -91,6 +91,9 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
                 if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidOwnership.Consumed />) }
             }
         }
+        if statement.tag == 12U64 && statement.bindingLocal < out.count() {
+            out.set(i: statement.bindingLocal, value: <MidOwnership.Consumed />)
+        }
         if statement.tag == 6U64 && statement.scope < body.scopes.len {
             val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
             mut val local: U64 = scope.firstLocal
@@ -274,6 +277,9 @@ fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlock
                 if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidAccessibility.Unavailable />) }
             }
         }
+        if statement.tag == 12U64 && statement.bindingLocal < out.count() {
+            out.set(i: statement.bindingLocal, value: <MidAccessibility.Unavailable />)
+        }
         if statement.tag == 6U64 && statement.scope < body.scopes.len {
             val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
             mut val local: U64 = scope.firstLocal
@@ -449,6 +455,9 @@ fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[A
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+            if statement.tag == 12U64 && blockI < ownership.count() && statement.bindingLocal < body.locals.len && statement.bindingLocal < ownership[blockI].count() {
+                match ownership[blockI][statement.bindingLocal] { MidOwnership.MaybeOwned => { needsFlag.set(i: statement.bindingLocal, value: true) } _ => {} }
+            }
             if statement.tag == 6U64 && statement.scope < body.scopes.len && blockI < ownership.count() {
                 val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
                 localI = scope.firstLocal
@@ -821,6 +830,41 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
+            } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+                c.mid.statements.append(statement)
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < currentOwnership.count() {
+                        currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
+                        if place.local < currentAccessibility.count() { currentAccessibility.set(i: place.local, value: <MidAccessibility.Unavailable />) }
+                        if place.local < source.locals.len && plan.needsFlag[place.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: place.local) isSet=false />) }
+                    }
+                }
+            } else if statement.tag == 12U64 {
+                local = statement.bindingLocal
+                if local < source.locals.len && local < currentOwnership.count() {
+                    val place: U64 = canonicalMidAppendRootPlace(c: inout c, body: source, local: local)
+                    match currentOwnership[local] {
+                        // A capture cell's logical value is not its
+                        // lexical owner. Scope cleanup releases the
+                        // cell; an overwrite elsewhere still uses
+                        // tag=3 to drop only the current logical T.
+                        MidOwnership.Owned => {
+                            val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
+                            if declaration.isBorrowed || declaration.isInout { }
+                            else if declaration.isCaptureCell { c.mid.statements.append(<MidStatementNode tag=10U64 destination=place />) }
+                            else { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
+                        }
+                        MidOwnership.MaybeOwned => {
+                            val declaration: MidLocalDecl = c.mid.locals[source.locals.start + local]
+                            if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                        }
+                        _ => {}
+                    }
+                    if plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />) }
+                    currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
+                    if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
+                }
             } else if statement.tag == 6U64 {
                 if statement.scope < source.scopes.len {
                     val scope: MidScope = c.mid.scopes[source.scopes.start + statement.scope]
@@ -1063,6 +1107,9 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
                     // way no source owner remains after this operation.
                     out.set(i: place.local, value: <MidOwnership.Consumed />)
                 }
+            }
+            MidStatement.EndBinding(local: val local) => {
+                if local < out.count() { out.set(i: local, value: <MidOwnership.Consumed />) }
             }
             MidStatement.ScopeExit(scope: val scope) => {
                 mut val local: U64 = midScopeFirst(body: body, scope: scope)
@@ -1316,6 +1363,9 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                 if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < out.count() {
                     out.set(i: place.local, value: <MidAccessibility.Unavailable />)
                 }
+            }
+            MidStatement.EndBinding(local: val local) => {
+                if local < out.count() { out.set(i: local, value: <MidAccessibility.Unavailable />) }
             }
             MidStatement.ScopeExit(scope: val scope) => {
                 mut val local: U64 = midScopeFirst(body: body, scope: scope)
@@ -1583,6 +1633,11 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         mut val statementI: U64 = 0U64
         while statementI < body.blocks[bi].statements.count() {
             match body.blocks[bi].statements[statementI] {
+                MidStatement.EndBinding(local: val local) => {
+                    if local < originalCount {
+                        match ownership[bi][local] { MidOwnership.MaybeOwned => { needsFlag.set(i: local, value: true) } _ => {} }
+                    }
+                }
                 MidStatement.ScopeExit(scope: val scope) => {
                     li = midScopeFirst(body: body, scope: scope)
                     val end: U64 = midScopeEnd(body: body, scope: scope)
@@ -1751,6 +1806,48 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         currentOwnership.set(i: source.local, value: <MidOwnership.Consumed />)
                         currentAccessibility.set(i: source.local, value: <MidAccessibility.Unavailable />)
                         if source.local < originalCount && needsFlag[source.local] { statements.append(<MidStatement.SetDropFlag local=flagFor[source.local] isSet=false />) }
+                    }
+                }
+                MidStatement.Drop(place: val place) => {
+                    statements.append(statement)
+                    if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < currentOwnership.count() {
+                        currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: place.local, value: <MidAccessibility.Unavailable />)
+                        if place.local < originalCount && needsFlag[place.local] { statements.append(<MidStatement.SetDropFlag local=flagFor[place.local] isSet=false />) }
+                    }
+                }
+                MidStatement.ConditionalDrop(place: val place, flag: _) => {
+                    statements.append(statement)
+                    if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < currentOwnership.count() {
+                        currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: place.local, value: <MidAccessibility.Unavailable />)
+                        if place.local < originalCount && needsFlag[place.local] { statements.append(<MidStatement.SetDropFlag local=flagFor[place.local] isSet=false />) }
+                    }
+                }
+                MidStatement.ReleaseCaptureCell(place: val place) => {
+                    statements.append(statement)
+                    if midIsLocalRoot(place: place) && place.projections.count() == 0U64 && place.local < currentOwnership.count() {
+                        currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: place.local, value: <MidAccessibility.Unavailable />)
+                        if place.local < originalCount && needsFlag[place.local] { statements.append(<MidStatement.SetDropFlag local=flagFor[place.local] isSet=false />) }
+                    }
+                }
+                MidStatement.EndBinding(local: val local) => {
+                    if local < originalCount && local < currentOwnership.count() {
+                        match currentOwnership[local] {
+                            MidOwnership.Owned => {
+                                if body.locals[local].isBorrowed || body.locals[local].isInout { }
+                                else if body.locals[local].isCaptureCell { statements.append(<MidStatement.ReleaseCaptureCell place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
+                                else { statements.append(<MidStatement.Drop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
+                            }
+                            MidOwnership.MaybeOwned => {
+                                if !body.locals[local].isInout && needsFlag[local] { statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> flag=flagFor[local] />) }
+                            }
+                            _ => {}
+                        }
+                        if needsFlag[local] { statements.append(<MidStatement.SetDropFlag local=flagFor[local] isSet=false />) }
+                        currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />)
                     }
                 }
                 MidStatement.ScopeExit(scope: val scope) => {

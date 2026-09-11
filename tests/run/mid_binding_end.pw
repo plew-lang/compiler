@@ -1,0 +1,76 @@
+// A lifetime boundary consumes only remaining ownership. Repeating the
+// boundary or exiting its lexical scope must not manufacture a second drop.
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Mid with { MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerifyError, elaborateMidDrops, elaborateCanonicalMidDrops, verifyMidBody, verifyCanonicalMidBody }
+
+fn check(mode: U64) {
+    val place: MidPlace = <MidPlace local=0U64 typeTerm=1U64 />
+    val local: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=true ownsAtEntry=true />
+    mut val prefix: Array[MidStatement] = []
+    if mode == 1U64 { prefix.append(<MidStatement.Drop place=place />) }
+    mut val blocks: Array[MidBlock] = []
+    if mode == 2U64 {
+        blocks.append(<MidBlock terminator=<MidTerminator.Switch discriminant=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=1U64 /> /> values=[1I64] targets=[1U64] otherwise=2U64 /> />)
+        blocks.append(<MidBlock statements=[<MidStatement.Drop place=place />] terminator=<MidTerminator.Goto target=3U64 /> />)
+        blocks.append(<MidBlock terminator=<MidTerminator.Goto target=3U64 /> />)
+    }
+    prefix.append(<MidStatement.EndBinding local=0U64 />)
+    prefix.append(<MidStatement.EndBinding local=0U64 />)
+    prefix.append(<MidStatement.ScopeExit scope=0U64 />)
+    blocks.append(<MidBlock statements=prefix terminator=<MidTerminator.Return /> />)
+    val body: MidBody = <MidBody locals=[local] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=blocks />
+    match verifyMidBody(body: body).error {
+        MidVerifyError.UnelaboratedBindingEnd => { print(1I64) }
+        _ => { print(0I64) }
+    }
+    val result = elaborateMidDrops(body: body)
+    match verifyMidBody(body: result).error { MidVerifyError.None => {} _ => { print(900I64) } }
+    mut val drops: U64 = 0U64
+    mut val conditional: U64 = 0U64
+    mut val blockIndex: U64 = 0U64
+    while blockIndex < result.blocks.count() {
+        val block = result.blocks[blockIndex]
+        mut val index: U64 = 0U64
+        while index < block.statements.count() {
+            match block.statements[index] {
+                MidStatement.Drop(place: _) => { drops += 1U64 }
+                MidStatement.ConditionalDrop(place: _, flag: _) => { conditional += 1U64 }
+                MidStatement.EndBinding(local: _) => { drops += 100U64 }
+                _ => {}
+            }
+            index += 1U64
+        }
+        blockIndex += 1U64
+    }
+    print(drops)
+    print(conditional)
+    mut val compiler: Comp = <Comp />
+    val frozen = compiler.mid.store(body: body)
+    val canonical = elaborateCanonicalMidDrops(c: inout compiler, canonical: frozen)
+    match verifyCanonicalMidBody(c: compiler, canonical: canonical).error { MidVerifyError.None => {} _ => { print(901I64) } }
+    val node = compiler.mid.bodies[canonical.body - 1U64]
+    drops = 0U64
+    conditional = 0U64
+    blockIndex = 0U64
+    while blockIndex < node.blocks.len {
+        val block = compiler.mid.blocks[node.blocks.start + blockIndex]
+        mut val index: U64 = 0U64
+        while index < block.statements.len {
+            val statement = compiler.mid.statements[block.statements.start + index]
+            if statement.tag == 3U64 { drops += 1U64 }
+            if statement.tag == 4U64 { conditional += 1U64 }
+            if statement.tag == 12U64 { drops += 100U64 }
+            index += 1U64
+        }
+        blockIndex += 1U64
+    }
+    print(drops)
+    print(conditional)
+}
+
+fn main() {
+    check(mode: 0U64)
+    check(mode: 1U64)
+    check(mode: 2U64)
+}

@@ -264,6 +264,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.DropUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.InvalidDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninitializedDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.UnelaboratedBindingEnd => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
@@ -279,6 +280,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.DropUnavailable => { eprint(text: "drop-unavailable") }
                                                 MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
                                                 MidVerifyError.UninitializedDropFlag => { eprint(text: "uninitialized-drop-flag") }
+                                                MidVerifyError.UnelaboratedBindingEnd => { eprint(text: "binding-end") }
                                                 MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
                                                 MidVerifyError.UninstantiatedCastBoundary => { eprint(text: "cast-boundary") }
                                                 _ => { eprint(text: "unknown") }

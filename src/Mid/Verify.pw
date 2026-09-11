@@ -15,6 +15,7 @@ export enum MidVerifyError {
     InvalidDropFlag
     UninitializedDropFlag
     UnelaboratedScopeExit
+    UnelaboratedBindingEnd
     UnelaboratedAccess
     UninstantiatedReturnBoundary
     UninstantiatedStorageBoundary
@@ -374,6 +375,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
             }
+            if statement.tag == 11U64 || statement.tag == 12U64 { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI /> }
             if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
             statementI = statementI + 1U64
         }
@@ -759,6 +761,8 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                         _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
                     }
                 }
+                MidStatement.StorageCommit(stmtId: _) => { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=bi /> }
+                MidStatement.EndBinding(local: _) => { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=bi /> }
                 MidStatement.ScopeExit(scope: _) => { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=bi /> }
                 _ => {}
             }
