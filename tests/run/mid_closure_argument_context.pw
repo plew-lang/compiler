@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+// A closure signature supplies the same literal context as a named function.
+fn main() {
+    val increment: fn(value: I32) -> I32 = fn(value: I32) -> I32 { return value + 1 }
+    val sum: fn(values: Array[I32]) -> I32 = fn(values: Array[I32]) -> I32 {
+        return values[0U64] + values[1U64]
+    }
+    print(increment(value: 5))
+    print(sum(values: [10, 20]))
+}

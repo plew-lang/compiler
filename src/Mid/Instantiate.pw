@@ -852,7 +852,28 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             }
             val sourceType: U64 = midConversionSourceRef(c: c, conversion: conversion)
             val conversionTarget: U64 = midConversionTargetRef(c: c, conversion: conversion)
-            if sourceType == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: sourceType) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> /> }
+            if sourceType == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: sourceType) {
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid canonical conversion-source body=")
+                    eprintU64(n: bodyId)
+                    eprint(text: " expr=")
+                    eprintU64(n: selected.exprId)
+                    eprint(text: " offset=")
+                    eprintU64(n: c.exprOffset(id: selected.exprId))
+                    eprint(text: " argument=")
+                    eprintU64(n: argumentI)
+                    eprint(text: " proof=")
+                    eprintU64(n: conversion)
+                    eprint(text: " operand=")
+                    c.traceMonoTypeHead(ref: canonicalMidOperandTypeRef(c: c, operandId: operand))
+                    eprint(text: " source=")
+                    c.traceMonoTypeHead(ref: sourceType)
+                    eprint(text: " target=")
+                    c.traceMonoTypeHead(ref: targetType)
+                    eprint(text: "\n")
+                }
+                return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> />
+            }
             if conversionTarget == 0U64 || !c.typeRefEq(a: targetType, b: conversionTarget) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionTarget /> /> }
             val temporary: U64 = nextLocal
             nextLocal = nextLocal + 1U64

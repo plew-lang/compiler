@@ -572,6 +572,27 @@ pub impl Comp {
     // lexical scope, field identity, or requirement overload selection.
     inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget) {
         if !(self.cur.recordCallTemplates) { return }
+        mut val functionType: U64 = 0U64
+        match target {
+            DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { functionType = term }
+            DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { functionType = term }
+            _ => {}
+        }
+        if functionType != 0U64 && self.isFnType(ref: functionType) {
+            val signature: TypeRef = self.arena.typeAt(index: functionType)
+            mut val index: U64 = 0U64
+            while index < args.len && index + 1U64 < signature.args.count() {
+                val expected: U64 = signature.args[index + 1U64]
+                if expected != 0U64 && self.tyRefIsGround(ref: expected) {
+                    val parameter: TypeInfo = self.typeInfoOfRef(ref: expected)
+                    val argument: U64 = self.argAt(args: args, index: index).expr
+                    self.checkLitSpanCtx(id: argument, tyStart: parameter.nameStart, tyLen: parameter.nameLen, isArray: parameter.kind == 3, ctxRef: expected)
+                    self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected)
+                    self.recordArrayLitCtx(exprId: argument, ctxRef: expected)
+                }
+                index += 1U64
+            }
+        }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
