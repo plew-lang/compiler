@@ -51,7 +51,7 @@ export struct MidCanonicalInstantiation {
 }
 pub impl MidCanonicalInstantiation { factory }
 
-struct MidCanonicalCallInstantiation {
+export struct MidCanonicalCallMaterialization {
     pub val sourceStatementCount: U64 = 0U64
     pub val sourceTerminator: U64 = 0U64
     pub val cleanupStatements: MidRange = <MidRange start=0U64 len=0U64 />
@@ -59,7 +59,7 @@ struct MidCanonicalCallInstantiation {
     pub val hasCleanup: Bool = false
     pub val error: MidInstantiateError = <MidInstantiateError.None />
 }
-pub impl MidCanonicalCallInstantiation { factory }
+pub impl MidCanonicalCallMaterialization { factory }
 
 fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
     match error {
@@ -817,7 +817,12 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
     return true
 }
 
-fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, source: MidBodyNode, bodyId: U64, blockI: U64, environment: BodyInstance, itemRef: U64, nextLocal: inout U64) -> MidCanonicalCallInstantiation {
+// Materialize one selected call independently of the caller's CFG rewrite.
+// Both destinations are body-relative blocks supplied by the caller; this
+// operation owns ABI validation, argument conversion and conversion cleanup.
+// It appends statements/terminators, but leaves block and local registration
+// to the surrounding rewrite, using nextLocal for conversion temporaries.
+export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bodyId: U64, environment: BodyInstance, itemRef: U64, continuation: U64, cleanupTarget: U64, nextLocal: inout U64) -> MidCanonicalCallMaterialization {
     // Same-error `try` propagation has no callable at all. It is still
     // represented by the same parametric TryConversion site so the builder
     // does not inspect a BodyInstance; freeze it here into an ordinary copy
@@ -826,26 +831,26 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
         val rawTarget: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
         if rawTarget.tag == 3U64 {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: rawTarget.exprId)
-            if tryIndex >= c.arena.finalTries.count() { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingTryResolution /> /> }
+            if tryIndex >= c.arena.finalTries.count() { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingTryResolution /> /> }
             val fact: FinalTryResolution = c.arena.finalTries[tryIndex]
             if !fact.hasErrorConversion {
-                if term.args.len != 1U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.InvalidTryResolution /> /> }
+                if term.args.len != 1U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidTryResolution /> /> }
                 val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start], environment: environment, itemRef: itemRef)
                 val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
-                if operand == 0U64 || destination == 0U64 || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: fact.targetErrorTypeRef)) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.InvalidTryResolution /> /> }
+                if operand == 0U64 || destination == 0U64 || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: fact.targetErrorTypeRef)) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidTryResolution /> /> }
                 c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=operand />)
                 c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=c.mid.rvalues.count() />)
-                c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.target) />)
-                return <MidCanonicalCallInstantiation sourceStatementCount=1U64 sourceTerminator=c.mid.terminators.count() />
+                c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
+                return <MidCanonicalCallMaterialization sourceStatementCount=1U64 sourceTerminator=c.mid.terminators.count() />
             }
         }
     }
     val resolutionId: U64 = canonicalCallResolution(c: c, terminator: term, bodyId: bodyId)
-    if resolutionId == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
+    if resolutionId == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingCallResolution /> /> }
     val resolution: U64 = resolutionId - 1U64
     val selected: CallResolution = c.arena.finalCallees[resolution]
     if selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
-        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionArity /> />
+        return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionArity /> />
     }
     val signature: MidSelectedSignature = midSelectedSignature(c: inout c, selected: selected)
     if !midSignatureMatches(signature: signature, count: term.args.len, passing: selected.receiverPassing) {
@@ -860,11 +865,11 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             eprintU64(n: selected.parameterTypeRefs.len)
             eprint(text: "\n")
         }
-        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+        return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
     }
     mut val targetError: MidInstantiateError = <MidInstantiateError.None />
     val callTarget: U64 = instantiateCanonicalCallTarget(c: inout c, targetId: term.callTarget, bodyId: bodyId, error: inout targetError)
-    if callTarget == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
+    if callTarget == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingCallResolution /> /> }
     val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
     val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing)
     if receiver == 0U64 {
@@ -879,7 +884,7 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             eprintU64(n: rawReceiver)
             eprint(text: "\n")
         }
-        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+        return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
     }
     val argumentStart: U64 = c.mid.callArguments.count()
     val conversionStatementStart: U64 = c.mid.statements.count()
@@ -890,14 +895,14 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
         val targetType: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
         val passing: CallArgumentPassing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
         if !midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing) {
-            return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+            return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
         }
         mut val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, itemRef: itemRef)
-        if operand == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> /> }
+        if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
         if !c.conversionProofIsIdentity(id: conversion) {
             match passing {
                 CallArgumentPassing.Borrow => {}
-                _ => { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+                _ => { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
             }
             val sourceType: U64 = midConversionSourceRef(c: c, conversion: conversion)
             val conversionTarget: U64 = midConversionTargetRef(c: c, conversion: conversion)
@@ -921,9 +926,9 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
                     c.traceMonoTypeHead(ref: targetType)
                     eprint(text: "\n")
                 }
-                return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> />
+                return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> />
             }
-            if conversionTarget == 0U64 || !c.typeRefEq(a: targetType, b: conversionTarget) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionTarget /> /> }
+            if conversionTarget == 0U64 || !c.typeRefEq(a: targetType, b: conversionTarget) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionTarget /> /> }
             val temporary: U64 = nextLocal
             nextLocal = nextLocal + 1U64
             c.mid.places.append(<MidPlaceNode local=temporary typeTerm=conversionTarget />)
@@ -938,14 +943,12 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand) }
             _ => {}
         }
-        if operand == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+        if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
         c.mid.callArguments.append(operand)
         argumentI = argumentI + 1U64
     }
     val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
-    if destination == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.InvalidFinalResolution /> /> }
-    val cleanupTarget: U64 = canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: blockI) + 1U64
-    val continuation: U64 = canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.target)
+    if destination == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
     if cleanupCount > 0U64 {
         c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=cleanupTarget args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
         val sourceTerminator: U64 = c.mid.terminators.count()
@@ -957,10 +960,10 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             cleanupI = cleanupI + 1U64
         }
         c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
-        return <MidCanonicalCallInstantiation sourceStatementCount=cleanupCount sourceTerminator=sourceTerminator cleanupStatements=<MidRange start=cleanupStart len=cleanupCount /> cleanupTerminator=c.mid.terminators.count() hasCleanup=true />
+        return <MidCanonicalCallMaterialization sourceStatementCount=cleanupCount sourceTerminator=sourceTerminator cleanupStatements=<MidRange start=cleanupStart len=cleanupCount /> cleanupTerminator=c.mid.terminators.count() hasCleanup=true />
     }
     c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=continuation args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
-    return <MidCanonicalCallInstantiation sourceStatementCount=cleanupCount sourceTerminator=c.mid.terminators.count() />
+    return <MidCanonicalCallMaterialization sourceStatementCount=cleanupCount sourceTerminator=c.mid.terminators.count() />
 }
 
 // Canonical instantiation is a direct append-only rewrite. Converted borrow
@@ -1002,7 +1005,7 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
         val instantiatedStatementCount: U64 = c.mid.statements.count() - statementStart
         val terminator: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
         if terminator.tag == 4U64 {
-            val call: MidCanonicalCallInstantiation = instantiateCanonicalCallTerminator(c: inout c, term: terminator, source: source, bodyId: bodyId, blockI: blockI, environment: environment, itemRef: itemRef, nextLocal: inout nextLocal)
+            val call: MidCanonicalCallMaterialization = materializeCanonicalMidCall(c: inout c, term: terminator, bodyId: bodyId, environment: environment, itemRef: itemRef, continuation: canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: terminator.target), cleanupTarget: canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: blockI) + 1U64, nextLocal: inout nextLocal)
             if midInstantiateHasError(error: call.error) { return <MidCanonicalInstantiation error=call.error /> }
             c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=instantiatedStatementCount + call.sourceStatementCount /> terminator=call.sourceTerminator />)
             outputBlockLen = outputBlockLen + 1U64
