@@ -1,17 +1,26 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
-import /Mid with { MidBlock, MidBuildError, MidBuildState, MidCallReceiver, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
+import /Ir with { SemanticExprType, StructDef, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+import /Mid with { MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
 
 fn main() {
     mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val typeName = c.internBytes(s: "File")
+    c.arena.registerStruct(<StructDef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId typeParams=[] fields=[] isUnique=true isExtern=false />)
+    val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
+    val resultName = c.internBytes(s: "I64")
+    val resultTerm = c.simpleTypeRef(nameStart: resultName.nameStart, nameLen: resultName.nameLen)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=resultTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.arena.exprs.append(<Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=0U64 /> />)
     val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
-    c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=[] calleeTypeArgs=[] proof=<StaticConformanceProof.Missing /> /> />)
+    c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: []) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
     c.arena.stmts.append(<Stmt.ExprStmt expr=0U64 />)
     c.arena.blockStmtPool.append(0U64)
     c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
-    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] sourceFunction=0U64 />
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val result = buildMidBlock(c: inout c, state: inout state, blockId: 0U64)
     mut val built: Bool = false
     match result { MidBuildError.None => { built = true } _ => {} }
@@ -43,9 +52,9 @@ fn main() {
     val moveKey = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
     c.decls.callTemplates = []
     c.decls.callTemplateIndexSlots = []
-    c.appendCallTemplate(template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=[<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=1U64 /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />] calleeTypeArgs=[] proof=<StaticConformanceProof.Missing /> /> />)
-    mut val moveState: MidBuildState = <MidBuildState blocks=[<MidBlock />] sourceFunction=0U64 />
-    val file = addMidLocal(state: inout moveState, declarationTarget: 90U64, typeTerm: 1U64, isUnique: true, isParameter: false, ownsAtEntry: true)
+    c.appendCallTemplate(template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=valueTerm /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
+    mut val moveState: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
+    val file = addMidLocal(state: inout moveState, declarationTarget: 90U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: true)
     val moveResult = buildMidBlock(c: inout c, state: inout moveState, blockId: 0U64)
     mut val moved: Bool = false
     match moveState.blocks[0U64].terminator {

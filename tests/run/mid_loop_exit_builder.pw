@@ -3,7 +3,7 @@
 // branch to the selected loop target without an LLVM-side cleanup convention.
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Block, Expr, Stmt }
+import /Ir with { Block, Expr, SemanticExprType, Stmt }
 import /Mid with { MidBlock, MidBuildError, MidBuildState, MidStatement, MidTerminator, buildMidBlock }
 
 fn built(result: MidBuildError) -> Bool {
@@ -23,6 +23,10 @@ fn hasScopeExit(block: MidBlock, scope: U64) -> Bool {
 
 fn breakBuilderWorks() -> Bool {
     mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val typeName = c.internBytes(s: "Bool")
+    val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
     c.arena.stmts.append(<Stmt.Break offset=0U64 />)
     c.arena.blockStmtPool.append(0U64)
@@ -30,10 +34,11 @@ fn breakBuilderWorks() -> Bool {
     c.arena.stmts.append(<Stmt.While cond=0U64 body=0U64 />)
     c.arena.blockStmtPool.append(1U64)
     c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=1U64 />)
-    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: 1U64)
     if !built(result: result) || state.blocks.count() != 4U64 { return false }
-    if !hasScopeExit(block: state.blocks[2U64], scope: 2U64) { return false }
+    // Scope 0 is the root, 1 the enclosing block, 2 the condition, 3 the loop body.
+    if !hasScopeExit(block: state.blocks[2U64], scope: 3U64) { return false }
     match state.blocks[2U64].terminator {
         MidTerminator.Goto(target: val target) => { return target == 3U64 }
         _ => { return false }
@@ -42,6 +47,10 @@ fn breakBuilderWorks() -> Bool {
 
 fn continueBuilderWorks() -> Bool {
     mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val typeName = c.internBytes(s: "Bool")
+    val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
     c.arena.stmts.append(<Stmt.Continue offset=0U64 />)
     c.arena.blockStmtPool.append(0U64)
@@ -49,10 +58,11 @@ fn continueBuilderWorks() -> Bool {
     c.arena.stmts.append(<Stmt.While cond=0U64 body=0U64 />)
     c.arena.blockStmtPool.append(1U64)
     c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=1U64 />)
-    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: 1U64)
     if !built(result: result) || state.blocks.count() != 4U64 { return false }
-    if !hasScopeExit(block: state.blocks[2U64], scope: 2U64) { return false }
+    // Scope 0 is the root, 1 the enclosing block, 2 the condition, 3 the loop body.
+    if !hasScopeExit(block: state.blocks[2U64], scope: 3U64) { return false }
     match state.blocks[2U64].terminator {
         MidTerminator.Goto(target: val target) => { return target == 1U64 }
         _ => { return false }
