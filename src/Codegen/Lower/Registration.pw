@@ -784,7 +784,7 @@ pub impl Comp {
                 // As with methods, a named extension is one source-selectable
                 // bundle, not one bundle per defining module.  Its conformance
                 // key must therefore be unique across all of its parts.
-                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || self.moduleOf(offset: prior.defOffset) == self.moduleOf(offset: cf.defOffset)
+                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || prior.sourceModule == cf.sourceModule
                 if sameNamespace {
                     if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.traitStart == cf.traitStart && prior.typeId == cf.typeId && prior.subjectArgs.count() == cf.subjectArgs.count() {
                         // A conformance is a callable-like source surface: its

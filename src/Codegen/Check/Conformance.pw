@@ -81,7 +81,7 @@ pub impl Comp {
             if !(cf.derived) && cf.extId == 0U64 && !(self.isMacrointerfaceCompatConform(cf: cf)) {
                 val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.subjectArgs.count())
                 if ownerMod != 4000000000U64 {
-                    if self.moduleOf(offset: cf.defOffset) != ownerMod {
+                    if cf.sourceModule != ownerMod {
                         self.errorAt(offset: cf.defOffset, msg: "bare inter-trait conformance `impl B as A` must be declared in the subject trait's owner module; use a named extension for third-party additions (spec/08,09)")
                     }
                 }
@@ -609,7 +609,7 @@ pub impl Comp {
         if ownerMod == 4000000000U64 {
             return false
         }
-        if self.moduleOf(offset: cf.defOffset) != ownerMod {
+        if cf.sourceModule != ownerMod {
             return false
         }
         if !(self.moduleIsSyntaxRoot(mod: ownerMod)) {

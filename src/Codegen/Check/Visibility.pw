@@ -814,7 +814,7 @@ pub impl Comp {
     inout fn checkPublicConformanceSurface(cf: Conform) {
         if !(cf.isPub) { return }
         if cf.extId != 0U64 { return }
-        val useMod: U64 = self.moduleOf(offset: cf.defOffset)
+        val useMod: U64 = cf.sourceModule
         val receiver: Bind = self.typeDeclIdentityAt(useMod: useMod, start: cf.typeStart, len: cf.typeLen)
         if receiver.nameLen == 0U64 { return }
         val typeMod: U64 = self.moduleOf(offset: receiver.nameStart)

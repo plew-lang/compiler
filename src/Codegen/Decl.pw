@@ -47,7 +47,7 @@ pub impl Comp {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
             if t.nameId == traitId {
                 if t.arity == arity {
-                    return self.moduleOf(offset: t.nameStart)
+                    return t.sourceModule
                 }
             }
             i = self.decls.nextTraitOwnerNamed(index: i)
@@ -75,7 +75,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: id)
         while i < self.decls.traitOwnerCount() {
             val owner: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if owner.nameId == id && owner.arity == arity && self.moduleOf(offset: owner.nameStart) == self.modules.coreModule {
+            if owner.nameId == id && owner.arity == arity && owner.sourceModule == self.modules.coreModule {
                 return owner.nameStart
             }
             i = self.decls.nextTraitOwnerNamed(index: i)
@@ -110,7 +110,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
+            if t.nameId == nameId && t.arity == arity && t.sourceModule == mod {
                 return t.nameStart
             }
             i = self.decls.nextTraitOwnerNamed(index: i)
@@ -128,7 +128,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
+            if t.nameId == nameId && t.arity == arity && t.sourceModule == mod {
                 return t.nameStart
             }
             i = self.decls.nextTraitOwnerNamed(index: i)
@@ -168,7 +168,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: nameId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if t.nameId == nameId && self.moduleOf(offset: t.nameStart) == mod {
+            if t.nameId == nameId && t.sourceModule == mod {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
@@ -184,7 +184,7 @@ pub impl Comp {
                     mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.targetModule {
+                        if candidate.nameId == targetNameId && candidate.sourceModule == origin.targetModule {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
@@ -203,7 +203,7 @@ pub impl Comp {
                     mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
                     while oi < self.decls.traitOwnerCount() {
                         val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && self.moduleOf(offset: candidate.nameStart) == origin.targetModule {
+                        if candidate.nameId == targetNameId && candidate.sourceModule == origin.targetModule {
                             if found != 0U64 && found != candidate.nameStart { return 0U64 }
                             found = candidate.nameStart
                         }
@@ -253,7 +253,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if self.moduleOf(offset: t.nameStart) == mod && t.nameId == textId {
+            if t.sourceModule == mod && t.nameId == textId {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
@@ -290,7 +290,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if self.moduleOf(offset: t.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
+            if t.sourceModule == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
@@ -322,7 +322,7 @@ pub impl Comp {
         mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: textId)
         while i < self.decls.traitOwnerCount() {
             val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if self.moduleOf(offset: t.nameStart) == useMod && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: start, bLen: len) {
+            if t.sourceModule == useMod && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: start, bLen: len) {
                 if found != 0U64 && found != t.nameStart { return 0U64 }
                 found = t.nameStart
             }
@@ -778,7 +778,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
+            self.decls.conforms.append(<Conform sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
         }
     }
 

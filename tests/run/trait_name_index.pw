@@ -18,7 +18,7 @@ fn check(table: Decls, names: Array[U64]) {
 }
 fn add(table: inout Decls, names: inout Array[U64], name: U64) {
     val index = names.count()
-    table.registerTraitOwner(<TraitOwner nameStart=index + 1U64 nameLen=1U64 nameId=name arity=index % 3U64 />)
+    table.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=index + 1U64 nameLen=1U64 nameId=name arity=index % 3U64 />)
     names.append(name)
 }
 fn main() {
@@ -32,7 +32,7 @@ fn main() {
     }
     check(table: table, names: names)
     // A duplicate declaration must not overwrite its row or publish a new name.
-    table.registerTraitOwner(<TraitOwner nameStart=1U64 nameLen=99U64 nameId=259U64 arity=99U64 />)
+    table.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=1U64 nameLen=99U64 nameId=259U64 arity=99U64 />)
     check(table: table, names: names)
     mut val copy = table
     mut val copiedNames = names

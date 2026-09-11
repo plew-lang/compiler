@@ -281,7 +281,7 @@ pub impl Comp {
     // The sole semantic mutation for trait predeclaration.  AST and SyntaxFile
     // inputs decode to source identity/arity and then converge here.
     inout fn predeclareTraitIdentity(nameStart: U64, nameLen: U64, arity: U64) {
-        self.decls.registerTraitOwner(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
+        self.decls.registerTraitOwner(<TraitOwner sourceModule=self.moduleOf(offset: nameStart) nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
     }
 
     inout fn predeclareTraitItem(item: TopItemAst) {
@@ -824,7 +824,7 @@ pub impl Comp {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=cfExtId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
+            self.registerDeclaredConformance(cf: <Conform sourceModule=self.moduleOf(offset: im.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=cfExtId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.
@@ -940,7 +940,7 @@ pub impl Comp {
             val traitN: Bind = self.resolvedSyntaxImplTraitBind(im: im)
             mut val extId: U64 = 0U64
             if im.extName.end > im.extName.start { extId = intern(c: inout self, start: im.extName.start, len: im.extName.end - im.extName.start) }
-            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
+            self.registerDeclaredConformance(cf: <Conform sourceModule=self.moduleOf(offset: im.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
         }
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
         self.cur.typeParams = savedTP

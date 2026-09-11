@@ -1029,6 +1029,7 @@ pub impl TraitReqRange {
 // Parsed declaration identity, deliberately separate from the completed
 // TraitDef table used by semantic checks.
 export struct TraitOwner {
+    pub val sourceModule: U64
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64
@@ -1097,6 +1098,7 @@ export struct AssocBinding {
 }
 
 export struct Conform {
+    pub val sourceModule: U64
     pub val typeStart: U64
     pub val typeLen: U64
     pub val typeId: U64 = 0

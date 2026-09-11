@@ -3,9 +3,9 @@ import /Ir with { TraitOwner }
 import @Std/Io with { write }
 fn main() {
     mut val compiler: Comp = <Comp />
-    compiler.decls.registerTraitOwner(<TraitOwner nameStart=10U64 nameLen=4U64 nameId=7U64 arity=0U64 />)
-    compiler.decls.registerTraitOwner(<TraitOwner nameStart=20U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
-    compiler.decls.registerTraitOwner(<TraitOwner nameStart=30U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=10U64 nameLen=4U64 nameId=7U64 arity=0U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=20U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=30U64 nameLen=4U64 nameId=7U64 arity=1U64 />)
     if compiler.canonicalTraitOwner(start: 10U64, len: 4U64) != 10U64 { panic "canonical span lost" }
     if compiler.canonicalTraitOwner(start: 10U64, len: 3U64) != 0U64 { panic "incorrect length accepted" }
     if compiler.canonicalTraitOwner(start: 11U64, len: 4U64) != 0U64 { panic "noncanonical offset accepted" }
