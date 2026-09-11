@@ -2536,7 +2536,18 @@ pub impl Comp {
             val traitIdx: U64 = self.recordAnyTraitIndex(anyRef: targetRef)
             if traitIdx >= self.decls.traitCount() { return <ValueConversionProof.Missing /> }
             val trait: TraitDef = self.decls.traitAt(index: traitIdx)
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />)
+            mut val bindingParams: Array[Bind] = []
+            mut val bindingArgs: Array[U64] = []
+            if !self.anyBindingEnv(anyRef: targetRef, traitIdx: traitIdx, outParams: inout bindingParams, outArgs: inout bindingArgs) { return <ValueConversionProof.Missing /> }
+            // Associated-type bindings follow the declaration type parameters;
+            // only the latter identify the selected conformance instance.
+            mut val traitArgs: Array[U64] = []
+            mut val argument: U64 = 0U64
+            while argument < trait.typeParams.count() {
+                traitArgs.append(bindingArgs[argument])
+                argument += 1U64
+            }
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: sourceRef, traitId: trait.nameId, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=traitArgs />)
             if self.proofIsMissing(proof: proof) { return <ValueConversionProof.Missing /> }
             return <ValueConversionProof.ExistentialBox sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
         }

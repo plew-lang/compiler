@@ -1,0 +1,34 @@
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Bind, Conform, TraitDef, TypeRef, ValueConversionProof, StaticConformanceProof }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val subject = compiler.internBytes(s: "Subject")
+    val trait = compiler.internBytes(s: "Producer")
+    val parameter = compiler.internBytes(s: "Output")
+    val integer = compiler.internBytes(s: "I64")
+    val string = compiler.internBytes(s: "String")
+    val source = compiler.simpleTypeRef(nameStart: subject.nameStart, nameLen: subject.nameLen)
+    val integerType = compiler.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val stringType = compiler.simpleTypeRef(nameStart: string.nameStart, nameLen: string.nameLen)
+    val parameters = compiler.pushTraitBinds(binds: [<Bind nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId fieldStart=0U64 fieldLen=0U64 />])
+    compiler.decls.registerTrait(<TraitDef nameStart=trait.nameStart nameLen=trait.nameLen nameId=trait.nameId typeParams=parameters />)
+    compiler.decls.conforms.append(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTy=source traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId traitArgs=compiler.pushConformTypes(types: [integerType]) derived=false />)
+    val target = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integerType] isAny=true />)
+    val wrongTarget = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[stringType] isAny=true />)
+    match compiler.callArgumentConversion(sourceRef: source, targetRef: target) {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => {
+            match proof {
+                StaticConformanceProof.ConcreteWitness(witness: val witness) => { print(witness.conformIdx) }
+                _ => { print(0U64) }
+            }
+        }
+        _ => { print(0U64) }
+    }
+    match compiler.callArgumentConversion(sourceRef: source, targetRef: wrongTarget) {
+        ValueConversionProof.Missing => { print("missing") }
+        _ => { print("wrong-proof") }
+    }
+}

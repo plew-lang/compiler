@@ -67,7 +67,7 @@ pub impl LlvmCtx {
         // paramLlvmTy / llvmFnRetTy ground them.
         mut val envParams: Array[Bind] = []
         mut val envArgs: Array[U64] = []
-        val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+        val haveEnv: Bool = c.anyBindingEnv(anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
         val savedEP: Array[Bind] = c.cur.typeParams
         val savedEA: Array[U64] = c.cur.typeArgs
         if haveEnv {
@@ -339,7 +339,7 @@ pub impl LlvmCtx {
         // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
         mut val envP: Array[Bind] = []
         mut val envA: Array[U64] = []
-        anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
+        c.anyBindingEnv(anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
         val bindKey: U64 = anyBindKey(c: inout c, args: envA)
         mut val ci: U64 = 0
         while ci < self.anyVtType.count() {
@@ -725,7 +725,7 @@ pub impl LlvmCtx {
         // bindings (matching the thunk built in buildAnyThunk).
         mut val envParams: Array[Bind] = []
         mut val envArgs: Array[U64] = []
-        val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+        val haveEnv: Bool = c.anyBindingEnv(anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
         val savedEP: Array[Bind] = c.cur.typeParams
         val savedEA: Array[U64] = c.cur.typeArgs
         if haveEnv {
