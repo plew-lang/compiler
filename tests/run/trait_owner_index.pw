@@ -38,5 +38,11 @@ fn main() {
     verify(table: copy, nameId: 99U64, offset: 18446744073709551615U64)
     if table.hasTraitName(nameId: 99U64) || copy.hasTraitName(nameId: 18446744073709551615U64) { panic "copy mutation escaped" }
     if table.traitOwnerAt(index: 80U64).nameLen != 4U64 || copy.traitOwnerAt(index: 80U64).nameLen != 5U64 { panic "copy row mutation escaped" }
+    table.registerTraitOwner(<TraitOwner nameStart=10000U64 nameLen=6U64 nameId=0U64 arity=1U64 />)
+    copy.registerTraitOwner(<TraitOwner nameStart=10001U64 nameLen=7U64 nameId=0U64 arity=2U64 />)
+    verify(table: table, nameId: 0U64, offset: 10000U64)
+    verify(table: copy, nameId: 0U64, offset: 10001U64)
+    verify(table: table, nameId: 0U64, offset: 10001U64)
+    verify(table: copy, nameId: 0U64, offset: 10000U64)
     write(s: "trait-owner-index-ok\n")
 }
