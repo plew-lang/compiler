@@ -6,6 +6,7 @@ struct Store {
 }
 
 pub impl Store {
+    factory
     inout fn appendNode() {
         // Reading the field to form the inserted value must not leave a shared
         // temporary whose later inout append aliases stale storage.
