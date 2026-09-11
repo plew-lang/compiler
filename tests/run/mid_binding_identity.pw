@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { StructDef, Expr, Stmt, identValueCode }
+import /Ir with { StructDef, Expr, Stmt, SemanticExprType, identValueCode }
 import /Mid with { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
@@ -24,6 +24,8 @@ fn main() {
     c.typeCache.identTarget.set(i: 0U64, value: 60U64)
     c.arena.exprs.append(<Expr.Ident start=60U64 len=4U64 />)
     c.arena.exprs.append(<Expr.Move operand=0U64 isBorrow=false />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.typeCache.identBind.append(0I64)
     c.typeCache.identTarget.append(0U64)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=40U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=1U64 />)
@@ -34,9 +36,9 @@ fn main() {
     match letState.blocks[0U64].statements[0U64] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
-                MidRvalue.Use(operand: val operand) => {
+                MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
                     match operand {
-                        MidOperand.Move(place: val source) => { hasAssign = destination.local == 1U64 && source.local == input }
+                        MidOperand.Move(place: val source) => { hasAssign = statement == 0U64 && target == valueTerm && destination.local == 1U64 && source.local == input }
                         _ => {}
                     }
                 }
@@ -47,17 +49,20 @@ fn main() {
     }
     c.arena.exprs.append(<Expr.Ident start=40U64 len=1U64 />)
     c.arena.exprs.append(<Expr.Move operand=2U64 isBorrow=false />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.typeCache.identBind.append(identValueCode())
     c.typeCache.identTarget.append(40U64)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=50U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=3U64 />)
+    val secondStart = letState.blocks[0U64].statements.count()
     val moveResult = buildMidLet(c: inout c, state: inout letState, stmtId: 1U64)
     mut val hasMove: Bool = false
-    match letState.blocks[0U64].statements[2U64] {
+    match letState.blocks[0U64].statements[secondStart] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
-                MidRvalue.Use(operand: val operand) => {
+                MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
                     match operand {
-                        MidOperand.Move(place: val moved) => { hasMove = destination.local == 2U64 && moved.local == 1U64 }
+                        MidOperand.Move(place: val moved) => { hasMove = statement == 1U64 && target == valueTerm && destination.local == 2U64 && moved.local == 1U64 }
                         _ => {}
                     }
                 }

@@ -41,10 +41,10 @@ fn main() {
     match state.blocks[0U64].statements[0U64] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
-                MidRvalue.Use(operand: val operand) => {
+                MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
                     match operand {
                         MidOperand.Copy(place: val place) => {
-                            if destination.local == 2U64 && place.local == items && place.typeTerm == integerTerm && place.projections.count() == 1U64 {
+                            if statement == 0U64 && target == integerTerm && destination.local == 2U64 && place.local == items && place.typeTerm == integerTerm && place.projections.count() == 1U64 {
                                 match place.projections[0U64] {
                                     MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
                                         correctPlace = indexLocal == index && typeTerm == integerTerm

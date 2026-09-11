@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Block, Expr, SemanticExprType, StructDef, Stmt, identValueCode }
-import /Mid with { MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeMidOwnership, buildMidBlock, buildMidIf, elaborateMidDrops, verifyMidBody }
+import /Ir with { Block, Expr, SemanticExprType, StructDef, Stmt, Func, InstanceEnvironment, FinalStorageResolution, ValueConversionProof, identValueCode }
+import /Mid with { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeMidOwnership, buildMidBlock, buildMidIf, elaborateMidDrops, instantiateMidBody, verifyMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -33,7 +33,19 @@ fn main() {
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
     val ownership = analyzeMidOwnership(body: body)
     val joinState: MidOwnership = ownership[3U64][0U64]
-    val elaborated = elaborateMidDrops(body: body)
+    // The builder yields parametric storage boundaries. Publish the concrete
+    // frontend fact and instantiate before drop elaboration and verification.
+    c.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=c.pushFuncParams(params: [])
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />)
+    val instance = c.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    val identity = c.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
+    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=0U64 sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
+    val concrete = instantiateMidBody(c: inout c, body: body, bodyId: instance)
+    mut val instantiated: Bool = false
+    match concrete.error { MidInstantiateError.None => { instantiated = true } _ => {} }
+    val elaborated = elaborateMidDrops(body: concrete.body)
     mut val hasConditionalDrop: Bool = false
     match elaborated.blocks[3U64].statements[0U64] {
         MidStatement.ConditionalDrop(place: _, flag: _) => { hasConditionalDrop = true }
@@ -55,7 +67,7 @@ fn main() {
     match result { MidBuildError.None => { built = true } _ => {} }
     match joinState {
         MidOwnership.MaybeOwned => {
-            if built && fileLocal == 0U64 && state.blocks.count() == 4U64 && hasConditionalDrop && elaboratedValid && returned {
+            if built && instantiated && fileLocal == 0U64 && state.blocks.count() == 4U64 && hasConditionalDrop && elaboratedValid && returned {
                 write(s: "if-move-cfg\n")
             } else {
                 write(s: "wrong-cfg\n")
