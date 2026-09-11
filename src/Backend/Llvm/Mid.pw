@@ -3469,7 +3469,100 @@ pub impl LlvmCtx {
         }
     }
 
+    fn midCanonicalBindingLocal(c: Comp, body: MidBodyNode, binding: U64) -> U64 {
+        mut val index: U64 = 0U64
+        while index < body.locals.len {
+            if c.mid.locals[body.locals.start + index].sourceNameStart == binding { return index }
+            index += 1U64
+        }
+        return body.locals.len
+    }
+
+    inout fn midCanonicalClosureCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        mut val functionType: U64 = 0U64
+        match selected.target {
+            CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
+                functionType = ref
+                val local: U64 = self.midCanonicalBindingLocal(c: c, body: body, binding: binding)
+                if local >= body.locals.len || !c.typeRefEq(a: c.mid.locals[body.locals.start + local].typeTerm, b: ref) { return <MidCallPreflight.Receiver /> }
+                if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.Receiver /> }
+            }
+            CallTarget.ClosureField(fieldIndex: val field, fnTypeRef: val ref) => {
+                functionType = ref
+                if selected.recvTypeRef == 0U64 || selected.recvTypeRef >= c.arena.typeCount() || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.Borrow />) { return <MidCallPreflight.Receiver /> }
+                val receiverType: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: selected.recvTypeRef)
+                if LLVMGetTypeKind(receiverType) != 10U32 || field >= (LLVMCountStructElementTypes(receiverType) as U64) { return <MidCallPreflight.Receiver /> }
+            }
+            _ => { return <MidCallPreflight.Target /> }
+        }
+        if functionType == 0U64 || functionType >= c.arena.typeCount() || !c.isFnType(ref: functionType) { return <MidCallPreflight.Callee /> }
+        val signature: TypeRef = c.arena.typeAt(index: functionType)
+        if signature.args.count() != term.args.len + 1U64 || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <MidCallPreflight.ArgumentShape /> }
+        mut val index: U64 = 0U64
+        while index < term.args.len {
+            if !c.typeRefEq(a: c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index), b: signature.args[index + 1U64]) { return <MidCallPreflight.ArgumentShape /> }
+            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) { CallArgumentPassing.Borrow => {} _ => { return <MidCallPreflight.Argument /> } }
+            if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index]) { return <MidCallPreflight.Argument /> }
+            index += 1U64
+        }
+        if !c.functionTypeReturnsUnit(ref: functionType) {
+            if term.destination == 0U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: term.destination) || !c.typeRefEq(a: selected.resultTypeRef, b: signature.args[0U64]) { return <MidCallPreflight.Result /> }
+        }
+        return <MidCallPreflight.None />
+    }
+
+    inout fn midCanonicalEmitClosureCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        mut val functionType: U64 = 0U64
+        mut val closure: LLVMValueRef = LLVMConstNull(self.ptrty)
+        match selected.target {
+            CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
+                functionType = ref
+                val local: U64 = self.midCanonicalBindingLocal(c: c, body: body, binding: binding)
+                closure = self.midCanonicalReadPlace(c: inout c, body: body, place: <MidPlaceNode rootTag=1U64 local=local typeTerm=ref />)
+            }
+            CallTarget.ClosureField(fieldIndex: val field, fnTypeRef: val ref) => {
+                functionType = ref
+                val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+                closure = LLVMBuildExtractValue(self.b, self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand), field, anon())
+            }
+            _ => { return false }
+        }
+        val function: LLVMValueRef = LLVMBuildExtractValue(self.b, closure, 0U64, anon())
+        mut val values: Array[LLVMValueRef] = [LLVMBuildExtractValue(self.b, closure, 1U64, anon())]
+        mut val types: Array[LLVMTypeRef] = [self.ptrty]
+        mut val index: U64 = 0U64
+        while index < term.args.len {
+            val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+            val parameter: TypeRef = c.arena.typeAt(index: parameterRef)
+            val parameterType: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: parameterRef)
+            mut val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index])
+            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: parameterType, unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen)) }
+            values.append(value)
+            types.append(parameterType)
+            index += 1U64
+        }
+        val unit: Bool = c.functionTypeReturnsUnit(ref: functionType)
+        mut val resultType: LLVMTypeRef = self.voidty
+        if !unit { resultType = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
+        val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
+        val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), values.count(), anon())
+        if !unit { LLVMBuildStore(self.b, result, self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64])) }
+        return true
+    }
+
     inout fn midCanonicalCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        val closure: MidCallPreflight = self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
+        match closure { MidCallPreflight.Target => {} _ => { return closure } }
         val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
         match direct {
             MidCallPreflight.Target => {
@@ -3493,6 +3586,11 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
+            MidCallPreflight.None => { return self.midCanonicalEmitClosureCall(c: inout c, body: body, terminatorId: terminatorId) }
+            MidCallPreflight.Target => {}
+            _ => { return false }
+        }
         match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
             MidCallPreflight.None => { return self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {
