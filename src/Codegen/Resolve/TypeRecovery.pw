@@ -200,6 +200,9 @@ pub impl Comp {
             }
             return false
         }
+        // Array TypeInfo carries the element name; it cannot match a scalar
+        // parameter merely because that scalar has the same name.
+        if ti.kind == 3 { return false }
         if ti.kind == 2 {
             // A source set is ordinary named-type identity.  Compare it even
             // when the base local has not acquired a TypeRef yet: `p#E` must

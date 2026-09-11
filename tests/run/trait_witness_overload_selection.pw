@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+trait Picker {
+    fn pick(value: I64) -> I64
+    fn pick(value: String) -> I64
+    fn pick(value: Array[I64]) -> I64
+    fn pick(value: Array[String]) -> I64
+}
+pub impl Picker {
+    fn fromInteger() -> I64 { return self.pick(value: 7I64) }
+    fn fromString() -> I64 { return self.pick(value: "selected") }
+    fn fromIntegerArray() -> I64 { return self.pick(value: [7I64]) }
+    fn fromStringArray() -> I64 { return self.pick(value: ["selected"]) }
+}
+struct Selection {}
+pub impl Selection { factory }
+pub impl Selection as Picker {
+    fn pick(value: I64) -> I64 { return 11I64 }
+    fn pick(value: String) -> I64 { return 22I64 }
+    fn pick(value: Array[I64]) -> I64 { return 33I64 }
+    fn pick(value: Array[String]) -> I64 { return 44I64 }
+}
+fn main() {
+    val selection = <Selection />
+    print(selection.fromInteger())
+    print(selection.fromString())
+    print(selection.fromIntegerArray())
+    print(selection.fromStringArray())
+}

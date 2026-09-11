@@ -1,0 +1,8 @@
+trait Picker {
+    fn pick(value: I32) -> I64
+    fn pick(value: I64) -> I64
+}
+pub impl Picker {
+    fn choose() -> I64 { return self.pick(value: 7) }
+}
+fn main() {}

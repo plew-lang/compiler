@@ -3424,14 +3424,14 @@ pub impl Comp {
     // `B as A`, an A requirement uses the latter edge while `self.base()` in
     // its witness body uses the former.  Selecting the terminal unconditionally
     // loses that distinction and makes nested requirement dispatch impossible.
-    inout fn bodyProofConformanceForTrait(traitIdx: U64) -> U64 {
-        if traitIdx >= self.decls.traitCount() { return 0U64 }
+    inout fn proofWitnessForTrait(proof: StaticConformanceProof, traitIdx: U64) -> WitnessMatch {
+        if traitIdx >= self.decls.traitCount() { return <WitnessMatch /> }
         val requested: TraitDef = self.decls.traitAt(index: traitIdx)
-        match self.cur.bodyEnvironment.proof {
+        match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conforms.count() {
                     val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
-                    if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness.conformIdx }
+                    if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness }
                 }
             }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
@@ -3443,14 +3443,46 @@ pub impl Comp {
                     val witness: WitnessMatch = edges[edgeIdx]
                     if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conforms.count() {
                         val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
-                        if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness.conformIdx }
+                        if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness }
                     }
                     edgeIdx += 1U64
                 }
             }
             _ => {}
         }
-        return 0U64
+        return <WitnessMatch />
+    }
+
+    // Requirement selection compares concrete parameter terms, not just arity.
+    // The witness owns the impl substitutions; the target trait owns its binders.
+    inout fn proofRequirementSelectorMatches(source: Func, requirement: Func, witness: WitnessMatch, traitIdx: U64, receiverRef: U64, proof: StaticConformanceProof) -> Bool {
+        if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.params.count() != requirement.params.count() { return false }
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traitCount() { return false }
+        val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
+        val trait: TraitDef = self.decls.traitAt(index: traitIdx)
+        mut val params: Array[Bind] = self.copyTraitBinds(binds: trait.typeParams)
+        mut val args: Array[U64] = self.groundedWitnessTraitArgs(cf: conform, witness: witness)
+        mut val associated: U64 = 0U64
+        while associated < trait.assocTypes.count() {
+            val binding: Bind = self.traitBindAt(binds: trait.assocTypes, index: associated)
+            params.append(binding)
+            args.append(self.associatedOutputInProof(proof: proof, traitOwner: trait.nameStart, assocId: binding.nameId))
+            associated += 1U64
+        }
+        val environment: InstanceEnvironment = <InstanceEnvironment params=params args=args receiverRef=receiverRef proof=proof />
+        mut val parameter: U64 = 0U64
+        while parameter < source.params.count() {
+            val actual: Param = self.funcParamAt(params: source.params, index: parameter)
+            val expected: Param = self.funcParamAt(params: requirement.params, index: parameter)
+            if actual.noLabel != expected.noLabel || (!actual.noLabel && actual.nameId != expected.nameId) { return false }
+            val actualTerm: U64 = self.groundWitnessTypeTerm(ref: actual.ty, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness)
+            val actualRef: U64 = self.groundTermForBody(ref: actualTerm, environment: environment, selfRef: receiverRef, itemRef: 0U64)
+            val requiredTerm: U64 = self.groundTraitRequirementType(ref: expected.ty, traitIdx: traitIdx, receiverRef: receiverRef, params: params, args: args)
+            val requiredRef: U64 = self.groundTermForBody(ref: requiredTerm, environment: environment, selfRef: receiverRef, itemRef: 0U64)
+            if !self.typeRefEq(a: actualRef, b: requiredRef) { return false }
+            parameter += 1U64
+        }
+        return true
     }
 
     // Select a concrete member through the exact proof edge, not by
@@ -3460,7 +3492,8 @@ pub impl Comp {
     // selected path's source trait/extension identity.
     inout fn traitSelfConcreteWitness(traitIdx: U64, reqIdx: U64) -> U64 {
         if traitIdx >= self.decls.traitCount() || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return self.arena.functionCount() }
-        val conformIdx: U64 = self.bodyProofConformanceForTrait(traitIdx: traitIdx)
+        val witness: WitnessMatch = self.proofWitnessForTrait(proof: self.cur.bodyEnvironment.proof, traitIdx: traitIdx)
+        val conformIdx: U64 = witness.conformIdx
         if conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return self.arena.functionCount() }
         val conform: Conform = self.decls.conforms[conformIdx - 1U64]
         val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
@@ -3469,7 +3502,7 @@ pub impl Comp {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.functionCount() {
                 val source: Func = self.arena.functionAt(index: sourceIdx)
-                if source.nameId == req.nameId && source.params.count() == req.params.count() {
+                if self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: self.cur.bodyEnvironment.receiverRef, proof: self.cur.bodyEnvironment.proof) {
                     // A concrete impl owns its witness body directly.  The
                     // proof's witnessFuncIds is already the exact semantic
                     // selection, so do not require an imaginary provided
