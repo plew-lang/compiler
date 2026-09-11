@@ -1422,6 +1422,7 @@ fn midTemplateReceiver(template: CallTemplate) -> CallTemplateReceiver {
     match template.kind {
         CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proofId: _) => { return receiver }
         CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, resultTerm: _) => { return receiver }
+        CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: _) => { return receiver }
         _ => { return <CallTemplateReceiver.None /> }
     }
 }
@@ -1452,6 +1453,7 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     if callee >= c.arena.functionCount() {
         match template.kind {
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => {}
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => {}
             _ => { return <MidReceiverBuild /> }
         }
     } else if !(c.arena.functionAt(index: callee).hasRecv) {

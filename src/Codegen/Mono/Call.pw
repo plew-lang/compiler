@@ -1948,6 +1948,7 @@ pub impl Comp {
             }
             CallTarget.ClosureField(fieldIndex: _, fnTypeRef: val ref) => {
                 functionType = ref
+                receiverPassing = <CallReceiverPassing.Borrow />
                 dynamic = true
             }
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val requirementSlot) => {

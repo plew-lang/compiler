@@ -5,7 +5,7 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
@@ -795,11 +795,11 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
     if resolutionId == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
     val resolution: U64 = resolutionId - 1U64
     val selected: CallResolution = c.arena.finalCallees[resolution]
-    if selected.callee >= c.arena.functionCount() || selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
+    if selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
         return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionArity /> />
     }
-    val callee: Func = c.arena.functionAt(index: selected.callee)
-    if callee.params.count() != term.args.len || !midReceiverPassingMatches(callee: callee, passing: selected.receiverPassing) {
+    val signature: MidSelectedSignature = midSelectedSignature(c: inout c, selected: selected)
+    if !midSignatureMatches(signature: signature, count: term.args.len, passing: selected.receiverPassing) {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid instantiate-passing-reject stage=callee resolution=")
             eprintU64(n: resolution)
@@ -808,7 +808,7 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
             eprint(text: " args=")
             eprintU64(n: term.args.len)
             eprint(text: " params=")
-            eprintU64(n: callee.params.count())
+            eprintU64(n: selected.parameterTypeRefs.len)
             eprint(text: "\n")
         }
         return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
@@ -840,7 +840,7 @@ fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, so
         val conversion: U64 = c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)
         val targetType: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
         val passing: CallArgumentPassing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
-        if !midArgumentPassingMatches(parameter: c.funcParamAt(params: callee.params, index: argumentI), passing: passing) {
+        if !midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing) {
             return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
         }
         mut val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, itemRef: itemRef)
@@ -951,8 +951,65 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
     return <MidCanonicalInstantiation body=<MidCanonicalBody body=c.mid.bodies.count() /> error=error />
 }
 
-fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
-    if !(callee.hasRecv) {
+enum MidSelectedSignature {
+    Invalid
+    Declaration(function: Func, hasReceiver: Bool)
+    Closure(functionType: TypeRef, hasReceiver: Bool)
+}
+
+fn midSelectedSignature(c: inout Comp, selected: CallResolution) -> MidSelectedSignature {
+    mut val functionType: U64 = 0U64
+    mut val hasReceiver: Bool = false
+    match selected.target {
+        CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: val ref) => { functionType = ref }
+        CallTarget.ClosureField(fieldIndex: _, fnTypeRef: val ref) => {
+            functionType = ref
+            hasReceiver = true
+        }
+        CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+            if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <MidSelectedSignature.Invalid /> }
+            return <MidSelectedSignature.Declaration function=c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64) hasReceiver=true />
+        }
+        _ => {
+            if selected.callee >= c.arena.functionCount() { return <MidSelectedSignature.Invalid /> }
+            return <MidSelectedSignature.Declaration function=c.arena.functionAt(index: selected.callee) hasReceiver=c.arena.functionAt(index: selected.callee).hasRecv />
+        }
+    }
+    if functionType == 0U64 || functionType >= c.arena.typeCount() { return <MidSelectedSignature.Invalid /> }
+    val signature: TypeRef = c.arena.typeAt(index: functionType)
+    if !c.isFnType(ref: functionType) || signature.args.count() == 0U64 { return <MidSelectedSignature.Invalid /> }
+    return <MidSelectedSignature.Closure functionType=signature hasReceiver=hasReceiver />
+}
+
+fn midSignatureMatches(signature: MidSelectedSignature, count: U64, passing: CallReceiverPassing) -> Bool {
+    match signature {
+        MidSelectedSignature.Invalid => { return false }
+        MidSelectedSignature.Declaration(function: val function, hasReceiver: val hasReceiver) => {
+            return function.params.count() == count && midReceiverPassingMatches(callee: function, passing: passing, hasReceiver: hasReceiver)
+        }
+        MidSelectedSignature.Closure(functionType: val functionType, hasReceiver: val hasReceiver) => {
+            if functionType.args.count() != count + 1U64 { return false }
+            if hasReceiver { match passing { CallReceiverPassing.Borrow => { return true } _ => { return false } } }
+            match passing { CallReceiverPassing.None => { return true } _ => { return false } }
+        }
+    }
+}
+
+fn midSignatureArgumentMatches(c: Comp, signature: MidSelectedSignature, index: U64, passing: CallArgumentPassing) -> Bool {
+    match signature {
+        MidSelectedSignature.Invalid => { return false }
+        MidSelectedSignature.Declaration(function: val function, hasReceiver: _) => {
+            return index < function.params.count() && midArgumentPassingMatches(parameter: c.funcParamAt(params: function.params, index: index), passing: passing)
+        }
+        MidSelectedSignature.Closure(functionType: val functionType, hasReceiver: _) => {
+            if index + 1U64 >= functionType.args.count() { return false }
+            match passing { CallArgumentPassing.Borrow => { return true } _ => { return false } }
+        }
+    }
+}
+
+fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing, hasReceiver: Bool) -> Bool {
+    if !hasReceiver {
         match passing { CallReceiverPassing.None => { return true } _ => { return false } }
     }
     if callee.selfInout { match passing { CallReceiverPassing.Inout => { return true } _ => { return false } } }
@@ -1488,13 +1545,11 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                             val conversions: Array[U64] = c.copyFinalCalleeConversions(conversions: selected.argumentConversions)
                             val parameterTypes: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
                             val argumentPassings: Array[CallArgumentPassing] = c.copyFinalCalleeArgumentPassings(passings: selected.argumentPassings)
-                            if selected.callee >= c.arena.functionCount() || conversions.count() != rawArgs.count() || parameterTypes.count() != rawArgs.count() || argumentPassings.count() != rawArgs.count() {
+                            if conversions.count() != rawArgs.count() || parameterTypes.count() != rawArgs.count() || argumentPassings.count() != rawArgs.count() {
                                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionArity /> }
                             } else {
-                                val calleeDef: Func = c.arena.functionAt(index: selected.callee)
-                                if calleeDef.params.count() != rawArgs.count() {
-                                    if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionArity /> }
-                                } else if !(midReceiverPassingMatches(callee: calleeDef, passing: selected.receiverPassing)) {
+                                val signature: MidSelectedSignature = midSelectedSignature(c: inout c, selected: selected)
+                                if !midSignatureMatches(signature: signature, count: rawArgs.count(), passing: selected.receiverPassing) {
                                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionPassing /> }
                                 } else {
                                 mut val args: Array[MidOperand] = rawArgs
@@ -1504,7 +1559,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                                 while argumentI < args.count() {
                                     val conversion: U64 = conversions[argumentI]
                                     val passing: CallArgumentPassing = argumentPassings[argumentI]
-                                    if !(midArgumentPassingMatches(parameter: c.funcParamAt(params: calleeDef.params, index: argumentI), passing: passing)) {
+                                    if !(midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing)) {
                                         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionPassing /> }
                                     }
                                     if !(c.conversionProofIsIdentity(id: conversion)) {
