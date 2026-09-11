@@ -2220,6 +2220,11 @@ export struct Arena {
     mut val concreteTypeNameIds: Set[U64] = Set.new()
     mut val funcs: Array[Func] = []
     mut val structs: Array[StructDef] = []
+    mut val structNameHeads: Dictionary[U64, U64] = [:]
+    mut val structNameTails: Dictionary[U64, U64] = [:]
+    mut val genericStructNameHeads: Dictionary[U64, U64] = [:]
+    mut val concreteStructNameHeads: Dictionary[U64, U64] = [:]
+    mut val structNameNext: Array[U64] = []
     mut val enums: Array[EnumDef] = []
     // Canonical scalar semantic type rows. `types` is the legacy mirror while
     // consumers migrate; both tables have the same index during that period.

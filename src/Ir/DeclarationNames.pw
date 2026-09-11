@@ -22,9 +22,51 @@ pub impl Arena {
     }
 
     inout fn registerStruct(declaration~: StructDef) {
+        val entry = self.structs.count() + 1U64
+        val tail = self.structNameTails.getOr(key: declaration.nameId, fallback: 0U64)
+        self.structNameNext.append(0U64)
+        if tail == 0U64 {
+            self.structNameHeads[declaration.nameId] = entry
+        } else {
+            self.structNameNext[tail - 1U64] = entry
+        }
+        self.structNameTails[declaration.nameId] = entry
+        if declaration.typeParams.count() == 0U64 {
+            if self.concreteStructNameHeads.getOr(key: declaration.nameId, fallback: 0U64) == 0U64 {
+                self.concreteStructNameHeads[declaration.nameId] = entry
+            }
+        } else {
+            if self.genericStructNameHeads.getOr(key: declaration.nameId, fallback: 0U64) == 0U64 {
+                self.genericStructNameHeads[declaration.nameId] = entry
+            }
+        }
         if declaration.typeParams.count() == 0U64 { self.concreteTypeNameIds.insert(declaration.nameId) }
         for val parameter in declaration.typeParams { self.typeParameterNameIds.insert(parameter.nameId) }
         self.structs.append(declaration)
+    }
+
+    fn firstStructNamed(nameId: U64) -> U64 {
+        val entry = self.structNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.structs.count()
+    }
+
+    fn firstGenericStructNamed(nameId: U64) -> U64 {
+        val entry = self.genericStructNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.structs.count()
+    }
+
+    fn firstConcreteStructNamed(nameId: U64) -> U64 {
+        val entry = self.concreteStructNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.structs.count()
+    }
+
+    fn nextStructNamed(index: U64) -> U64 {
+        val entry = self.structNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.structs.count()
     }
 
     inout fn registerEnum(declaration~: EnumDef) {

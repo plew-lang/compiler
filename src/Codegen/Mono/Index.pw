@@ -6,17 +6,7 @@
 pub impl Comp {
     inout fn genericStructIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: i)
-            if s.typeParams.count() > 0 {
-                if s.nameId == qId {
-                    return i
-                }
-            }
-            i += 1
-        }
-        return self.arena.structCount()
+        return self.arena.firstGenericStructNamed(nameId: qId)
     }
 
     // Index in c.arena.structs of ANY struct named (nameStart,nameLen) — generic OR
@@ -25,14 +15,7 @@ pub impl Comp {
     // arguments (`struct Bar` then `Bar[I32]`), which the generic-only lookup misses.
     inout fn anyStructIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.structCount() {
-            if self.arena.structAt(index: i).nameId == qId {
-                return i
-            }
-            i += 1
-        }
-        return self.arena.structCount()
+        return self.arena.firstStructNamed(nameId: qId)
     }
 
     // Index in c.arena.enums of ANY enum named (nameStart,nameLen) — generic or not.
