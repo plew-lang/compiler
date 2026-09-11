@@ -3924,7 +3924,7 @@ pub impl LlvmCtx {
             if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: targetTy, unsigned: false) }
             if statement.tag == 9U64 {
                 if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len || !c.mid.locals[body.locals.start + destination.local].isCaptureCell { return false }
-                val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(targetTy), cap: 1U64)
+                val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(targetTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                 LLVMBuildStore(self.b, cell, self.midCanonicalLocalPtr(body: body, local: destination.local))
                 LLVMBuildStore(self.b, value, cell)
             } else {

@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidBlockNode, MidStatementNode, MidTerminatorNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidRange }
+import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidBlockNode, MidStatementNode, MidTerminatorNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidRange, MidLocalDecl }
 
 // Structural validation must follow the current canonical schema, including
 // rejection of malformed references in the newer closure and try operations.
@@ -33,5 +33,17 @@ fn main() {
     print(arena.isWellFormed(body: body))
     arena.terminators.set(i: 0U64, value: <MidTerminatorNode tag=5U64 />)
     arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=20U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.rvalues.set(i: 0U64, value: <MidRvalueNode tag=1U64 operand=1U64 />)
+    arena.locals.append(<MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />)
+    arena.bodies.set(i: 0U64, value: <MidBodyNode locals=<MidRange start=0U64 len=1U64 /> blocks=<MidRange start=0U64 len=1U64 /> entry=0U64 />)
+    arena.statements.set(i: 0U64, value: <MidStatementNode tag=9U64 destination=1U64 value=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.locals.set(i: 0U64, value: <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=false />)
+    print(arena.isWellFormed(body: body))
+    arena.locals.set(i: 0U64, value: <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />)
+    arena.statements.set(i: 0U64, value: <MidStatementNode tag=9U64 destination=1U64 />)
+    print(arena.isWellFormed(body: body))
+    arena.statements.set(i: 0U64, value: <MidStatementNode tag=9U64 value=1U64 />)
     print(arena.isWellFormed(body: body))
 }
