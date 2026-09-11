@@ -54,5 +54,8 @@ fn main() {
     verify(arena: copy, nameId: 0U64)
     verify(arena: arena, nameId: 18446744073709551615U64)
     verify(arena: copy, nameId: 18446744073709551615U64)
+    if arena.structCount() != 82U64 || copy.structCount() != 82U64 { panic "copy row mutation escaped" }
+    if arena.firstConcreteStructNamed(nameId: 18446744073709551615U64) != arena.structCount() { panic "copy concrete index escaped" }
+    if copy.firstGenericStructNamed(nameId: 18446744073709551615U64) != copy.structCount() { panic "original generic index escaped" }
     write(s: "struct-name-index-ok\n")
 }
