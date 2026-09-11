@@ -330,13 +330,14 @@ pub impl LlvmCtx {
                 }
                 if exTy < c.arena.typeCount() {
                     val et: TypeRef = c.arena.typeAt(index: exTy)
-                    if et.nameLen > 0U64 {
-                        if c.arena.bytes[et.nameStart] == 40U8 {
-                            val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
-                            if rreg < self.genStructRefs.count() {
-                                self.expectedTy = 0U64
-                                return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: self.genStructDefs[rreg]), sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
-                            }
+                    if et.isRecord {
+                        // Grounded record terms may retain the template's name.
+                        // Use the same structural layout identity as llvmTypeOfRef.
+                        val layout: U64 = c.recordStructIndex(ref: exTy)
+                        val rreg: U64 = self.structSlotForSidx(structIndex: layout)
+                        if rreg < self.genStructRefs.count() {
+                            self.expectedTy = 0U64
+                            return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: layout), sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
                         }
                     }
                 }
