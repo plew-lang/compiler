@@ -781,7 +781,18 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
     }
     val term: U64 = c.semanticExprTerm(exprId: exprId)
-    if term == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    if term == 0U64 {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid call result term missing expr=")
+            eprintU64(n: exprId)
+            eprint(text: " offset=")
+            eprintU64(n: c.exprOffset(id: exprId))
+            eprint(text: " owner=")
+            eprintU64(n: state.sourceFunction)
+            eprint(text: "\n")
+        }
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> />
+    }
     val local: U64 = addMidTemporary(state: inout state, typeTerm: term)
     val place: MidPlace = <MidPlace local=local typeTerm=term />
     val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
