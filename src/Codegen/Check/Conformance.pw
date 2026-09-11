@@ -465,21 +465,13 @@ pub impl Comp {
     // edges as present for every source-set; supplying one bundle id gives
     // exactly `bare ∪ bundle`.
     inout fn checkTraitSubjectCycleBundles() {
+        mut val seen: Set[U64] = Set.new()
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
-            if cf.extId != 0U64 {
-                mut val seen: Bool = false
-                mut val earlier: U64 = 0U64
-                while earlier < ci {
-                    if self.decls.conforms[earlier].extId == cf.extId {
-                        seen = true
-                    }
-                    earlier += 1U64
-                }
-                if !seen {
-                    self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
-                }
+            if cf.extId != 0U64 && !seen.contains(cf.extId) {
+                seen.insert(cf.extId)
+                self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
             }
             ci += 1U64
         }

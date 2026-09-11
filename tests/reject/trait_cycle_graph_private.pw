@@ -1,0 +1,5 @@
+import /TraitCycleGraph with { TraitCycleGraph }
+fn main() {
+    mut val graph = <TraitCycleGraph />
+    graph.conformIndices.append(1U64)
+}
