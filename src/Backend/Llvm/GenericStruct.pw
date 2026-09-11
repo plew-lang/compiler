@@ -12,6 +12,33 @@
 // emission, by which point all bodies are set).
 
 pub impl LlvmCtx {
+    // All struct instances enter through this method, including demand registration.
+    // Publish the slot before any recursive body construction can query it.
+    inout fn registerStructInstance(c: inout Comp, typeRef: U64, llvmType: LLVMTypeRef, structIndex: U64) {
+        val slot: U64 = self.genStructRefs.count()
+        self.genStructRefs.append(typeRef)
+        self.genStructTys.append(llvmType)
+        self.genStructDefs.append(structIndex)
+        if c.arena.typeAt(index: typeRef).args.count() == 0U64 {
+            while self.zeroArgStructSlots.count() <= structIndex {
+                self.zeroArgStructSlots.append(0U64)
+            }
+            if self.zeroArgStructSlots[structIndex] == 0U64 {
+                self.zeroArgStructSlots[structIndex] = slot + 1U64
+            }
+        }
+    }
+
+    // The first registered zero-argument instance, or the CURRENT count on a miss.
+    // Generic instances sharing the same definition never populate this index.
+    fn structSlotForSidx(structIndex: U64) -> U64 {
+        if structIndex < self.zeroArgStructSlots.count() {
+            val entry: U64 = self.zeroArgStructSlots[structIndex]
+            if entry != 0U64 { return entry - 1U64 }
+        }
+        return self.genStructRefs.count()
+    }
+
     inout fn registerGenStructNames(c: inout Comp) {
         // create every instance's NAMED struct type (opaque, body unset) and record its
         // def. Bodies are set later (registerGenStructBodies) so a field of generic-
@@ -27,7 +54,6 @@ pub impl LlvmCtx {
                 // as a pointer — it has no struct layout, so register no `%gs` type for it
                 // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
                 if defIdx < c.arena.structCount() && !(c.arena.structAt(index: defIdx).isExtern) {
-                    self.genStructRefs.append(ref)
                     // De-pin: `Array[E]` is an ordinary generic-struct instance — it gets its
                     // own fresh named `%gsN` (body `{ptr}` from its single `data: Buffer[E]`
                     // field, set in the body pass). No name->arrayTy representation pin; every
@@ -36,8 +62,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout nm, from: "gs".bytes())
                     appendU64Dec(into: inout nm, n: k)
                     nm.append(0)
-                    self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
-                    self.genStructDefs.append(defIdx)
+                    self.registerStructInstance(c: inout c, typeRef: ref, llvmType: LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)), structIndex: defIdx)
                 }
             }
             k += 1
@@ -186,9 +211,7 @@ pub impl LlvmCtx {
             appendU64Dec(into: inout nm, n: k)
             nm.append(0)
             val sty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-            self.genStructRefs.append(ref)
-            self.genStructTys.append(sty)
-            self.genStructDefs.append(defIdx)
+            self.registerStructInstance(c: inout c, typeRef: ref, llvmType: sty, structIndex: defIdx)
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams

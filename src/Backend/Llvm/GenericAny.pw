@@ -31,7 +31,7 @@ pub impl LlvmCtx {
         if c.arena.typeAt(index: ref).isRecord {
             val layoutIndex: U64 = c.recordStructIndex(ref: ref)
             if layoutIndex < c.arena.structCount() {
-                val slot: U64 = self.structSlotForSidx(c: inout c, sidx: layoutIndex)
+                val slot: U64 = self.structSlotForSidx(structIndex: layoutIndex)
                 if slot < self.genStructTys.count() { return self.genStructTys[slot] }
             }
             c.errorAt(offset: c.arena.typeAt(index: ref).nameStart, msg: "internal error (compiler bug): record LLVM type requires a registered layout matching its semantic field types")

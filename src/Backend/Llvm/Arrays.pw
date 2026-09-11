@@ -543,7 +543,7 @@ pub impl LlvmCtx {
     inout fn deepCopyStructValue(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
         // a concrete registered struct: call its copy witness (fields are concrete, so the
         // witness body is env-independent). A generic struct walks inline under the caller's env.
-        if self.structSlotForSidx(c: inout c, sidx: sidx) < self.genStructRefs.count() {
+        if self.structSlotForSidx(structIndex: sidx) < self.genStructRefs.count() {
             val slot: U64 = self.structCopyWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
@@ -648,7 +648,7 @@ pub impl LlvmCtx {
         if found < self.copyWitSidx.count() {
             return found
         }
-        val reg: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
+        val reg: U64 = self.structSlotForSidx(structIndex: sidx)
         val sty: LLVMTypeRef = self.genStructTys[reg]
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(sty)
@@ -1236,7 +1236,7 @@ pub impl LlvmCtx {
         // a concrete registered struct: call its retain witness instead of inlining the
         // walker (fields are concrete, so the witness body is env-independent). A generic
         // struct stays unregistered and is walked inline under the caller's env.
-        if self.structSlotForSidx(c: inout c, sidx: sidx) < self.genStructRefs.count() {
+        if self.structSlotForSidx(structIndex: sidx) < self.genStructRefs.count() {
             val slot: U64 = self.structRetainWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
@@ -1313,7 +1313,7 @@ pub impl LlvmCtx {
         if found < self.retWitSidx.count() {
             return found
         }
-        val reg: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
+        val reg: U64 = self.structSlotForSidx(structIndex: sidx)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genStructTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)

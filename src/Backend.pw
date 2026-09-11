@@ -168,9 +168,11 @@ struct LlvmCtx {
     // non-generic struct as its own 0-type-arg instance (bare-name, no-args ref) pointing at
     // the same named `%st` type. A generic-typed local points locStructIdx at the def and
     // locTypeRef at the instance, so field access reuses the struct machinery + substitution.
-    pub mut val genStructRefs: Array[U64]
-    pub mut val genStructTys: Array[LLVMTypeRef]
-    pub mut val genStructDefs: Array[U64]
+    mut val genStructRefs: Array[U64]
+    mut val genStructTys: Array[LLVMTypeRef]
+    mut val genStructDefs: Array[U64]
+    // Definition ID -> first zero-argument slot + 1; zero means unregistered.
+    mut val zeroArgStructSlots: Array[U64] = []
     // enum instances (parallel: TypeRef ref -> LLVM type, def idx). Every enum lives here:
     // a generic instance (`Optional[I32]`) keyed by its arg-bearing ref, and a non-generic
     // enum keyed by its 0-type-arg (bare-name) ref. The one `%ge` mechanism (genEnumSlot).
