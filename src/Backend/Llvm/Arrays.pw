@@ -239,22 +239,15 @@ pub impl LlvmCtx {
         if fld.tyIsArray {
             match c.arena.exprs[valExpr] {
                 Expr.Array(val elems) => {
-                    // the literal builds the SAME per-instance `%gs` the field slot expects.
-                    // Prefer the literal's own (concrete) element type; for an empty `[]` fall
-                    // back to the field's declared element (`fld.ty` = `Array[E]`, args[0] = E),
-                    // grounded through the active env so `Array[T]` resolves to `Array[I64]`.
-                    mut val feRef: U64 = self.arrayLitElemRef(c: inout c, id: valExpr, elems: elems)
-                    if feRef == 0U64 {
-                        if fld.ty != 0U64 {
-                            mut val gft: U64 = fld.ty
-                            if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
-                                gft = c.groundTypeRef(ref: fld.ty)
-                            }
-                            if c.arena.typeAt(index: gft).args.count() == 1U64 {
-                                feRef = c.arena.typeAt(index: gft).args[0]
-                            }
-                        }
+                    // A field initializer has the field's declared type as its
+                    // construction context, including empty and generic literals.
+                    // Use the same grounded term as the physical field layout.
+                    val fieldRef: U64 = c.groundTypeRef(ref: fld.ty)
+                    if fieldRef == 0U64 || fieldRef >= c.arena.typeCount() || c.arena.typeAt(index: fieldRef).args.count() != 1U64 {
+                        c.errorAt(offset: fld.nameStart, msg: "internal error: array field has no grounded element type")
+                        return LLVMConstNull(self.ptrty)
                     }
+                    val feRef: U64 = c.arena.typeAt(index: fieldRef).args[0U64]
                     return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: feRef), elemRef: feRef)
                 }
                 _ => {}
