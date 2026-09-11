@@ -22,8 +22,8 @@ pub impl Comp {
         // an empty array, never a dict — `[:]` is the empty-dictionary literal (spec/02). An
         // empty `[]` here used to coincidentally read count 0 in a let binding yet reinterpret
         // to garbage as an argument; reject it with a clear pointer to `[:]`.
-        if expectedRef < self.arena.types.count() {
-            if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Dictionary") {
+        if expectedRef < self.arena.typeCount() {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen, kw: "Dictionary") {
                 match self.arena.exprs[valueExpr] {
                     Expr.Array(elems: _) => {
                         if !(self.tcLog) {
@@ -47,8 +47,8 @@ pub impl Comp {
         // (such as `a / b`) has no bottom-up TypeInfo.  Do not fall through to
         // the old nominal-layout comparison, which would discard the Record
         // node merely because the literal had no independent annotation.
-        if expectedRef < self.arena.types.count() {
-            if self.arena.types[expectedRef].isRecord {
+        if expectedRef < self.arena.typeCount() {
+            if self.arena.typeAt(index: expectedRef).isRecord {
                 match self.arena.exprs[valueExpr] {
                     Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return }
                     _ => {}
@@ -94,8 +94,8 @@ pub impl Comp {
                 // the expected element type. Recurses, so arbitrary nesting is covered —
                 // inferType doesn't precisely type a literal's element, so this is the
                 // element check. (Only when the expected type is a known `Array[E]`.)
-                if expectedRef < self.arena.types.count() {
-                    val et: TypeRef = self.arena.types[expectedRef]
+                if expectedRef < self.arena.typeCount() {
+                    val et: TypeRef = self.arena.typeAt(index: expectedRef)
                     if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
                         if et.args.count() > 0U64 {
                             mut val ei: U64 = 0
@@ -113,13 +113,13 @@ pub impl Comp {
         if self.typesCompatible(expected: expectedRef, inferred: inferred) {
             return
         }
-        if expectedRef < self.arena.types.count() {
+        if expectedRef < self.arena.typeCount() {
             val expectedGround: U64 = self.groundTypeRef(ref: expectedRef)
-            if expectedGround < self.arena.types.count() {
-                val expectedTy: TypeRef = self.arena.types[expectedGround]
+            if expectedGround < self.arena.typeCount() {
+                val expectedTy: TypeRef = self.arena.typeAt(index: expectedGround)
                 if expectedTy.isSendable {
                     if inferred != 0U64 {
-                        if inferred < self.arena.types.count() {
+                        if inferred < self.arena.typeCount() {
                             if !(self.typeRefIsSendable(ref: inferred)) {
                                 if !(self.tcLog) {
                                     self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)")
@@ -182,7 +182,7 @@ pub impl Comp {
         if l == 0U64 || r == 0U64 {
             return
         }
-        if l >= self.arena.types.count() || r >= self.arena.types.count() {
+        if l >= self.arena.typeCount() || r >= self.arena.typeCount() {
             return
         }
         // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
@@ -199,17 +199,17 @@ pub impl Comp {
         // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
         // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
         // may legitimately differ) is excluded here — its witness is checked elsewhere.
-        val lNum: Bool = self.isIntType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || self.isFloatType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen)
+        val lNum: Bool = self.isIntType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen) || self.isFloatType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen)
         if lNum {
             self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "binop")
         }
     }
 
     inout fn tcIsUnsignedInt(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() {
+        if ref == 0U64 || ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U8") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U16") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "U32") { return true }
@@ -233,10 +233,10 @@ pub impl Comp {
 
     inout fn tcCheckUnary(op: I64, operand: U64) {
         val t: U64 = self.inferType(id: operand)
-        if t == 0U64 || t >= self.arena.types.count() {
+        if t == 0U64 || t >= self.arena.typeCount() {
             return
         }
-        val tn: TypeRef = self.arena.types[t]
+        val tn: TypeRef = self.arena.typeAt(index: t)
         val isInt: Bool = self.isIntType(start: tn.nameStart, len: tn.nameLen)
         val isBool: Bool = rangeEquals(bytes: self.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
         val isFloat: Bool = self.isFloatType(start: tn.nameStart, len: tn.nameLen)
@@ -269,10 +269,10 @@ pub impl Comp {
     }
 
     inout fn tcIsPrimInt(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() {
+        if ref == 0U64 || ref >= self.arena.typeCount() {
             return false
         }
-        return self.isIntType(start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
+        return self.isIntType(start: self.arena.typeAt(index: ref).nameStart, len: self.arena.typeAt(index: ref).nameLen)
     }
 
     inout fn tcCheckArrayIndex(base: U64, index: U64) {
@@ -287,8 +287,8 @@ pub impl Comp {
         }
         val br: U64 = self.inferType(id: base)
         if br != 0U64 {
-            if br < self.arena.types.count() {
-                val bref: TypeRef = self.arena.types[br]
+            if br < self.arena.typeCount() {
+                val bref: TypeRef = self.arena.typeAt(index: br)
                 if rangeEquals(bytes: self.arena.bytes, start: bref.nameStart, len: bref.nameLen, kw: "Dictionary") {
                     if bref.args.count() >= 1U64 {
                         self.tcCheckValue(expectedRef: bref.args[0], valueExpr: index, pos: "dictkey")
@@ -313,10 +313,10 @@ pub impl Comp {
     }
 
     inout fn tcCheckMakeFields(expectedRef: U64, makeId: U64) {
-        if expectedRef >= self.arena.types.count() {
+        if expectedRef >= self.arena.typeCount() {
             return
         }
-        val et: TypeRef = self.arena.types[expectedRef]
+        val et: TypeRef = self.arena.typeAt(index: expectedRef)
         // A Record's semantic field types live in its TypeTerm children. The
         // synthetic StructDef is an ABI layout cache and may originate in a
         // different lexical generic scope, so consulting it here would replace
@@ -473,10 +473,10 @@ pub impl Comp {
     }
 
     inout fn tcRefName(ref: U64) -> String {
-        if ref == 0U64 || ref >= self.arena.types.count() {
+        if ref == 0U64 || ref >= self.arena.typeCount() {
             return "?"
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val bs: Array[U8] = []
         mut val i: U64 = 0
         while i < t.nameLen {

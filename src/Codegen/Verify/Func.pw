@@ -35,15 +35,15 @@ pub impl Comp {
             if f.isAsync {
                 if rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Promise") {
                     if rTy != 0U64 {
-                        if rTy < self.arena.types.count() {
-                            val pt: TypeRef = self.arena.types[rTy]
+                        if rTy < self.arena.typeCount() {
+                            val pt: TypeRef = self.arena.typeAt(index: rTy)
                             if pt.args.count() >= 1U64 {
                                 val innerRef: U64 = pt.args[0]
                                 rTy = innerRef
                                 rArr = false
-                                if innerRef < self.arena.types.count() {
-                                    rStart = self.arena.types[innerRef].nameStart
-                                    rLen = self.arena.types[innerRef].nameLen
+                                if innerRef < self.arena.typeCount() {
+                                    rStart = self.arena.typeAt(index: innerRef).nameStart
+                                    rLen = self.arena.typeAt(index: innerRef).nameLen
                                 }
                             }
                         }
@@ -181,8 +181,8 @@ pub impl Comp {
     inout fn checkIndexKeyType(base: U64, index: U64) {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.ref != 0U64 {
-            if bt.ref < self.arena.types.count() {
-                val t: TypeRef = self.arena.types[bt.ref]
+            if bt.ref < self.arena.typeCount() {
+                val t: TypeRef = self.arena.typeAt(index: bt.ref)
                 if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
                     if t.args.count() >= 1U64 {
                         self.tcCheckValue(expectedRef: t.args[0], valueExpr: index, pos: "dict key")

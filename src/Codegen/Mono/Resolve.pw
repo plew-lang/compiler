@@ -8,8 +8,8 @@ pub impl Comp {
     // representation. Every layout / receiver-instance consumer canonicalizes
     // through this one boundary; nested argument views remain type identity.
     inout fn runtimeTypeRef(ref: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
         // Removing a value-view changes only the callable surface. It must
         // retain the nominal and projection declaration identities: later
@@ -27,8 +27,8 @@ pub impl Comp {
     // only when the same extension occurs in the normalized view source set.
     inout fn proofSourceIsActive(baseRef: U64, extId: U64) -> Bool {
         if extId == 0U64 { return true }
-        if baseRef >= self.arena.types.count() { return false }
-        val base: TypeRef = self.arena.types[baseRef]
+        if baseRef >= self.arena.typeCount() { return false }
+        val base: TypeRef = self.arena.typeAt(index: baseRef)
         mut val i: U64 = 0U64
         while i < base.viewIds.count() {
             if base.viewIds[i] == extId { return true }
@@ -105,7 +105,7 @@ pub impl Comp {
     // the proof state's ground positional arguments stay rigid.  Exact trait
     // instance lookup is the `patternParams=[]` specialization below.
     inout fn concreteTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> StaticConformanceProof {
-        if baseRef >= self.arena.types.count() { return <StaticConformanceProof.Missing /> }
+        if baseRef >= self.arena.typeCount() { return <StaticConformanceProof.Missing /> }
         mut val pending: Array[TraitProofState] = []
         mut val seen: Array[TraitProofState] = []
         mut val ci: U64 = 0U64
@@ -169,7 +169,7 @@ pub impl Comp {
     }
 
     inout fn resolveAssocProjection(tyRef: U64) -> U64 {
-        val t: TypeRef = self.arena.types[tyRef]
+        val t: TypeRef = self.arena.typeAt(index: tyRef)
         if t.assocNameId == 0U64 {
             return tyRef
         }
@@ -179,7 +179,7 @@ pub impl Comp {
         // projections, ordinary extension calls, and final descriptors --
         // agree on the same source provenance.
         val baseRef: U64 = self.groundTypeRef(ref: self.plainRefOfProjection(t: t))
-        if baseRef >= self.arena.types.count() {
+        if baseRef >= self.arena.typeCount() {
             return tyRef
         }
         // A projection is a semantic term during declaration checking.  Its
@@ -187,7 +187,7 @@ pub impl Comp {
         // nominal declaration yet; resolving it here would turn structural
         // cycle validation into a failed witness lookup.  Concrete receivers
         // are annotated by the visibility pass before projection resolution.
-        val base: TypeRef = self.arena.types[baseRef]
+        val base: TypeRef = self.arena.typeAt(index: baseRef)
         // A lexical Param is a symbolic term even if an unrelated ambient
         // Mono context happens to bind the same spelling.  Projection
         // resolution is deferred until THIS ParamId is substituted.
@@ -235,10 +235,10 @@ pub impl Comp {
     }
 
     inout fn isGenericEnumInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.paramId == 0U64 && t.args.count() == 0U64 {
             return false
         }
@@ -261,7 +261,7 @@ pub impl Comp {
     }
 
     inout fn appendMangle(ref: U64) {
-        val t: TypeRef = self.arena.types[self.resolveTy(tyRef: ref)]
+        val t: TypeRef = self.arena.typeAt(index: self.resolveTy(tyRef: ref))
         mut val j: U64 = 0
         while j < t.nameLen {
             self.arena.bytes.append(self.arena.bytes[t.nameStart + j])
@@ -285,14 +285,14 @@ pub impl Comp {
     inout fn sameMangle(refA: U64, refB: U64) -> Bool {
         val ra: U64 = self.resolveTy(tyRef: refA)
         val rb: U64 = self.resolveTy(tyRef: refB)
-        if ra >= self.arena.types.count() {
+        if ra >= self.arena.typeCount() {
             return false
         }
-        if rb >= self.arena.types.count() {
+        if rb >= self.arena.typeCount() {
             return false
         }
-        val a: TypeRef = self.arena.types[ra]
-        val b: TypeRef = self.arena.types[rb]
+        val a: TypeRef = self.arena.typeAt(index: ra)
+        val b: TypeRef = self.arena.typeAt(index: rb)
         if a.nameId != b.nameId {
             return false
         }
@@ -311,10 +311,10 @@ pub impl Comp {
 
     inout fn isCompoundType(ref: U64) -> Bool {
         val r: U64 = self.resolveTy(tyRef: ref)
-        if r >= self.arena.types.count() {
+        if r >= self.arena.typeCount() {
             return false
         }
-        return self.arena.types[r].args.count() > 0U64
+        return self.arena.typeAt(index: r).args.count() > 0U64
     }
 
     // Resolve a term that is a binder in the current method's receiver pattern
@@ -326,7 +326,7 @@ pub impl Comp {
         mut val ref: U64 = self.cur.recvInstRef
         if ref == 0U64 { ref = self.cur.bodyEnvironment.receiverRef }
         if ref == 0U64 { ref = self.cur.selfRef }
-        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
         if self.cur.bodyFnIdx >= self.arena.funcs.count() { return 0U64 }
         val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
         if bodyFn.recvTy == 0U64 { return 0U64 }
@@ -349,8 +349,8 @@ pub impl Comp {
         mut val ref: U64 = self.cur.recvInstRef
         if ref == 0U64 { ref = self.cur.bodyEnvironment.receiverRef }
         if ref == 0U64 { ref = self.cur.selfRef }
-        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
-        val recv: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
+        val recv: TypeRef = self.arena.typeAt(index: ref)
         // A method's `impl[E] Set[E]` binder is distinct from the declaration
         // binder on `struct Set[E]`.  Its lexical ParamId therefore cannot be
         // recovered by merely pairing the nominal declaration's parameters with
@@ -389,10 +389,10 @@ pub impl Comp {
     }
 
     inout fn resolveTy(tyRef: U64) -> U64 {
-        if tyRef >= self.arena.types.count() {
+        if tyRef >= self.arena.typeCount() {
             return tyRef
         }
-        val t: TypeRef = self.arena.types[tyRef]
+        val t: TypeRef = self.arena.typeAt(index: tyRef)
         if t.assocNameId != 0U64 {
             return self.resolveAssocProjection(tyRef: tyRef)
         }
@@ -573,10 +573,10 @@ pub impl Comp {
     }
 
     inout fn tyRefIsGround(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return true
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.paramId != 0U64 { return false }
         // an existential `any P` is a concrete ground type — its `P` names a TRAIT, never a
         // type parameter (a single-letter trait name like `P` would otherwise be misread as a

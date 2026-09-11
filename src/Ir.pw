@@ -4,6 +4,7 @@ part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
 part ./Ir/TraitOwners
+part ./Ir/Types
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2228,7 +2229,8 @@ export struct Arena {
     pub mut val typeArgumentLabelPool: Array[U64] = []
     pub mut val typeAssocArgumentPool: Array[U64] = []
     pub mut val typeAssocArgumentLabelPool: Array[U64] = []
-    pub mut val types: Array[TypeRef] = []
+    mut val typeRows: Array[TypeRef] = []
+    mut val bareTypeNameRefs: Array[U64] = []
     pub mut val globals: Array[Global] = []
     pub mut val newtypes: Array[NewtypeDef] = []
     // Final static call selections belong to the analyzed program, not to

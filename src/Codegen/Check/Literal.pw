@@ -464,7 +464,7 @@ pub impl Comp {
         if ctxRef == 0U64 || !(self.isGenericInst(ref: ctxRef)) {
             return false
         }
-        val ct: TypeRef = self.arena.types[ctxRef]
+        val ct: TypeRef = self.arena.typeAt(index: ctxRef)
         if !(spansEqual(c: inout self, aStart: ct.nameStart, aLen: ct.nameLen, bStart: arn.nameStart, bLen: arn.nameLen)) {
             return false
         }
@@ -476,7 +476,7 @@ pub impl Comp {
         while gi < ginf.count() {
             mut val needsGround: Bool = ginf[gi] == 0U64
             if !(needsGround) {
-                if self.arena.types[ginf[gi]].nameLen == 0U64 {
+                if self.arena.typeAt(index: ginf[gi]).nameLen == 0U64 {
                     needsGround = true
                 }
             }

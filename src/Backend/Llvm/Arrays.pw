@@ -143,8 +143,8 @@ pub impl LlvmCtx {
     // over the ref (shadow: 0 arm-only hits over self-compile + full corpus).
     inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
         val r: U64 = self.exprTypeRef(c: inout c, id: id)
-        if r != 0U64 && r < c.arena.types.count() {
-            return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
+        if r != 0U64 && r < c.arena.typeCount() {
+            return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen, kw: "Array")
         }
         return false
     }
@@ -155,8 +155,8 @@ pub impl LlvmCtx {
     // literal the record pass never saw) falls back to the first element's type.
     inout fn arrayLitElemRef(c: inout Comp, id: U64, elems: ExprRange) -> U64 {
         val lr: U64 = self.exprTypeRef(c: inout c, id: id)
-        if lr != 0U64 && lr < c.arena.types.count() {
-            val lt: TypeRef = c.arena.types[lr]
+        if lr != 0U64 && lr < c.arena.typeCount() {
+            val lt: TypeRef = c.arena.typeAt(index: lr)
             if lt.args.count() == 1U64 && rangeEquals(bytes: c.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
                 return lt.args[0]
             }
@@ -195,8 +195,8 @@ pub impl LlvmCtx {
     // un-annotated array binding's element kind).
     inout fn arrElemKindOf(c: inout Comp, id: U64) -> U64 {
         val er: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: id)
-        if er != 0U64 && er < c.arena.types.count() {
-            return kindFromTySpan(c: inout c, tyStart: c.arena.types[er].nameStart, tyLen: c.arena.types[er].nameLen)
+        if er != 0U64 && er < c.arena.typeCount() {
+            return kindFromTySpan(c: inout c, tyStart: c.arena.typeAt(index: er).nameStart, tyLen: c.arena.typeAt(index: er).nameLen)
         }
         return 0U64
     }
@@ -250,8 +250,8 @@ pub impl LlvmCtx {
                             if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
                                 gft = c.groundTypeRef(ref: fld.ty)
                             }
-                            if c.arena.types[gft].args.count() == 1U64 {
-                                feRef = c.arena.types[gft].args[0]
+                            if c.arena.typeAt(index: gft).args.count() == 1U64 {
+                                feRef = c.arena.typeAt(index: gft).args[0]
                             }
                         }
                     }
@@ -726,7 +726,7 @@ pub impl LlvmCtx {
                 sr = self.exprTypeRef(c: inout c, id: expr)
             }
             if sr != 0U64 {
-                val st: TypeRef = c.arena.types[sr]
+                val st: TypeRef = c.arena.typeAt(index: sr)
                 if rangeEquals(bytes: c.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "String") {
                     self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                     return v
@@ -1004,7 +1004,7 @@ pub impl LlvmCtx {
         // by NAME only, so a generic-instance pointee (Ref[Box[String]]) and any
         // non-struct pointee (enum / String / nested Ref) were silently never destroyed.
         if c.isStrongRefInst(ref: refTy) {
-            val pr: U64 = c.arena.types[refTy].args[0]
+            val pr: U64 = c.arena.typeAt(index: refTy).args[0]
             if c.arcNeedsRelease(ref: pr) {
                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                 self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), typeRef: pr, retain: false)

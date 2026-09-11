@@ -19,10 +19,10 @@ pub impl Comp {
         if ref == 0U64 {
             return <ArcClass.Scalar />
         }
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return <ArcClass.Scalar />
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             val layout: U64 = self.recordStructIndex(ref: ref)
             if layout < self.arena.structs.count() {
@@ -168,9 +168,9 @@ pub impl Comp {
                 // -> T = Ref[Cell]); an argless generic def (legacy sidx-only query)
                 // clears the env so an unrelated ambient T never leaks in.
                 if sd.typeParams.count() > 0U64 {
-                    if ref < self.arena.types.count() && self.arena.types[ref].args.count() == sd.typeParams.count() {
+                    if ref < self.arena.typeCount() && self.arena.typeAt(index: ref).args.count() == sd.typeParams.count() {
                         self.cur.typeParams = sd.typeParams
-                        self.cur.typeArgs = self.arena.types[ref].args
+                        self.cur.typeArgs = self.arena.typeAt(index: ref).args
                     } else {
                         self.cur.typeParams = []
                         self.cur.typeArgs = []
@@ -216,9 +216,9 @@ pub impl Comp {
                 val savedP: Array[Bind] = self.cur.typeParams
                 val savedA: Array[U64] = self.cur.typeArgs
                 if ed.typeParams.count() > 0U64 {
-                    if ref < self.arena.types.count() && self.arena.types[ref].args.count() == ed.typeParams.count() {
+                    if ref < self.arena.typeCount() && self.arena.typeAt(index: ref).args.count() == ed.typeParams.count() {
                         self.cur.typeParams = ed.typeParams
-                        self.cur.typeArgs = self.arena.types[ref].args
+                        self.cur.typeArgs = self.arena.typeAt(index: ref).args
                     } else {
                         self.cur.typeParams = []
                         self.cur.typeArgs = []

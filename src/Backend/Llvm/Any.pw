@@ -426,7 +426,7 @@ pub impl LlvmCtx {
         if sidx >= c.arena.structs.count() {
             return LLVMConstNull(self.ptrty)
         }
-        val tr: TypeRef = c.arena.types[targetRef]
+        val tr: TypeRef = c.arena.typeAt(index: targetRef)
         val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
         if traitIdx >= c.decls.traits.count() {
             return LLVMConstNull(self.ptrty)
@@ -451,11 +451,11 @@ pub impl LlvmCtx {
         if dstRef == 0U64 || srcRef == 0U64 {
             return false
         }
-        if dstRef >= c.arena.types.count() || srcRef >= c.arena.types.count() {
+        if dstRef >= c.arena.typeCount() || srcRef >= c.arena.typeCount() {
             return false
         }
-        val td: TypeRef = c.arena.types[dstRef]
-        val ts: TypeRef = c.arena.types[srcRef]
+        val td: TypeRef = c.arena.typeAt(index: dstRef)
+        val ts: TypeRef = c.arena.typeAt(index: srcRef)
         // the two must share a container head and arg count (`Array[·]`, `Optional[·]`, any
         // generic enum) — the head we can physically repack.
         if td.nameId != ts.nameId {
@@ -496,8 +496,8 @@ pub impl LlvmCtx {
             if refIsAny(c: inout c, ref: srcElem) {
                 return false
             }
-            val td: TypeRef = c.arena.types[dstElem]
-            val ts: TypeRef = c.arena.types[srcElem]
+            val td: TypeRef = c.arena.typeAt(index: dstElem)
+            val ts: TypeRef = c.arena.typeAt(index: srcElem)
             val sidx: U64 = c.structIndexByName(start: ts.nameStart, len: ts.nameLen)
             if sidx >= c.arena.structs.count() {
                 return false
@@ -519,12 +519,12 @@ pub impl LlvmCtx {
     // verbatim-copied (non-erasable) fields — never as a blanket pre-retain, so a NESTED
     // container (`Optional[Array[Self]]`) does not double-count and leak its inner buffer.
     inout fn eraseCovariantToAny(c: inout Comp, v: LLVMValueRef, srcRef: U64, dstRef: U64) -> LLVMValueRef {
-        val td: TypeRef = c.arena.types[dstRef]
+        val td: TypeRef = c.arena.typeAt(index: dstRef)
         // leaf: a concrete struct value widening into `any P`. The box co-owns the concrete's
         // heap, so retain it (borrow contract: `v` stays alive for the caller); boxIntoAny then
         // adopts that +1 into the fresh cell.
         if td.isAny {
-            val ts: TypeRef = c.arena.types[srcRef]
+            val ts: TypeRef = c.arena.typeAt(index: srcRef)
             val sidx: U64 = c.structIndexByName(start: ts.nameStart, len: ts.nameLen)
             val traitIdx: U64 = c.findTraitIdxByName(start: td.nameStart, len: td.nameLen)
             self.valueArc(c: inout c, v: v, typeRef: srcRef, retain: true)
@@ -532,7 +532,7 @@ pub impl LlvmCtx {
         }
         // `Array[src] -> Array[dst]`: rebuild a fresh buffer, erasing each element.
         if rangeEquals(bytes: c.arena.bytes, start: td.nameStart, len: td.nameLen, kw: "Array") {
-            return self.eraseArrayToAny(c: inout c, srcArr: v, srcElemRef: c.arena.types[srcRef].args[0], dstElemRef: td.args[0])
+            return self.eraseArrayToAny(c: inout c, srcArr: v, srcElemRef: c.arena.typeAt(index: srcRef).args[0], dstElemRef: td.args[0])
         }
         // a generic enum (`Optional[src] -> Optional[dst]`, `Result[src,E] -> …`): tag-dispatch,
         // erasing each variant's payload fields that widen to the existential.
@@ -577,7 +577,7 @@ pub impl LlvmCtx {
             if fs.count() > 0U64 {
                 // load the source payload under the SOURCE env (so `v: T` sizes as the concrete).
                 c.cur.typeParams = c.arena.enums[srcEid].typeParams
-                c.cur.typeArgs = c.arena.types[srcRef].args
+                c.cur.typeArgs = c.arena.typeAt(index: srcRef).args
                 val srcPty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: srcEid, vi: vi)
                 val pv: LLVMValueRef = LLVMBuildLoad2(self.b, srcPty, srcPayloadPtr, anon())
                 c.cur.typeParams = savedP
@@ -586,10 +586,10 @@ pub impl LlvmCtx {
                 while fj < fs.count() {
                     val fieldVal: LLVMValueRef = LLVMBuildExtractValue(self.b, pv, fj, anon())
                     c.cur.typeParams = c.arena.enums[srcEid].typeParams
-                    c.cur.typeArgs = c.arena.types[srcRef].args
+                    c.cur.typeArgs = c.arena.typeAt(index: srcRef).args
                     val sFieldRef: U64 = c.groundTypeRef(ref: fs[fj].ty)
                     c.cur.typeParams = c.arena.enums[dstEid].typeParams
-                    c.cur.typeArgs = c.arena.types[dstRef].args
+                    c.cur.typeArgs = c.arena.typeAt(index: dstRef).args
                     val dFieldRef: U64 = c.groundTypeRef(ref: fs[fj].ty)
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
@@ -611,7 +611,7 @@ pub impl LlvmCtx {
             }
             // rebuild the variant of the DESTINATION enum (payload sizes as the existential).
             c.cur.typeParams = c.arena.enums[dstEid].typeParams
-            c.cur.typeArgs = c.arena.types[dstRef].args
+            c.cur.typeArgs = c.arena.typeAt(index: dstRef).args
             val dv: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: dstEid, ety: dstEty, vi: vi, payloadVals: payloadVals)
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
@@ -1121,11 +1121,11 @@ pub impl LlvmCtx {
             mut val selfIsArr: Bool = false
             mut val selfElemTy: LLVMTypeRef = self.i64ty
             if self.curRecvInstRef != 0U64 {
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.curRecvInstRef].nameStart, len: c.arena.types[self.curRecvInstRef].nameLen, kw: "Array") {
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: self.curRecvInstRef).nameStart, len: c.arena.typeAt(index: self.curRecvInstRef).nameLen, kw: "Array") {
                     recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
                     selfIsArr = true
-                    if c.arena.types[self.curRecvInstRef].args.count() > 0U64 {
-                        selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[self.curRecvInstRef].args[0])
+                    if c.arena.typeAt(index: self.curRecvInstRef).args.count() > 0U64 {
+                        selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: self.curRecvInstRef).args[0])
                     }
                     // Array's `{ptr}` value IS `struct Array[T] { data: Buffer[T] }` (Buffer
                     // is a bare ptr — buffer-floor.md §6), so its sole field `data` is field 0.
@@ -1170,7 +1170,7 @@ pub impl LlvmCtx {
             // pf path) OR a no-view instance ref (B3-2: the gm path sets recvRef from
             // curRecvInstRef, so the view must be applied on top of it, preserving its args).
             if f.extId != 0U64 {
-                if recvRef == 0U64 || (c.arena.types[recvRef].viewExtId == 0U64 && c.arena.types[recvRef].viewIds.count() == 0U64) {
+                if recvRef == 0U64 || (c.arena.typeAt(index: recvRef).viewExtId == 0U64 && c.arena.typeAt(index: recvRef).viewIds.count() == 0U64) {
                     if recvRef != 0U64 {
                         val selectedView: Array[U64] = [f.extId]
                         recvRef = c.typeRefWithViews(ref: recvRef, viewExtId: f.extId, viewIds: selectedView)

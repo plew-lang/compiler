@@ -18,29 +18,29 @@ pub impl LlvmCtx {
     // the final-callable descriptor; do not search registered instances by the
     // receiver (two map calls on the same iterator may have different outputs).
     inout fn adapterResultForFinalMethod(c: inout Comp, finalMfi: U64, resultRef: U64) -> U64 {
-        if finalMfi >= c.arena.funcs.count() || resultRef == 0U64 || resultRef >= c.arena.types.count() { return 0U64 }
+        if finalMfi >= c.arena.funcs.count() || resultRef == 0U64 || resultRef >= c.arena.typeCount() { return 0U64 }
         val f: Func = c.arena.funcs[finalMfi]
         if !(f.isProvided) { return 0U64 }
         val nameStart: U64 = f.nameStart
         val nameLen: U64 = f.nameLen
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "map") {
-            val t: TypeRef = c.arena.types[resultRef]
+            val t: TypeRef = c.arena.typeAt(index: resultRef)
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MapIter") { return resultRef }
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "filter") {
-            val t: TypeRef = c.arena.types[resultRef]
+            val t: TypeRef = c.arena.typeAt(index: resultRef)
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "FilterIter") { return resultRef }
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "take") {
-            val t: TypeRef = c.arena.types[resultRef]
+            val t: TypeRef = c.arena.typeAt(index: resultRef)
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "TakeIter") { return resultRef }
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "skip") {
-            val t: TypeRef = c.arena.types[resultRef]
+            val t: TypeRef = c.arena.typeAt(index: resultRef)
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "SkipIter") { return resultRef }
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "enumerate") {
-            val t: TypeRef = c.arena.types[resultRef]
+            val t: TypeRef = c.arena.typeAt(index: resultRef)
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "EnumerateIter") { return resultRef }
         }
         return 0U64
@@ -70,7 +70,7 @@ pub impl LlvmCtx {
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         c.cur.typeParams = sd.typeParams
-        c.cur.typeArgs = c.arena.types[adapterRef].args
+        c.cur.typeArgs = c.arena.typeAt(index: adapterRef).args
         val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: c.pushMakeFields(fields: fields), errOffset: c.exprOffset(id: recv))
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA

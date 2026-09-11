@@ -621,10 +621,10 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
 // this: `Self` in a contravariant position (any parameter) blocks the member entirely,
 // and `Self` in the result is callable only where it can be covariantly erased.
 fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count() {
+    if ref >= c.arena.typeCount() {
         return false
     }
-    val t: TypeRef = c.arena.types[ref]
+    val t: TypeRef = c.arena.typeAt(index: ref)
     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
         return true
     }
@@ -692,10 +692,10 @@ fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
 // (`Optional[Self]`, `Result[Self, E]`), recursively (spec/08, SE-0309). `Self` under any
 // other head (`Dictionary`, a tuple/record, a user struct) is NOT erasable.
 fn retTySelfErasable(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count() {
+    if ref >= c.arena.typeCount() {
         return true
     }
-    val t: TypeRef = c.arena.types[ref]
+    val t: TypeRef = c.arena.typeAt(index: ref)
     // a bare `Self` here: the leaf boxes into the existential.
     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
         return true
@@ -1271,7 +1271,7 @@ fn fieldIsBufferType(c: inout Comp, f: FieldDef) -> Bool {
     // `Buffer[...]` (name "Buffer") directly — Dict/Set hold `Buffer[K]` etc. explicitly,
     // never via a bare type param. Crucially this avoids calling groundTypeRef from the
     // hot, recursive structNeedsDeinit (which can re-enter type resolution and overflow).
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Buffer")
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "Buffer")
 }
 
 // A strong reference-cell field: declared `Ref[...]` or `MutableRef[...]` directly. Its cell carries a strong
@@ -1286,10 +1286,10 @@ fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
     if f.ty == 0U64 {
         return false
     }
-    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Ref") {
+    if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "Ref") {
         return true
     }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "MutableRef")
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "MutableRef")
 }
 
 // A weak reference-cell field: declared `WeakRef[...]` or `WeakMutableRef[...]` directly. It owns one WEAK
@@ -1304,10 +1304,10 @@ fn fieldIsWeakRefType(c: inout Comp, f: FieldDef) -> Bool {
     if f.ty == 0U64 {
         return false
     }
-    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakRef") {
+    if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "WeakRef") {
         return true
     }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakMutableRef")
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "WeakMutableRef")
 }
 
 // The (grounded) `Ref[T]` instance TypeRef of a Ref field — for emitRefRelease's pointee
@@ -1375,7 +1375,7 @@ fn bufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if c.cur.typeParams.count() > 0U64 {
         g = c.groundTypeRef(ref: f.ty)
     }
-    val t: TypeRef = c.arena.types[g]
+    val t: TypeRef = c.arena.typeAt(index: g)
     if t.args.count() > 0U64 {
         return t.args[0]
     }
@@ -1397,7 +1397,7 @@ fn arrayOrBufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
 fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.tyIsArray {
         if f.ty != 0U64 {
-            val t: TypeRef = c.arena.types[f.ty]
+            val t: TypeRef = c.arena.typeAt(index: f.ty)
             if t.args.count() > 0U64 {
                 return t.args[0]
             }
@@ -1407,7 +1407,7 @@ fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.ty != 0U64 {
         if c.cur.typeParams.count() > 0U64 {
             val g: U64 = c.groundTypeRef(ref: f.ty)
-            val gt: TypeRef = c.arena.types[g]
+            val gt: TypeRef = c.arena.typeAt(index: g)
             if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
                 if gt.args.count() > 0U64 {
                     return gt.args[0]
@@ -1459,8 +1459,8 @@ fn exprFormName2(c: inout Comp, id: U64) -> String {
 }
 
 fn refIsAny(c: inout Comp, ref: U64) -> Bool {
-    if ref < c.arena.types.count() {
-        return c.arena.types[ref].isAny
+    if ref < c.arena.typeCount() {
+        return c.arena.typeAt(index: ref).isAny
     }
     return false
 }
@@ -1474,7 +1474,7 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 // Returns false if any parameter / associated type is left unbound.
 fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
     val t: TraitDef = c.decls.traits[traitIdx]
-    val ar: TypeRef = c.arena.types[anyRef]
+    val ar: TypeRef = c.arena.typeAt(index: anyRef)
     // positional binding refs (argLabels entry 0), in source order.
     mut val positional: Array[U64] = []
     mut val ai: U64 = 0
@@ -1553,8 +1553,8 @@ fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
     mut val i: U64 = 0
     while i < args.count() {
         mut val nid: U64 = 0
-        if args[i] < c.arena.types.count() {
-            nid = c.arena.types[args[i]].nameId
+        if args[i] < c.arena.typeCount() {
+            nid = c.arena.typeAt(index: args[i]).nameId
         }
         k = k * 1000003U64 + nid + 1U64
         i += 1

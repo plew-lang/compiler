@@ -24,7 +24,7 @@ pub impl Comp {
         val target = self.typeCache.identTarget[exprId]
         if exprId >= self.arena.semanticExprTypes.count() { return <Optional.None /> }
         val term = self.arena.semanticExprTypes[exprId].term
-        if term == 0U64 || term >= self.arena.types.count() { return <Optional.None /> }
+        if term == 0U64 || term >= self.arena.typeCount() { return <Optional.None /> }
         mut val index: U64 = 0U64
         while index < self.arena.globals.count() {
             val global = self.arena.globals[index]

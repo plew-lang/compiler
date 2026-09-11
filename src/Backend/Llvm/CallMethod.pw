@@ -133,8 +133,8 @@ pub impl LlvmCtx {
         // `(42I64).format(...)` on I64): these are extern lang-items (not registered
         // structs), so dispatch to their std method and lazily emit the body.
         mut val primRecv: Bind = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
-        if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.types.count() {
-            val selectedTy: TypeRef = c.arena.types[selectedRecvRef]
+        if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.typeCount() {
+            val selectedTy: TypeRef = c.arena.typeAt(index: selectedRecvRef)
             val underlying: Bind = c.newtypeUnderName(start: selectedTy.nameStart, len: selectedTy.nameLen)
             // `String` is a language-item value type just like scalar
             // primitives: it has no ordinary struct registration but its
@@ -195,7 +195,7 @@ pub impl LlvmCtx {
         // path below like any generic-instance receiver (collections.md E3: no Array
         // type-name synthesis of the receiver ref here any more).
         if recvRef != 0U64 {
-            val grt: TypeRef = c.arena.types[recvRef]
+            val grt: TypeRef = c.arena.typeAt(index: recvRef)
             // Reference cells are opaque intrinsics (not registered generic structs),
             // but their std `impl[T]` methods (weak / upgrade) are ordinary generic methods —
             // route them through the same monomorphized-method path (the bodies bottom out in
@@ -231,8 +231,8 @@ pub impl LlvmCtx {
         // `<pfx>Wrap*` intrinsic floor — resolved and emitted like any assoc fn, with identity,
         // so a same-named user extension is no longer hijacked.)
         mut val rsidx: U64 = c.arena.structs.count()
-        if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.types.count() {
-            val selectedTy: TypeRef = c.arena.types[selectedRecvRef]
+        if selectedRecvRef != 0U64 && selectedRecvRef < c.arena.typeCount() {
+            val selectedTy: TypeRef = c.arena.typeAt(index: selectedRecvRef)
             rsidx = c.structDefByNameAny(start: selectedTy.nameStart, len: selectedTy.nameLen)
         }
         if rsidx >= c.arena.structs.count() {
@@ -240,7 +240,7 @@ pub impl LlvmCtx {
             // struct method (self by value, or a pointer for `inout fn`).
             val erecvRef: U64 = selectedRecvRef
             if erecvRef != 0U64 {
-                val et: TypeRef = c.arena.types[erecvRef]
+                val et: TypeRef = c.arena.typeAt(index: erecvRef)
                 val ereg0: U64 = self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
                 if ereg0 < self.genEnumRefs.count() {
                     val emfi: U64 = finalMfi

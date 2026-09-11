@@ -1,0 +1,5 @@
+import /Ir with { Arena, TypeRef }
+fn main() {
+    mut val arena: Arena = <Arena />
+    arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 nameId=4U64 args=[] />, nameCount: 3U64)
+}

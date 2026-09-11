@@ -1,0 +1,89 @@
+// The bare-name index preserves the first row matching the legacy query.
+// It is not type equality: owner, binder, projection and provenance remain in
+// the returned row and are interpreted by their existing semantic consumers.
+pub impl Arena {
+    fn typeCount() -> U64 { return self.typeRows.count() }
+    fn typeAt(index: U64) -> TypeRef { return self.typeRows[index] }
+
+    fn firstBareTypeNamed(nameId: U64) -> U64 {
+        if nameId < self.bareTypeNameRefs.count() {
+            val entry = self.bareTypeNameRefs[nameId]
+            if entry != 0U64 { return entry - 1U64 }
+        }
+        return self.typeRows.count()
+    }
+
+    inout fn reserveTypeSentinel() {
+        if self.typeRows.count() != 0U64 { panic "type sentinel must be first" }
+        self.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />, nameCount: 0U64)
+    }
+
+    inout fn registerType(t: TypeRef, nameCount: U64) -> U64 {
+        if t.nameId > nameCount { panic "type name is outside the interner" }
+        val id = self.typeRows.count()
+        if self.typeTerms.count() != id { panic "type representations diverged" }
+        val argsStart: U64 = self.typeArgumentPool.count()
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            self.typeArgumentPool.append(t.args[i])
+            i += 1U64
+        }
+        val recordLabelStart: U64 = self.typeRecordLabelPool.count()
+        i = 0U64
+        while i < t.recordFieldLabels.count() {
+            self.typeRecordLabelPool.append(t.recordFieldLabels[i])
+            i += 1U64
+        }
+        val recordFieldStart: U64 = self.typeRecordFieldPool.count()
+        i = 0U64
+        while i < t.recordFieldTerms.count() {
+            self.typeRecordFieldPool.append(t.recordFieldTerms[i])
+            i += 1U64
+        }
+        val viewIdStart: U64 = self.typeViewIdPool.count()
+        i = 0U64
+        while i < t.viewIds.count() {
+            self.typeViewIdPool.append(t.viewIds[i])
+            i += 1U64
+        }
+        val viewSourceStart: U64 = self.typeViewSourcePool.count()
+        i = 0U64
+        while i < t.viewSources.count() {
+            self.typeViewSourcePool.append(t.viewSources[i])
+            i += 1U64
+        }
+        val labelStart: U64 = self.typeArgumentLabelPool.count()
+        i = 0U64
+        while i < t.argLabels.count() {
+            self.typeArgumentLabelPool.append(t.argLabels[i])
+            i += 1U64
+        }
+        val assocArgStart: U64 = self.typeAssocArgumentPool.count()
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            self.typeAssocArgumentPool.append(t.assocTraitArgs[i])
+            i += 1U64
+        }
+        val assocLabelStart: U64 = self.typeAssocArgumentLabelPool.count()
+        i = 0U64
+        while i < t.assocTraitArgLabels.count() {
+            self.typeAssocArgumentLabelPool.append(t.assocTraitArgLabels[i])
+            i += 1U64
+        }
+        self.typeTerms.append(<TypeTerm nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        self.typeRows.append(t)
+        if t.args.count() == 0U64 && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && !t.isAny && !t.isSendable {
+            while self.bareTypeNameRefs.count() <= t.nameId { self.bareTypeNameRefs.append(0U64) }
+            if self.bareTypeNameRefs[t.nameId] == 0U64 { self.bareTypeNameRefs[t.nameId] = id + 1U64 }
+        }
+        return id
+    }
+
+    // Declaration resolution cannot change the fields used by the name index.
+    inout fn resolveTypeDeclaration(index: U64, hasDecl: Bool, declOffset: U64, hasAssocTraitDecl: Bool, assocTraitDeclOffset: U64) {
+        val t: TypeRef = self.typeRows[index]
+        val term: TypeTerm = self.typeTerms[index]
+        self.typeTerms[index] = <TypeTerm nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable siteOffset=term.siteOffset hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset />
+        self.typeRows[index] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset siteOffset=t.siteOffset />
+    }
+}

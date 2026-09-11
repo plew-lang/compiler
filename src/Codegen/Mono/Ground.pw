@@ -19,8 +19,8 @@ pub impl Comp {
     // instance must never infer its field type from that ambient state: its
     // ParamId map is the authority.
     inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64], selfRef: U64 = 0U64, itemRef: U64 = 0U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         // Self and Item are proof-derived binders just like ParamId entries,
         // except their values live on the selected receiver proof rather than
         // in a method's generic argument vector. They may occur below a
@@ -127,8 +127,8 @@ pub impl Comp {
     // key fields, but are explicit here so a semantic read never silently
     // consults whichever callee environment happens to be in Cursor.
     inout fn groundTermForBody(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         val outerViews: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
@@ -188,8 +188,8 @@ pub impl Comp {
     // This must stay here, rather than in individual call/local consumers, so
     // all frontend semantic reads agree on one closed type term.
     inout fn closeBodyProjectionTerms(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
             mut val fields: Array[U64] = []
@@ -220,8 +220,8 @@ pub impl Comp {
             if changed {
                 projection = self.rebuildProjectionTerm(t: t, receiver: receiver, traitArgs: traitArgs)
             }
-            if projection == 0U64 || projection >= self.arena.types.count() { return ref }
-            val p: TypeRef = self.arena.types[projection]
+            if projection == 0U64 || projection >= self.arena.typeCount() { return ref }
+            val p: TypeRef = self.arena.typeAt(index: projection)
             if p.assocTraitId == 0U64 { return projection }
             mut val traitOwner: U64 = p.assocTraitDeclOffset
             if traitOwner == 0U64 { traitOwner = p.assocTraitStart }
@@ -455,16 +455,16 @@ pub impl Comp {
     // replacement here prevents each substitution path from accidentally
     // treating a projection's flattened legacy head as the whole term.
     inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
-        if receiver >= self.arena.types.count() { return 0U64 }
-        val base: TypeRef = self.arena.types[receiver]
+        if receiver >= self.arena.typeCount() { return 0U64 }
+        val base: TypeRef = self.arena.typeAt(index: receiver)
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
     // terms stay rigid: an unmatched binder remains symbolic.
     inout fn groundWitnessTypeTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val semantic: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val semantic: TypeRef = self.arena.typeAt(index: ref)
         if semantic.paramId != 0U64 {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
             if byParam < matchResult.binds.count() { return matchResult.binds[byParam].term }
@@ -567,10 +567,10 @@ pub impl Comp {
             return
         }
         val r: U64 = self.resolveTy(tyRef: elemRef)
-        if r >= self.arena.types.count() {
+        if r >= self.arena.typeCount() {
             return
         }
-        val t: TypeRef = self.arena.types[r]
+        val t: TypeRef = self.arena.typeAt(index: r)
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             if t.args.count() > 0U64 {
                 self.registerArrayElemRef(elemRef: t.args[0])
@@ -583,15 +583,15 @@ pub impl Comp {
         // concrete argument under the active env, so the runtime is emitted for the
         // instantiation (`Array[I32]`), not the template (`PlewArray_T`).
         val re: U64 = self.resolveTy(tyRef: elemRef)
-        if re >= self.arena.types.count() {
+        if re >= self.arena.typeCount() {
             return
         }
         self.ensureArrayElemDeps(elemRef: re)
         // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
         // name span + its ref, matching the parser's recordArrayElem (so the runtime
         // and use sites agree); a simple element uses its head name.
-        mut val nStart: U64 = self.arena.types[re].nameStart
-        mut val nLen: U64 = self.arena.types[re].nameLen
+        mut val nStart: U64 = self.arena.typeAt(index: re).nameStart
+        mut val nLen: U64 = self.arena.typeAt(index: re).nameLen
         mut val fRef: U64 = 0
         if self.isCompoundType(ref: re) {
             val mn: Bind = self.appendMangleSpan(ref: re)
@@ -612,10 +612,10 @@ pub impl Comp {
 
     inout fn recordTypeKeyFromRef(ref: U64) -> Array[U8] {
         mut val out: Array[U8] = []
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return out
         }
-        val tr: TypeRef = self.arena.types[ref]
+        val tr: TypeRef = self.arena.typeAt(index: ref)
         if tr.isSendable {
             appendBytes(into: inout out, from: "sendable ".bytes())
         }
@@ -669,8 +669,8 @@ pub impl Comp {
     // Match layouts against the complete semantic fields without substituting
     // ambient parameters or recovering terms from a template StructDef.
     inout fn recordLayoutMatches(ref: U64, structIndex: U64) -> Bool {
-        if ref >= self.arena.types.count() || structIndex >= self.arena.structs.count() { return false }
-        val term: TypeRef = self.arena.types[ref]
+        if ref >= self.arena.typeCount() || structIndex >= self.arena.structs.count() { return false }
+        val term: TypeRef = self.arena.typeAt(index: ref)
         val layout: StructDef = self.arena.structs[structIndex]
         if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
         if layout.nameLen == 0U64 || layout.isExtern || layout.typeParams.count() != 0U64 { return false }
@@ -685,8 +685,8 @@ pub impl Comp {
     }
 
     inout fn recordStructIndex(ref: U64) -> U64 {
-        if ref >= self.arena.types.count() { return self.arena.structs.count() }
-        val term: TypeRef = self.arena.types[ref]
+        if ref >= self.arena.typeCount() { return self.arena.structs.count() }
+        val term: TypeRef = self.arena.typeAt(index: ref)
         if !term.isRecord { return self.arena.structs.count() }
         val attached: U64 = self.structIndexByName(start: term.nameStart, len: term.nameLen)
         if self.recordLayoutMatches(ref: ref, structIndex: attached) { return attached }
@@ -699,7 +699,7 @@ pub impl Comp {
     }
 
     inout fn groundRecordStruct(ref: U64) -> U64 {
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.nameLen == 0U64 {
             return ref
         }
@@ -738,7 +738,7 @@ pub impl Comp {
                 changed = true
             }
             appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
-            val gt: TypeRef = self.arena.types[g]
+            val gt: TypeRef = self.arena.typeAt(index: g)
             gfields.append(<FieldDef nameStart=fd.nameStart nameLen=fd.nameLen nameId=fd.nameId tyStart=gt.nameStart tyLen=gt.nameLen tyNameId=intern(c: inout self, start: gt.nameStart, len: gt.nameLen) tyIsArray=fd.tyIsArray ty=g isMut=fd.isMut hasDefault=fd.hasDefault defaultVal=fd.defaultVal vis=fd.vis />)
             j += 1
         }
@@ -779,10 +779,10 @@ pub impl Comp {
     // carrier removes the projection marker, so this still descends structurally.
     // Used by the instantiation-depth gate below.
     inout fn tyRefDepth(ref: U64) -> U64 {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return 0
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val d: U64 = 0
         mut val i: U64 = 0
         while i < self.typeTermChildCount(t: t) {
@@ -802,15 +802,15 @@ pub impl Comp {
     // program's type nesting is far below 64.
     inout fn checkInstDepth(ref: U64) {
         if self.tyRefDepth(ref: ref) > 64U64 {
-            self.errorAt(offset: self.arena.types[ref].nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
+            self.errorAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
         }
     }
 
     inout fn groundTypeRef(ref: U64) -> U64 {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return ref
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
             mut val fields: Array[U64] = []
@@ -861,8 +861,8 @@ pub impl Comp {
     }
 
     inout fn groundUnderInst(instRef: U64, tyRef: U64) -> U64 {
-        if instRef == 0U64 || instRef >= self.arena.types.count() { return tyRef }
-        val inst: TypeRef = self.arena.types[instRef]
+        if instRef == 0U64 || instRef >= self.arena.typeCount() { return tyRef }
+        val inst: TypeRef = self.arena.typeAt(index: instRef)
         val si: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
         mut val params: Array[Bind] = []
         if si < self.arena.structs.count() {
@@ -921,8 +921,8 @@ pub impl Comp {
         // selection. This is the one carrier bridge for structural records;
         // the final TypeTerm node will make those fields ordinary children.
         mut val normalized: U64 = g
-        if g != 0U64 && g < self.arena.types.count() {
-            val gt: TypeRef = self.arena.types[g]
+        if g != 0U64 && g < self.arena.typeCount() {
+            val gt: TypeRef = self.arena.typeAt(index: g)
             if gt.nameLen > 0U64 && self.arena.bytes[gt.nameStart] == 40U8 {
                 normalized = self.groundTypeRef(ref: g)
             }
@@ -1054,7 +1054,7 @@ pub impl Comp {
     // of that same conformance proof. Other body kinds retain the legacy
     // bridge until all associated-type terms are explicit TypeTerm nodes.
     inout fn setSelfItemEnvForBody(f: Func, environment: InstanceEnvironment) {
-        if environment.receiverRef != 0U64 && environment.receiverRef < self.arena.types.count() {
+        if environment.receiverRef != 0U64 && environment.receiverRef < self.arena.typeCount() {
             self.cur.selfRef = environment.receiverRef
         } else {
             self.cur.selfRef = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
@@ -1083,7 +1083,7 @@ pub impl Comp {
     }
 
     inout fn instArgCollidesParamName(instRef: U64) -> Bool {
-        val t: TypeRef = self.arena.types[instRef]
+        val t: TypeRef = self.arena.typeAt(index: instRef)
         if t.args.count() == 0U64 {
             return false
         }
@@ -1109,7 +1109,7 @@ pub impl Comp {
         }
         mut val ai: U64 = 0
         while ai < t.args.count() {
-            val arg: TypeRef = self.arena.types[t.args[ai]]
+            val arg: TypeRef = self.arena.typeAt(index: t.args[ai])
             // a bare argument whose head names a declared concrete type AND coincides with
             // one of this generic's parameter names (skip an argument that is itself a
             // parameter — a template position, resolved by the active env, not a collision).
@@ -1134,10 +1134,10 @@ pub impl Comp {
         if self.decls.derives.count() == 0U64 {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0
         while i < t.args.count() {
-            val argT: TypeRef = self.arena.types[t.args[i]]
+            val argT: TypeRef = self.arena.typeAt(index: t.args[i])
             mut val di: U64 = 0
             while di < self.decls.derives.count() {
                 // Only the ENTRY file's (module 0) derive targets are being generated by
@@ -1158,17 +1158,17 @@ pub impl Comp {
     }
 
     inout fn scanType(ref: U64) {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return
         }
         // resolve any active env (a generic struct's field `Array[T]` -> `Array[I64]`)
         // so the grounded instantiation, not the template, is what gets registered.
         // (Shadows the parameter; the public label stays `ref` for all callers.)
         val ref: U64 = self.groundTypeRef(ref: ref)
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0
         while i < t.args.count() {
             self.scanType(ref: t.args[i])
@@ -1232,7 +1232,7 @@ pub impl Comp {
                     j += 1
                 }
                 if self.instArgCollidesParamName(instRef: ref) {
-                    self.errorAt(offset: self.arena.types[ref].nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
+                    self.errorAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {
@@ -1251,7 +1251,7 @@ pub impl Comp {
     }
 
     inout fn scanGenInstFields(instRef: U64) {
-        val inst: TypeRef = self.arena.types[instRef]
+        val inst: TypeRef = self.arena.typeAt(index: instRef)
         val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
         mut val si: U64 = 0
         while si < self.arena.structs.count() {

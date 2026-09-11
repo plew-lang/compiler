@@ -4,11 +4,11 @@
 // of imported declarations or provisional layout requests.
 pub impl Comp {
     inout fn enqueueFinalDestruction(typeRef: U64, visited: inout Array[Bool]) {
-        if typeRef == 0U64 || typeRef >= self.arena.types.count() { return }
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
         while visited.count() <= typeRef { visited.append(false) }
         if visited[typeRef] { return }
         visited.set(i: typeRef, value: true)
-        val type: TypeRef = self.arena.types[typeRef]
+        val type: TypeRef = self.arena.typeAt(index: typeRef)
         if type.isRecord {
             mut val index: U64 = 0U64
             while index < type.recordFieldTerms.count() {
@@ -55,10 +55,10 @@ pub impl Comp {
                 self.enqueueFinalDestruction(typeRef: element, visited: inout visited)
             }
             ArcClass.RefCell(inst: val instance) => {
-                self.enqueueFinalDestruction(typeRef: self.arena.types[instance].args[0U64], visited: inout visited)
+                self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64], visited: inout visited)
             }
             ArcClass.PromiseCell(inst: val instance) => {
-                self.enqueueFinalDestruction(typeRef: self.arena.types[instance].args[0U64], visited: inout visited)
+                self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64], visited: inout visited)
             }
             // Weak destruction never destroys the pointee. A closure's values
             // and an existential's concrete source join through their own

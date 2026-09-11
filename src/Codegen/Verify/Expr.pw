@@ -243,7 +243,7 @@ pub impl Comp {
                 // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
                 // `Box[T]` was silently accepted, dropping the extra) — spec/06.
                 if ty != 0U64 {
-                    val tr: TypeRef = self.arena.types[ty]
+                    val tr: TypeRef = self.arena.typeAt(index: ty)
                     if tr.args.count() > 0U64 {
                         // look up the head as ANY struct/enum (not only generic ones): a
                         // 0-param struct/enum constructed with type arguments (`struct Bar`
@@ -273,7 +273,7 @@ pub impl Comp {
                 // Generic structs / enums (field types need env grounding) are deferred.
                 mut val nonGenSidx: U64 = self.arena.structs.count()
                 if !(isEnum) {
-                    if ty == 0U64 || self.arena.types[ty].args.count() == 0U64 {
+                    if ty == 0U64 || self.arena.typeAt(index: ty).args.count() == 0U64 {
                         val sidxC: U64 = self.structIndexByName(start: typeStart, len: typeLen)
                         if sidxC < self.arena.structs.count() {
                             if self.arena.structs[sidxC].typeParams.count() == 0U64 && !self.arena.structs[sidxC].isExtern {
@@ -353,7 +353,7 @@ pub impl Comp {
                     // `->` touches the POINTEE's field, so it obeys the pointee type's field
                     // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
                     // escape hatch.
-                    val inst: TypeRef = self.arena.types[abt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
                         self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
@@ -436,11 +436,11 @@ pub impl Comp {
                     // the String error as an I64. Compare the Err args (index 1).
                     if retIsResult {
                         if tti.ref != 0U64 {
-                            if tti.ref < self.arena.types.count() {
+                            if tti.ref < self.arena.typeCount() {
                                 if self.cur.retTy != 0U64 {
-                                    if self.cur.retTy < self.arena.types.count() {
-                                        val opR: TypeRef = self.arena.types[tti.ref]
-                                        val fnR: TypeRef = self.arena.types[self.cur.retTy]
+                                    if self.cur.retTy < self.arena.typeCount() {
+                                        val opR: TypeRef = self.arena.typeAt(index: tti.ref)
+                                        val fnR: TypeRef = self.arena.typeAt(index: self.cur.retTy)
                                         if opR.args.count() >= 2U64 {
                                             if fnR.args.count() >= 2U64 {
                                                 if !(self.typeRefEq(a: fnR.args[1], b: opR.args[1])) {
@@ -662,9 +662,9 @@ pub impl Comp {
                 return
             }
         } else {
-            if ti.ref != 0U64 && ti.ref < self.arena.types.count() {
-                tnStart = self.arena.types[ti.ref].nameStart
-                tnLen = self.arena.types[ti.ref].nameLen
+            if ti.ref != 0U64 && ti.ref < self.arena.typeCount() {
+                tnStart = self.arena.typeAt(index: ti.ref).nameStart
+                tnLen = self.arena.typeAt(index: ti.ref).nameLen
             }
         }
         // the struct form (`P { val x } = e`) declares the type it destructures —

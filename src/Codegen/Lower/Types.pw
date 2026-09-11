@@ -19,8 +19,8 @@ pub impl Comp {
                 i += 1
             }
             mut val elemRef: U64 = 0
-            if ty.ref < self.arena.types.count() {
-                val at: TypeRef = self.arena.types[ty.ref]
+            if ty.ref < self.arena.typeCount() {
+                val at: TypeRef = self.arena.typeAt(index: ty.ref)
                 if at.args.count() > 0 {
                     elemRef = at.args[0]
                 }
@@ -44,8 +44,8 @@ pub impl Comp {
     // the one the grounding pass rebuilds for the same type.
     inout fn recordTypeKey(pty: PType) -> Array[U8] {
         mut val out: Array[U8] = []
-        if pty.ref < self.arena.types.count() {
-            if self.arena.types[pty.ref].isSendable {
+        if pty.ref < self.arena.typeCount() {
+            if self.arena.typeAt(index: pty.ref).isSendable {
                 appendBytes(into: inout out, from: "sendable ".bytes())
             }
         }
@@ -54,8 +54,8 @@ pub impl Comp {
             out.append(self.arena.bytes[pty.start + i])
             i += 1
         }
-        if pty.ref < self.arena.types.count() {
-            val tr: TypeRef = self.arena.types[pty.ref]
+        if pty.ref < self.arena.typeCount() {
+            val tr: TypeRef = self.arena.typeAt(index: pty.ref)
             if tr.args.count() > 0U64 {
                 appendBytes(into: inout out, from: "[".bytes())
                 mut val a: U64 = 0
@@ -1032,7 +1032,7 @@ pub impl Comp {
     // `Buffer[K]`/`Buffer[V]`/`Buffer[U64]` (the storage floor) — built via `Buffer.new()`,
     // whose element type is inferred from the field type at codegen.
     inout fn synthEmptyDict(ctxRef: U64) -> U64 {
-        val ct: TypeRef = self.arena.types[ctxRef]
+        val ct: TypeRef = self.arena.typeAt(index: ctxRef)
         val kN: Bind = self.internBytes(s: "keys")
         val vN: Bind = self.internBytes(s: "vals")
         val hN: Bind = self.internBytes(s: "hashes")
@@ -1104,8 +1104,8 @@ pub impl Comp {
 
     inout fn hasDictionaryLiteralContext(ctxRef: U64) -> Bool {
         if ctxRef != 0U64 {
-            if ctxRef < self.arena.types.count() {
-                val ct: TypeRef = self.arena.types[ctxRef]
+            if ctxRef < self.arena.typeCount() {
+                val ct: TypeRef = self.arena.typeAt(index: ctxRef)
                 if rangeEquals(bytes: self.arena.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
                     if ct.args.count() >= 2U64 {
                         return true
@@ -1120,7 +1120,7 @@ pub impl Comp {
     // sequence.  Value-AST and SyntaxFile decoders differ only in how they
     // produce these expression IDs; the dictionary desugar itself is singular.
     inout fn lowerDictLitValues(keys: Array[U64], vals: Array[U64], ctxRef: U64, span: Span) -> U64 {
-        val ct: TypeRef = self.arena.types[ctxRef]
+        val ct: TypeRef = self.arena.typeAt(index: ctxRef)
         val dlN: Bind = self.internBytes(s: "__dl")
         mut val stmts: Array[U64] = []
         val initMake: U64 = self.synthEmptyDict(ctxRef: ctxRef)

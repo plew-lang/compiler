@@ -294,8 +294,8 @@ pub impl Comp {
     // (compiler-built) or a type-parameter head — both skipped.
     inout fn checkTypeVisibility() {
         mut val i: U64 = 0
-        while i < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[i]
+        while i < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: i)
             if t.siteOffset != 0U64 {
                 if self.offsetIsLoaded(offset: t.siteOffset) {
                     self.checkTypeName(siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
@@ -536,8 +536,8 @@ pub impl Comp {
 
     inout fn resolveTypeDeclIdentities() {
         mut val i: U64 = 0
-        while i < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[i]
+        while i < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: i)
             if t.siteOffset != 0U64 && self.offsetIsLoaded(offset: t.siteOffset) {
                 val useMod: U64 = self.moduleOf(offset: t.siteOffset)
                 val decl: Bind = self.typeDeclIdentityAt(useMod: useMod, start: t.nameStart, len: t.nameLen)
@@ -547,9 +547,7 @@ pub impl Comp {
                 }
                 // Resolve both representations at the same declaration boundary.
                 // The scalar reader must never observe pre-resolution identity.
-                val term: TypeTerm = self.arena.typeTerms[i]
-                self.arena.typeTerms[i] = <TypeTerm nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable siteOffset=term.siteOffset hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart />
-                self.arena.types[i] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart siteOffset=t.siteOffset />
+                self.arena.resolveTypeDeclaration(index: i, hasDecl: decl.nameLen != 0U64, declOffset: decl.nameStart, hasAssocTraitDecl: assoc.nameLen != 0U64, assocTraitDeclOffset: assoc.nameStart)
             }
             i += 1
         }
@@ -628,8 +626,8 @@ pub impl Comp {
 
     inout fn checkSurfaceType(surfaceMod: U64, ref: U64, offset: U64) {
         if ref == 0U64 { return }
-        if ref >= self.arena.types.count() { return }
-        val t: TypeRef = self.arena.types[ref]
+        if ref >= self.arena.typeCount() { return }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.siteOffset == 0U64 {
             if self.isRecordSurfaceName(start: t.nameStart, len: t.nameLen) {
                 self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: offset)

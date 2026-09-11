@@ -238,7 +238,7 @@ pub impl Comp {
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.extId == extId && self.methodRecvIsTrait(f: f) {
-                val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.types[f.recvTy])
+                val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.typeAt(index: f.recvTy))
                 mut val bi: U64 = 0U64
                 while bi < self.decls.funcBounds.count() {
                     val bound: FuncBound = self.decls.funcBounds[bi]
@@ -285,9 +285,9 @@ pub impl Comp {
     // complete type tree here: a view source-set nested in Array[T#E#F], a
     // tuple, or a function type is no less structural than a top-level view.
     inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) {
-        if ref == 0U64 || ref >= self.arena.types.count() { return }
+        if ref == 0U64 || ref >= self.arena.typeCount() { return }
         self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: ref), offset: offset)
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0U64
         while i < t.args.count() {
             self.checkGenericTypeViewCycles(ref: t.args[i], offset: offset)
@@ -659,10 +659,10 @@ pub impl Comp {
     // Returns true only when `valueExpr` is a construction of `expectedRef`;
     // callers can then skip the lossy whole-expression inference fallback.
     inout fn genericCheckMakeFields(expectedRef: U64, valueExpr: U64) -> Bool {
-        if expectedRef >= self.arena.types.count() {
+        if expectedRef >= self.arena.typeCount() {
             return false
         }
-        val et: TypeRef = self.arena.types[expectedRef]
+        val et: TypeRef = self.arena.typeAt(index: expectedRef)
         match self.arena.exprs[valueExpr] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                 // Records have no declaration-owned semantic fields.  Their
@@ -757,8 +757,8 @@ pub impl Comp {
         }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
-        if expectedRef < self.arena.types.count() {
-            if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) || self.isSelfTypeInProvided(start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) {
+        if expectedRef < self.arena.typeCount() {
+            if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen) || self.isSelfTypeInProvided(start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen) {
                 match self.arena.exprs[valueExpr] {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                         if !(isBool) {
@@ -809,12 +809,12 @@ pub impl Comp {
         }
         // an array literal in an `Array[E]` position: recurse element-wise (inferType
         // reports an array literal as unknown, so check each element against E).
-        if expectedRef < self.arena.types.count() {
-            if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Array") {
-                if self.arena.types[expectedRef].args.count() > 0U64 {
+        if expectedRef < self.arena.typeCount() {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen, kw: "Array") {
+                if self.arena.typeAt(index: expectedRef).args.count() > 0U64 {
                     match self.arena.exprs[valueExpr] {
                         Expr.Array(val elems) => {
-                            val elemRef: U64 = self.arena.types[expectedRef].args[0]
+                            val elemRef: U64 = self.arena.typeAt(index: expectedRef).args[0]
                             mut val ei: U64 = 0
                             while ei < elems.len {
                                 self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ei))
@@ -879,8 +879,8 @@ pub impl Comp {
     // Traverse the shared TypeTerm child relation so generic checking sees the
     // same complete term shape as grounding, equality, and monomorphization.
     inout fn typeTermContainsAssociatedProjection(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.assocNameId != 0U64 { return true }
         mut val i: U64 = 0U64
         while i < self.typeTermChildCount(t: t) {

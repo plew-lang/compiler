@@ -146,7 +146,7 @@ pub impl LlvmCtx {
     // receiver's env, and the Optional[Item] return by grounding next()'s under the
     // iterator instance's env.
     inout fn genLlvmForGenIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, iter: U64, body: U64, recvRef: U64) {
-        val gt: TypeRef = c.arena.types[recvRef]
+        val gt: TypeRef = c.arena.typeAt(index: recvRef)
         val noArgs: Array[Arg] = []
         mut val iterVal: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         mut val iterInstRef: U64 = recvRef
@@ -164,7 +164,7 @@ pub impl LlvmCtx {
             // the value IS its own Iterator (it has next() directly).
             iterVal = self.genLlvmExpr(c: inout c, id: iter)
         }
-        val it: TypeRef = c.arena.types[iterInstRef]
+        val it: TypeRef = c.arena.typeAt(index: iterInstRef)
         val nfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         if nfi >= c.arena.funcs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
@@ -204,7 +204,7 @@ pub impl LlvmCtx {
             return
         }
         if xRef != 0U64 {
-            if xRef < c.arena.types.count() {
+            if xRef < c.arena.typeCount() {
                 if c.isGenericInst(ref: xRef) {
                     val egs: U64 = self.genStructSlot(c: inout c, ref: xRef)
                     if egs < self.genStructRefs.count() {
@@ -301,8 +301,8 @@ pub impl LlvmCtx {
             if c.cur.typeParams.count() > 0U64 {
                 val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
                 xRef = gx
-                xStart = c.arena.types[gx].nameStart
-                xLen = c.arena.types[gx].nameLen
+                xStart = c.arena.typeAt(index: gx).nameStart
+                xLen = c.arena.typeAt(index: gx).nameLen
             }
         }
         // a struct-destructure pattern (`for S { val a } in …`) binds the element's
@@ -442,8 +442,8 @@ pub impl LlvmCtx {
             if c.cur.typeParams.count() > 0U64 {
                 val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
                 xRef = gx
-                xStart = c.arena.types[gx].nameStart
-                xLen = c.arena.types[gx].nameLen
+                xStart = c.arena.typeAt(index: gx).nameStart
+                xLen = c.arena.typeAt(index: gx).nameLen
             }
         }
         if binds.len > 0U64 {

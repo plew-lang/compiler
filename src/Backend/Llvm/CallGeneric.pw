@@ -44,13 +44,13 @@ pub impl LlvmCtx {
         // genLlvmMakeEnum's merge. Pure callee env (the prior code) dropped the caller's,
         // leaving such a construction an ungrounded template.
         c.cur.typeParams = concatParams(add: c.copyFuncBinds(binds: mf.typeParams), base: savedP)
-        c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.types[instRef].args, base: self.copyGenMethOwn(slot: slot)), base: savedA)
+        c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.typeAt(index: instRef).args, base: self.copyGenMethOwn(slot: slot)), base: savedA)
         // bind Self/Item for an own-param provided call so an argument typed by `Item`
         // coerces against the receiver's real item type (see emitOneGenMethod).
         val sGs: U64 = c.cur.selfRef
         val sGi: U64 = c.cur.itemRef
         if mf.isProvided {
-            c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+            c.setSelfItemEnv(recvStart: c.arena.typeAt(index: instRef).nameStart, recvLen: c.arena.typeAt(index: instRef).nameLen, recvInstRef: instRef)
         }
         mut val parameterTypeRefs: Array[U64] = []
         if callId != 0U64 {
@@ -160,7 +160,7 @@ pub impl LlvmCtx {
                     // owned (+1) temporary — home it so the count releases at statement end.
                     val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
-                    val pointeeRef: U64 = c.arena.types[refTy].args[0U64]
+                    val pointeeRef: U64 = c.arena.typeAt(index: refTy).args[0U64]
                     return <LlvmPlace ptr=cellPtr pointeeTy=self.refPointeeTy(c: inout c, refTy: refTy) typeRef=pointeeRef structIdx=self.structIdxOfRef(c: inout c, ref: pointeeRef) />
                 }
             }
@@ -182,7 +182,7 @@ pub impl LlvmCtx {
                         val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                         val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
-                        val pref: U64 = c.arena.types[refTy].args[0U64]
+                        val pref: U64 = c.arena.typeAt(index: refTy).args[0U64]
                         val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
                         return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
                     }
@@ -426,7 +426,7 @@ pub impl LlvmCtx {
         // check applies only to a concrete param type.
         mut val pConcrete: Bool = true
         if parameterTypeRef != 0U64 {
-            pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[parameterTypeRef].nameStart, len: c.arena.types[parameterTypeRef].nameLen)
+            pConcrete = tyNameConcrete(c: inout c, start: c.arena.typeAt(index: parameterTypeRef).nameStart, len: c.arena.typeAt(index: parameterTypeRef).nameLen)
         }
         if checkView {
             if pConcrete {
@@ -482,8 +482,8 @@ pub impl LlvmCtx {
                 Expr.Array(val elems) => {
                     mut val argElemRef: U64 = 0
                     if parameterTypeRef != 0U64 {
-                        if c.arena.types[parameterTypeRef].args.count() > 0U64 {
-                            argElemRef = c.arena.types[parameterTypeRef].args[0]
+                        if c.arena.typeAt(index: parameterTypeRef).args.count() > 0U64 {
+                            argElemRef = c.arena.typeAt(index: parameterTypeRef).args[0]
                         }
                     }
                     val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
@@ -527,8 +527,8 @@ pub impl LlvmCtx {
         mut val coerceStart: U64 = p.tyStart
         mut val coerceLen: U64 = p.tyLen
         if parameterTypeRef != 0U64 {
-            coerceStart = c.arena.types[parameterTypeRef].nameStart
-            coerceLen = c.arena.types[parameterTypeRef].nameLen
+            coerceStart = c.arena.typeAt(index: parameterTypeRef).nameStart
+            coerceLen = c.arena.typeAt(index: parameterTypeRef).nameLen
         }
         val out: LLVMValueRef = self.coerceIntTo(c: inout c, v: argV, tyStart: coerceStart, tyLen: coerceLen)
         // Swift-guaranteed (+0) convention for EVERY by-value class (spec/14 の同期呼び

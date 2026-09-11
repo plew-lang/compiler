@@ -113,8 +113,8 @@ pub impl LlvmCtx {
                     // a compound element (`Array[Ref[Box]]`, `Array[Box[I32]]`) has a
                     // mangled tyStart llvmScalarTy can't resolve — use the element ref.
                     if ty != 0U64 {
-                        if c.arena.types[ty].args.count() > 0U64 {
-                            elemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[ty].args[0])
+                        if c.arena.typeAt(index: ty).args.count() > 0U64 {
+                            elemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: ty).args[0])
                         }
                     }
                     elemKind = kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen)
@@ -156,8 +156,8 @@ pub impl LlvmCtx {
                                 if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
                                     gt = c.groundTypeRef(ref: ty)
                                 }
-                                if c.arena.types[gt].args.count() > 0U64 {
-                                    litElemRef = c.arena.types[gt].args[0]
+                                if c.arena.typeAt(index: gt).args.count() > 0U64 {
+                                    litElemRef = c.arena.typeAt(index: gt).args[0]
                                 }
                             }
                             v = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: elemTy, elemRef: litElemRef)
@@ -268,7 +268,7 @@ pub impl LlvmCtx {
                     // name so the local is a real struct to field access AND to ARC.
                     if sidx >= c.arena.structs.count() {
                         if gty != 0U64 {
-                            sidx = self.localStructIdxFor(c: inout c, start: c.arena.types[gty].nameStart, len: c.arena.types[gty].nameLen)
+                            sidx = self.localStructIdxFor(c: inout c, start: c.arena.typeAt(index: gty).nameStart, len: c.arena.typeAt(index: gty).nameLen)
                         }
                     }
                 }
@@ -302,7 +302,7 @@ pub impl LlvmCtx {
                 // a `Buffer[T]` local: track its type so the floor intrinsics recover
                 // the element type T (the buffer is just a data pointer).
                 if clsRef != 0U64 {
-                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen, kw: "Buffer") {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: clsRef).nameStart, len: c.arena.typeAt(index: clsRef).nameLen, kw: "Buffer") {
                         tref = clsRef
                     }
                 }
@@ -363,7 +363,7 @@ pub impl LlvmCtx {
                         }
                     } else {
                         if clsRef != 0U64 {
-                            if c.enumIdxByName(start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen) < c.arena.enums.count() {
+                            if c.enumIdxByName(start: c.arena.typeAt(index: clsRef).nameStart, len: c.arena.typeAt(index: clsRef).nameLen) < c.arena.enums.count() {
                                 tref = clsRef
                             }
                         }
@@ -416,7 +416,7 @@ pub impl LlvmCtx {
                 // un-annotated binding, the initializer's own view (`val v = p#Ext`).
                 if tref == 0U64 {
                     if ty != 0U64 {
-                        if c.arena.types[ty].viewExtId != 0U64 || c.arena.types[ty].viewIds.count() > 0U64 {
+                        if c.arena.typeAt(index: ty).viewExtId != 0U64 || c.arena.typeAt(index: ty).viewIds.count() > 0U64 {
                             tref = ty
                         }
                     }
@@ -424,7 +424,7 @@ pub impl LlvmCtx {
                 if tref == 0U64 {
                     val ir: U64 = self.exprTypeRef(c: inout c, id: init)
                     if ir != 0U64 {
-                        if c.arena.types[ir].viewExtId != 0U64 || c.arena.types[ir].viewIds.count() > 0U64 {
+                        if c.arena.typeAt(index: ir).viewExtId != 0U64 || c.arena.typeAt(index: ir).viewIds.count() > 0U64 {
                             tref = ir
                         }
                     }
@@ -505,7 +505,7 @@ pub impl LlvmCtx {
                 if isArr {
                     if tyIsArray {
                         if ty != 0U64 {
-                            val at: TypeRef = c.arena.types[ty]
+                            val at: TypeRef = c.arena.typeAt(index: ty)
                             if at.args.count() > 0U64 {
                                 self.setLocalElemTypeRef(ref: at.args[0])
                             }
@@ -708,7 +708,7 @@ pub impl LlvmCtx {
                                 // the Ref, but the assigned VALUE keeps value semantics.
                                 mut val pref: U64 = 0
                                 if c.isStrongRefInst(ref: refTy) {
-                                    pref = c.arena.types[refTy].args[0]
+                                    pref = c.arena.typeAt(index: refTy).args[0]
                                 }
                                 val g3: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
                                 mut val pty3: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
@@ -776,7 +776,7 @@ pub impl LlvmCtx {
                         // extension-view invariance (spec/09): a returned value's view
                         // must match the declared return type's view.
                         if self.curRetRef != 0U64 {
-                            val retTy: TypeRef = c.arena.types[self.curRetRef]
+                            val retTy: TypeRef = c.arena.typeAt(index: self.curRetRef)
                             mut val retIds: Array[U64] = retTy.viewIds
                             if retIds.count() == 0U64 && retTy.viewExtId != 0U64 { retIds.append(retTy.viewExtId) }
                             if !(c.sameViewIdSet(a: retIds, b: self.collectViewChain(c: inout c, id: value))) {
@@ -817,8 +817,8 @@ pub impl LlvmCtx {
                                     mut val retElemRef: U64 = 0
                                     mut val retElemTy: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: self.curRetTyStart, tyLen: self.curRetTyLen)
                                     if self.curRetRef != 0U64 {
-                                        if c.arena.types[self.curRetRef].args.count() > 0U64 {
-                                            retElemRef = c.arena.types[self.curRetRef].args[0]
+                                        if c.arena.typeAt(index: self.curRetRef).args.count() > 0U64 {
+                                            retElemRef = c.arena.typeAt(index: self.curRetRef).args[0]
                                             if refIsAny(c: inout c, ref: retElemRef) {
                                                 retElemTy = self.anyTy
                                             }

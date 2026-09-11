@@ -21,8 +21,8 @@ pub impl LlvmCtx {
                 Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => { term = c.semanticExprTerm(exprId: init) }
                 _ => { return false }
             }
-            if term == 0U64 || term >= c.arena.types.count() { return false }
-            val typeRef = c.arena.types[term]
+            if term == 0U64 || term >= c.arena.typeCount() { return false }
+            val typeRef = c.arena.typeAt(index: term)
             val lty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: term)
             val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
             LLVMSetInitializer(gv, LLVMConstNull(lty))
@@ -31,9 +31,9 @@ pub impl LlvmCtx {
             if isArray { elementTerm = typeRef.args[0U64] }
             mut val elementTy: LLVMTypeRef = self.i64ty
             mut val elementKind: U64 = 0U64
-            if elementTerm != 0U64 && elementTerm < c.arena.types.count() {
+            if elementTerm != 0U64 && elementTerm < c.arena.typeCount() {
                 elementTy = self.llvmTypeOfRef(c: inout c, ref: elementTerm)
-                elementKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[elementTerm].nameStart, tyLen: c.arena.types[elementTerm].nameLen)
+                elementKind = kindFromTySpan(c: inout c, tyStart: c.arena.typeAt(index: elementTerm).nameStart, tyLen: c.arena.typeAt(index: elementTerm).nameLen)
             }
             mut val structIndex: U64 = self.localStructIdxFor(c: inout c, start: typeRef.nameStart, len: typeRef.nameLen)
             if c.isGenericInst(ref: term) {

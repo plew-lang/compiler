@@ -67,7 +67,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < self.genStructRefs.count() {
             if self.genStructDefs[i] == sidx {
-                if c.arena.types[self.genStructRefs[i]].args.count() == 0U64 {
+                if c.arena.typeAt(index: self.genStructRefs[i]).args.count() == 0U64 {
                     return i
                 }
             }
@@ -313,11 +313,11 @@ pub impl LlvmCtx {
         // the data pointer, identical to an array value, and the element ref comes from
         // the `Buffer[T]` type argument.
         if self.locTypeRef[li] != 0U64 {
-            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.locTypeRef[li]].nameStart, len: c.arena.types[self.locTypeRef[li]].nameLen, kw: "Buffer") {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: self.locTypeRef[li]).nameStart, len: c.arena.typeAt(index: self.locTypeRef[li]).nameLen, kw: "Buffer") {
                 val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
                 mut val ber: U64 = 0
-                if c.arena.types[self.locTypeRef[li]].args.count() > 0U64 {
-                    ber = c.arena.types[self.locTypeRef[li]].args[0]
+                if c.arena.typeAt(index: self.locTypeRef[li]).args.count() > 0U64 {
+                    ber = c.arena.typeAt(index: self.locTypeRef[li]).args[0]
                 }
                 if c.arcNeedsRelease(ref: ber) {
                     self.emitReleaseArrayValue(c: inout c, data: bdata, elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)

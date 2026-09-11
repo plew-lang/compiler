@@ -9,24 +9,24 @@ pub impl Comp {
     }
 
     inout fn typeRefIsNonsendable(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() {
+        if ref == 0U64 || ref >= self.arena.typeCount() {
             return true
         }
         return !(self.typeRefIsSendable(ref: ref))
     }
 
     inout fn typeRefIsSendableDepth(ref: U64, depth: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() {
+        if ref == 0U64 || ref >= self.arena.typeCount() {
             return false
         }
         if depth == 0U64 {
             return false
         }
         val rr: U64 = self.resolveTy(tyRef: ref)
-        if rr >= self.arena.types.count() {
+        if rr >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[rr]
+        val t: TypeRef = self.arena.typeAt(index: rr)
         if t.isAny {
             return t.isSendable
         }

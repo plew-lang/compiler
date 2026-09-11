@@ -39,9 +39,9 @@ pub impl LlvmCtx {
         mut val ptStart: U64 = p.tyStart
         mut val ptLen: U64 = p.tyLen
         if pt != p.ty {
-            if pt < c.arena.types.count() {
-                ptStart = c.arena.types[pt].nameStart
-                ptLen = c.arena.types[pt].nameLen
+            if pt < c.arena.typeCount() {
+                ptStart = c.arena.typeAt(index: pt).nameStart
+                ptLen = c.arena.typeAt(index: pt).nameLen
             }
         }
         return self.llvmTypeFor(c: inout c, tyStart: ptStart, tyLen: ptLen, isArray: p.tyIsArray)
@@ -101,8 +101,8 @@ pub impl LlvmCtx {
             // derived witness carrying only `f.retStart`), fall back to the declared span.
             if f.retTy != 0U64 {
                 if rt != f.retTy {
-                    if rt < c.arena.types.count() {
-                        val rtT: TypeRef = c.arena.types[rt]
+                    if rt < c.arena.typeCount() {
+                        val rtT: TypeRef = c.arena.typeAt(index: rt)
                         return self.llvmTypeFor(c: inout c, tyStart: rtT.nameStart, tyLen: rtT.nameLen, isArray: f.retIsArray)
                     }
                 }

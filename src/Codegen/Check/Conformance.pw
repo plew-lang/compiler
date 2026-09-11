@@ -133,8 +133,8 @@ pub impl Comp {
             }
             return term.scope == scope && self.conformBindAt(binds: self.decls.conforms[decl].typeParams, index: binder).nameId == nameId
         }
-        if term.ref == 0U64 || term.ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[term.ref]
+        if term.ref == 0U64 || term.ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: term.ref)
         // The closed child view includes record fields and a projection's
         // receiver, so occurs checking cannot accidentally flatten either.
         mut val i: U64 = 0U64
@@ -182,12 +182,12 @@ pub impl Comp {
             return 1U64
         }
         if bIsBinder { return self.traitCycleTermRelation(a: b, b: a, binds: inout binds) }
-        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.types.count() || b.ref >= self.arena.types.count() {
+        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() {
             if a.ref == b.ref { return 1U64 }
             return 0U64
         }
-        val ta: TypeRef = self.arena.types[a.ref]
-        val tb: TypeRef = self.arena.types[b.ref]
+        val ta: TypeRef = self.arena.typeAt(index: a.ref)
+        val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
             if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
         } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return 0U64 }
@@ -281,9 +281,9 @@ pub impl Comp {
             bScopes.append(b.scope)
             return true
         }
-        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.types.count() || b.ref >= self.arena.types.count() { return a.ref == b.ref }
-        val ta: TypeRef = self.arena.types[a.ref]
-        val tb: TypeRef = self.arena.types[b.ref]
+        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.typeCount() || b.ref >= self.arena.typeCount() { return a.ref == b.ref }
+        val ta: TypeRef = self.arena.typeAt(index: a.ref)
+        val tb: TypeRef = self.arena.typeAt(index: b.ref)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
             if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
         } else if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.isRecord != tb.isRecord || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId { return false }
@@ -447,8 +447,8 @@ pub impl Comp {
 
     inout fn traitCycleConstructorCount(ref: U64, params: Array[Bind]) -> U64 {
         if self.plainBinder(ref: ref, params: params) < params.count() { return 0U64 }
-        if ref == 0U64 || ref >= self.arena.types.count() { return 1U64 }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 1U64 }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 1U64
         mut val i: U64 = 0U64
         while i < self.typeTermChildCount(t: t) {
@@ -460,8 +460,8 @@ pub impl Comp {
 
     inout fn traitCycleBinderOccurrences(ref: U64, params: Array[Bind], binder: U64) -> U64 {
         if self.plainBinder(ref: ref, params: params) == binder { return 1U64 }
-        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 0U64
         mut val i: U64 = 0U64
         while i < self.typeTermChildCount(t: t) {

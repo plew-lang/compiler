@@ -27,8 +27,8 @@ pub impl Comp {
                     val argument: CallTemplateArgument = sources[ai]
                     val argRef: U64 = self.groundCallArgumentSource(source: argument.source)
                     if p.tyIsArray {
-                        if p.tyNameId == tp.nameId && argRef != 0U64 && argRef < self.arena.types.count() {
-                            val array: TypeRef = self.arena.types[argRef]
+                        if p.tyNameId == tp.nameId && argRef != 0U64 && argRef < self.arena.typeCount() {
+                            val array: TypeRef = self.arena.typeAt(index: argRef)
                             if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
                                 candidate = array.args[0]
                             }
@@ -73,8 +73,8 @@ pub impl Comp {
                 if ai < args.len {
                     val argTerm: U64 = self.parametricExprTerm(exprId: self.argAt(args: args, index: ai).expr)
                     if p.tyIsArray {
-                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.types.count() {
-                            val at: TypeRef = self.arena.types[argTerm]
+                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.typeCount() {
+                            val at: TypeRef = self.arena.typeAt(index: argTerm)
                             if at.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                                 found = at.args[0]
                             }
@@ -104,19 +104,8 @@ pub impl Comp {
 
     inout fn findOrAddTypeRef(nameStart: U64, nameLen: U64) -> U64 {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[i]
-            if t.args.count() == 0 {
-                // a bare NAME lookup must not alias a facet-carrying ref: `P#Ext`
-                // (viewExtId) and `any P` (isAny) are distinct types from plain `P`
-                // (spec/08,09) — returning one for the other leaks the facet.
-                if t.nameId == q && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && !(t.isAny) && !(t.isSendable) {
-                    return i
-                }
-            }
-            i += 1
-        }
+        val ref = self.arena.firstBareTypeNamed(nameId: q)
+        if ref < self.arena.typeCount() { return ref }
         val noArgs: Array[U64] = []
         return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
@@ -134,14 +123,14 @@ pub impl Comp {
     }
 
     inout fn unifyTypeParam(paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
-        if paramRef >= self.arena.types.count() {
+        if paramRef >= self.arena.typeCount() {
             return 0
         }
-        val pt: TypeRef = self.arena.types[paramRef]
-        if argRef >= self.arena.types.count() {
+        val pt: TypeRef = self.arena.typeAt(index: paramRef)
+        if argRef >= self.arena.typeCount() {
             return 0
         }
-        val at: TypeRef = self.arena.types[argRef]
+        val at: TypeRef = self.arena.typeAt(index: argRef)
         // Anonymous records are structural TypeTerm nodes.  Their synthetic
         // layout names (`(value:T)` / `(value:I32)`) are intentionally ignored
         // here: infer through the canonical labelled field children exactly as
@@ -217,8 +206,8 @@ pub impl Comp {
     // element (exprType reports the literal itself as unknown — element-wise typing).
     inout fn argArrayElemRef(argExpr: U64) -> U64 {
         val r: U64 = self.typedIrRefOfInfo(ti: self.typeOf(id: argExpr))
-        if r != 0 && r < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[r]
+        if r != 0 && r < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: r)
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
                 if t.args.count() == 1 {
                     return t.args[0]
@@ -245,7 +234,7 @@ pub impl Comp {
                 if strip {
                     return baseRef
                 }
-                val bt: TypeRef = self.arena.types[baseRef]
+                val bt: TypeRef = self.arena.typeAt(index: baseRef)
                 mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: baseRef)
                 mut val present: Bool = false
                 mut val i: U64 = 0U64
@@ -484,7 +473,7 @@ pub impl Comp {
         if !(self.isGenericInst(ref: resultRef)) {
             return
         }
-        val rt: TypeRef = self.arena.types[resultRef]
+        val rt: TypeRef = self.arena.typeAt(index: resultRef)
         if !(spansEqual(c: inout self, aStart: rt.nameStart, aLen: rt.nameLen, bStart: recvStart, bLen: recvLen)) {
             return
         }
@@ -495,7 +484,7 @@ pub impl Comp {
         while i < inferred.count() {
             mut val needsGround: Bool = inferred[i] == 0U64
             if !(needsGround) {
-                if self.arena.types[inferred[i]].nameLen == 0U64 {
+                if self.arena.typeAt(index: inferred[i]).nameLen == 0U64 {
                     needsGround = true
                 }
             }
@@ -518,7 +507,7 @@ pub impl Comp {
         // only arrays (kind 3, handled per element type) and nameless values are skipped.
         mut val rt: TypeInfo = rt0
         val concreteRecvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
-        if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.types.count() {
+        if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.typeCount() {
             rt = self.typeInfoOfRef(ref: concreteRecvRef)
         }
         // A method body can be the first use that exposes a nested generic

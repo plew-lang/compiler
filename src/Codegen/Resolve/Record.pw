@@ -163,8 +163,8 @@ pub impl Comp {
     // that term is what lets a generic free call in the loop body later ground
     // E through the enclosing BodyInstance.
     inout fn iterableItemTerm(iterExpr: U64, iterTerm: U64) -> U64 {
-        if iterTerm == 0U64 || iterTerm >= self.arena.types.count() { return 0U64 }
-        val iterTy: TypeRef = self.arena.types[iterTerm]
+        if iterTerm == 0U64 || iterTerm >= self.arena.typeCount() { return 0U64 }
+        val iterTy: TypeRef = self.arena.typeAt(index: iterTerm)
         if iterTy.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: iterTy.nameStart, len: iterTy.nameLen, kw: "Array") {
             return iterTy.args[0]
         }
@@ -205,8 +205,8 @@ pub impl Comp {
     // supplies it only when the shared body is grounded.
     inout fn parametricCallArgumentTerm(exprId: U64) -> U64 {
         val term: U64 = self.parametricExprTerm(exprId: exprId)
-        if term == 0U64 || term >= self.arena.types.count() { return term }
-        val t: TypeRef = self.arena.types[term]
+        if term == 0U64 || term >= self.arena.typeCount() { return term }
+        val t: TypeRef = self.arena.typeAt(index: term)
         if t.args.count() != 0U64 || !(rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self")) {
             return term
         }
@@ -242,8 +242,8 @@ pub impl Comp {
                     val argTerm: U64 = self.parametricCallArgumentTerm(exprId: self.argAt(args: args, index: ai).expr)
                     mut val candidate: U64 = 0U64
                     if p.tyIsArray {
-                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.types.count() {
-                            val at: TypeRef = self.arena.types[argTerm]
+                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.typeCount() {
+                            val at: TypeRef = self.arena.typeAt(index: argTerm)
                             if at.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                                 candidate = at.args[0]
                             }
@@ -305,8 +305,8 @@ pub impl Comp {
     // Prefer that owner over a spelling scan so an import/re-export cannot
     // redirect an existential slot after the source resolver selected it.
     inout fn recordAnyTraitIndex(anyRef: U64) -> U64 {
-        if anyRef == 0U64 || anyRef >= self.arena.types.count() { return self.decls.traits.count() }
-        val anyTy: TypeRef = self.arena.types[anyRef]
+        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traits.count() }
+        val anyTy: TypeRef = self.arena.typeAt(index: anyRef)
         if !(anyTy.isAny) { return self.decls.traits.count() }
         if anyTy.hasDecl {
             mut val i: U64 = 0U64
@@ -348,16 +348,16 @@ pub impl Comp {
             eprintU64(n: receiverTerm)
             eprint(text: " receiver-type=")
             self.traceMonoTypeHead(ref: receiverTerm)
-            if receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
+            if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                 eprint(text: " receiver-any=")
-                if self.arena.types[receiverTerm].isAny { eprint(text: "true") }
+                if self.arena.typeAt(index: receiverTerm).isAny { eprint(text: "true") }
                 else { eprint(text: "false") }
             }
             eprint(text: "\n")
         }
-        if receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return }
         val receiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: receiverExpr)
-        val recvTy: TypeRef = self.arena.types[receiverTerm]
+        val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
             val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -432,7 +432,7 @@ pub impl Comp {
             }
             return
         }
-        if receiverTerm >= self.arena.types.count() { return }
+        if receiverTerm >= self.arena.typeCount() { return }
         // A resolver can find the authored declaration of a trait-subject
         // witness while checking a provided body. That declaration is not a
         // concrete callee: `impl B as A` is abstract over B and must be
@@ -474,10 +474,10 @@ pub impl Comp {
         // normalized receiver. The source value remains the newtype; this is
         // only the callee's `Self` substitution for signature grounding.
         mut val returnReceiver: U64 = receiverTerm
-        val receiver: TypeRef = self.arena.types[receiverTerm]
+        val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
         val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
-        if underlying != 0U64 && underlying < self.arena.types.count() {
-            val under: TypeRef = self.arena.types[underlying]
+        if underlying != 0U64 && underlying < self.arena.typeCount() {
+            val under: TypeRef = self.arena.typeAt(index: underlying)
             if spansEqual(c: inout self, aStart: under.nameStart, aLen: under.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
                 returnReceiver = underlying
             }
@@ -593,8 +593,8 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Array(elems: val elems) => {
                 self.recordSemanticExprTerm(exprId: exprId, term: ctxRef)
-                if ctxRef < self.arena.types.count() {
-                    val array: TypeRef = self.arena.types[ctxRef]
+                if ctxRef < self.arena.typeCount() {
+                    val array: TypeRef = self.arena.typeAt(index: ctxRef)
                     if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
                         mut val i: U64 = 0U64
                         while i < elems.len {
@@ -687,8 +687,8 @@ pub impl Comp {
                             val declaredFields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
-                    } else if resultTerm < self.arena.types.count() && !(self.arena.types[resultTerm].isRecord) {
-                        val result: TypeRef = self.arena.types[resultTerm]
+                    } else if resultTerm < self.arena.typeCount() && !(self.arena.typeAt(index: resultTerm).isRecord) {
+                        val result: TypeRef = self.arena.typeAt(index: resultTerm)
                         val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
                         if structIndex < self.arena.structs.count() {
                             val declaredFields: Array[FieldDef] = self.arena.structs[structIndex].fields
@@ -703,7 +703,7 @@ pub impl Comp {
                 // that order here, alongside each selected destination slot.
                 // Structural records have canonical layout slots but retain
                 // their written evaluation order; layout is not evaluation.
-                if !self.arena.types[resultTerm].isRecord {
+                if !self.arena.typeAt(index: resultTerm).isRecord {
                     mut val position: U64 = 1U64
                     while position < elements.count() {
                         val element = elements[position]
@@ -722,7 +722,7 @@ pub impl Comp {
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Enum enumIdx=enumIndex variantIndex=variantIndex /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
                 } else {
                     mut val fieldCount: U64 = 0U64
-                    val result = self.arena.types[resultTerm]
+                    val result = self.arena.typeAt(index: resultTerm)
                     if result.isRecord {
                         fieldCount = result.recordFieldTerms.count()
                     } else {
@@ -894,8 +894,8 @@ pub impl Comp {
     inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) {
         if !(self.cur.recordCallTemplates) { return }
         val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
-        if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.types.count() { return }
-        val scrutinee: TypeRef = self.arena.types[scrutineeTerm]
+        if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return }
+        val scrutinee: TypeRef = self.arena.typeAt(index: scrutineeTerm)
         val enumIndex: U64 = self.anyEnumIndex(nameStart: scrutinee.nameStart, nameLen: scrutinee.nameLen)
         if enumIndex >= self.arena.enums.count() { return }
         mut val selectedArms: Array[SemanticMatchArm] = []
@@ -1093,7 +1093,7 @@ pub impl Comp {
                 if rangeEquals(bytes: self.arena.bytes, start: callStart, len: callLen, kw: "pow") && args.len == 2U64 {
                     val baseExpr: U64 = self.argAt(args: args, index: 0U64).expr
                     val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
-                    if baseTerm != 0U64 && baseTerm < self.arena.types.count() {
+                    if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
                         val baseReceiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: baseExpr)
                         val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args)
                         match resolution {
@@ -1244,11 +1244,11 @@ pub impl Comp {
                 // The finalizer already normalizes that receiver for the
                 // selected declaration; Record must make the same frontend
                 // selection so it can publish a Direct template first.
-                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
-                    val receiver: TypeRef = self.arena.types[receiverTerm]
+                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+                    val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
                     val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
-                    if underlying != 0U64 && underlying < self.arena.types.count() {
-                        val under: TypeRef = self.arena.types[underlying]
+                    if underlying != 0U64 && underlying < self.arena.typeCount() {
+                        val under: TypeRef = self.arena.typeAt(index: underlying)
                         methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
                     }
                 }
@@ -1333,7 +1333,7 @@ pub impl Comp {
                 // TypeTerm and apply the resolved source set once, matching
                 // the canonical TypeRef representation used everywhere else.
                 val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
-                if receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
+                if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                     mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiverTerm)
                     if strip {
                         sources = []
@@ -1365,7 +1365,7 @@ pub impl Comp {
                 if fieldTerm != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
                     val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
-                    val receiver: TypeRef = self.arena.types[baseTerm]
+                    val receiver: TypeRef = self.arena.typeAt(index: baseTerm)
                     mut val fieldCount: U64 = receiver.recordFieldTerms.count()
                     if !receiver.isRecord {
                         val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
@@ -1456,8 +1456,8 @@ pub impl Comp {
                 if baseTerm == 0U64 {
                     baseTerm = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 }
-                if baseTerm != 0U64 && baseTerm < self.arena.types.count() {
-                    val baseTy: TypeRef = self.arena.types[baseTerm]
+                if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
+                    val baseTy: TypeRef = self.arena.typeAt(index: baseTerm)
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
                             self.recordSemanticExprTerm(exprId: exprId, term: baseTy.args[0])
@@ -1524,8 +1524,8 @@ pub impl Comp {
                 if baseRef == 0U64 {
                     baseRef = self.typedIrRefOfInfo(ti: baseInfo)
                 }
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
-                    val baseTerm: TypeRef = self.arena.types[baseRef]
+                if baseRef != 0U64 && baseRef < self.arena.typeCount() {
+                    val baseTerm: TypeRef = self.arena.typeAt(index: baseRef)
                     // The structural semantic term is authoritative over the
                     // legacy TypeInfo adapter: nested `?.` has already become
                     // MatchExpr here, whose lexical arm binding cannot be
@@ -1542,11 +1542,11 @@ pub impl Comp {
                 // Verify can observe this shared AST node. Initial collection
                 // deliberately does not do this because these terms do not yet
                 // exist there.
-                if baseInfo.kind == 2I64 && baseRef != 0U64 && baseRef < self.arena.types.count() {
+                if baseInfo.kind == 2I64 && baseRef != 0U64 && baseRef < self.arena.typeCount() {
                     if self.typeConformsToChain(nameStart: baseInfo.nameStart, nameLen: baseInfo.nameLen) {
                         val stageRef: U64 = self.chainStageResultRef(baseRef: baseRef, cont: cont)
                         if stageRef != 0U64 {
-                            val baseTerm: TypeRef = self.arena.types[baseRef]
+                            val baseTerm: TypeRef = self.arena.typeAt(index: baseRef)
                             val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
                             if valueIndex < baseTerm.args.count() {
                                 self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=baseTerm.args[valueIndex] />)
@@ -1565,7 +1565,7 @@ pub impl Comp {
                 self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
                 val resultTerm: U64 = self.parametricExprTerm(exprId: expr)
                 if self.isGenericInst(ref: resultTerm) {
-                    val result: TypeRef = self.arena.types[resultTerm]
+                    val result: TypeRef = self.arena.typeAt(index: resultTerm)
                     if result.args.count() > 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: result.args[0])
                     }
@@ -1575,7 +1575,7 @@ pub impl Comp {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if self.isStrongRefInst(ref: refTerm) {
-                    val reference: TypeRef = self.arena.types[refTerm]
+                    val reference: TypeRef = self.arena.typeAt(index: refTerm)
                     if reference.args.count() > 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: self.fieldTypeRefOfReceiver(receiverRef: reference.args[0], fieldStart: nameStart, fieldLen: nameLen))
                     }
@@ -1585,7 +1585,7 @@ pub impl Comp {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if self.isStrongRefInst(ref: refTerm) {
-                    val reference: TypeRef = self.arena.types[refTerm]
+                    val reference: TypeRef = self.arena.typeAt(index: refTerm)
                     if reference.args.count() > 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: reference.args[0])
                     }
@@ -1598,8 +1598,8 @@ pub impl Comp {
             Expr.Await(val operand) => {
                 self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
                 val promiseTerm: U64 = self.parametricExprTerm(exprId: operand)
-                if promiseTerm != 0U64 && promiseTerm < self.arena.types.count() {
-                    val promise: TypeRef = self.arena.types[promiseTerm]
+                if promiseTerm != 0U64 && promiseTerm < self.arena.typeCount() {
+                    val promise: TypeRef = self.arena.typeAt(index: promiseTerm)
                     if promise.args.count() > 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: promise.args[0])
                     }
@@ -1728,8 +1728,8 @@ pub impl Comp {
                             // (an `any P` / generic-inst element loses its structure as
                             // a bare name — `for s in shapes` then can't dispatch on s).
                             mut val fer: U64 = 0
-                            if et.ref != 0U64 && et.ref < self.arena.types.count() {
-                                val fat: TypeRef = self.arena.types[et.ref]
+                            if et.ref != 0U64 && et.ref < self.arena.typeCount() {
+                                val fat: TypeRef = self.arena.typeAt(index: et.ref)
                                 if fat.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: fat.nameStart, len: fat.nameLen, kw: "Array") {
                                     fer = fat.args[0]
                                 }

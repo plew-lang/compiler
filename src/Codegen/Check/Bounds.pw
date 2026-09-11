@@ -39,10 +39,10 @@ pub impl Comp {
     }
 
     inout fn existentialTraitConstraint(ref: U64) -> TraitConstraint {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
         }
-        return self.existentialTraitConstraintFor(t: self.arena.types[ref])
+        return self.existentialTraitConstraintFor(t: self.arena.typeAt(index: ref))
     }
 
     // Compatibility projection for existing bool consumers.  The input is
@@ -348,9 +348,9 @@ pub impl Comp {
         // not an ambient lookup: `impl P { self.p() }` has exactly `Self: P`
         // in scope.  Preserve that proof in the same carrier as an authored
         // `where T: P`, so BodyInstance later grounds the receiver once.
-        if fnIdx < self.arena.funcs.count() && receiverRef < self.arena.types.count() {
+        if fnIdx < self.arena.funcs.count() && receiverRef < self.arena.typeCount() {
             val f: Func = self.arena.funcs[fnIdx]
-            val receiver: TypeRef = self.arena.types[receiverRef]
+            val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
             if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
                 mut val ti: U64 = 0U64
                 while ti < self.decls.traits.count() {
@@ -500,8 +500,8 @@ pub impl Comp {
     // never a name search: `Optional[Item]` must receive the same treatment as
     // a top-level `Item` under `where T: Iterator[Item=E]`.
     inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, receiverRef: U64, traitOwner: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val raw: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val raw: TypeRef = self.arena.typeAt(index: ref)
         mut val rawName: U64 = raw.nameId
         if rawName == 0U64 { rawName = intern(c: inout self, start: raw.nameStart, len: raw.nameLen) }
         if raw.args.count() == 0U64 && raw.assocNameId == 0U64 {
@@ -515,8 +515,8 @@ pub impl Comp {
                         if predicate.member == rawName { return predicate.value }
                         pi += 1U64
                     }
-                    if receiverRef >= self.arena.types.count() { return ref }
-                    val receiver: TypeRef = self.arena.types[receiverRef]
+                    if receiverRef >= self.arena.typeCount() { return ref }
+                    val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
                     val noLabels: Array[U64] = []
                     return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
                 }
@@ -554,7 +554,7 @@ pub impl Comp {
     // trait parameters ground first; then associated outputs reify recursively
     // through the selected proof's constraint.
     inout fn staticRequirementResultTypeForProof(traitDef: TraitDef, req: Func, receiverRef: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
-        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
+        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.typeCount() { return 0U64 }
         // This is a declaration-time proof query, not a body-instance read.
         // Ground only the selected trait instance's binders; consulting Cursor
         // here let an unrelated temporary receiver reinterpret abstract Self.
@@ -664,8 +664,8 @@ pub impl Comp {
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
     inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Bool {
-        if ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[ref]
+        if ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if self.conformsInstance(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues) { return true }
         mut val i: U64 = 0U64
         while i < t.viewIds.count() {
@@ -703,7 +703,7 @@ pub impl Comp {
         while k < tps.count() {
             if tps[k].nameId == prId {
                 if k < targs.count() {
-                    return self.arena.types[targs[k]].nameId
+                    return self.arena.typeAt(index: targs[k]).nameId
                 }
             }
             k += 1
@@ -718,7 +718,7 @@ pub impl Comp {
         while k < tps.count() {
             if tps[k].nameId == prId {
                 if k < targs.count() {
-                    val tr: TypeRef = self.arena.types[targs[k]]
+                    val tr: TypeRef = self.arena.typeAt(index: targs[k])
                     if rangeEquals(bytes: self.arena.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
                         if tr.args.count() > 0U64 {
                             return targs[k]
@@ -749,8 +749,8 @@ pub impl Comp {
             val arrTarg: U64 = self.substReqParamArrayElemRef(tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
             if arrTarg != 0U64 {
                 if pw.tyIsArray {
-                    val elemRef: U64 = self.arena.types[arrTarg].args[0]
-                    if pw.tyNameId == self.arena.types[elemRef].nameId {
+                    val elemRef: U64 = self.arena.typeAt(index: arrTarg).args[0]
+                    if pw.tyNameId == self.arena.typeAt(index: elemRef).nameId {
                         i += 1
                     } else {
                         return false
@@ -848,8 +848,8 @@ pub impl Comp {
 
     inout fn checkAnyFormation() {
         mut val ti: U64 = 0
-        while ti < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[ti]
+        while ti < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: ti)
             if t.isAny {
                 val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
                 if tri < self.decls.traits.count() {
@@ -1055,14 +1055,14 @@ pub impl Comp {
     // (hasCompareWitness) and the `where` bound-check consult this, so acceptance == the
     // reality of instantiation and the diagnostic lands where the type is written.
     inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
         val rr: U64 = self.resolveTy(tyRef: ref)
         if rr != ref {
             return self.conformsInstance(ref: rr, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.assocNameId != 0U64 {
             return false
         }
@@ -1128,7 +1128,7 @@ pub impl Comp {
                 if fb.paramTy != 0U64 {
                     val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: wf.typeParams), values: t.args)
                     val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: wf.typeParams), args: t.args)
-                    if lhs >= self.arena.types.count() {
+                    if lhs >= self.arena.typeCount() {
                         return false
                     }
                     if !(self.tyRefIsGround(ref: lhs)) {
@@ -1194,7 +1194,7 @@ pub impl Comp {
                 val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: fin.args)
                 if fb.paramTy != 0U64 {
                     val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: fin.args)
-                    if lhs < self.arena.types.count() {
+                    if lhs < self.arena.typeCount() {
                         val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
                         if !ok {
                             self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
@@ -1243,7 +1243,7 @@ pub impl Comp {
     // proofs, but run it for the one BodyInstance that finalization enqueues
     // rather than sweeping every discovered generic layout up front.
     inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64) {
-        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.types.count() { return }
+        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.typeCount() { return }
         val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
         if receiverEnv.conformIdx == 0U64 { return }
         // Start with method-owned substitutions carried by the final callable,
@@ -1279,7 +1279,7 @@ pub impl Comp {
                         pi += 1U64
                     }
                 }
-                if lhs != 0U64 && lhs < self.arena.types.count() {
+                if lhs != 0U64 && lhs < self.arena.typeCount() {
                     if !(self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)) {
                         self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                     }

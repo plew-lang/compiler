@@ -35,7 +35,7 @@ pub impl LlvmCtx {
     }
 
     inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> LLVMTypeRef {
-        val t: TypeRef = c.arena.types[fnRef]
+        val t: TypeRef = c.arena.typeAt(index: fnRef)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val i: U64 = 1
@@ -45,7 +45,7 @@ pub impl LlvmCtx {
         }
         mut val rty: LLVMTypeRef = self.voidty
         if t.args.count() > 0U64 {
-            val rt: TypeRef = c.arena.types[t.args[0]]
+            val rt: TypeRef = c.arena.typeAt(index: t.args[0])
             // a `()` return (the unnamed unit record) is void; any named type is a value.
             if rt.nameLen != 0U64 {
                 rty = self.llvmTypeOfRef(c: inout c, ref: t.args[0])
@@ -60,7 +60,7 @@ pub impl LlvmCtx {
         val fnPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, cloVal, 0U64, anon())
         val env: LLVMValueRef = LLVMBuildExtractValue(self.b, cloVal, 1U64, anon())
         val fty: LLVMTypeRef = self.closureLlvmFnTy(c: inout c, fnRef: fnRef)
-        val ft: TypeRef = c.arena.types[fnRef]
+        val ft: TypeRef = c.arena.typeAt(index: fnRef)
         mut val av: Array[LLVMValueRef] = []
         av.append(env)
         mut val i: U64 = 0
@@ -70,7 +70,7 @@ pub impl LlvmCtx {
             // coerce an int arg to the declared param width (fn args = [ret, p0, p1, …]).
             if i + 1U64 < ft.args.count() {
                 if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-                    val pt: TypeRef = c.arena.types[ft.args[i + 1U64]]
+                    val pt: TypeRef = c.arena.typeAt(index: ft.args[i + 1U64])
                     v = self.coerceInt(v: v, target: self.llvmTypeOfRef(c: inout c, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
                 }
             }
@@ -165,8 +165,8 @@ pub impl LlvmCtx {
             val savedItem: U64 = c.cur.itemRef
             c.cur.typeParams = c.copyFuncBinds(binds: cf.typeParams)
             c.cur.typeArgs = inferred
-            if cf.isAssoc && recvInstRef != 0U64 && recvInstRef < c.arena.types.count() {
-                c.setSelfItemEnv(recvStart: c.arena.types[recvInstRef].nameStart, recvLen: c.arena.types[recvInstRef].nameLen, recvInstRef: recvInstRef)
+            if cf.isAssoc && recvInstRef != 0U64 && recvInstRef < c.arena.typeCount() {
+                c.setSelfItemEnv(recvStart: c.arena.typeAt(index: recvInstRef).nameStart, recvLen: c.arena.typeAt(index: recvInstRef).nameLen, recvInstRef: recvInstRef)
             }
             val pinMark: U64 = self.pinCells.count()
             mut val av2: Array[LLVMValueRef] = []

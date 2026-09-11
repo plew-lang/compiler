@@ -19,7 +19,7 @@ pub impl LlvmCtx {
     inout fn anyRecvTraitIdxForRef(c: inout Comp, ref: U64) -> U64 {
         val r: U64 = ref
         if refIsAny(c: inout c, ref: r) {
-            return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
+            return c.findTraitIdxByName(start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen)
         }
         return c.decls.traits.count()
     }
@@ -28,13 +28,13 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
-        if c.arena.types[ref].isRecord {
+        if c.arena.typeAt(index: ref).isRecord {
             val layoutIndex: U64 = c.recordStructIndex(ref: ref)
             if layoutIndex < c.arena.structs.count() {
                 val slot: U64 = self.structSlotForSidx(c: inout c, sidx: layoutIndex)
                 if slot < self.genStructTys.count() { return self.genStructTys[slot] }
             }
-            c.errorAt(offset: c.arena.types[ref].nameStart, msg: "internal error (compiler bug): record LLVM type requires a registered layout matching its semantic field types")
+            c.errorAt(offset: c.arena.typeAt(index: ref).nameStart, msg: "internal error (compiler bug): record LLVM type requires a registered layout matching its semantic field types")
             return self.i64ty
         }
         // an existential `any P`: the fat pointer { data, vtable }, not the named
@@ -46,7 +46,7 @@ pub impl LlvmCtx {
             // a generic OPAQUE intrinsic (`Buffer[T]`): its representation is a single
             // pointer (like Array/Ref), NOT a struct layout — so it gets no `%gs` type
             // (registerGenStructNames skips it). Ask the representation question once here.
-            val gat: TypeRef = c.arena.types[ref]
+            val gat: TypeRef = c.arena.typeAt(index: ref)
             val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
             if gxi < c.arena.structs.count() {
                 if c.arena.structs[gxi].isExtern {
@@ -69,7 +69,7 @@ pub impl LlvmCtx {
             // legitimately declines instances over to-be-derived types — spec/16.)
             if !(c.genMode) {
                 if c.tyRefIsGround(ref: ref) {
-                    val lt: TypeRef = c.arena.types[ref]
+                    val lt: TypeRef = c.arena.typeAt(index: ref)
                     mut val isKnownDef: Bool = false
                     val lsi: U64 = c.genericStructIndex(nameStart: lt.nameStart, nameLen: lt.nameLen)
                     if lsi < c.arena.structs.count() {
@@ -86,7 +86,7 @@ pub impl LlvmCtx {
                 }
             }
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         return self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
     }
 
@@ -176,8 +176,8 @@ pub impl LlvmCtx {
         val r: U64 = self.exprTypeRef(c: inout c, id: id)
         if r != 0U64 {
             val g: U64 = c.groundTypeRef(ref: r)
-            if g < c.arena.types.count() {
-                val gt: TypeRef = c.arena.types[g]
+            if g < c.arena.typeCount() {
+                val gt: TypeRef = c.arena.typeAt(index: g)
                 if gt.nameLen != 0U64 {
                     if isPrimIntName(c: inout c, start: gt.nameStart, len: gt.nameLen) || c.isFloatType(start: gt.nameStart, len: gt.nameLen) {
                         return <Bind nameStart=gt.nameStart nameLen=gt.nameLen fieldStart=0U64 fieldLen=0U64 />

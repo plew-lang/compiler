@@ -151,8 +151,8 @@ pub impl LlvmCtx {
             return false
         }
         if self.locTypeRef[li] != 0U64 {
-            if self.locTypeRef[li] < c.arena.types.count() {
-                val tr: TypeRef = c.arena.types[self.locTypeRef[li]]
+            if self.locTypeRef[li] < c.arena.typeCount() {
+                val tr: TypeRef = c.arena.typeAt(index: self.locTypeRef[li])
                 if c.typeIsUnique(start: tr.nameStart, len: tr.nameLen) {
                     return true
                 }
@@ -203,17 +203,17 @@ pub impl LlvmCtx {
         if r == 0U64 {
             return 0U64
         }
-        if r >= c.arena.types.count() {
+        if r >= c.arena.typeCount() {
             return 0U64
         }
         // arrays carry their ELEMENT's kind (kind-3 span convention: an array
         // local/param kind tags the element for element ops)
-        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array") {
-            if c.arena.types[r].args.count() == 1U64 {
-                r = c.arena.types[r].args[0]
+        if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen, kw: "Array") {
+            if c.arena.typeAt(index: r).args.count() == 1U64 {
+                r = c.arena.typeAt(index: r).args[0]
             }
         }
-        return kindFromTySpan(c: inout c, tyStart: c.arena.types[r].nameStart, tyLen: c.arena.types[r].nameLen)
+        return kindFromTySpan(c: inout c, tyStart: c.arena.typeAt(index: r).nameStart, tyLen: c.arena.typeAt(index: r).nameLen)
     }
 
     // Index of the live local matching (start,len) by content, searched from the most

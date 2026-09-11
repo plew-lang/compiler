@@ -6,10 +6,10 @@
 
 pub impl Comp {
     inout fn isGenericInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() == 0 {
             return false
         }
@@ -21,10 +21,10 @@ pub impl Comp {
 
     // Is `ref` a function type (head `fn`, args = [return, params...])?
     inout fn isFnType(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
     }
 
@@ -32,10 +32,10 @@ pub impl Comp {
     // read-only capability to a heap cell), lowered to an opaque pointer — not a user
     // struct/enum.
     inout fn isRefInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -45,10 +45,10 @@ pub impl Comp {
     // Is `ref` a `MutableRef[T]` instantiation? Same cell representation as Ref, with
     // write capability through `->`.
     inout fn isMutableRefInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -65,10 +65,10 @@ pub impl Comp {
 
     // Is `ref` a compiler-supplied strong reference cell (`StrongRefCell[T]`)?
     inout fn isStrongRefCellInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -80,10 +80,10 @@ pub impl Comp {
     // pointee deinit fires at strong 0 regardless of live weaks, and the cell is freed only
     // when both counters reach 0. Lowered like Ref/MutableRef to an opaque pointer.
     inout fn isWeakRefInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -92,10 +92,10 @@ pub impl Comp {
 
     // Is `ref` a `WeakMutableRef[T]` instantiation?
     inout fn isWeakMutableRefInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -112,10 +112,10 @@ pub impl Comp {
 
     // Is `ref` a compiler-supplied weak reference cell (`WeakRefCell[T]`)?
     inout fn isWeakRefCellInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -127,10 +127,10 @@ pub impl Comp {
     // lowered like `Ref` to a C `T*` (with a {cap,rc} header before data) — not a
     // user type.
     inout fn isRawBufInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() != 1 {
             return false
         }
@@ -327,10 +327,10 @@ pub impl Comp {
         if ref == 0 {
             return false
         }
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         return self.nameReachesOwner(nStart: t.nameStart, nLen: t.nameLen, args: t.args, tStart: tStart, tLen: tLen, visited: inout visited)
     }
 

@@ -328,8 +328,8 @@ pub impl LlvmCtx {
                 if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
                     exTy = c.groundTypeRef(ref: exTy)
                 }
-                if exTy < c.arena.types.count() {
-                    val et: TypeRef = c.arena.types[exTy]
+                if exTy < c.arena.typeCount() {
+                    val et: TypeRef = c.arena.typeAt(index: exTy)
                     if et.nameLen > 0U64 {
                         if c.arena.bytes[et.nameStart] == 40U8 {
                             val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
@@ -352,7 +352,7 @@ pub impl LlvmCtx {
         // same logical instance and rejects aggregate insertion.
         if self.expectedTy != 0U64 {
             if c.isGenericInst(ref: self.expectedTy) {
-                val et: TypeRef = c.arena.types[self.expectedTy]
+                val et: TypeRef = c.arena.typeAt(index: self.expectedTy)
                 if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
                     gty = self.expectedTy
                 }
@@ -372,7 +372,7 @@ pub impl LlvmCtx {
                 // name collides (`Box[Box[I32]]` — both levels' param named `T`: the inner
                 // must resolve to I32, not the outer Box[I32]).
                 c.cur.typeParams = concatParams(add: savedP, base: sd.typeParams)
-                c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.types[gty].args)
+                c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.typeAt(index: gty).args)
                 val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: typeStart)
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA
@@ -388,8 +388,8 @@ pub impl LlvmCtx {
         // concrete instance, not the i64-defaulting template. `gty` carries the grounding;
         // use its name for the registered-struct lookup (mirrors llvmFnRetTy).
         if gty != ty {
-            if gty < c.arena.types.count() {
-                val gtyT: TypeRef = c.arena.types[gty]
+            if gty < c.arena.typeCount() {
+                val gtyT: TypeRef = c.arena.typeAt(index: gty)
                 rtStart = gtyT.nameStart
                 rtLen = gtyT.nameLen
             }
@@ -418,7 +418,7 @@ pub impl LlvmCtx {
     // The LLVM type of a strong reference-cell pointee T (from the instance's first type arg).
     inout fn refPointeeTy(c: inout Comp, refTy: U64) -> LLVMTypeRef {
         if c.isStrongRefInst(ref: refTy) {
-            return self.llvmTypeOfRef(c: inout c, ref: c.arena.types[refTy].args[0])
+            return self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: refTy).args[0])
         }
         return self.i64ty
     }
@@ -449,9 +449,9 @@ pub impl LlvmCtx {
     inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         if r != 0U64 {
-            val t: TypeRef = c.arena.types[r]
+            val t: TypeRef = c.arena.typeAt(index: r)
             if t.args.count() > 0U64 {
-                val pt: TypeRef = c.arena.types[t.args[0]]
+                val pt: TypeRef = c.arena.typeAt(index: t.args[0])
                 return self.localStructIdxFor(c: inout c, start: pt.nameStart, len: pt.nameLen)
             }
         }

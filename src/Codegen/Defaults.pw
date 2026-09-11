@@ -104,7 +104,7 @@ pub impl Comp {
         while index < bindings.count() {
             match bindings[index] {
                 CallParameterBinding.Default(val generator) => {
-                    if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.types.count() {
+                    if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.typeCount() {
                         tracePhaseCount(c: inout self, label: "default-call-completion:invalid-parameter-term", count: parameterTerms[index])
                         return <Optional.None />
                     }

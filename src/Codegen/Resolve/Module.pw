@@ -111,7 +111,7 @@ pub impl Comp {
                     Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
                     _ => {}
                 }
-                if resolved != 0U64 && resolved < self.arena.types.count() {
+                if resolved != 0U64 && resolved < self.arena.typeCount() {
                     ti = self.typeInfoOfRef(ref: resolved)
                 }
                 // an array-literal init reports unknown via exprType (literal typing is
@@ -141,8 +141,8 @@ pub impl Comp {
                                 // recursion. Leave the binding untyped — the element's own
                                 // construction then reports cleanly downstream.
                                 if eRef != 0 {
-                                    if self.arena.types[eRef].args.count() == 0U64 {
-                                        val eh: TypeRef = self.arena.types[eRef]
+                                    if self.arena.typeAt(index: eRef).args.count() == 0U64 {
+                                        val eh: TypeRef = self.arena.typeAt(index: eRef)
                                         if self.genericStructIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.structs.count() {
                                             eRef = 0
                                         } else if self.genericEnumIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.enums.count() {
@@ -718,7 +718,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        if !stripped && recvRef != 0U64 && recvRef < self.arena.types.count() {
+        if !stripped && recvRef != 0U64 && recvRef < self.arena.typeCount() {
             val staticSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: recvRef)
             mut val si: U64 = 0U64
             while si < staticSources.count() {
@@ -742,19 +742,19 @@ pub impl Comp {
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
     inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true) -> U64 {
-        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
+        if surfaceRef == 0U64 || surfaceRef >= self.arena.typeCount() {
             return self.arena.funcs.count()
         }
         // A newtype is a distinct source type but inherits the underlying
         // callable surface and representation. Normalize inside the semantic
         // query so every caller applies the same rule.
         mut val resolvedRef: U64 = surfaceRef
-        val original: TypeRef = self.arena.types[surfaceRef]
+        val original: TypeRef = self.arena.typeAt(index: surfaceRef)
         val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
-        if underlying != 0U64 && underlying < self.arena.types.count() {
+        if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
-        val rt: TypeRef = self.arena.types[resolvedRef]
+        val rt: TypeRef = self.arena.typeAt(index: resolvedRef)
         val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax)
         mut val callee: U64 = self.arena.funcs.count()
         if sources.count() > 0U64 {
@@ -772,16 +772,16 @@ pub impl Comp {
     // Keep view/newtype normalization in this one frontend query so static
     // associated calls and explicit `Type#View.member()` cannot drift.
     inout fn resolveAssocForResolvedReceiver(surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64) -> U64 {
-        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
+        if surfaceRef == 0U64 || surfaceRef >= self.arena.typeCount() {
             return self.arena.funcs.count()
         }
         mut val resolvedRef: U64 = surfaceRef
-        val original: TypeRef = self.arena.types[surfaceRef]
+        val original: TypeRef = self.arena.typeAt(index: surfaceRef)
         val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
-        if underlying != 0U64 && underlying < self.arena.types.count() {
+        if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
-        val rt: TypeRef = self.arena.types[resolvedRef]
+        val rt: TypeRef = self.arena.typeAt(index: resolvedRef)
         val sources: Array[ViewSource] = self.collectViewSources(recv: 0U64, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: false)
         mut val callee: U64 = self.arena.funcs.count()
         if sources.count() > 0U64 {
@@ -965,9 +965,9 @@ pub impl Comp {
         // the same callable decision rather than a backend-only Array lookup.
         mut val recvStart: U64 = rt.nameStart
         mut val recvLen: U64 = rt.nameLen
-        if rt.kind == 3 && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
-            recvStart = self.arena.types[rt.ref].nameStart
-            recvLen = self.arena.types[rt.ref].nameLen
+        if rt.kind == 3 && rt.ref != 0U64 && rt.ref < self.arena.typeCount() {
+            recvStart = self.arena.typeAt(index: rt.ref).nameStart
+            recvLen = self.arena.typeAt(index: rt.ref).nameLen
         }
         mut val mfi: U64 = self.arena.funcs.count()
         // Always start from the complete view set.  A multi-view TypeRef deliberately
@@ -986,8 +986,8 @@ pub impl Comp {
                     while li > 0U64 && sources.count() == 0U64 {
                         li -= 1U64
                         val lo: Local = self.cur.locals[li]
-                        if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.types.count() {
-                            val localTy: TypeRef = self.arena.types[lo.ty]
+                        if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
+                            val localTy: TypeRef = self.arena.typeAt(index: lo.ty)
                             val localSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: lo.ty)
                             mut val vi: U64 = 0U64
                             while vi < localSources.count() {
@@ -1292,17 +1292,17 @@ pub impl Comp {
     // (`ty == 0`, which `typesCompatible` treats permissively). Returns `funcs.count()`
     // (= no match) when no `from` on `E` accepts `F`.
     inout fn typeRefFromFactoryIdx(errRef: U64, srcRef: U64) -> U64 {
-        if errRef >= self.arena.types.count() {
+        if errRef >= self.arena.typeCount() {
             return self.arena.funcs.count()
         }
-        val eNameId: U64 = self.arena.types[errRef].nameId
+        val eNameId: U64 = self.arena.typeAt(index: errRef).nameId
         if eNameId == 0U64 {
             return self.arena.funcs.count()
         }
-        if srcRef >= self.arena.types.count() {
+        if srcRef >= self.arena.typeCount() {
             return self.arena.funcs.count()
         }
-        val srcNameId: U64 = self.arena.types[srcRef].nameId
+        val srcNameId: U64 = self.arena.typeAt(index: srcRef).nameId
         if srcNameId == 0U64 {
             return self.arena.funcs.count()
         }
@@ -1334,9 +1334,9 @@ pub impl Comp {
     }
 
     inout fn resultErrArgRef(ref: U64) -> U64 {
-        if ref < self.arena.types.count() {
-            if self.arena.types[ref].args.count() >= 2U64 {
-                return self.arena.types[ref].args[1]
+        if ref < self.arena.typeCount() {
+            if self.arena.typeAt(index: ref).args.count() >= 2U64 {
+                return self.arena.typeAt(index: ref).args[1]
             }
         }
         return 0U64

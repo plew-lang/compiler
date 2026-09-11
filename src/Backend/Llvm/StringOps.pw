@@ -143,7 +143,7 @@ pub impl LlvmCtx {
         // an enum local carries a bare enum TypeRef on locTypeRef (typeOf can't see it).
         val tr: U64 = self.exprTypeRef(c: inout c, id: id)
         if tr != 0U64 {
-            val tt: TypeRef = c.arena.types[tr]
+            val tt: TypeRef = c.arena.typeAt(index: tr)
             val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)
             if ei < c.arena.enums.count() {
                 return ei

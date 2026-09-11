@@ -35,7 +35,7 @@ pub impl LlvmCtx {
                     if c.isGenericInst(ref: argRef) {
                         return self.llvmTypeOfRef(c: inout c, ref: argRef)
                     }
-                    val at: TypeRef = c.arena.types[argRef]
+                    val at: TypeRef = c.arena.typeAt(index: argRef)
                     // an array argument (`T -> Array[I32]`) is the {ptr,i64} value type.
                     if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                         return self.arrayTy

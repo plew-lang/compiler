@@ -1,0 +1,5 @@
+import /Ir with { Arena }
+fn main() {
+    val arena: Arena = <Arena />
+    val value = arena.bareTypeNameRefs
+}

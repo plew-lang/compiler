@@ -33,8 +33,8 @@ pub impl Comp {
 
     inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> U64 {
         if ctxRef != 0 {
-            if ctxRef < self.arena.types.count() {
-                val ct: TypeRef = self.arena.types[ctxRef]
+            if ctxRef < self.arena.typeCount() {
+                val ct: TypeRef = self.arena.typeAt(index: ctxRef)
                 // a record literal adopting an annotated record type (`val p: (x: I64, y:
                 // I64) = (x: 1, y: 2)`): the context already lowered to the synthetic record
                 // struct (its name begins `(`), so build that struct directly.
@@ -346,8 +346,8 @@ pub impl Comp {
     // child remains a stable immutable syntax ID.
     inout fn lowerSyntaxExprWithCtx(id: ExprId, ctxRef: U64) -> U64 {
         if ctxRef != 0U64 {
-            if ctxRef < self.arena.types.count() {
-                val ct: TypeRef = self.arena.types[ctxRef]
+            if ctxRef < self.arena.typeCount() {
+                val ct: TypeRef = self.arena.typeAt(index: ctxRef)
                 val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
                 if ct.nameLen > 0U64 {
                     if self.arena.bytes[ct.nameStart] == '(' {

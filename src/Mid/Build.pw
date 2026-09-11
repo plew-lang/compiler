@@ -661,8 +661,8 @@ fn midDirectArrayIndexExpr(c: Comp, exprId: U64) -> U64 {
         Expr.Index(base: val base, index: _) => {
             if base >= c.arena.semanticExprTypes.count() { return c.arena.exprs.count() }
             val baseTerm: U64 = c.arena.semanticExprTypes[base].term
-            if baseTerm == 0U64 || baseTerm >= c.arena.types.count() { return c.arena.exprs.count() }
-            val array: TypeRef = c.arena.types[baseTerm]
+            if baseTerm == 0U64 || baseTerm >= c.arena.typeCount() { return c.arena.exprs.count() }
+            val array: TypeRef = c.arena.typeAt(index: baseTerm)
             if c.traceCodegen {
                 eprint(text: "[trace-codegen] Mid array-place candidate term=")
                 eprintU64(n: baseTerm)
@@ -1046,11 +1046,11 @@ fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U6
 // slots and either resolve `from` or erase the identity conversion.
 fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
     val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
-    if operandResultTerm == 0U64 || operandResultTerm >= c.arena.types.count() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
-    val operandResult: TypeRef = c.arena.types[operandResultTerm]
+    if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    val operandResult: TypeRef = c.arena.typeAt(index: operandResultTerm)
     if operandResult.args.count() != 2U64 || state.sourceFunction >= c.arena.funcs.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredValueControl /> /> /> }
     val returnResultTerm: U64 = c.arena.funcs[state.sourceFunction].retTy
-    if returnResultTerm == 0U64 || returnResultTerm >= c.arena.types.count() || c.arena.types[returnResultTerm].args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.InvalidFunction /> /> }
+    if returnResultTerm == 0U64 || returnResultTerm >= c.arena.typeCount() || c.arena.typeAt(index: returnResultTerm).args.count() != 2U64 || !state.hasReturnPlace { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.InvalidFunction /> /> }
 
     // The yielded Ok value crosses the nested evaluation scope; all Result
     // storage and Err temporaries remain inside it and are cleaned on either
@@ -1105,7 +1105,7 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
 
     state.currentBlock = errTarget
     val sourceErrorTerm: U64 = operandResult.args[1U64]
-    val targetErrorTerm: U64 = c.arena.types[returnResultTerm].args[1U64]
+    val targetErrorTerm: U64 = c.arena.typeAt(index: returnResultTerm).args[1U64]
     val sourceErrorLocal: U64 = addMidTemporary(state: inout state, typeTerm: sourceErrorTerm)
     val sourceError: MidPlace = <MidPlace local=sourceErrorLocal typeTerm=sourceErrorTerm />
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=sourceError value=<MidRvalue.TryPayloadCopy place=inputPlace exprId=exprId variantIndex=1U64 resultTerm=sourceErrorTerm /> />)
@@ -1573,8 +1573,8 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             if term == 0U64 { term = c.semanticExprTerm(exprId: init) }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             mut val isUnique: Bool = false
-            if term < c.arena.types.count() {
-                val t: TypeRef = c.arena.types[term]
+            if term < c.arena.typeCount() {
+                val t: TypeRef = c.arena.typeAt(index: term)
                 isUnique = c.typeIsUnique(start: t.nameStart, len: t.nameLen)
             }
             val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
@@ -2110,8 +2110,8 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
 }
 
 fn midTermIsUnique(c: inout Comp, term: U64) -> Bool {
-    if term >= c.arena.types.count() { return false }
-    val t: TypeRef = c.arena.types[term]
+    if term >= c.arena.typeCount() { return false }
+    val t: TypeRef = c.arena.typeAt(index: term)
     return c.typeIsUnique(start: t.nameStart, len: t.nameLen)
 }
 

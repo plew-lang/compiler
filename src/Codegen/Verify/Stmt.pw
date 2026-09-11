@@ -47,8 +47,8 @@ pub impl Comp {
                                 // arg (`Array[I64]` -> I64) if structured, else by name.
                                 mut val elemRef: U64 = 0
                                 if ty != 0U64 {
-                                    if self.arena.types[ty].args.count() > 0U64 {
-                                        elemRef = self.arena.types[ty].args[0]
+                                    if self.arena.typeAt(index: ty).args.count() > 0U64 {
+                                        elemRef = self.arena.typeAt(index: ty).args[0]
                                     }
                                 }
                                 mut val ek: U64 = 0
@@ -65,8 +65,8 @@ pub impl Comp {
                                 // concrete primitives (a struct/generic element is left to the
                                 // existing machinery — conservative).
                                 if ty != 0U64 {
-                                    if self.arena.types[ty].args.count() > 0U64 {
-                                        val de: TypeRef = self.arena.types[self.arena.types[ty].args[0]]
+                                    if self.arena.typeAt(index: ty).args.count() > 0U64 {
+                                        val de: TypeRef = self.arena.typeAt(index: self.arena.typeAt(index: ty).args[0])
                                         val it: TypeInfo = self.typeOf(id: init)
                                         if it.kind == 3 {
                                             if it.nameLen > 0U64 {
@@ -96,8 +96,8 @@ pub impl Comp {
                 if tyLen == 0U64 && le.arr && le.ty != 0U64 {
                     match self.arena.exprs[init] {
                         Expr.Array(val elems) => {
-                            if self.arena.types[le.ty].args.count() > 0U64 {
-                                val infElemRef: U64 = self.arena.types[le.ty].args[0]
+                            if self.arena.typeAt(index: le.ty).args.count() > 0U64 {
+                                val infElemRef: U64 = self.arena.typeAt(index: le.ty).args[0]
                                 // element 0 DEFINED E; check the rest against it.
                                 mut val ek: U64 = 1
                                 while ek < elems.len {
@@ -384,7 +384,7 @@ pub impl Comp {
                     if !(self.placeIsMutable(id: target)) {
                         self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
                     }
-                    val inst: TypeRef = self.arena.types[abt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
                         self.checkFieldWriteVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)

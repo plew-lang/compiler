@@ -104,9 +104,9 @@ pub impl Comp {
     // declaration-key equality, not call-site type compatibility.
     inout fn typeRefsAlphaEq(a: U64, b: U64, aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
         if a == 0U64 || b == 0U64 { return a == b }
-        if a >= self.arena.types.count() || b >= self.arena.types.count() { return false }
-        val ta: TypeRef = self.arena.types[a]
-        val tb: TypeRef = self.arena.types[b]
+        if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
+        val ta: TypeRef = self.arena.typeAt(index: a)
+        val tb: TypeRef = self.arena.typeAt(index: b)
         val ai: U64 = self.binderIndex(params: aParams, nameId: ta.nameId)
         val bi: U64 = self.binderIndex(params: bParams, nameId: tb.nameId)
         if ai < aParams.count() || bi < bParams.count() {
@@ -137,8 +137,8 @@ pub impl Comp {
     }
 
     inout fn typeRefUsesBinders(ref: U64, params: Array[Bind]) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if self.binderIndex(params: params, nameId: t.nameId) < params.count() { return true }
         mut val i: U64 = 0
         while i < t.args.count() {
@@ -177,16 +177,16 @@ pub impl Comp {
     // mistaken for bare `T` merely because its normal-form source set lives
     // in `viewIds`.
     inout fn hasTopLevelView(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         return t.viewExtId != 0U64 || t.viewIds.count() != 0U64
     }
 
     // A type parameter is a free unification variable only in its bare form;
     // `T#P` / projections retain their structural view/projection constraints.
     inout fn plainBinder(ref: U64, params: Array[Bind]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return params.count() }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return params.count() }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if self.hasTopLevelView(ref: ref) || t.assocTraitId != 0U64 || t.args.count() != 0U64 { return params.count() }
         if t.paramId != 0U64 {
             mut val i: U64 = 0U64
@@ -218,8 +218,8 @@ pub impl Comp {
             }
             return false
         }
-        if ref == 0U64 || ref >= self.arena.types.count() { return false }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return false }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0U64
         while i < t.args.count() {
             if self.occursInPattern(side: side, binderId: binderId, ref: t.args[i], refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
@@ -259,9 +259,9 @@ pub impl Comp {
         if bv < bScope.count() {
             return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
         }
-        if a == 0U64 || b == 0U64 || a >= self.arena.types.count() || b >= self.arena.types.count() { return a == b }
-        val ta: TypeRef = self.arena.types[a]
-        val tb: TypeRef = self.arena.types[b]
+        if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
+        val ta: TypeRef = self.arena.typeAt(index: a)
+        val tb: TypeRef = self.arena.typeAt(index: b)
         if ta.nameId != tb.nameId || (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() || ta.assocTraitArgs.count() != tb.assocTraitArgs.count() { return false }
         mut val i: U64 = 0U64
         while i < ta.args.count() {
@@ -382,8 +382,8 @@ pub impl Comp {
             // preserve the same head-and-arguments match used by a structured
             // receiver, or the blanket declaration would incorrectly apply to
             // every concrete type before trait-subject conferral materializes it.
-            if typeRef >= self.arena.types.count() { return <WitnessMatch /> }
-            val actual: TypeRef = self.arena.types[typeRef]
+            if typeRef >= self.arena.typeCount() { return <WitnessMatch /> }
+            val actual: TypeRef = self.arena.typeAt(index: typeRef)
             // `nameId` is an interning cache, not a semantic name. Synthetic
             // TypeRefs (including the receiver used while finalizing a
             // provided call) legitimately carry 0, so matching a legacy
@@ -728,7 +728,7 @@ pub impl Comp {
             return false
         }
         if recvRef == 0U64 || f.recvTy == 0U64 { return true }
-        if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
+        if recvRef >= self.arena.typeCount() || f.recvTy >= self.arena.typeCount() { return true }
         mut val binds: Array[UnifyBind] = []
         mut val patternParams: Array[Bind] = self.copyFuncBinds(binds: f.typeParams)
         if f.recvPatternParams.count() > 0U64 { patternParams = self.copyFuncBinds(binds: f.recvPatternParams) }

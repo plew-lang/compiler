@@ -112,8 +112,8 @@ pub impl LlvmCtx {
     // store agrees everywhere). 0 when the expression's type is not a structured Array.
     inout fn arrayExprElemRef(c: inout Comp, arrayExpr: U64) -> U64 {
         val r: U64 = self.exprTypeRef(c: inout c, id: arrayExpr)
-        if r != 0U64 && r < c.arena.types.count() {
-            val t: TypeRef = c.arena.types[r]
+        if r != 0U64 && r < c.arena.typeCount() {
+            val t: TypeRef = c.arena.typeAt(index: r)
             if t.args.count() == 1U64 && rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
                 return t.args[0]
             }
@@ -135,7 +135,7 @@ pub impl LlvmCtx {
                 if li < self.nLocals {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
-                        return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[tr].nameStart, len: c.arena.types[tr].nameLen, kw: "Buffer")
+                        return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: tr).nameStart, len: c.arena.typeAt(index: tr).nameLen, kw: "Buffer")
                     }
                 }
             }
@@ -173,8 +173,8 @@ pub impl LlvmCtx {
                 if li < self.nLocals {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
-                        if c.arena.types[tr].args.count() > 0U64 {
-                            er = c.arena.types[tr].args[0]
+                        if c.arena.typeAt(index: tr).args.count() > 0U64 {
+                            er = c.arena.typeAt(index: tr).args[0]
                         }
                     }
                 }

@@ -7,8 +7,8 @@ pub impl Comp {
     // publication. The result comes from the selected declaration, not from
     // an assumption that Neg/Not/BitNot return their receiver type.
     inout fn unaryOperatorCallee(receiverRef: U64, op: I64) -> U64 {
-        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() { return self.arena.funcs.count() }
-        val receiver: TypeRef = self.arena.types[receiverRef]
+        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return self.arena.funcs.count() }
+        val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
         return self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
     }
 
@@ -80,7 +80,7 @@ pub impl Comp {
             if ab.traitId == trN.nameId {
                 if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
                     if self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: self.copyConformTypes(types: ab.subjectArgs), typeParams: self.copyConformBinds(binds: ab.typeParams), declaredTraitArgs: self.copyConformTypes(types: ab.traitArgs), typeRef: leftRef, traitArgs: requestedArgs) {
-                        if ab.ty != 0U64 && ab.ty < self.arena.types.count() {
+                        if ab.ty != 0U64 && ab.ty < self.arena.typeCount() {
                             return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: ab.ty))
                         }
                         return self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray))

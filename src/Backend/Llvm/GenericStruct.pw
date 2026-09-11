@@ -21,7 +21,7 @@ pub impl LlvmCtx {
         while k < c.monoWork.genInsts.count() {
             val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
-                val t: TypeRef = c.arena.types[ref]
+                val t: TypeRef = c.arena.typeAt(index: ref)
                 val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
                 // an extern generic struct (`Buffer[T]`) is an OPAQUE intrinsic represented
                 // as a pointer — it has no struct layout, so register no `%gs` type for it
@@ -62,7 +62,7 @@ pub impl LlvmCtx {
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams
-            c.cur.typeArgs = c.arena.types[ref].args
+            c.cur.typeArgs = c.arena.typeAt(index: ref).args
             mut val elems: Array[LLVMTypeRef] = []
             mut val fi: U64 = 0
             while fi < sd.fields.count() {
@@ -172,7 +172,7 @@ pub impl LlvmCtx {
         if k >= c.monoWork.genInsts.count() {
             return false
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if defIdx < c.arena.structs.count() {
             val sd: StructDef = c.arena.structs[defIdx]
@@ -241,7 +241,7 @@ pub impl LlvmCtx {
         while k < c.monoWork.genInsts.count() {
             val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
-                val t: TypeRef = c.arena.types[ref]
+                val t: TypeRef = c.arena.typeAt(index: ref)
                 val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
                 if defIdx < c.arena.enums.count() {
                     val e: EnumDef = c.arena.enums[defIdx]
@@ -350,7 +350,7 @@ pub impl LlvmCtx {
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
             c.cur.typeParams = c.arena.enums[self.genEnumDefs[ge]].typeParams
-            c.cur.typeArgs = c.arena.types[ref].args
+            c.cur.typeArgs = c.arena.typeAt(index: ref).args
             return true
         }
         // An enum instance's semantic substitution belongs to the TypeRef and
@@ -365,8 +365,8 @@ pub impl LlvmCtx {
         // carrier is complete, use the generic enum declaration selected by
         // this TypeRef as the semantic fallback; layout registration remains a
         // separate backend concern.
-        if ref < c.arena.types.count() {
-            val t: TypeRef = c.arena.types[ref]
+        if ref < c.arena.typeCount() {
+            val t: TypeRef = c.arena.typeAt(index: ref)
             val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if ei < c.arena.enums.count() {
                 c.cur.typeParams = c.arena.enums[ei].typeParams
@@ -387,7 +387,7 @@ pub impl LlvmCtx {
         val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
         if gs < self.genStructRefs.count() {
             c.cur.typeParams = c.arena.structs[self.genStructDefs[gs]].typeParams
-            c.cur.typeArgs = c.arena.types[ref].args
+            c.cur.typeArgs = c.arena.typeAt(index: ref).args
             return true
         }
         return false
@@ -403,7 +403,7 @@ pub impl LlvmCtx {
             return false
         }
         if c.isStrongRefInst(ref: ref) || c.isWeakRefLikeInst(ref: ref) {
-            val t: TypeRef = c.arena.types[ref]
+            val t: TypeRef = c.arena.typeAt(index: ref)
             val di: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if di < c.arena.structs.count() {
                 c.cur.typeParams = c.arena.structs[di].typeParams

@@ -168,8 +168,8 @@ pub impl Comp {
 
     inout fn checkTypeViewSources() {
         mut val i: U64 = 0U64
-        while i < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[i]
+        while i < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: i)
             // Synthetic TypeRefs and type-parameter heads have no authored
             // annotation site. Every user-written `Type#Name` does.
             if t.siteOffset != 0U64 {
@@ -257,8 +257,8 @@ pub impl Comp {
     // trait selector is identified by declaration owner, never by its
     // content-interned spelling.
     inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) {
-        if typeRef == 0U64 || typeRef >= self.arena.types.count() { return }
-        val t: TypeRef = self.arena.types[typeRef]
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
+        val t: TypeRef = self.arena.typeAt(index: typeRef)
         val selected: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
         if selected.kind != 0U64 { return }
         if source.traitOwner != 0U64 {
@@ -518,10 +518,10 @@ pub impl Comp {
         if ref == 0U64 {
             return
         }
-        if ref >= self.arena.types.count() {
+        if ref >= self.arena.typeCount() {
             return
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() > 0U64 {
             // look up the head name as ANY struct/enum (not only generic ones): a 0-param
             // struct/enum used with type arguments (`struct Bar` then `Bar[I32]`) is an arity

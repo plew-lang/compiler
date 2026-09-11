@@ -387,9 +387,9 @@ pub impl LlvmCtx {
         // place and the consumer each hold a count (a temp operand transfers instead).
         if operandIsPlace {
             mut val okRef: U64 = 0
-            if exprRef < c.arena.types.count() {
-                if c.arena.types[exprRef].args.count() > 0U64 {
-                    okRef = c.arena.types[exprRef].args[0]
+            if exprRef < c.arena.typeCount() {
+                if c.arena.typeAt(index: exprRef).args.count() > 0U64 {
+                    okRef = c.arena.typeAt(index: exprRef).args[0]
                 }
             }
             if okRef != 0U64 {

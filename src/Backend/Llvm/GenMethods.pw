@@ -58,7 +58,7 @@ pub impl LlvmCtx {
     }
 
     inout fn traceCodegenType(c: inout Comp, ref: U64, depth: U64) {
-        if ref == 0U64 || ref >= c.arena.types.count() {
+        if ref == 0U64 || ref >= c.arena.typeCount() {
             eprint(text: "?")
             return
         }
@@ -66,7 +66,7 @@ pub impl LlvmCtx {
             eprint(text: "...")
             return
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         self.traceCodegenName(c: inout c, start: t.nameStart, len: t.nameLen)
         if t.args.count() > 0U64 {
             eprint(text: "[")
@@ -171,7 +171,7 @@ pub impl LlvmCtx {
                 // callable identity.
                 if f.hasRecv && !(f.isExtern) && !(f.isProvided) && !(c.methodRecvIsTrait(f: f)) {
                     val receiverRef: U64 = body.environment.receiverRef
-                    if receiverRef != 0U64 && receiverRef < c.arena.types.count() {
+                    if receiverRef != 0U64 && receiverRef < c.arena.typeCount() {
                         val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: f, environment: body.environment)
                         if self.genMethSlotFor(c: inout c, mfi: body.fnIdx, instRef: receiverRef, ownArgs: ownArgs, bodyId: bodyId) == self.genMethK.count() {
                             self.declareOneGenMethod(c: inout c, mfi: body.fnIdx, instRef: receiverRef, ownArgs: ownArgs, bodyId: bodyId)
@@ -212,7 +212,7 @@ pub impl LlvmCtx {
         if mf.isProvided {
             c.setSelfItemEnvForBody(f: mf, environment: environment)
         } else if mf.typeParams.count() == 0U64 {
-            c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+            c.setSelfItemEnv(recvStart: c.arena.typeAt(index: instRef).nameStart, recvLen: c.arena.typeAt(index: instRef).nameLen, recvInstRef: instRef)
         }
         mut val ptys: Array[LLVMTypeRef] = []
         if mf.selfInout {
@@ -282,7 +282,7 @@ pub impl LlvmCtx {
         if mf.isProvided {
             c.setSelfItemEnvForBody(f: mf, environment: environment)
         } else if mf.typeParams.count() == 0U64 {
-            c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
+            c.setSelfItemEnv(recvStart: c.arena.typeAt(index: instRef).nameStart, recvLen: c.arena.typeAt(index: instRef).nameLen, recvInstRef: instRef)
         }
         self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], environment: environment)
         c.cur.selfRef = s4
@@ -322,7 +322,7 @@ pub impl LlvmCtx {
         // binders of its own, yet its self ABI is still the concrete Box[I64]
         // instance. It belongs in the same receiver-instance table; only a
         // non-empty binder list must account for the receiver and own args.
-        if mf.typeParams.count() != 0U64 && mf.typeParams.count() != c.arena.types[instRef].args.count() + ownArgs.count() {
+        if mf.typeParams.count() != 0U64 && mf.typeParams.count() != c.arena.typeAt(index: instRef).args.count() + ownArgs.count() {
             return self.genMethK.count()
         }
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
@@ -342,7 +342,7 @@ pub impl LlvmCtx {
         }
         val body: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
         val instRef: U64 = body.environment.receiverRef
-        if body.fnIdx >= c.arena.funcs.count() || instRef == 0U64 || instRef >= c.arena.types.count() {
+        if body.fnIdx >= c.arena.funcs.count() || instRef == 0U64 || instRef >= c.arena.typeCount() {
             return self.genMethK.count()
         }
         val f: Func = c.arena.funcs[body.fnIdx]
@@ -379,8 +379,8 @@ pub impl LlvmCtx {
         if p.ty != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
                 effRef = c.groundTypeRef(ref: p.ty)
-                pgStart = c.arena.types[effRef].nameStart
-                pgLen = c.arena.types[effRef].nameLen
+                pgStart = c.arena.typeAt(index: effRef).nameStart
+                pgLen = c.arena.typeAt(index: effRef).nameLen
                 if rangeEquals(bytes: c.arena.bytes, start: pgStart, len: pgLen, kw: "Array") {
                     effIsArray = true
                 }
@@ -400,8 +400,8 @@ pub impl LlvmCtx {
                 val eg: U64 = c.groundTypeRef(ref: effRef)
                 if eg != effRef {
                     effRef = eg
-                    pgStart = c.arena.types[eg].nameStart
-                    pgLen = c.arena.types[eg].nameLen
+                    pgStart = c.arena.typeAt(index: eg).nameStart
+                    pgLen = c.arena.typeAt(index: eg).nameLen
                 }
             }
         }
@@ -412,7 +412,7 @@ pub impl LlvmCtx {
         // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
         // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
         if p.ty != 0U64 {
-            if c.arena.types[p.ty].viewExtId != 0U64 || c.arena.types[p.ty].viewIds.count() > 0U64 {
+            if c.arena.typeAt(index: p.ty).viewExtId != 0U64 || c.arena.typeAt(index: p.ty).viewIds.count() > 0U64 {
                 pRef = p.ty
             }
         }
@@ -426,7 +426,7 @@ pub impl LlvmCtx {
                 if c.cur.typeParams.count() > 0U64 {
                     val pgv: U64 = c.groundTypeRef(ref: p.ty)
                     if pgv != p.ty {
-                        if pgv < c.arena.types.count() {
+                        if pgv < c.arena.typeCount() {
                             // Preserve the fully grounded receiver ref, not only a
                             // view-bearing one.  The final callable is source-aware,
                             // and primitive / provided generic receivers need the
@@ -460,8 +460,8 @@ pub impl LlvmCtx {
             pElem = pty
             // an `Array[any P]` param: its element is the existential fat pointer.
             if effRef != 0U64 {
-                if c.arena.types[effRef].args.count() > 0U64 {
-                    if refIsAny(c: inout c, ref: c.arena.types[effRef].args[0]) {
+                if c.arena.typeAt(index: effRef).args.count() > 0U64 {
+                    if refIsAny(c: inout c, ref: c.arena.typeAt(index: effRef).args[0]) {
                         pElem = self.anyTy
                     }
                 }
@@ -524,8 +524,8 @@ pub impl LlvmCtx {
                 if p.ty != 0U64 {
                     if c.cur.typeParams.count() > 0U64 {
                         val pg2: U64 = c.groundTypeRef(ref: p.ty)
-                        gs2 = c.arena.types[pg2].nameStart
-                        gl2 = c.arena.types[pg2].nameLen
+                        gs2 = c.arena.typeAt(index: pg2).nameStart
+                        gl2 = c.arena.typeAt(index: pg2).nameLen
                     }
                 }
                 // a grounded scalar type param (`v: T` with T -> I32 / F64 / Bool): pin BOTH
@@ -600,8 +600,8 @@ pub impl LlvmCtx {
         if p.ty != 0U64 {
             if c.cur.typeParams.count() > 0U64 {
                 val pg: U64 = c.groundTypeRef(ref: p.ty)
-                pKindStart = c.arena.types[pg].nameStart
-                pKindLen = c.arena.types[pg].nameLen
+                pKindStart = c.arena.typeAt(index: pg).nameStart
+                pKindLen = c.arena.typeAt(index: pg).nameLen
             }
         }
         val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
@@ -625,7 +625,7 @@ pub impl LlvmCtx {
                 if c.cur.typeParams.count() > 0U64 {
                     gpty = c.groundTypeRef(ref: effRef)
                 }
-                val at: TypeRef = c.arena.types[gpty]
+                val at: TypeRef = c.arena.typeAt(index: gpty)
                 if at.args.count() > 0U64 {
                     self.setLocalElemTypeRef(ref: at.args[0])
                 }

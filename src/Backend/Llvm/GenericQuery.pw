@@ -21,7 +21,7 @@ pub impl LlvmCtx {
             mut val ti: U64 = 0
             while ti < c.cur.typeParams.count() {
                 if c.cur.typeParams[ti].nameId == qid {
-                    val at: TypeRef = c.arena.types[c.cur.typeArgs[ti]]
+                    val at: TypeRef = c.arena.typeAt(index: c.cur.typeArgs[ti])
                     return self.localStructIdxFor(c: inout c, start: at.nameStart, len: at.nameLen)
                 }
                 ti += 1
@@ -67,12 +67,12 @@ pub impl LlvmCtx {
         if ref == 0U64 {
             return c.arena.structs.count()
         }
-        if ref >= c.arena.types.count() {
+        if ref >= c.arena.typeCount() {
             return c.arena.structs.count()
         }
         val runtimeRef: U64 = c.runtimeTypeRef(ref: ref)
         if runtimeRef != ref { return self.structIdxOfRef(c: inout c, ref: runtimeRef) }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         // An existential is a distinct semantic term with the fat `anyTy`
         // representation.  Its trait head is not a nominal struct name, even
         // when it happens to spell the same as an ambient generic binder.
@@ -213,8 +213,8 @@ pub impl LlvmCtx {
             // to a changed `g`, but its head name resolves correctly through the fall-through
             // below (`Ref[Cell]` -> ptr, NOT the inline pointee struct).
             if g != fd.ty {
-                if g < c.arena.types.count() {
-                    val gt: TypeRef = c.arena.types[g]
+                if g < c.arena.typeCount() {
+                    val gt: TypeRef = c.arena.typeAt(index: g)
                     if gt.nameLen > 0U64 {
                         if c.arena.bytes[gt.nameStart] == 40U8 {
                             return self.llvmTypeFor(c: inout c, tyStart: gt.nameStart, tyLen: gt.nameLen, isArray: false)

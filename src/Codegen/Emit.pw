@@ -132,8 +132,8 @@ pub impl Comp {
             }
             i += 1
         }
-        if elemRef < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[elemRef]
+        if elemRef < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: elemRef)
             return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
         }
         return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />

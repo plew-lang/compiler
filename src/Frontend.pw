@@ -559,59 +559,8 @@ pub impl Comp {
         if t.assocNameId != 0U64 && projectionReceiver == 0U64 {
             projectionReceiver = self.typeTermProjectionReceiver(t: t)
         }
-        val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        val argsStart: U64 = self.arena.typeArgumentPool.count()
-        mut val i: U64 = 0U64
-        while i < t.args.count() {
-            self.arena.typeArgumentPool.append(t.args[i])
-            i += 1U64
-        }
-        val recordLabelStart: U64 = self.arena.typeRecordLabelPool.count()
-        i = 0U64
-        while i < t.recordFieldLabels.count() {
-            self.arena.typeRecordLabelPool.append(t.recordFieldLabels[i])
-            i += 1U64
-        }
-        val recordFieldStart: U64 = self.arena.typeRecordFieldPool.count()
-        i = 0U64
-        while i < t.recordFieldTerms.count() {
-            self.arena.typeRecordFieldPool.append(t.recordFieldTerms[i])
-            i += 1U64
-        }
-        val viewIdStart: U64 = self.arena.typeViewIdPool.count()
-        i = 0U64
-        while i < t.viewIds.count() {
-            self.arena.typeViewIdPool.append(t.viewIds[i])
-            i += 1U64
-        }
-        val viewSourceStart: U64 = self.arena.typeViewSourcePool.count()
-        i = 0U64
-        while i < t.viewSources.count() {
-            self.arena.typeViewSourcePool.append(t.viewSources[i])
-            i += 1U64
-        }
-        val labelStart: U64 = self.arena.typeArgumentLabelPool.count()
-        i = 0U64
-        while i < t.argLabels.count() {
-            self.arena.typeArgumentLabelPool.append(t.argLabels[i])
-            i += 1U64
-        }
-        val assocArgStart: U64 = self.arena.typeAssocArgumentPool.count()
-        i = 0U64
-        while i < t.assocTraitArgs.count() {
-            self.arena.typeAssocArgumentPool.append(t.assocTraitArgs[i])
-            i += 1U64
-        }
-        val assocLabelStart: U64 = self.arena.typeAssocArgumentLabelPool.count()
-        i = 0U64
-        while i < t.assocTraitArgLabels.count() {
-            self.arena.typeAssocArgumentLabelPool.append(t.assocTraitArgLabels[i])
-            i += 1U64
-        }
-        self.arena.typeTerms.append(<TypeTerm nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
-        return id
+        return self.arena.registerType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />, nameCount: self.interner.entries.count())
     }
 
     // TypeTerm child access is owner-specific. Do not publish a generic pool
@@ -653,8 +602,8 @@ pub impl Comp {
 
     inout fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
         mut val out: Array[ResolvedViewSource] = []
-        if ref == 0U64 || ref >= self.arena.types.count() { return out }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return out }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         out = t.viewSources
         if out.count() != 0U64 { return out }
         mut val ids: Array[U64] = t.viewIds
@@ -700,8 +649,8 @@ pub impl Comp {
     }
 
     inout fn typeRefWithViewSources(ref: U64, sources: Array[ResolvedViewSource]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val base: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val base: TypeRef = self.arena.typeAt(index: ref)
         val ids: Array[U64] = self.viewSourceIds(sources: sources)
         mut val mirror: U64 = 0U64
         if ids.count() == 1U64 { mirror = ids[0] }
@@ -717,8 +666,8 @@ pub impl Comp {
     // This is deliberately not a recursive erasure: views inside type
     // arguments remain part of those arguments' semantic identity.
     inout fn typeRefWithoutOuterViews(ref: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val base: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val base: TypeRef = self.arena.typeAt(index: ref)
         if base.viewExtId == 0U64 && base.viewIds.count() == 0U64 && base.viewSources.count() == 0U64 { return ref }
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
     }
@@ -753,7 +702,7 @@ pub impl Comp {
     // Semantic callers must append the full selector, not only its spelling:
     // two imported traits can spell alike while selecting different owners.
     inout fn typeRefWithAddedViewSources(ref: U64, additions: Array[ResolvedViewSource]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         mut val views: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
         mut val i: U64 = 0U64
         while i < additions.count() {
@@ -1153,8 +1102,7 @@ export fn runFrontend(c: inout Comp) {
     // origin is known, so a source occurrence resolves one declaration identity everywhere.
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
-    c.arena.typeTerms.append(<TypeTerm nameStart=0U64 nameLen=0U64 />)
-    c.arena.types.append(<TypeRef nameStart=0 nameLen=0 args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    c.arena.reserveTypeSentinel()
     // reserve Block index 0 as a dummy so a `body` field of 0 is an unambiguous
     // "no body" sentinel (extern fns, trait-requirement signatures). Without this,
     // the first function body lowered (the entry file, which loads before the

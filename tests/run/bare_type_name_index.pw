@@ -1,0 +1,49 @@
+import @Std/Io with { write }
+import /Ir with { Arena, TypeRef }
+fn check(arena: Arena) {
+    mut val name: U64 = 0U64
+    while name < 220U64 {
+        mut val expected = arena.typeCount()
+        mut val index: U64 = 0U64
+        while index < arena.typeCount() {
+            val row = arena.typeAt(index: index)
+            if row.nameId == name && row.args.count() == 0U64 && row.viewExtId == 0U64 && row.viewIds.count() == 0U64 && !row.isAny && !row.isSendable {
+                expected = index
+                break
+            }
+            index += 1U64
+        }
+        if arena.firstBareTypeNamed(nameId: name) != expected { panic "bare name index differs from linear oracle" }
+        name += 1U64
+    }
+}
+fn main() {
+    mut val arena: Arena = <Arena />
+    check(arena: arena)
+    arena.reserveTypeSentinel()
+    if arena.firstBareTypeNamed(nameId: 0U64) != 0U64 { panic "index zero was lost" }
+    mut val index: U64 = 0U64
+    while index < 180U64 {
+        val name = index % 31U64 + 1U64
+        val kind = index % 7U64
+        mut val args: Array[U64] = []
+        mut val views: Array[U64] = []
+        if kind == 1U64 { args.append(0U64) }
+        if kind == 3U64 { views.append(1U64) }
+        val result = arena.registerType(t: <TypeRef nameStart=index nameLen=1U64 nameId=name args=args viewExtId=if kind == 2U64 { 1U64 } else { 0U64 } viewIds=views isAny=kind == 4U64 isSendable=kind == 5U64 paramId=index isRecord=kind == 6U64 />, nameCount: 219U64)
+        if result != index + 1U64 || arena.typeTerms.count() != arena.typeCount() { panic "registration changed arena ids" }
+        index += 1U64
+    }
+    check(arena: arena)
+    mut val copy = arena
+    val added = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=1U64 nameId=201U64 args=[] />, nameCount: 219U64)
+    if arena.firstBareTypeNamed(nameId: 201U64) != added || copy.firstBareTypeNamed(nameId: 201U64) != copy.typeCount() { panic "copy index changed" }
+    val first = arena.firstBareTypeNamed(nameId: 1U64)
+    arena.resolveTypeDeclaration(index: first, hasDecl: true, declOffset: 456U64, hasAssocTraitDecl: true, assocTraitDeclOffset: 789U64)
+    if arena.firstBareTypeNamed(nameId: 1U64) != first || arena.typeAt(index: first).declOffset != 456U64 || arena.typeTerms[first].declOffset != 456U64 || copy.typeAt(index: first).hasDecl { panic "declaration update changed lookup or copy" }
+    copy.registerType(t: <TypeRef nameStart=0U64 nameLen=1U64 nameId=202U64 args=[] />, nameCount: 219U64)
+    check(arena: arena)
+    check(arena: copy)
+    if arena.firstBareTypeNamed(nameId: 18446744073709551615U64) != arena.typeCount() { panic "unknown name was found" }
+    write(s: "bare-type-name-index-ok\n")
+}

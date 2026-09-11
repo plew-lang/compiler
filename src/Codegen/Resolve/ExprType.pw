@@ -98,7 +98,7 @@ pub impl Comp {
             fr = self.groundUnderInst(instRef: rt.ref, tyRef: fr)
         }
         if self.isFnType(ref: fr) {
-            val ft: TypeRef = self.arena.types[fr]
+            val ft: TypeRef = self.arena.typeAt(index: fr)
             if ft.args.count() > 0U64 {
                 return self.typeInfoOfRef(ref: ft.args[0])
             }
@@ -112,7 +112,7 @@ pub impl Comp {
     // lost `Ref[Cell]` elements and the body could not resolve `c->v`. A parametric
     // retTy (un-grounded generic) falls back to the bare name span, as before.
     inout fn declaredRetInfo(f: Func) -> TypeInfo {
-        if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.types.count() {
+        if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
             if self.tyRefIsGround(ref: f.retTy) {
                 return self.typeInfoOfRef(ref: f.retTy)
             }
@@ -121,16 +121,16 @@ pub impl Comp {
         // name-only recovery would degrade it to the plain trait name — a `f().m()`
         // inline dispatch on the result would then misroute to the free-fn inference
         // path instead of dynamic dispatch (spec/08).
-        if f.retTy != 0U64 && f.retTy < self.arena.types.count() {
-            if self.arena.types[f.retTy].isAny {
+        if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
+            if self.arena.typeAt(index: f.retTy).isAny {
                 return self.typeInfoOfRef(ref: f.retTy)
             }
             // A non-generic anonymous-record return is nevertheless a fully
             // structured semantic term.  Returning only its synthetic layout
             // spelling would erase the Record children before the caller can
             // compare, ground, or select a field.
-            if self.arena.types[f.retTy].isRecord {
-                val rt: TypeRef = self.arena.types[f.retTy]
+            if self.arena.typeAt(index: f.retTy).isRecord {
+                val rt: TypeRef = self.arena.typeAt(index: f.retTy)
                 return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=f.retTy viewExtId=rt.viewExtId />
             }
         }
@@ -145,7 +145,7 @@ pub impl Comp {
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
     inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange) -> InstanceEnvironment {
-        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() {
+        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() {
             return <InstanceEnvironment />
         }
         // A method's generic binder list can contain the nominal declaration
@@ -423,7 +423,7 @@ pub impl Comp {
         if !(req.hasRet) || req.retTy == 0U64 {
             return scalarInfo()
         }
-        val t: TypeRef = self.arena.types[anyRef]
+        val t: TypeRef = self.arena.typeAt(index: anyRef)
         val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
         if tri >= self.decls.traits.count() {
             return scalarInfo()
@@ -551,7 +551,7 @@ pub impl Comp {
                         sref = self.cur.recvInstRef
                     }
                     if sref != 0U64 {
-                        val rt: TypeRef = self.arena.types[sref]
+                        val rt: TypeRef = self.arena.typeAt(index: sref)
                         // self inside an `impl Array[T]` method types as an array (kind 3,
                         // element name) so the array/raw intrinsics dispatch on it.
                         if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
@@ -573,7 +573,7 @@ pub impl Comp {
                         if ce.closureId == self.cur.closureId {
                             if spansEqual(c: inout self, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
                                 if self.isStrongRefInst(ref: ce.ty) || self.isWeakRefLikeInst(ref: ce.ty) {
-                                    val rt2: TypeRef = self.arena.types[ce.ty]
+                                    val rt2: TypeRef = self.arena.typeAt(index: ce.ty)
                                     return <TypeInfo kind=2 nameStart=rt2.nameStart nameLen=rt2.nameLen ref=ce.ty />
                                 }
                                 return self.typeInfoOfName(start: ce.tyStart, len: ce.tyLen, isArray: ce.isArray)
@@ -607,7 +607,7 @@ pub impl Comp {
                         // `Optional[I64].Some(v)` needs its concrete enum
                         // subject to type `v` and infer `print(v)`.
                         if self.isGenericInst(ref: lo.ty) || self.isGenericEnumInst(ref: lo.ty) {
-                            val lt: TypeRef = self.arena.types[lo.ty]
+                            val lt: TypeRef = self.arena.typeAt(index: lo.ty)
                             return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
                         }
                         // A declaration-time generic term such as
@@ -616,20 +616,20 @@ pub impl Comp {
                         // Preserve its TypeRef while recording so consumers
                         // can later substitute the lexical ParamId; reducing
                         // it to the `Optional` spelling loses every argument.
-                        if lo.ty != 0U64 && lo.ty < self.arena.types.count() {
-                            val declared: TypeRef = self.arena.types[lo.ty]
+                        if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
+                            val declared: TypeRef = self.arena.typeAt(index: lo.ty)
                             if declared.args.count() > 0U64 || declared.paramId != 0U64 {
                                 return self.typeInfoOfRef(ref: lo.ty)
                             }
                         }
                         if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
-                            val lt2: TypeRef = self.arena.types[lo.ty]
+                            val lt2: TypeRef = self.arena.typeAt(index: lo.ty)
                             return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                         }
                         // a Buffer[T] local: keep the structured ref so the floor
                         // intrinsics can recover the element type T from its argument.
                         if self.isRawBufInst(ref: lo.ty) {
-                            val lt3: TypeRef = self.arena.types[lo.ty]
+                            val lt3: TypeRef = self.arena.typeAt(index: lo.ty)
                             return <TypeInfo kind=2 nameStart=lt3.nameStart nameLen=lt3.nameLen ref=lo.ty />
                         }
                         // resolve a type-parameter-typed local under the active
@@ -666,18 +666,18 @@ pub impl Comp {
                         // an `any P` local: keep the structured ref so its method calls can
                         // resolve through the trait P (the name-only form loses isAny).
                         if lo.ty != 0U64 {
-                            if lo.ty < self.arena.types.count() {
-                                if self.arena.types[lo.ty].isAny {
-                                    return <TypeInfo kind=2 nameStart=self.arena.types[lo.ty].nameStart nameLen=self.arena.types[lo.ty].nameLen ref=lo.ty />
+                            if lo.ty < self.arena.typeCount() {
+                                if self.arena.typeAt(index: lo.ty).isAny {
+                                    return <TypeInfo kind=2 nameStart=self.arena.typeAt(index: lo.ty).nameStart nameLen=self.arena.typeAt(index: lo.ty).nameLen ref=lo.ty />
                                 }
                                 // A view-typed local/param keeps its declared ref.  The
                                 // source set is a static type facet: reducing it to a name-only
                                 // TypeInfo here would make `T#E#F` bare only in ordinary `.`
                                 // syntax.  `viewExtId` is the legacy one-source spelling;
                                 // `viewIds` is the multi-source normal form.
-                                if self.arena.types[lo.ty].viewExtId != 0U64 || self.arena.types[lo.ty].viewIds.count() > 0U64 {
+                                if self.arena.typeAt(index: lo.ty).viewExtId != 0U64 || self.arena.typeAt(index: lo.ty).viewIds.count() > 0U64 {
                                     val vb: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
-                                    return <TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.types[lo.ty].viewExtId />
+                                    return <TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.typeAt(index: lo.ty).viewExtId />
                                 }
                             }
                         }
@@ -739,7 +739,7 @@ pub impl Comp {
                     if args.len == 2U64 {
                         val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: self.argAt(args: args, index: 0U64).expr, chainHoleRef: chainHoleRef))
                         if br != 0U64 {
-                            val brt: TypeRef = self.arena.types[br]
+                            val brt: TypeRef = self.arena.typeAt(index: br)
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
                             fi = self.findAssoc(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
                         }
@@ -761,7 +761,7 @@ pub impl Comp {
                         // the same treatment named generics already get via their args.
                         if self.isGenericFreeFn(fi: fi) {
                             if !(f.retIsArray) {
-                                if f.retTy < self.arena.types.count() {
+                                if f.retTy < self.arena.typeCount() {
                                     val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
                                     val savedP: Array[Bind] = self.cur.typeParams
                                     val savedA: Array[U64] = self.cur.typeArgs
@@ -782,7 +782,7 @@ pub impl Comp {
                                 // self-referential grounding at worst). Gated on COMPLETE
                                 // inference: a partial env substitutes holes for the
                                 // unfound params (see the record pass's identical gate).
-                                if f.retTy != 0U64 && f.retTy < self.arena.types.count() {
+                                if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
                                     val ainf: Array[U64] = self.inferFnArgs(f: f, args: args)
                                     if self.fnArgsAllGround(args: ainf) {
                                         val savedAP: Array[Bind] = self.cur.typeParams
@@ -803,7 +803,7 @@ pub impl Comp {
                         // kind-2 instantiation (`Box[I32]`, an enum) reports as a genInst.
                         if !(f.retIsArray) {
                             if self.isGenericInst(ref: f.retTy) {
-                                val rtr: TypeRef = self.arena.types[f.retTy]
+                                val rtr: TypeRef = self.arena.typeAt(index: f.retTy)
                                 return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
                             }
                         }
@@ -819,7 +819,7 @@ pub impl Comp {
                 if lvi < self.cur.locals.count() {
                     val lty: U64 = self.cur.locals[lvi].ty
                     if self.isFnType(ref: lty) {
-                        val ftr: TypeRef = self.arena.types[lty]
+                        val ftr: TypeRef = self.arena.typeAt(index: lty)
                         if ftr.args.count() > 0 {
                             return self.typeInfoOfRef(ref: ftr.args[0])
                         }
@@ -854,7 +854,7 @@ pub impl Comp {
                     if !isEnum && ty == 0U64 {
                         val rr: U64 = self.inferRecordMakeRef(fields: fields)
                         if rr != 0U64 {
-                            val rt: TypeRef = self.arena.types[rr]
+                            val rt: TypeRef = self.arena.typeAt(index: rr)
                             return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr viewExtId=rt.viewExtId />
                         }
                     }
@@ -874,9 +874,9 @@ pub impl Comp {
                 // synthetic ABI layout is non-generic: later compatibility,
                 // inference, and field selection must see the same structural
                 // children as the annotated context.
-                if g != 0U64 && g < self.arena.types.count() {
-                    if self.arena.types[g].isRecord {
-                        val rt: TypeRef = self.arena.types[g]
+                if g != 0U64 && g < self.arena.typeCount() {
+                    if self.arena.typeAt(index: g).isRecord {
+                        val rt: TypeRef = self.arena.typeAt(index: g)
                         return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=g viewExtId=rt.viewExtId />
                     }
                 }
@@ -895,15 +895,15 @@ pub impl Comp {
                     val er: U64 = self.arrayElemRef(start: bt.nameStart, len: bt.nameLen)
                     if er != 0 {
                         val rr: U64 = self.resolveTy(tyRef: er)
-                        if rr < self.arena.types.count() {
+                        if rr < self.arena.typeCount() {
                             // an `Array[any P]` element (`xs[i]` where the element is the
                             // existential): carry the isAny ref so a bare `xs[i].m()`
                             // dispatches dynamically — name-only recovery below would
                             // degrade it to the plain trait name and misroute the call.
-                            if self.arena.types[rr].isAny {
+                            if self.arena.typeAt(index: rr).isAny {
                                 return self.typeInfoOfRef(ref: rr)
                             }
-                            val rt: TypeRef = self.arena.types[rr]
+                            val rt: TypeRef = self.arena.typeAt(index: rr)
                             if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                                 if rt.args.count() > 0 {
                                     val xn: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
@@ -925,7 +925,7 @@ pub impl Comp {
                 // `dict[k]` yields the Dictionary's value type V (args[1]) — the subscript
                 // desugars to `.at(key:) -> V`.
                 if self.isDictionaryType(ti: bt) {
-                    val dt: TypeRef = self.arena.types[bt.ref]
+                    val dt: TypeRef = self.arena.typeAt(index: bt.ref)
                     if dt.args.count() > 1 {
                         return self.typeInfoOfRef(ref: dt.args[1])
                     }
@@ -934,7 +934,7 @@ pub impl Comp {
                 // compiler-recognised subscript (value return; see genLlvmIndex).
                 if self.isBufferType(ti: bt) {
                     if bt.ref != 0 {
-                        val bft: TypeRef = self.arena.types[bt.ref]
+                        val bft: TypeRef = self.arena.typeAt(index: bt.ref)
                         if bft.args.count() > 0 {
                             return self.typeInfoOfRef(ref: bft.args[0])
                         }
@@ -956,7 +956,7 @@ pub impl Comp {
                 val bt: TypeInfo = self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
-                    val brt: TypeRef = self.arena.types[br]
+                    val brt: TypeRef = self.arena.typeAt(index: br)
                     mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: br)
                     if strip {
                         sources = []
@@ -970,7 +970,7 @@ pub impl Comp {
                         if !(present) { sources.append(source) }
                     }
                     val vr: U64 = self.typeRefWithViewSources(ref: br, sources: sources)
-                    val legacy: U64 = self.arena.types[vr].viewExtId
+                    val legacy: U64 = self.arena.typeAt(index: vr).viewExtId
                     return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=legacy />
                 }
                 return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=source.surfaceId />
@@ -1009,8 +1009,8 @@ pub impl Comp {
                 // the current body instance, so this is safe for every phase.
                 val finalResult: U64 = self.bodyCalleeResultRef(exprId: id)
                 val finalRecv: U64 = self.groundedBodyReceiverRef(exprId: recv)
-                if finalResult != 0U64 && finalResult < self.arena.types.count() && finalRecv != 0U64 && finalRecv < self.arena.types.count() {
-                    val finalRecvTy: TypeRef = self.arena.types[finalRecv]
+                if finalResult != 0U64 && finalResult < self.arena.typeCount() && finalRecv != 0U64 && finalRecv < self.arena.typeCount() {
+                    val finalRecvTy: TypeRef = self.arena.typeAt(index: finalRecv)
                     // The ordinary generic return-recovery below remains the
                     // authority for an unviewed receiver. The final descriptor
                     // is required specifically when the receiver's `#` facet
@@ -1134,8 +1134,8 @@ pub impl Comp {
                     // re-erased to the existential) — anyMemberRetInfo. Unknown when the
                     // return doesn't fully ground.
                     if rt.ref != 0U64 {
-                        if rt.ref < self.arena.types.count() {
-                            if self.arena.types[rt.ref].isAny {
+                        if rt.ref < self.arena.typeCount() {
+                            if self.arena.typeAt(index: rt.ref).isAny {
                                 val qTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                                 val qMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                                 mut val ti: U64 = 0
@@ -1264,8 +1264,8 @@ pub impl Comp {
                             // would record a garbage instance); a ref-less receiver falls to
                             // the bare-`T` name substitution below, as before.
                             mut val elemRef: U64 = 0
-                            if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
-                                val art: TypeRef = self.arena.types[rt.ref]
+                            if rt.ref != 0U64 && rt.ref < self.arena.typeCount() {
+                                val art: TypeRef = self.arena.typeAt(index: rt.ref)
                                 if art.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: art.nameStart, len: art.nameLen, kw: "Array") {
                                     elemRef = art.args[0]
                                 }
@@ -1311,8 +1311,8 @@ pub impl Comp {
                                 }
                                 // an inference hole: a bare-`T` return still substitutes the
                                 // structured element ref (the pre-grounding behavior).
-                                if mf.retTy < self.arena.types.count() {
-                                    if self.arena.types[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
+                                if mf.retTy < self.arena.typeCount() {
+                                    if self.arena.typeAt(index: mf.retTy).nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                         return self.typeInfoOfRef(ref: elemRef)
                                     }
                                 }
@@ -1320,8 +1320,8 @@ pub impl Comp {
                             // a ref-less receiver: substitute a return that is EXACTLY the
                             // type parameter T with the element's name (the pre-grounding
                             // behavior — serves plain named elements only).
-                            if mf.retTy < self.arena.types.count() {
-                                if self.arena.types[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
+                            if mf.retTy < self.arena.typeCount() {
+                                if self.arena.typeAt(index: mf.retTy).nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                     if rt.nameLen > 0U64 {
                                         return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
                                     }
@@ -1392,7 +1392,7 @@ pub impl Comp {
                 // result type = the Result's Ok payload T (args[0] of Result[T, E]).
                 val rt: TypeInfo = self.exprTypeWithChainHole(id: expr, chainHoleRef: chainHoleRef)
                 if self.isGenericInst(ref: rt.ref) {
-                    val inst: TypeRef = self.arena.types[rt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: rt.ref)
                     if inst.args.count() > 0 {
                         return self.typeInfoOfRef(ref: inst.args[0])
                     }
@@ -1403,7 +1403,7 @@ pub impl Comp {
                 // pointee field type: base is Ref[T] / MutableRef[T]; resolve T then T's field.
                 val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 if self.isStrongRefInst(ref: bt.ref) {
-                    val inst: TypeRef = self.arena.types[bt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
                         return self.fieldType(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
@@ -1417,7 +1417,7 @@ pub impl Comp {
                 // like a normal receiver.
                 val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 if self.isStrongRefInst(ref: bt.ref) {
-                    val inst: TypeRef = self.arena.types[bt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     if inst.args.count() > 0 {
                         return self.typeInfoOfRef(ref: inst.args[0])
                     }
@@ -1439,7 +1439,7 @@ pub impl Comp {
                 // type argument. A value-less Promise[()] (args empty) yields a scalar.
                 val ot: TypeInfo = self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef)
                 if ot.ref != 0 {
-                    val tr: TypeRef = self.arena.types[ot.ref]
+                    val tr: TypeRef = self.arena.typeAt(index: ot.ref)
                     if tr.args.count() > 0 {
                         return self.typeInfoOfRef(ref: tr.args[0])
                     }

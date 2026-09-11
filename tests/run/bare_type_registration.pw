@@ -1,0 +1,22 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "BareProbe")
+    // All five facets excluded by the legacy query must remain excluded.
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[0U64] />)
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewExtId=1U64 />)
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[1U64] />)
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isAny=true />)
+    compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isSendable=true />)
+    val expected = compiler.arena.typeCount()
+    val first = compiler.findOrAddTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    if first != expected || compiler.arena.typeCount() != expected + 1U64 { panic "bare query reused a facet" }
+    val duplicate = compiler.internBytes(s: "BareProbe")
+    compiler.pushType(t: <TypeRef nameStart=duplicate.nameStart nameLen=duplicate.nameLen args=[] />)
+    if compiler.findOrAddTypeRef(nameStart: duplicate.nameStart, nameLen: duplicate.nameLen) != first { panic "first name occurrence changed" }
+    if compiler.arena.typeCount() != compiler.arena.typeTerms.count() { panic "parallel type rows diverged" }
+    write(s: "bare-type-registration-ok\n")
+}

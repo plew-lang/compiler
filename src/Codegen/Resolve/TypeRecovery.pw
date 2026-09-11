@@ -13,8 +13,8 @@ pub impl Comp {
     // letting a later backend check discover that the wrong overload won.
     inout fn typeRefViewIds(ref: U64) -> Array[U64] {
         mut val out: Array[U64] = []
-        if ref == 0U64 || ref >= self.arena.types.count() { return out }
-        val t: TypeRef = self.arena.types[ref]
+        if ref == 0U64 || ref >= self.arena.typeCount() { return out }
+        val t: TypeRef = self.arena.typeAt(index: ref)
         out = t.viewIds
         if out.count() == 0U64 && t.viewExtId != 0U64 { out.append(t.viewExtId) }
         return out
@@ -154,16 +154,16 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 {
             return false
         }
-        if a >= self.arena.types.count() || b >= self.arena.types.count() {
+        if a >= self.arena.typeCount() || b >= self.arena.typeCount() {
             return false
         }
-        if self.arena.types[a].isAny || self.arena.types[b].isAny {
+        if self.arena.typeAt(index: a).isAny || self.arena.typeAt(index: b).isAny {
             return false
         }
         if self.isFnType(ref: a) || self.isFnType(ref: b) {
             return false
         }
-        return self.arena.types[a].args.count() > 0U64 && self.arena.types[b].args.count() > 0U64
+        return self.arena.typeAt(index: a).args.count() > 0U64 && self.arena.typeAt(index: b).args.count() > 0U64
     }
 
     // An argument's recovered type for overload discrimination. Prefer the parametric
@@ -179,7 +179,7 @@ pub impl Comp {
         if argExpr < self.arena.semanticExprTypes.count() {
             val sref: U64 = self.semanticExprTerm(exprId: argExpr)
             if sref != 0U64 {
-                if sref < self.arena.types.count() {
+                if sref < self.arena.typeCount() {
                     if self.tyRefIsGround(ref: sref) {
                         return self.typeInfoOfRef(ref: sref)
                     }
@@ -228,8 +228,8 @@ pub impl Comp {
             // `any sendable P` are distinct callable parameter forms.  Route
             // them through the same complete TypeRef identity used for fn
             // types instead of letting the fallback erase the capability.
-            if ti.ref != 0U64 && p.ty != 0U64 && ti.ref < self.arena.types.count() && p.ty < self.arena.types.count() {
-                if self.arena.types[ti.ref].isAny || self.arena.types[p.ty].isAny {
+            if ti.ref != 0U64 && p.ty != 0U64 && ti.ref < self.arena.typeCount() && p.ty < self.arena.typeCount() {
+                if self.arena.typeAt(index: ti.ref).isAny || self.arena.typeAt(index: p.ty).isAny {
                     return self.typeRefEq(a: ti.ref, b: p.ty)
                 }
             }
@@ -280,7 +280,7 @@ pub impl Comp {
     // before reading its recorded semantic TypeTerm.
     inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> U64 {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
-        if recvRef == 0U64 || recvRef >= self.arena.types.count() {
+        if recvRef == 0U64 || recvRef >= self.arena.typeCount() {
             return self.callableArgMatchRank(f: f, args: args)
         }
         // Capture the caller meaning before selecting a callee. The semantic
@@ -339,12 +339,12 @@ pub impl Comp {
                         // a plain named type does not necessarily retain a TypeRef
                         // during method lookup, while generic/fn/any/view terms do
                         // require their complete semantic identity.
-                        val expectedTerm: TypeRef = self.arena.types[expected]
+                        val expectedTerm: TypeRef = self.arena.typeAt(index: expected)
                         val actualViews: Array[U64] = self.argViewIds(argExpr: self.argAt(args: args, index: ai).expr, ti: actual)
                         val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
                         if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
                             allMatch = false
-                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.types.count() && (self.arena.types[actual.ref].isAny || expectedTerm.isAny)) {
+                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.typeCount() && (self.arena.typeAt(index: actual.ref).isAny || expectedTerm.isAny)) {
                             if !(self.typeRefEq(a: actual.ref, b: expected)) {
                                 allMatch = false
                             }
@@ -352,7 +352,7 @@ pub impl Comp {
                             allMatch = false
                         }
                     } else {
-                        val et: TypeRef = self.arena.types[expected]
+                        val et: TypeRef = self.arena.typeAt(index: expected)
                         if actual.nameLen == 0U64 || intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != et.nameId {
                             allMatch = false
                         }

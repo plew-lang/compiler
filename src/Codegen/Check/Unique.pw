@@ -522,8 +522,8 @@ pub impl Comp {
     // are covered too; generic templates carry type-param args (not unique) and pass.
     inout fn checkGenericUniqueArgs() {
         mut val i: U64 = 0
-        while i < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[i]
+        while i < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: i)
             if t.args.count() != 0 {
                 // Array is handled by checkArrayElemsNotUnique, which scans the RECORDED
                 // element list (real `Array[E]` annotations from lowerType), not the whole

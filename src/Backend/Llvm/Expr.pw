@@ -456,7 +456,7 @@ pub impl LlvmCtx {
                 }
                 val opRef: U64 = self.exprTypeRef(c: inout c, id: operand)
                 if opRef != 0U64 {
-                    if c.newtypeUnderRef(start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
+                    if c.newtypeUnderRef(start: c.arena.typeAt(index: opRef).nameStart, len: c.arena.typeAt(index: opRef).nameLen) != 0U64 {
                         return ov
                     }
                 }

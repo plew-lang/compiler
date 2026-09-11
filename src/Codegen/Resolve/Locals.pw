@@ -226,10 +226,10 @@ pub impl Comp {
         if bt.kind != 2 {
             return 0
         }
-        if bt.ref >= self.arena.types.count() {
+        if bt.ref >= self.arena.typeCount() {
             return 0
         }
-        val ot: TypeRef = self.arena.types[bt.ref]
+        val ot: TypeRef = self.arena.typeAt(index: bt.ref)
         if !(rangeEquals(bytes: self.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
             return 0
         }
@@ -284,8 +284,8 @@ pub impl Comp {
                             // (`p: P#Ext`) field: the ref IS the identity facet
                             // (spec/08,09) — name-only recovery would drop it and a
                             // method on the field couldn't dispatch through it.
-                            if f.ty != 0U64 && f.ty < self.arena.types.count() {
-                                if self.arena.types[f.ty].isAny || self.arena.types[f.ty].viewExtId != 0U64 || self.arena.types[f.ty].viewIds.count() > 0U64 {
+                            if f.ty != 0U64 && f.ty < self.arena.typeCount() {
+                                if self.arena.typeAt(index: f.ty).isAny || self.arena.typeAt(index: f.ty).viewExtId != 0U64 || self.arena.typeAt(index: f.ty).viewIds.count() > 0U64 {
                                     return self.typeInfoOfRef(ref: f.ty)
                                 }
                             }
@@ -568,7 +568,7 @@ pub impl Comp {
                 // purpose), NOT the pointee field's own mutability. A `Ref` is read-only.
                 val bt: TypeInfo = self.typeOf(id: base)
                 if self.isMutableRefInst(ref: bt.ref) {
-                    val inst: TypeRef = self.arena.types[bt.ref]
+                    val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
                         return self.fieldDeclaredMut(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)

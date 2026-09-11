@@ -239,8 +239,8 @@ pub impl Comp {
     // consumers migrate; TypeTerm, shape and literal context nevertheless
     // share one ExprId-keyed entry rather than parallel caches.
     inout fn semanticExprShape(ti: TypeInfo) -> U64 {
-        if ti.ref != 0U64 && ti.ref < self.arena.types.count() {
-            val t: TypeRef = self.arena.types[ti.ref]
+        if ti.ref != 0U64 && ti.ref < self.arena.typeCount() {
+            val t: TypeRef = self.arena.typeAt(index: ti.ref)
             if t.isAny { return 6U64 }
             if self.isFnType(ref: ti.ref) { return 5U64 }
         }
@@ -869,7 +869,7 @@ pub impl Comp {
         val e: SemanticExprType = self.arena.semanticExprTypes[exprId]
         if e.shape == 0U64 || e.term == 0U64 { return entry }
         val grounded: U64 = self.groundTermForBody(ref: e.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
-        if grounded != 0U64 && grounded < self.arena.types.count() {
+        if grounded != 0U64 && grounded < self.arena.typeCount() {
             return self.typeInfoOfRef(ref: grounded)
         }
         return entry
@@ -901,7 +901,7 @@ pub impl Comp {
     // Derive its legacy shape from the term at this single boundary instead of
     // leaving array/chain/operator-specific caches behind.
     inout fn recordSemanticExprTerm(exprId: U64, term: U64) {
-        if term == 0U64 || term >= self.arena.types.count() { return }
+        if term == 0U64 || term >= self.arena.typeCount() { return }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val ti: TypeInfo = self.typeInfoOfRef(ref: term)
@@ -932,7 +932,7 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />
-        if resultTerm != 0U64 && resultTerm < self.arena.types.count() {
+        if resultTerm != 0U64 && resultTerm < self.arena.typeCount() {
             val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
             next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />
         }
@@ -968,7 +968,7 @@ pub impl Comp {
     // later BodyInstance infer a callee binder from the caller's binder
     // without reopening the AST or reading Mono's ambient scan state.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) {
-        if expectedTerm == 0U64 || expectedTerm >= self.arena.types.count() { return }
+        if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
@@ -985,7 +985,7 @@ pub impl Comp {
             // consumer, including Mid return resolution, observes it.
             Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => {
                 if suffixLen == 0U64 {
-                    val expected: TypeRef = self.arena.types[expectedTerm]
+                    val expected: TypeRef = self.arena.typeAt(index: expectedTerm)
                     if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
                         self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                     }
@@ -1103,15 +1103,15 @@ pub impl Comp {
                     _ => {}
                 }
                 if baseRef == 0U64 { baseRef = self.groundedTypeOf(id: base) }
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                if baseRef != 0U64 && baseRef < self.arena.typeCount() {
                     val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
                     if fieldRef != 0U64 { return fieldRef }
                 }
             }
             Expr.Index(val base, index: _) => {
                 val baseRef: U64 = self.groundedTypeOf(id: base)
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
-                    val baseTy: TypeRef = self.arena.types[baseRef]
+                if baseRef != 0U64 && baseRef < self.arena.typeCount() {
+                    val baseTy: TypeRef = self.arena.typeAt(index: baseRef)
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
                             return baseTy.args[0]

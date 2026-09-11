@@ -29,7 +29,7 @@ pub impl LlvmCtx {
             mut val ti: U64 = 0
             while ti < c.cur.typeParams.count() {
                 if c.cur.typeParams[ti].nameId == qid {
-                    val at: TypeRef = c.arena.types[c.cur.typeArgs[ti]]
+                    val at: TypeRef = c.arena.typeAt(index: c.cur.typeArgs[ti])
                     // an existential argument (`T -> any P`) is the fat pointer (2 words);
                     // recursing on `at`'s bare trait name would size it as 1 word.
                     if refIsAny(c: inout c, ref: c.cur.typeArgs[ti]) {
@@ -147,7 +147,7 @@ pub impl LlvmCtx {
             }
             if c.isGenericInst(ref: g) {
                 // Array[E] is the {ptr,i64} value type, not an inline instance.
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: g).nameStart, len: c.arena.typeAt(index: g).nameLen, kw: "Array") {
                     return 2U64
                 }
                 return self.genInstWords(c: inout c, ref: g)
@@ -162,7 +162,7 @@ pub impl LlvmCtx {
     // over its variants — mirroring registerGenEnums' sizing so an inline gen-instance
     // member is sized identically to its standalone named type.
     inout fn genInstWords(c: inout Comp, ref: U64) -> U64 {
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         val gsi: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if gsi < c.arena.structs.count() {
             val sd: StructDef = c.arena.structs[gsi]
@@ -310,7 +310,7 @@ pub impl LlvmCtx {
             }
             return true
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.genEnumRefs.count() {
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
@@ -346,7 +346,7 @@ pub impl LlvmCtx {
             }
             return res
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.genEnumRefs.count() {
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
@@ -689,7 +689,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < self.genEnumRefs.count() {
             if self.genEnumDefs[i] == eid {
-                if c.arena.types[self.genEnumRefs[i]].args.count() == 0U64 {
+                if c.arena.typeAt(index: self.genEnumRefs[i]).args.count() == 0U64 {
                     return i
                 }
             }
@@ -720,7 +720,7 @@ pub impl LlvmCtx {
             }
             return true
         }
-        val t: TypeRef = c.arena.types[ref]
+        val t: TypeRef = c.arena.typeAt(index: ref)
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.genEnumRefs.count() {
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
@@ -827,7 +827,7 @@ pub impl LlvmCtx {
         if !(c.isGenericInst(ref: ty)) {
             if self.expectedTy != 0U64 {
                 if c.isGenericInst(ref: self.expectedTy) {
-                    val et: TypeRef = c.arena.types[self.expectedTy]
+                    val et: TypeRef = c.arena.typeAt(index: self.expectedTy)
                     if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
                         ty = self.expectedTy
                     }
@@ -847,7 +847,7 @@ pub impl LlvmCtx {
                 // obtains layout and field expectations from the selected instance;
                 // that is what makes nested `Optional[Optional[I32]]` unambiguous.
                 c.cur.typeParams = concatParams(add: savedP, base: c.arena.enums[self.genEnumDefs[gslot]].typeParams)
-                c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.types[ty].args)
+                c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.typeAt(index: ty).args)
                 val v: LLVMValueRef = self.buildEnumValue(c: inout c, eid: self.genEnumDefs[gslot], ety: self.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields, instanceRef: ty)
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA
@@ -968,8 +968,8 @@ pub impl LlvmCtx {
                         // literal value resolves its struct (records have a `(`-prefixed name).
                         mut val gpfIsRecord: Bool = false
                         if gpf != 0U64 {
-                            if c.arena.types[gpf].nameLen > 0U64 {
-                                if c.arena.bytes[c.arena.types[gpf].nameStart] == 40U8 {
+                            if c.arena.typeAt(index: gpf).nameLen > 0U64 {
+                                if c.arena.bytes[c.arena.typeAt(index: gpf).nameStart] == 40U8 {
                                     gpfIsRecord = true
                                 }
                             }
@@ -982,8 +982,8 @@ pub impl LlvmCtx {
                         // element cascade dropped their shares).
                         mut val gpfIsAnyOrFn: Bool = false
                         if gpf != 0U64 {
-                            if gpf < c.arena.types.count() {
-                                gpfIsAnyOrFn = c.arena.types[gpf].isAny || c.isFnType(ref: gpf)
+                            if gpf < c.arena.typeCount() {
+                                gpfIsAnyOrFn = c.arena.typeAt(index: gpf).isAny || c.isFnType(ref: gpf)
                             }
                         }
                         if c.isStrongRefInst(ref: gpf) || c.isWeakRefLikeInst(ref: gpf) || gpfIsAnyOrFn {

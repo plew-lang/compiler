@@ -84,17 +84,17 @@ pub impl Comp {
         if expected == 0U64 || inferred == 0U64 {
             return true
         }
-        if expected >= self.arena.types.count() || inferred >= self.arena.types.count() {
+        if expected >= self.arena.typeCount() || inferred >= self.arena.typeCount() {
             return true
         }
         // ground the expected type through any active generic env (a `-> T` return / `T`
         // param resolves to the concrete instantiation argument); inferred is grounded.
         val exp: U64 = self.groundTypeRef(ref: expected)
-        if exp >= self.arena.types.count() {
+        if exp >= self.arena.typeCount() {
             return true
         }
-        val te: TypeRef = self.arena.types[exp]
-        val tin: TypeRef = self.arena.types[inferred]
+        val te: TypeRef = self.arena.typeAt(index: exp)
+        val tin: TypeRef = self.arena.typeAt(index: inferred)
         if te.isSendable && !(self.typeRefIsSendable(ref: inferred)) {
             return false
         }
@@ -236,8 +236,8 @@ pub impl Comp {
 
     // Structural field-by-field compatibility of two Record TypeTerms.
     inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Bool {
-        val te: TypeRef = self.arena.types[teRef]
-        val tin: TypeRef = self.arena.types[tinRef]
+        val te: TypeRef = self.arena.typeAt(index: teRef)
+        val tin: TypeRef = self.arena.typeAt(index: tinRef)
         if !(te.isRecord) || !(tin.isRecord) { return false }
         if te.recordFieldLabels.count() != tin.recordFieldLabels.count() || te.recordFieldTerms.count() != tin.recordFieldTerms.count() || te.recordFieldLabels.count() != te.recordFieldTerms.count() {
             return false
@@ -312,11 +312,11 @@ pub impl Comp {
     // covariant concrete->existential position. Used to gate that widening to the container
     // heads whose backend actually repacks it (compatNamed).
     inout fn argWidensToAny(expectedArg: U64, inferredArg: U64) -> Bool {
-        if expectedArg >= self.arena.types.count() || inferredArg >= self.arena.types.count() {
+        if expectedArg >= self.arena.typeCount() || inferredArg >= self.arena.typeCount() {
             return false
         }
-        val ea: TypeRef = self.arena.types[expectedArg]
-        val ia: TypeRef = self.arena.types[inferredArg]
+        val ea: TypeRef = self.arena.typeAt(index: expectedArg)
+        val ia: TypeRef = self.arena.typeAt(index: inferredArg)
         if !(ea.isAny) || ia.isAny {
             return false
         }

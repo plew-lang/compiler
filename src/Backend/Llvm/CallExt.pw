@@ -11,12 +11,12 @@ pub impl LlvmCtx {
     // target ABI extension attributes; aggregates require C classification.
     // Neither may silently inherit the ordinary Plew calling convention.
     inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Bool {
-        if ref == 0U64 || ref >= c.arena.types.count() { return false }
+        if ref == 0U64 || ref >= c.arena.typeCount() { return false }
         val ty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: ref)
         val kind: U32 = LLVMGetTypeKind(ty)
         if kind == 12U32 { return true }
         if kind == 8U32 { return LLVMGetIntTypeWidth(ty) >= 32U32 }
-        val term: TypeRef = c.arena.types[ref]
+        val term: TypeRef = c.arena.typeAt(index: ref)
         // F32 currently has a double Plew representation, not a C float ABI.
         return kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64")
     }
@@ -75,8 +75,8 @@ pub impl LlvmCtx {
     // below only for old one-source callers while migrating them.
     inout fn typeViewIds(c: inout Comp, ref: U64) -> Array[U64] {
         mut val out: Array[U64] = []
-        if ref == 0U64 || ref >= c.arena.types.count() { return out }
-        val t: TypeRef = c.arena.types[ref]
+        if ref == 0U64 || ref >= c.arena.typeCount() { return out }
+        val t: TypeRef = c.arena.typeAt(index: ref)
         out = t.viewIds
         if out.count() == 0U64 && t.viewExtId != 0U64 { out.append(t.viewExtId) }
         return out
@@ -131,7 +131,7 @@ pub impl LlvmCtx {
                 if li < self.nLocals {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
-                        val t: TypeRef = c.arena.types[tr]
+                        val t: TypeRef = c.arena.typeAt(index: tr)
                         if isPrimIntName(c: inout c, start: t.nameStart, len: t.nameLen) {
                             return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=t.nameStart fieldLen=t.nameLen />
                         }
@@ -167,7 +167,7 @@ pub impl LlvmCtx {
         // already pins a grounded int/float/Bool param's tracked ref to that concrete name.
         val rt: U64 = self.exprTypeRef(c: inout c, id: recv)
         if rt != 0U64 {
-            val rtn: TypeRef = c.arena.types[rt]
+            val rtn: TypeRef = c.arena.typeAt(index: rt)
             // a grounded int / float / Bool type-param receiver (`value.format(…)` in `print[I64]`
             // / `print[F64]` / `print[Bool]`), including a newtype over a primitive (`Meter = I64`
             // in `print[Meter]`): a newtype inherits the underlying's lang-item methods (spec/10),
@@ -227,7 +227,7 @@ pub impl LlvmCtx {
         }
         val r: U64 = self.exprTypeRef(c: inout c, id: cur)
         if r != 0U64 {
-            val rt: TypeRef = c.arena.types[r]
+            val rt: TypeRef = c.arena.typeAt(index: r)
             mut val ri: U64 = 0U64
             while ri < rt.viewIds.count() {
                 out.append(rt.viewIds[ri])
