@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+enum Choice { First(value: I64) Second }
+
+fn repeated(value: Choice) {
+    match value {
+        Choice.First(value: val number) => { print(number) }
+        Choice.First(value: _) => { print(90I64) }
+        Choice.Second => { print(2I64) }
+    }
+}
+
+fn wildcard(value: Choice) {
+    match value {
+        Choice.First(value: _) => { print(3I64) }
+        _ => { print(4I64) }
+        Choice.Second => { print(91I64) }
+        _ => { print(92I64) }
+    }
+}
+
+fn main() {
+    repeated(value: <Choice.First value=1I64 />)
+    repeated(value: <Choice.Second />)
+    wildcard(value: <Choice.First value=5I64 />)
+    wildcard(value: <Choice.Second />)
+}

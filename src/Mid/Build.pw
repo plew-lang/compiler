@@ -1953,15 +1953,30 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
             mut val joinReachable: Bool = false
             mut val armIndex: U64 = 0U64
             while armIndex < semantic.arms.count() {
-                val armTarget: U64 = midNewBlock(state: inout state)
-                armTargets.append(armTarget)
                 val arm: SemanticMatchArm = semantic.arms[armIndex]
-                if arm.hasVariant {
-                    values.append(midEnumTagForVariantSlot(slot: arm.variantIndex))
-                    targets.append(armTarget)
-                } else {
-                    otherwise = armTarget
+                // Source arms are ordered. A variant is covered by its first
+                // arm, and the first wildcard covers every remaining variant.
+                // Unreachable source arms have no CFG block or ownership edge.
+                mut val reachable: Bool = otherwise == mismatchTarget
+                val tag: I64 = midEnumTagForVariantSlot(slot: arm.variantIndex)
+                if reachable && arm.hasVariant {
+                    mut val previous: U64 = 0U64
+                    while previous < values.count() {
+                        if values[previous] == tag { reachable = false }
+                        previous += 1U64
+                    }
                 }
+                mut val armTarget: U64 = mismatchTarget
+                if reachable {
+                    armTarget = midNewBlock(state: inout state)
+                    if arm.hasVariant {
+                        values.append(tag)
+                        targets.append(armTarget)
+                    } else {
+                        otherwise = armTarget
+                    }
+                }
+                armTargets.append(armTarget)
                 armIndex += 1U64
             }
             midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=<MidOperand.Copy place=tagPlace /> values=values targets=targets otherwise=otherwise />)
@@ -1969,6 +1984,10 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
             midSetTerminator(state: inout state, terminator: <MidTerminator.Abort />)
             armIndex = 0U64
             while armIndex < semantic.arms.count() {
+                if armTargets[armIndex] == mismatchTarget {
+                    armIndex += 1U64
+                    continue
+                }
                 state.currentBlock = armTargets[armIndex]
                 val bindingMark: U64 = state.bindings.count()
                 val armScope: U64 = midOpenScope(state: inout state)
