@@ -4251,10 +4251,13 @@ pub impl LlvmCtx {
     // This initial preflight admits the closed direct-call subset only; runtime
     // intrinsic targets remain fail-closed until their own direct reader is
     // implemented rather than borrowing the draft call path.
-    inout fn midCanonicalLlvmPreflight(c: inout Comp, canonical: MidCanonicalBody, abiParameterCount: U64 = 0U64) -> MidLlvmPreflight {
+}
+
+// Admission callers first verify the frozen Mid body. Only successful LLVM
+// capability checks allow publication of the backend-local Ready value.
+impl LlvmCtx {
+    inout fn midVerifiedLlvmPreflight(c: inout Comp, canonical: MidCanonicalBody, abiParameterCount: U64 = 0U64) -> MidLlvmPreflight {
         if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidLlvmPreflight.Terminator /> }
-        val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: canonical)
-        match verification.error { MidVerifyError.None => {} _ => { return <MidLlvmPreflight.Terminator /> } }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
         if body.entry >= body.blocks.len { return <MidLlvmPreflight.Terminator /> }
         mut val parameter: U64 = 0U64
@@ -4330,12 +4333,11 @@ pub impl LlvmCtx {
         return <MidLlvmPreflight.Ready />
     }
 
-    inout fn genLlvmCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody, abiParameterStart: U64 = 0U64, abiParameterCount: U64 = 0U64) -> Bool {
-        // `start` is the LLVM ABI offset of Mid local 0; `count` is the
-        // number of source ABI locals. They are deliberately independent:
-        // a closure reserves LLVM argument 0 for its environment while its
-        // Mid parameter prefix still starts at local 0.
-        match self.midCanonicalLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: abiParameterCount) { MidLlvmPreflight.Ready => {} _ => { return false } }
+    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64) -> Bool {
+        val canonical: MidCanonicalBody = match prepared {
+            MidLlvmPrepared.None => { return false }
+            MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: _) => { give canonical }
+        }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
         if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
         mut val blocks: Array[LLVMBasicBlockRef] = []

@@ -117,9 +117,9 @@ pub impl LlvmCtx {
                                             // Preflight before emission so an unsupported
                                             // Mid shape cannot leave a half-emitted global
                                             // initializer before the legacy compatibility path.
-                                            val preflight: MidLlvmPreflight = self.midCanonicalLlvmPreflight(c: inout c, canonical: dropped)
+                                            val preflight: MidLlvmPreflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped)
                                             match preflight {
-                                                MidLlvmPreflight.Ready => { midReady = self.genLlvmCanonicalMidBody(c: inout c, canonical: dropped) }
+                                                MidLlvmPreflight.Ready => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=0U64 />) }
                                                 _ => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: preflight) }
                                             }
                                         }
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
         // reads/writes carry explicit Global(declarationTarget) place roots;
         // they are never recovered through legacy seeded locals.
         mut val midReady: Bool = false
-        mut val canonicalMid: MidCanonicalBody = <MidCanonicalBody body=0U64 />
+        mut val preparedMid: MidLlvmPrepared = <MidLlvmPrepared.None />
         val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
         val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
         // Global LLVM storage is emitted before every function body. Refuse
@@ -239,9 +239,9 @@ pub impl LlvmCtx {
                                     val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: elaborated)
                                     match verification.error {
                                         MidVerifyError.None => {
-                                            match self.midCanonicalLlvmPreflight(c: inout c, canonical: elaborated) {
+                                            match self.midVerifiedLlvmPreflight(c: inout c, canonical: elaborated) {
                                                 MidLlvmPreflight.Ready => {
-                                                    canonicalMid = elaborated
+                                                    preparedMid = <MidLlvmPrepared.Ready canonical=elaborated abiParameterCount=0U64 />
                                                     midReady = true
                                                 }
                                                 MidLlvmPreflight.AbiLocals => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AbiLocals />) }
@@ -365,7 +365,7 @@ pub impl LlvmCtx {
             // canonical preflight completed before beginFnBody, so this
             // call cannot fail into an AST fallback after partially emitting a
             // function.  A failure here is therefore a backend invariant bug.
-            if !(self.genLlvmCanonicalMidBody(c: inout c, canonical: canonicalMid)) {
+            if !(self.genLlvmPreparedMidBody(c: inout c, prepared: preparedMid)) {
                 c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid body failed LLVM lowering")
             }
             return

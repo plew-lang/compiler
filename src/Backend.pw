@@ -59,6 +59,14 @@ export enum MidLlvmPreflight {
     Terminator
 }
 
+// Backend-local admission result. Ready is constructed only after ownership
+// verification and LLVM capability checks on this frozen body. Its ABI prefix
+// travels with the body rather than being supplied again by emission callers.
+enum MidLlvmPrepared {
+    None
+    Ready(canonical: MidCanonicalBody, abiParameterCount: U64)
+}
+
 // These are frontend/ABI admission facts, separate from a Mid or LLVM
 // preflight failure.  A body can report more than one reason; coverage uses
 // that fact set to prioritize the next representation slice without guessing
