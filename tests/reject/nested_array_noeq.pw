@@ -7,6 +7,8 @@
 // with a mislocated diagnostic.
 struct NoEq { pub val x: I64 }
 
+pub impl NoEq { factory }
+
 fn main() {
     val a: Array[Array[NoEq]] = [[<NoEq x=1 />]]
     val b: Array[Array[NoEq]] = [[<NoEq x=1 />]]

@@ -1,0 +1,1 @@
+ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)

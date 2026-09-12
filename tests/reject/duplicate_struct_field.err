@@ -1,0 +1,1 @@
+duplicate field name (each field in a struct body / variant payload must be distinct)

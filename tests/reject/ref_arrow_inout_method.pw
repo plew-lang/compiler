@@ -3,6 +3,7 @@ import @Std/Core with { Ref }
 struct Cell { pub mut val n: I32 }
 
 pub impl Cell {
+    factory
     inout fn bump() {
         self.n = self.n + 1I32
     }

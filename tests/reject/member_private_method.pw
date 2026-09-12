@@ -4,6 +4,8 @@ struct Widget { pub val id: I64 }
 impl Widget {
     fn secretName() -> I64 { return self.id }
 }
+pub impl Widget { factory }
+
 fn main() {
     val w = <Widget id=7 />
     val n: I64 = w.secretName()

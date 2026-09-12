@@ -9,6 +9,8 @@ unique enum Holder {
     Empty
 }
 
+pub impl Cell { factory }
+
 fn main() {
     val h: Holder = <Holder.Full c=<Cell v=7 /> />
     val h2: Holder = h

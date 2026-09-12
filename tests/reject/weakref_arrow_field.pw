@@ -5,6 +5,8 @@
 import @Std/Io with { print }
 import @Std/Core with { Ref, WeakRef }
 struct C { pub val v: I32 }
+pub impl C { factory }
+
 fn main() {
     val r: Ref[C] = <Ref[C] value=<C v=7 /> />
     val w: WeakRef[C] = r.weak()

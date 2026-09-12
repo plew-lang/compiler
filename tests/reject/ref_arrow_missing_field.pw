@@ -3,6 +3,8 @@
 // Ref to a registered struct" would misdirect to the Ref itself).
 import @Std/Core with { Ref }
 struct Pt { pub val x: I64 }
+pub impl Pt { factory }
+
 fn main() {
     val r: Ref[Pt] = <Ref value=<Pt x=1 /> />
     val v = r->typo

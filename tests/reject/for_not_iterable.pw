@@ -4,6 +4,8 @@ struct Plain {
     pub val n: I64
 }
 
+pub impl Plain { factory }
+
 fn main() {
     for val x in <Plain n=3 /> {
         x

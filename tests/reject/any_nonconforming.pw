@@ -4,6 +4,8 @@
 trait Sh { fn area() -> I64 }
 struct Sq { pub val s: I64 }
 
+pub impl Sq { factory }
+
 fn main() {
     val xs: Array[any Sh] = [<Sq s=4I64 />]
 }

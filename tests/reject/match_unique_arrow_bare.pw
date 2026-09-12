@@ -4,7 +4,7 @@ import @Std/Core with { MutableRef }
 import @Std/Io with { print }
 
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit {
         print(self.fd)
     }
@@ -18,6 +18,10 @@ unique enum State {
 unique struct Box {
     pub val state: State
 }
+
+pub impl File { factory }
+
+pub impl Box { factory }
 
 fn main() {
     val b: MutableRef[Box] = <MutableRef value=<Box state=<State.Open file=<File fd=7 /> /> /> />

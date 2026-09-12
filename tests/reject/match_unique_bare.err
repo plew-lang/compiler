@@ -1,0 +1,1 @@
+matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)

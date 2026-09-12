@@ -14,6 +14,8 @@ pub impl[T] MyOpt[T] {
     factory fromValue(value: T) { return <MyOpt[T].Has v=value /> }
     factory empty() { return <MyOpt[T].Empty /> }
 }
+pub impl Cell { factory }
+
 fn main() {
     val m: MyOpt[Cell] = <MyOpt[Cell].Has v=<Cell n=5I64 /> />
     val r: MyOpt[I64] = m?.n

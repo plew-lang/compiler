@@ -9,6 +9,8 @@ impl Vec2 as Add[I8] {
     type Output = Vec2
     assoc fn add(lhs: Vec2, rhs: I8) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> }
 }
+pub impl Vec2 { factory }
+
 fn main() {
     val b = <Vec2 x=1 y=2 />
     val c = b + 100 * 3

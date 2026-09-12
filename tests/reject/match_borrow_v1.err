@@ -1,0 +1,1 @@
+`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)

@@ -1,0 +1,1 @@
+`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)

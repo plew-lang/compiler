@@ -10,3 +10,5 @@ fn outer() -> Result[I32, DstErr] {
     val x: I32 = try inner()
     return <Result.Ok value=x />
 }
+
+pub impl[T] Box[T] { factory }

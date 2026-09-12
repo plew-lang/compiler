@@ -3,7 +3,9 @@
 // `chain()` but not the factories does NOT conform — reject at the base rather than
 // desugaring and failing deep in the backend with an out-of-source line number.
 struct Fake { pub val n: I64 }
-pub impl Fake { fn chain() -> Optional[I64] { return <Optional[I64].Some v=self.n /> } }
+pub impl Fake {
+    factory
+    fn chain() -> Optional[I64] { return <Optional[I64].Some v=self.n /> } }
 fn main() {
     val f: Fake = <Fake n=1 />
     val x = f?.n

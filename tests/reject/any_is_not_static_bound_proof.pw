@@ -12,6 +12,8 @@ fn needsStaticProof[T](value: T) -> I64 where T: Marker {
     return 1I64
 }
 
+pub impl S { factory }
+
 fn main() {
     val erased: any Marker = <S />
     val result: I64 = needsStaticProof(value: erased)

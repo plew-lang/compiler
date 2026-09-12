@@ -1,6 +1,8 @@
 // A field specified twice in one construction (spec/05): silent last-wins otherwise.
 import @Std/Io with { print }
 struct P { pub val x: I64 }
+pub impl P { factory }
+
 fn main() {
     val p: P = <P x=1 x=2 />
     print(p.x)

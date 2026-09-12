@@ -4,6 +4,8 @@
 // than silently picking one (spec/06 — 曖昧はエラー). An annotation is required.
 struct Pair[T] { pub val a: T pub val b: T }
 
+pub impl[T] Pair[T] { factory }
+
 fn main() {
     val p = <Pair a=1I32 b=2I64 />
 }

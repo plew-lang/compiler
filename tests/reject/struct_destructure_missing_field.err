@@ -1,0 +1,1 @@
+a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)

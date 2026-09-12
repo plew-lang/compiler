@@ -7,6 +7,8 @@ trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
 struct Vec2 { pub val x: I64  pub val y: I64 }
 impl Vec2 as Add[I32] { type Output = Vec2  assoc fn add(lhs: Vec2, rhs: I32) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
 impl Vec2 as Add[I64] { type Output = Vec2  assoc fn add(lhs: Vec2, rhs: I64) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> } }
+pub impl Vec2 { factory }
+
 fn main() {
     val a = <Vec2 x=1 y=2 />
     val d = a + 10

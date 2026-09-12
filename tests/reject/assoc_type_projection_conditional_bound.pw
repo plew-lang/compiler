@@ -29,6 +29,8 @@ pub impl[T] Box[T] as Use where T#Parser.Output: Mark {
 
 fn needUse[T](value: T) where T: Use {}
 
+pub impl NoMark { factory }
+
 fn main() {
     needUse(value: <Box[S] value=<S /> />)
 }

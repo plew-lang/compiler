@@ -5,6 +5,8 @@ trait Special { fn mark() -> I64 }
 fn needs[T](x: T) -> I64 where T: Special { return x.mark() }
 struct Plain { pub val v: I64 }
 newtype Wrapped = Plain
+pub impl Plain { factory }
+
 fn main() {
     val w: Wrapped = <Plain v=1 /> as Wrapped
     val r: I64 = needs(x: w)

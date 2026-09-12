@@ -15,6 +15,7 @@ struct WideStore {
 }
 
 pub impl WideStore {
+    factory
     inout fn appendNode() {
         self.nodes.append(<SyntaxNewtype name=<Span start=1U64 end=2U64 /> ty=<TypeId raw=3U64 /> isPub=false span=<Span start=0U64 end=4U64 /> />)
     }

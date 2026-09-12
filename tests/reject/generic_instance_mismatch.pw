@@ -4,6 +4,8 @@
 // passed any instance pair — reading a String's pointer as I64 at runtime.
 struct BoxG[T] { pub val value: T }
 fn mkS() -> BoxG[String] { return <BoxG[String] value="s" /> }
+pub impl[T] BoxG[T] { factory }
+
 fn main() {
     mut val x: BoxG[I64] = <BoxG[I64] value=1 />
     x = mkS()

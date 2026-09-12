@@ -1,0 +1,1 @@
+the left of `?.` must fully implement `Chain`: a `chain()` returning an `Optional`, plus `fromValue(value:)` and `empty()` factories (spec/12). `Optional` and user Chain types qualify; a plain struct/scalar does not, and `Result` is not Chain (use `try`)

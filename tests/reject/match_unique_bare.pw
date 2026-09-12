@@ -8,6 +8,8 @@ unique enum ResultFile {
     Err(code: I64)
 }
 
+pub impl File { factory }
+
 fn main() {
     val r: ResultFile = <ResultFile.Ok file=<File fd=7 /> />
     match r {

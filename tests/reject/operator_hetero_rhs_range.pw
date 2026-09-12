@@ -10,6 +10,8 @@ impl Money as Add[I8] {
     type Output = U64
     assoc fn add(lhs: Money, rhs: I8) -> U64 { return 0U64 }
 }
+pub impl Money { factory }
+
 fn main() {
     val m: Money = <Money cents=5 />
     val r: U64 = m + 200

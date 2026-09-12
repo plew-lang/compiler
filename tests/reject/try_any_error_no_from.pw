@@ -13,3 +13,5 @@ fn outer() -> Result[I32, any HasCode] {
     val x: I32 = try inner()
     return <Result.Ok value=x />
 }
+
+pub impl CErr { factory }

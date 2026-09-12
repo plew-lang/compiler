@@ -1,0 +1,1 @@
+cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)

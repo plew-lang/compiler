@@ -1,5 +1,7 @@
 // spec/04: a function value in a fn-typed struct field must match the signature.
 struct H { pub val cb: fn(x: I64) -> I64 }
+pub impl H { factory }
+
 fn main() {
     val h: H = <H cb=fn(x: String) -> String { return x } />
 }

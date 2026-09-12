@@ -7,6 +7,8 @@ struct S { pub val a: I64 }
 pub impl S as Merge {
     fn merge(other: Optional[Self]) -> I64 { return self.a }
 }
+pub impl S { factory }
+
 fn main() {
     val x: any Merge = <S a=1I64 />
     val o: Optional[S] = <Optional[S].None />

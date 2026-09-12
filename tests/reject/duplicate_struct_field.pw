@@ -3,4 +3,6 @@ struct A {
     pub val x: I64
     pub val x: I64
 }
+pub impl A { factory }
+
 fn main() { val a: A = <A x=1 /> }
