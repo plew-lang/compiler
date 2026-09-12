@@ -2423,15 +2423,7 @@ export struct ChainSite {
     pub val exprId: U64
     pub val stageRef: U64
     pub val valueRef: U64
-    // `?.` creates these calls after ordinary source resolution has finished.
-    // Keep their declaration-time selections with the parametric stage instead
-    // of asking each BodyInstance to re-resolve a synthetic `Head.empty()` /
-    // `Head.fromValue(...)` spelling.  Mono grounds `stageRef` and turns this
-    // template into ordinary CallResolution records per concrete body instance.
-    pub val fromValueExprId: U64 = 0U64
-    pub val fromValueCallee: U64 = 0U64
-    pub val emptyExprId: U64 = 0U64
-    pub val emptyCallee: U64 = 0U64
+
 }
 pub impl ChainSite { factory }
 

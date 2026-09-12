@@ -3897,29 +3897,8 @@ pub impl Comp {
     // decision for every downstream consumer (instance registration, type
     // recovery, and LLVM emission).
     inout fn resolveBodyCallee(exprId: U64) -> U64 {
-        // An OptChain rewrite manufactures associated factory calls after the
-        // written program was resolved.  Their ChainSite entry is therefore
-        // the semantic call-resolution template.  Ground only its receiver
-        // term under this body instance, then use the normal CallResolution /
-        // reachability machinery; do not re-run name lookup on `Head.empty`.
-        val chainTemplate: U64 = self.chainImplicitCallee(exprId: exprId)
-        if chainTemplate < self.arena.functionCount() {
-            val stageTerm: U64 = self.chainImplicitStageRef(exprId: exprId)
-            val stageRef: U64 = self.groundTypeRef(ref: stageTerm)
-            // A generic declaration's AST is visited before any concrete body
-            // instance exists.  Its Chain template is semantic evidence, not
-            // an emittable call: wait until the body environment grounds the
-            // stage.  Recording `Optional[T].empty()` here would leak a
-            // symbolic descriptor into the final-call table and make LLVM see
-            // a factory with an unfilled T.
-            if stageRef == 0U64 || !(self.tyRefIsGround(ref: stageRef)) {
-                return self.arena.functionCount()
-            }
-            self.materializeImplicitAssocTemplate(exprId: exprId, callee: chainTemplate, recvRef: stageRef)
-            return chainTemplate
-        }
         val template: CallTemplate = self.callTemplateForCurrentBody(exprId: exprId)
-        // A written static call was selected during Record. Its Direct
+        // Record selects written and synthesized calls alike. Their Direct
         // template is authoritative for the concrete BodyInstance: reopening
         // Expr.Call/Method/ExtMethod here would duplicate candidate selection
         // and lose a receiver/result dependency carried by CallSiteKey.
@@ -4129,32 +4108,6 @@ pub impl Comp {
             }
             useIndex += 1U64
         }
-    }
-
-    // Turn one declaration-time implicit associated-call template into the
-    // concrete final decision for the active BodyInstance.  Unlike a written
-    // source call, a template has already selected both callable and subject;
-    // consulting its shared synthetic AST would reintroduce `Head[T]` and lose
-    // the concrete receiver.  This is the narrow first consumer of the wider
-    // CallResolution-template contract: selected callee + receiver term yield
-    // a complete CallResolution without a second inference pass.
-    inout fn materializeImplicitAssocTemplate(exprId: U64, callee: U64, recvRef: U64) {
-        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=recvRef />)
-        if callee >= self.arena.functionCount() || recvRef == 0U64 || recvRef >= self.arena.typeCount() {
-            return
-        }
-        val f: Func = self.arena.functionAt(index: callee)
-        if !(f.isAssoc) {
-            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit call template selected a non-associated callable")
-            return
-        }
-        val args: Array[U64] = self.arena.typeAt(index: recvRef).args
-        if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) {
-            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit associated call template has no complete receiver substitution")
-            return
-        }
-        val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
-        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvRef, calleeArgs: args, calleeBodyId: calleeBodyId)
     }
 
     // Walk one already-selected concrete body instance.  It is the frontend
@@ -4956,13 +4909,9 @@ pub impl Comp {
         mut val arms: Array[MatchArm] = []
         arms.append(someArm)
         arms.append(noneArm)
-        // Finalization runs after callable registration, so bind the nominal
-        // Chain witnesses now and retain them in the structural template. The
-        // later BodyInstance walk only grounds this decision; it never redoes
-        // source/bare-surface lookup.
-        val fromValueCallee: U64 = self.chainAssocWitness(recvStart: headStart, recvLen: headLen, nameStart: fromValueN.nameStart, nameLen: fromValueN.nameLen)
-        val emptyCallee: U64 = self.chainAssocWitness(recvStart: headStart, recvLen: headLen, nameStart: emptyN.nameStart, nameLen: emptyN.nameLen)
-        self.setChainSiteImplicitCalls(exprId: exprId, fromValueExprId: fromCall, fromValueCallee: fromValueCallee, emptyExprId: emptyCall, emptyCallee: emptyCallee)
+        // Record revisits these generated calls in the normal lexical walk.
+        // Their SyntheticCallSite identities retain distinct provenance; their
+        // ordinary CallTemplates retain receiver, arguments and result context.
         self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=self.pushMatchArms(arms: arms) />
     }
 
@@ -5103,8 +5052,8 @@ pub impl Comp {
         optUArgs.append(uRef)
         val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         self.scanType(ref: optURef)
-        // The two factories are reached through their ChainSite call
-        // templates when the rewritten match arms are scanned below.  Do not
+        // The two factories are reached through ordinary CallTemplates
+        // when the rewritten match arms are scanned below.  Do not
         // append raw FnInsts here: that bypasses the selected receiver and
         // duplicates a symbolic generic template as if it were concrete.
     }
@@ -5120,48 +5069,6 @@ pub impl Comp {
             i += 1
         }
         return <ChainSite exprId=0 stageRef=0 valueRef=0 />
-    }
-
-    // Attach the two declaration-time selections made by the Chain desugar.
-    // ChainSite is the declaration-owned template; CallResolution remains the
-    // concrete, body-instance-owned result of grounding it.
-    inout fn setChainSiteImplicitCalls(exprId: U64, fromValueExprId: U64, fromValueCallee: U64, emptyExprId: U64, emptyCallee: U64) {
-        mut val i: U64 = 0U64
-        while i < self.decls.chainSites.count() {
-            val site: ChainSite = self.decls.chainSites[i]
-            if site.exprId == exprId {
-                self.decls.chainSites.set(i: i, value: <ChainSite exprId=site.exprId stageRef=site.stageRef valueRef=site.valueRef fromValueExprId=fromValueExprId fromValueCallee=fromValueCallee emptyExprId=emptyExprId emptyCallee=emptyCallee />)
-                return
-            }
-            i += 1U64
-        }
-    }
-
-    // Return the declaration-time template selected for an implicit Chain
-    // factory call, or the normal no-callable sentinel.  This is deliberately
-    // keyed by the synthetic call ExprId, not by its text: the text is only a
-    // lowering artifact and may be shared by several generic body instances.
-    fn chainImplicitCallee(exprId: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.chainSites.count() {
-            val site: ChainSite = self.decls.chainSites[i]
-            if site.fromValueExprId == exprId { return site.fromValueCallee }
-            if site.emptyExprId == exprId { return site.emptyCallee }
-            i += 1U64
-        }
-        return self.arena.functionCount()
-    }
-
-    fn chainImplicitStageRef(exprId: U64) -> U64 {
-        mut val i: U64 = 0U64
-        while i < self.decls.chainSites.count() {
-            val site: ChainSite = self.decls.chainSites[i]
-            if site.fromValueExprId == exprId || site.emptyExprId == exprId {
-                return site.stageRef
-            }
-            i += 1U64
-        }
-        return 0U64
     }
 
     inout fn findAssocByName(recvStart: U64, recvLen: U64, name: String) -> U64 {
