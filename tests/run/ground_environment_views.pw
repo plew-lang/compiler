@@ -1,0 +1,50 @@
+import /Frontend with { Comp }
+import /Ir with { TypeRef, Bind, InstanceEnvironment }
+import @Std/Io with { write }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val binderName = compiler.internBytes(s: "Parameter")
+    val concreteName = compiler.internBytes(s: "Concrete")
+    val containerName = compiler.internBytes(s: "Container")
+    val binder = <Bind nameStart=binderName.nameStart nameLen=binderName.nameLen nameId=binderName.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />
+    val argument = compiler.pushType(t: <TypeRef nameStart=concreteName.nameStart nameLen=concreteName.nameLen args=[] viewIds=[8U64] />)
+    val expected = compiler.pushType(t: <TypeRef nameStart=concreteName.nameStart nameLen=concreteName.nameLen args=[] viewIds=[8U64, 7U64] />)
+    val parameter = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 args=[] viewIds=[7U64] />)
+    val grounded = compiler.groundTermInEnvironment(ref: parameter, params: [binder], values: [argument])
+    if !compiler.typeRefEq(a: grounded, b: expected) { panic "parameter view lost" }
+    val legacy = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen args=[] viewIds=[7U64] />)
+    val legacyGrounded = compiler.groundTermInEnvironment(ref: legacy, params: [binder], values: [argument])
+    if !compiler.typeRefEq(a: legacyGrounded, b: expected) { panic "legacy parameter view lost" }
+    val foreign = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=22U64 args=[] viewIds=[7U64] />)
+    if compiler.groundTermInEnvironment(ref: foreign, params: [binder], values: [argument]) != foreign { panic "foreign binder substituted" }
+    val nested = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[parameter] viewIds=[9U64] />)
+    val nestedGrounded = compiler.groundTermInEnvironment(ref: nested, params: [binder], values: [argument])
+    val nestedTerm = compiler.arena.typeAt(index: nestedGrounded)
+    if !compiler.typeRefEq(a: nestedTerm.args[0], b: expected) { panic "nested view lost" }
+    if nestedTerm.viewIds.count() != 1U64 || nestedTerm.viewIds[0] != 9U64 { panic "child view escaped to container" }
+    val record = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[] isRecord=true recordFieldLabels=[1U64] recordFieldTerms=[parameter] />)
+    val recordGrounded = compiler.groundTermInEnvironment(ref: record, params: [binder], values: [argument])
+    if !compiler.typeRefEq(a: compiler.arena.typeAt(index: recordGrounded).recordFieldTerms[0], b: expected) { panic "record field view lost" }
+    val projection = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen paramId=11U64 args=[] viewIds=[7U64] assocTraitId=30U64 assocNameId=31U64 assocTraitArgs=[parameter] />)
+    val projectionGrounded = compiler.groundTermInEnvironment(ref: projection, params: [binder], values: [argument])
+    val projectionTerm = compiler.arena.typeAt(index: projectionGrounded)
+    if projectionTerm.assocNameId != 31U64 { panic "projection replaced by receiver" }
+    if !compiler.typeRefEq(a: compiler.typeTermProjectionReceiver(t: projectionTerm), b: expected) { panic "projection receiver view lost" }
+    if !compiler.typeRefEq(a: projectionTerm.assocTraitArgs[0], b: expected) { panic "projection argument view lost" }
+    for val spelling in ["Self", "Item"] {
+        val name = compiler.internBytes(s: spelling)
+        val term = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[7U64] />)
+        val result = compiler.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: argument, itemRef: argument)
+        if !compiler.typeRefEq(a: result, b: expected) { panic "proof binder view lost" }
+        val projected = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewIds=[7U64] assocTraitId=30U64 assocNameId=31U64 />)
+        val projectedResult = compiler.groundTermInEnvironment(ref: projected, params: [], values: [], selfRef: argument, itemRef: argument)
+        val projectedTerm = compiler.arena.typeAt(index: projectedResult)
+        if projectedTerm.assocNameId != 31U64 { panic "proof binder projection erased" }
+        if !compiler.typeRefEq(a: compiler.typeTermProjectionReceiver(t: projectedTerm), b: expected) { panic "proof projection view lost" }
+        val bodyResult = compiler.groundTermForBody(ref: projected, environment: <InstanceEnvironment receiverRef=argument />, selfRef: argument, itemRef: argument)
+        if compiler.arena.typeAt(index: bodyResult).assocNameId != 31U64 { panic "body projection erased" }
+    }
+    write(s: "ground-environment-views-ok\n")
+}

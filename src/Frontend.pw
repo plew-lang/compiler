@@ -698,7 +698,7 @@ pub impl Comp {
     // Semantic callers must append the full selector, not only its spelling:
     // two imported traits can spell alike while selecting different owners.
     inout fn typeRefWithAddedViewSources(ref: U64, additions: Array[ResolvedViewSource]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        if additions.count() == 0U64 || ref == 0U64 || ref >= self.arena.typeCount() { return ref }
         mut val views: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
         mut val i: U64 = 0U64
         while i < additions.count() {

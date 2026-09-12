@@ -27,9 +27,13 @@ pub impl Comp {
         // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
         // be part of the recursive term substitution rather than a root-only
         // convenience in groundTermForBody.
-        if t.paramId == 0U64 && t.args.count() == 0U64 {
-            if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") { return selfRef }
-            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") { return itemRef }
+        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.count() == 0U64 {
+            if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+                return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.typeRefViewSources(ref: ref))
+            }
+            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+                return self.typeRefWithAddedViewSources(ref: itemRef, additions: self.typeRefViewSources(ref: ref))
+            }
         }
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
@@ -66,12 +70,18 @@ pub impl Comp {
             if !changed { return ref }
             return self.rebuildProjectionTerm(t: t, receiver: groundedReceiver, traitArgs: traitArgs)
         }
+        // A binder replacement changes its head, never the source-set
+        // attached to this occurrence. Preserve it recursively, including
+        // projection receivers, trait arguments and record fields.
         if t.paramId != 0U64 {
             mut val pi: U64 = 0U64
             while pi < params.count() && pi < values.count() {
                 if params[pi].paramId == t.paramId {
                     val replacement: U64 = values[pi]
-                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef) }
+                    if replacement != ref {
+                        val grounded: U64 = self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                        return self.typeRefWithAddedViewSources(ref: grounded, additions: self.typeRefViewSources(ref: ref))
+                    }
                     return ref
                 }
                 pi += 1U64
@@ -95,7 +105,10 @@ pub impl Comp {
                 val binder: Bind = params[pi]
                 if termNameId == binder.nameId || (binder.nameId == 0U64 && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: binder.nameStart, bLen: binder.nameLen)) {
                     val replacement: U64 = values[pi]
-                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef) }
+                    if replacement != ref {
+                        val grounded: U64 = self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                        return self.typeRefWithAddedViewSources(ref: grounded, additions: self.typeRefViewSources(ref: ref))
+                    }
                     return ref
                 }
                 pi += 1U64
@@ -133,7 +146,7 @@ pub impl Comp {
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
-        if t.paramId == 0U64 && t.args.count() == 0U64 {
+        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.count() == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: outerViews)
             }
@@ -141,14 +154,7 @@ pub impl Comp {
                 return self.typeRefWithAddedViewSources(ref: itemRef, additions: outerViews)
             }
         }
-        mut val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
-        // Substitution replaces the outer nominal/binder head but never the
-        // source-set written on this term. `T#E` therefore grounds to `S#E`,
-        // not raw `S`; nested argument views remain the responsibility of the
-        // recursive term grounder and are intentionally not flattened here.
-        if explicit != ref && outerViews.count() != 0U64 {
-            explicit = self.typeRefWithAddedViewSources(ref: explicit, additions: outerViews)
-        }
+        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
         // Substitution alone does not close `T#Trait.Output`: the projection
         // receiver may now be concrete, but only a static conformance proof
         // owns the associated output.  Do this before the legacy Cursor
