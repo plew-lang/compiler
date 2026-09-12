@@ -294,34 +294,34 @@ pub impl Comp {
         return self.arena.functionCount()
     }
 
-    // A provided method is copied once per conformance but deliberately shares
-    // the trait declaration's body.  Parametric call templates belong to that
-    // one lexical body, not to any selected conformance copy.  Keep this
-    // canonicalization at the key boundary so every template producer and
-    // consumer agrees without an ambient "current selected method" rule.
-    inout fn callTemplateBodyOwner(fnIdx: U64) -> U64 {
+    // A conferred callable executes an authored body under its own proof.
+    // All declaration-time facts (calls, aggregates, matches and closures)
+    // belong to that shared source body. The copy records its exact owner;
+    // matching names or scanning for a coincidentally equal body is unnecessary.
+    // Default generators have independent executable bodies and retain their
+    // own fact identity even though they share a lexical binder environment.
+    inout fn semanticBodyOwner(fnIdx: U64) -> U64 {
         if fnIdx >= self.arena.functionCount() { return self.callTemplateOwner(fnIdx: fnIdx) }
         val selected: Func = self.arena.functionAt(index: fnIdx)
         if !(selected.isProvided) { return fnIdx }
-        mut val i: U64 = 0U64
-        while i < self.arena.functionCount() {
-            val candidate: Func = self.arena.functionAt(index: i)
-            if !(candidate.isProvided) && candidate.body == selected.body && candidate.nameId == selected.nameId && candidate.provTraitOwner == selected.provTraitOwner {
-                return i
-            }
-            i += 1U64
+        if selected.lexicalOwnerFnId == 0U64 || selected.lexicalOwnerFnId > self.arena.functionCount() {
+            self.errorAt(offset: selected.defOffset, msg: "internal error: provided body has no source owner")
+            return fnIdx
         }
-        // A malformed generated copy without its lexical source is an internal
-        // error elsewhere; retain its own identity here rather than aliasing an
-        // unrelated body with the same spelling.
-        return fnIdx
+        val owner: U64 = selected.lexicalOwnerFnId - 1U64
+        val declaration: Func = self.arena.functionAt(index: owner)
+        if declaration.lexicalOwnerFnId != 0U64 || declaration.body != selected.body {
+            self.errorAt(offset: selected.defOffset, msg: "internal error: provided source owner does not own its body")
+            return fnIdx
+        }
+        return owner
     }
 
     // Source calls are identified by the declaration body plus their complete
     // parsed span.  The arena index remains an implementation-navigation aid
     // only; using it as semantic identity made generated/shared bodies alias.
     inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
         mut val start: U64 = 0U64
         mut val end: U64 = 0U64
         mut val serial: U64 = 0U64
@@ -365,7 +365,7 @@ pub impl Comp {
     // not find the template that created its call.  `exprId` remains only the
     // navigation anchor for locating the producer-assigned serial.
     inout fn templateCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
         val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
         if index < self.decls.syntheticCallSites.count() {
             val synthetic: SyntheticCallSite = self.decls.syntheticCallSites[index]
@@ -377,7 +377,7 @@ pub impl Comp {
     // `for` protocol calls have no Expr node. Their template key must match
     // Mono's statement-site final descriptor key exactly.
     inout fn templateProtocolSiteKey(fnIdx: U64, stmtId: U64, slot: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
         mut val start: U64 = 0U64
         mut val end: U64 = 0U64
         if stmtId < self.arena.stmts.count() {

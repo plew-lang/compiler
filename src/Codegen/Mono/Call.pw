@@ -1685,7 +1685,7 @@ pub impl Comp {
         // or a generic associated/provided body writes under the copy while
         // LLVM reads under the template body (a descriptor miss despite both
         // sides having finalized the identical source call).
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: self.cur.bodyFnIdx))
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: self.cur.bodyFnIdx))
         if siteIsStmt {
             mut val start: U64 = 0U64
             mut val end: U64 = 0U64
@@ -3933,7 +3933,7 @@ pub impl Comp {
                 eprint(text: " offset=")
                 eprintU64(n: self.exprOffset(id: exprId))
                 eprint(text: " owner=")
-                eprintU64(n: self.callTemplateBodyOwner(fnIdx: self.cur.bodyFnIdx))
+                eprintU64(n: self.semanticBodyOwner(fnIdx: self.cur.bodyFnIdx))
                 eprint(text: "\n")
             }
             self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: written call CallTemplate was not recorded")
@@ -4780,13 +4780,14 @@ pub impl Comp {
     // in that body; closure `bodyKey` deliberately identifies the body it
     // creates, not the body which owns the literal.
     inout fn semanticClosureIndex(ownerFnIdx: U64, exprId: U64) -> U64 {
+        val sourceOwner: U64 = self.semanticBodyOwner(fnIdx: ownerFnIdx)
         val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
         if capacity == 0U64 { return self.decls.semanticClosures.count() }
-        mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
+        mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
         while self.decls.semanticClosureIndexSlots[slot] != 0U64 {
             val entry: U64 = self.decls.semanticClosureIndexSlots[slot] - 1U64
             val prior: SemanticClosure = self.decls.semanticClosures[entry]
-            if prior.ownerFnIdx == ownerFnIdx && prior.exprId == exprId { return entry }
+            if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return entry }
             slot = (slot + 1U64) % capacity
         }
         return self.decls.semanticClosures.count()

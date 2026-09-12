@@ -285,7 +285,7 @@ pub impl Comp {
         mut val owner: U64 = 0U64
         while owner < declarationLimit {
             val source: Func = self.arena.functionAt(index: owner)
-            val lexicalOwner: U64 = self.callTemplateBodyOwner(fnIdx: owner)
+            val lexicalOwner: U64 = self.semanticBodyOwner(fnIdx: owner)
             owners.append(lexicalOwner)
             val start: U64 = self.decls.defaultGeneratorFunctions.count()
             mut val parameterIndex: U64 = 0U64

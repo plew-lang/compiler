@@ -796,13 +796,14 @@ pub impl Comp {
     // Return the canonical array index, or count() when absent. The vector is
     // the semantic source; slots are a rebuildable reader for Record and Mid.
     inout fn semanticAggregateIndex(ownerFnIdx: U64, exprId: U64) -> U64 {
+        val sourceOwner: U64 = self.semanticBodyOwner(fnIdx: ownerFnIdx)
         val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
         if capacity == 0U64 { return self.decls.semanticAggregates.count() }
-        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
+        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: sourceOwner, exprId: exprId) % capacity
         while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
             val entry: U64 = self.decls.semanticAggregateIndexSlots[slot] - 1U64
             val prior: SemanticAggregate = self.decls.semanticAggregates[entry]
-            if prior.ownerFnIdx == ownerFnIdx && prior.exprId == exprId { return entry }
+            if prior.ownerFnIdx == sourceOwner && prior.exprId == exprId { return entry }
             slot = (slot + 1U64) % capacity
         }
         return self.decls.semanticAggregates.count()
@@ -866,13 +867,14 @@ pub impl Comp {
     }
 
     inout fn semanticMatchIndex(ownerFnIdx: U64, matchSource: MatchSource) -> U64 {
+        val sourceOwner: U64 = self.semanticBodyOwner(fnIdx: ownerFnIdx)
         val capacity: U64 = self.decls.semanticMatchIndexSlots.count()
         if capacity == 0U64 { return self.decls.semanticMatches.count() }
-        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: ownerFnIdx, matchSource: matchSource) % capacity
+        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: sourceOwner, matchSource: matchSource) % capacity
         while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
             val entry: U64 = self.decls.semanticMatchIndexSlots[slot] - 1U64
             val fact: SemanticMatch = self.decls.semanticMatches[entry]
-            if fact.ownerFnIdx == ownerFnIdx && self.sameMatchSource(a: fact.matchSource, b: matchSource) { return entry }
+            if fact.ownerFnIdx == sourceOwner && self.sameMatchSource(a: fact.matchSource, b: matchSource) { return entry }
             slot = (slot + 1U64) % capacity
         }
         return self.decls.semanticMatches.count()
