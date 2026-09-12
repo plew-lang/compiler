@@ -29,15 +29,14 @@ pub impl Comp {
     }
 
     inout fn methodRecvIsTrait(f: Func) -> Bool {
-        if f.hasRecv {
-            // Provenance and receiver kind are distinct.  A generated
-            // concrete witness retains `provTraitOwner` so proof-driven
-            // dispatch can identify its trait origin, but its receiver is
-            // still the concrete type.  Only the receiver declaration itself
-            // decides whether this is an abstract trait method.
-            return self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity) != 4000000000U64
-        }
-        return false
+        if !f.hasRecv { return false }
+        // Lowering records the selected trait declaration span on its
+        // receiver. A same-spelled trait in another module, or the lexical
+        // origin of a concrete provided copy, cannot change receiver kind.
+        val index: U64 = self.decls.traitOwnerIndex(offset: f.recvStart)
+        if index >= self.decls.traitOwnerCount() { return false }
+        val owner: TraitOwner = self.decls.traitOwnerAt(index: index)
+        return owner.nameId == f.recvId && owner.nameLen == f.recvLen && owner.arity == f.recvTraitArgs.count()
     }
 
     inout fn traitModuleByIdArity(traitId: U64, arity: U64) -> U64 {

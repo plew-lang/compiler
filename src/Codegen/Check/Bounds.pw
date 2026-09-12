@@ -383,17 +383,17 @@ pub impl Comp {
             val f: Func = self.arena.functionAt(index: fnIdx)
             val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
             if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
-                mut val ti: U64 = 0U64
-                while ti < self.decls.traitCount() {
+                val ti: U64 = self.decls.traitIndexByOffset(offset: f.recvStart)
+                if ti < self.decls.traitCount() {
                     val traitDef: TraitDef = self.decls.traitAt(index: ti)
                     // In `impl B as A`, the implementation's conformance
                     // target is A (`provTraitOwner`), but its body receiver is
                     // B.  The implicit proof for `self.base()` is therefore
                     // `Self: B`, not `Self: A`.  Receiver trait identity is
-                    // carried by `recvId`/`recvTraitArgs`; provenance remains
+                    // carried by canonical `recvStart`/`recvTraitArgs`; provenance remains
                     // relevant to dispatch but must not rewrite this local
                     // body constraint.
-                    if traitDef.nameId == f.recvId && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: f.recvTraitArgs.count()) {
+                    if traitDef.nameStart == f.recvStart && traitDef.nameId == f.recvId && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: f.recvTraitArgs.count()) {
                         val proof: StaticConformanceProof = <StaticConformanceProof.TraitSelf traitIdx=ti receiverRef=receiverRef traitArgs=self.copyFuncTypes(types: f.recvTraitArgs) />
                         mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
                         if requiredTraitOwner == 0U64 || self.decls.traitAt(index: ti).nameStart == requiredTraitOwner { requirement = self.selectStaticRequirement(proof: proof, traitIdx: ti, memberId: memberId, args: args) }
@@ -407,7 +407,6 @@ pub impl Comp {
                             fi += 1U64
                         }
                     }
-                    ti += 1U64
                 }
             }
         }
