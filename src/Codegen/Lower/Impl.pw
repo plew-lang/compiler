@@ -50,6 +50,7 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
         if owner == self.modules.coreModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
             mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
             if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) {
                 return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.CoreString intrinsic=coreString /> />
@@ -97,6 +98,7 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
         if owner == self.modules.coreModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
             mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
             if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.CoreString intrinsic=coreString /> /> }
             mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />

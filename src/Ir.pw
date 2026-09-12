@@ -1534,6 +1534,7 @@ export enum BufferIntrinsic {
 }
 
 export enum RuntimeIntrinsic {
+    StrongCellNew
     Io(intrinsic: IoIntrinsic)
     Process(intrinsic: ProcessIntrinsic)
     CoreString(intrinsic: CoreStringIntrinsic)

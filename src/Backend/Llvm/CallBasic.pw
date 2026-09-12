@@ -335,6 +335,7 @@ pub impl LlvmCtx {
             match c.arena.finalCallees[resolution].target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
+                        RuntimeIntrinsic.StrongCellNew => { return self.genLlvmRefNew(c: inout c, valueExpr: c.argAt(args: args, index: 0U64).expr) }
                         RuntimeIntrinsic.Io(intrinsic: val io) => { return self.genIoRuntimeIntrinsic(c: inout c, intrinsic: io, args: args) }
                         RuntimeIntrinsic.Process(intrinsic: val process) => { return self.genProcessRuntimeIntrinsic(c: inout c, intrinsic: process, args: args) }
                         RuntimeIntrinsic.CoreString(intrinsic: val coreString) => { return self.genCoreStringRuntimeIntrinsic(c: inout c, intrinsic: coreString, args: args) }
@@ -399,14 +400,6 @@ pub impl LlvmCtx {
         // Reference-cell control-block intrinsics (spec/03), backing weak()/upgrade()/asRef().
         // The
         // cell value IS the argument's value (an opaque pointer); each op touches a counter.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") {
-            // Ref.factory(value:) bottoms out here: allocate a fresh strong cell.
-            return self.genLlvmRefNew(c: inout c, valueExpr: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") {
-            // MutableRef.factory(value:) bottoms out here: same cell representation, different capability type.
-            return self.genLlvmRefNew(c: inout c, valueExpr: c.argAt(args: args, index: 0U64).expr)
-        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") {
             // r.weak(): bump the weak count, yield the same cell as a WeakRef handle.
             return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr))

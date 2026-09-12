@@ -736,6 +736,7 @@ pub impl LlvmCtx {
             match selected.target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
+                        RuntimeIntrinsic.StrongCellNew => { return <MidCallPreflight.Target /> }
                         RuntimeIntrinsic.Process(intrinsic: val process) => {
                             match process {
                                 ProcessIntrinsic.ArgCount => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
@@ -1166,6 +1167,7 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
             match intrinsic {
+                RuntimeIntrinsic.StrongCellNew => { return false }
                 RuntimeIntrinsic.Io(intrinsic: val io) => {
                     match io {
                         IoIntrinsic.Write => { self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", value: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])) }
@@ -3642,7 +3644,51 @@ pub impl LlvmCtx {
         return true
     }
 
+    inout fn midCanonicalStrongCellPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Target /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => { match intrinsic { RuntimeIntrinsic.StrongCellNew => {} _ => { return <MidCallPreflight.Target /> } } }
+            _ => { return <MidCallPreflight.Target /> }
+        }
+        if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.functionAt(index: selected.callee)
+        if !callee.isExtern || callee.isCExtern || callee.hasRecv || !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 || term.destination > c.mid.places.count() { return <MidCallPreflight.RuntimeAbi /> }
+        if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.Receiver /> }
+        if !c.isStrongRefCellInst(ref: selected.resultTypeRef) { return <MidCallPreflight.RuntimeAbi /> }
+        val result: TypeRef = c.arena.typeAt(index: selected.resultTypeRef)
+        if result.args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
+        val argument: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
+        if argument == 0U64 || argument > c.mid.operands.count() { return <MidCallPreflight.Argument /> }
+        val operand: MidOperandNode = c.mid.operands[argument - 1U64]
+        // The selected move ABI transfers ownership into the cell.
+        if selected.argumentPassings.len != 1U64 || selected.parameterTypeRefs.len != 1U64 { return <MidCallPreflight.ArgumentShape /> }
+        match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: 0U64) { CallArgumentPassing.Move => {} _ => { return <MidCallPreflight.Argument /> } }
+        if operand.tag != 2U64 { return <MidCallPreflight.Argument /> }
+        if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: argument), b: result.args[0U64]) || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> }
+        val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
+        if destination.rootTag != 1U64 || destination.projections.len != 0U64 || !c.typeRefEq(a: destination.typeTerm, b: selected.resultTypeRef) { return <MidCallPreflight.Result /> }
+        return <MidCallPreflight.None />
+    }
+
+    inout fn midCanonicalEmitStrongCell(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val argument: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
+        val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(LLVMTypeOf(value)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        LLVMBuildStore(self.b, value, cell)
+        LLVMBuildStore(self.b, cell, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+        return true
+    }
+
     inout fn midCanonicalCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        val strongCell: MidCallPreflight = self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId)
+        match strongCell { MidCallPreflight.Target => {} _ => { return strongCell } }
         val closure: MidCallPreflight = self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
         match closure { MidCallPreflight.Target => {} _ => { return closure } }
         val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
@@ -3668,6 +3714,7 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => { return self.midCanonicalEmitStrongCell(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return false } }
         match self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
             MidCallPreflight.None => { return self.midCanonicalEmitClosureCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {}

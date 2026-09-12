@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref, MutableRef }
+
+unique struct Cell {
+    pub val tag: I32
+    deinit { print(self.tag) }
+}
+pub impl Cell { factory }
+
+fn makeRead() {
+    val reference: Ref[Cell] = <Ref[Cell] value=<Cell tag=1I32 /> />
+    print("read")
+}
+fn makeWrite() {
+    val reference: MutableRef[Cell] = <MutableRef[Cell] value=<Cell tag=2I32 /> />
+    print("write")
+}
+fn main() {
+    makeRead()
+    makeWrite()
+}

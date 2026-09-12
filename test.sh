@@ -203,6 +203,12 @@ else
     fail=$((fail + 1)); failed="$failed mid-access-nested-field-receiver"
 fi
 
+if sh ./test-mid-strong-cell.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-strong-cell"
+fi
+
 # Conversion runtime tests must not silently exercise a legacy boundary.
 if sh ./test-mid-owned-conversion.sh; then
     :
