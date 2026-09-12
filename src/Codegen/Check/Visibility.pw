@@ -429,15 +429,11 @@ pub impl Comp {
     inout fn typeDeclIdentityFromSurface(surfaceMod: U64, start: U64, len: U64) -> Bind {
         val local: Bind = self.typeDeclIdentityInModule(mod: surfaceMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
-        mut val i: U64 = 0
-        while i < self.modules.reExportOriginCount() {
-            val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
-            if origin.localModule == surfaceMod {
-                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
-                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
-                }
-            }
-            i += 1
+        val nameId = intern(c: inout self, start: start, len: len)
+        val index = self.modules.firstReExportOriginNamed(moduleId: surfaceMod, nameId: nameId)
+        if index < self.modules.reExportOriginCount() {
+            val origin = self.modules.reExportOriginAt(index: index)
+            return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
         }
         return self.missingDeclIdentity()
     }
@@ -447,15 +443,11 @@ pub impl Comp {
     inout fn typeDeclIdentityAt(useMod: U64, start: U64, len: U64) -> Bind {
         val local: Bind = self.typeDeclIdentityInModule(mod: useMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
-        mut val i: U64 = 0
-        while i < self.modules.importOriginCount() {
-            val origin: ImportOrigin = self.modules.importOriginAt(index: i)
-            if origin.localModule == useMod {
-                if spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: start, bLen: len) {
-                    return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
-                }
-            }
-            i += 1
+        val nameId = intern(c: inout self, start: start, len: len)
+        val index = self.modules.firstImportOriginNamed(moduleId: useMod, nameId: nameId)
+        if index < self.modules.importOriginCount() {
+            val origin = self.modules.importOriginAt(index: index)
+            return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
         }
         // @Std/Lang is the one ambient type surface. Its declarations are in
         // scope without an import, but they still need the same declaration

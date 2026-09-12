@@ -6,14 +6,22 @@ fn check(origin: ImportOrigin, module: U64, target: U64) {
 }
 fn main() {
     mut val modules: Modules = <Modules />
-    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=0U64 sourceStart=10U64 sourceLength=7U64 targetModule=9U64 />, reExport: false)
+    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=0U64 sourceStart=10U64 sourceLength=7U64 targetModule=9U64 />, nameId: 7U64, reExport: false)
     mut val copy = modules
-    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=8U64 sourceStart=10U64 sourceLength=7U64 targetModule=4U64 />, reExport: true)
-    copy.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=6U64 sourceStart=10U64 sourceLength=7U64 targetModule=2U64 />, reExport: false)
+    modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=8U64 sourceStart=10U64 sourceLength=7U64 targetModule=4U64 />, nameId: 7U64, reExport: true)
+    copy.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=6U64 sourceStart=10U64 sourceLength=7U64 targetModule=2U64 />, nameId: 7U64, reExport: false)
     if modules.importOriginCount() != 1U64 || modules.reExportOriginCount() != 1U64 || copy.importOriginCount() != 2U64 || copy.reExportOriginCount() != 0U64 { panic "origin tables are not independent" }
     check(origin: modules.importOriginAt(index: 0U64), module: 0U64, target: 9U64)
     check(origin: modules.reExportOriginAt(index: 0U64), module: 8U64, target: 4U64)
     check(origin: copy.importOriginAt(index: 0U64), module: 0U64, target: 9U64)
     check(origin: copy.importOriginAt(index: 1U64), module: 6U64, target: 2U64)
+    if modules.firstImportOriginNamed(moduleId: 0U64, nameId: 7U64) != 0U64 { panic "first import" }
+    if modules.firstImportOriginNamed(moduleId: 6U64, nameId: 7U64) != modules.importOriginCount() { panic "copy index escaped" }
+    if copy.firstImportOriginNamed(moduleId: 6U64, nameId: 7U64) != 1U64 { panic "copy index missing" }
+    if modules.firstReExportOriginNamed(moduleId: 8U64, nameId: 7U64) != 0U64 { panic "reexport index" }
+    if copy.firstReExportOriginNamed(moduleId: 8U64, nameId: 7U64) != copy.reExportOriginCount() { panic "reexport copy" }
+    modules.registerImportOrigin(<ImportOrigin localStart=40U64 localLength=5U64 localModule=0U64 sourceStart=50U64 sourceLength=7U64 targetModule=99U64 />, nameId: 7U64, reExport: false)
+    if modules.firstImportOriginNamed(moduleId: 0U64, nameId: 7U64) != 0U64 { panic "duplicate replaced first" }
+    if modules.firstImportOriginNamed(moduleId: 0U64, nameId: 8U64) != modules.importOriginCount() { panic "wrong spelling" }
     write(s: "import-origin-provenance-ok\n")
 }

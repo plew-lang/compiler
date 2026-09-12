@@ -2,9 +2,37 @@
 // The Syntax compatibility predicate is unchanged; only its evaluation moves
 // from repeated conformance queries to this registration boundary.
 pub impl Modules {
-    inout fn registerImportOrigin(origin~: ImportOrigin, reExport: Bool) {
-        if reExport { self.reExportOrigins.append(origin) }
-        else { self.importOrigins.append(origin) }
+    inout fn registerImportOrigin(origin~: ImportOrigin, nameId: U64, reExport: Bool) {
+        val empty: Dictionary[U64, U64] = [:]
+        if reExport {
+            mut val names = self.reExportOriginNames.getOr(key: origin.localModule, fallback: empty)
+            if names.getOr(key: nameId, fallback: 0U64) == 0U64 {
+                names[nameId] = self.reExportOrigins.count() + 1U64
+                self.reExportOriginNames[origin.localModule] = names
+            }
+            self.reExportOrigins.append(origin)
+        } else {
+            mut val names = self.importOriginNames.getOr(key: origin.localModule, fallback: empty)
+            if names.getOr(key: nameId, fallback: 0U64) == 0U64 {
+                names[nameId] = self.importOrigins.count() + 1U64
+                self.importOriginNames[origin.localModule] = names
+            }
+            self.importOrigins.append(origin)
+        }
+    }
+    fn firstImportOriginNamed(moduleId: U64, nameId: U64) -> U64 {
+        val empty: Dictionary[U64, U64] = [:]
+        val names = self.importOriginNames.getOr(key: moduleId, fallback: empty)
+        val entry = names.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.importOrigins.count()
+    }
+    fn firstReExportOriginNamed(moduleId: U64, nameId: U64) -> U64 {
+        val empty: Dictionary[U64, U64] = [:]
+        val names = self.reExportOriginNames.getOr(key: moduleId, fallback: empty)
+        val entry = names.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.reExportOrigins.count()
     }
     fn importOriginCount() -> U64 { return self.importOrigins.count() }
     fn importOriginAt(index: U64) -> ImportOrigin { return self.importOrigins[index] }

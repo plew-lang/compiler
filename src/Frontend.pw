@@ -742,7 +742,8 @@ pub impl Comp {
                 val alias: Span = imp.nameAliasSpans[i]
                 if alias.end > alias.start { local = alias }
             }
-            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, reExport: reExport)
+            val nameId = intern(c: inout self, start: local.start, len: local.end - local.start)
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, nameId: nameId, reExport: reExport)
             i += 1
         }
     }
@@ -758,7 +759,8 @@ pub impl Comp {
             mut val local: Span = real
             val alias: Span = syntaxImportNameAliasSpan(file: self.syntax, imp: imp, index: i)
             if alias.end > alias.start { local = alias }
-            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, reExport: reExport)
+            val nameId = intern(c: inout self, start: local.start, len: local.end - local.start)
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=real.start sourceLength=real.end - real.start targetModule=targetMod />, nameId: nameId, reExport: reExport)
             i += 1U64
         }
     }
