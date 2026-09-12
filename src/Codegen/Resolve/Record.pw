@@ -1329,11 +1329,20 @@ pub impl Comp {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
-                    match self.callTemplateForCurrentBody(exprId: exprId).kind {
-                        CallTemplateKind.Pending => {
-                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing")
+                    // Record publishes under the lexical checking declaration.
+                    // bodyFnIdx belongs to emission and can name an unrelated
+                    // body here; origin fallback would hide that mismatch.
+                    val siteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+                    val templateIndex = self.callTemplateIndex(siteKey: siteKey)
+                    mut val selected = false
+                    if templateIndex < self.decls.callTemplates.count() {
+                        match self.decls.callTemplates[templateIndex].kind {
+                            CallTemplateKind.Pending => {}
+                            _ => { selected = true }
                         }
-                        _ => {}
+                    }
+                    if !selected {
+                        self.errorAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing")
                     }
                 }
                 // A synthetic index read used as this receiver is an access
