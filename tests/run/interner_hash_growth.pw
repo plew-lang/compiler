@@ -1,0 +1,25 @@
+import /Frontend with { Comp, intern }
+import /Ir with { Bind }
+import @Std/Io with { write }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    // FNV-1a places a and i in the same initial (eight-slot) bucket.
+    compiler.arena.bytes = "aiai".bytes()
+    val first = intern(c: inout compiler, start: 0U64, len: 1U64)
+    val second = intern(c: inout compiler, start: 1U64, len: 1U64)
+    if first != 1U64 || second != 2U64 { panic "collision merged names" }
+    mut val names: Array[Bind] = []
+    mut val index: U64 = 0U64
+    while index < 128U64 {
+        names.append(compiler.internTmpName(prefix: "entry", n: index))
+        index += 1U64
+    }
+    if intern(c: inout compiler, start: 2U64, len: 1U64) != first || intern(c: inout compiler, start: 3U64, len: 1U64) != second { panic "growth changed identity" }
+    index = 0U64
+    while index < names.count() {
+        val name = names[index]
+        if intern(c: inout compiler, start: name.nameStart, len: name.nameLen) != name.nameId { panic "lost name after growth" }
+        index += 1U64
+    }
+    write(s: "interner-hash-growth-ok\n")
+}

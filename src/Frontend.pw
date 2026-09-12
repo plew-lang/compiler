@@ -809,7 +809,7 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
 }
 
 // Grow the bucket index (double, or 8 from empty), re-placing every interned span
-// by re-hashing. The dense interner.entries array is untouched (ids stay
+// using its stored hash. The dense interner.entries array is untouched (ids stay
 // stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
 fn internGrow(c: inout Comp) {
     mut val newCap: U64 = 8
@@ -825,7 +825,7 @@ fn internGrow(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.interner.entries.count() {
         val entry: InternedSpan = c.interner.entries[i]
-        val code: U64 = internHash(c: inout c, start: entry.start, len: entry.len)
+        val code: U64 = entry.hashCode
         mut val slot: U64 = code & (newCap - 1)
         while nb[slot] != 0 {
             slot = (slot + 1) & (newCap - 1)
@@ -852,13 +852,13 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     while true {
         val b: U64 = c.interner.buckets[slot]
         if b == 0 {
-            c.interner.entries.append(<InternedSpan start=start len=len />)
+            c.interner.entries.append(<InternedSpan start=start len=len hashCode=code />)
             val id: U64 = c.interner.entries.count()
             c.interner.buckets.set(i: slot, value: id)
             return id
         }
         val entry: InternedSpan = c.interner.entries[b - 1]
-        if spansEqual(c: inout c, aStart: entry.start, aLen: entry.len, bStart: start, bLen: len) {
+        if entry.hashCode == code && spansEqual(c: inout c, aStart: entry.start, aLen: entry.len, bStart: start, bLen: len) {
             return b
         }
         slot = (slot + 1) & (cap - 1)

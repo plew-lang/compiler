@@ -3016,6 +3016,7 @@ pub impl TypeCache { factory }
 export struct InternedSpan {
     pub val start: U64
     pub val len: U64
+    pub val hashCode: U64
 }
 pub impl InternedSpan { factory }
 
