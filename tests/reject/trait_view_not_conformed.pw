@@ -3,7 +3,8 @@ import @Std/Io with { print }
 // A trait view `#P` only NARROWS an existing conformance — it never confers one.
 // So you cannot tag a value with a trait its type does not conform to: `s#Z` is
 // rejected because S does not conform to Z (spec/09).
-struct S { val v: I64 }
+struct S { pub val v: I64 }
+pub impl S { factory }
 pub impl S { fn s() -> I64 { return self.v } }
 trait Z { fn z() -> I64 }
 

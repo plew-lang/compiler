@@ -1,0 +1,1 @@
+a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)

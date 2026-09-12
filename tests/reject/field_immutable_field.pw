@@ -3,9 +3,10 @@
 import @Std/Io with { print }
 
 struct Point {
-    mut val x: I64
-    val base: I64
+    pub mut val x: I64
+    pub val base: I64
 }
+pub impl Point { factory }
 
 fn main() {
     mut val c: Point = <Point x=0 base=100 />

@@ -3,10 +3,11 @@
 import @Std/Io with { print }
 
 struct Counter {
-    mut val n: I64
+    pub mut val n: I64
 }
+pub impl Counter { factory }
 
-impl Counter {
+pub impl Counter {
     inout fn bump(by: I64) {
         self.n += by
     }

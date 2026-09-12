@@ -1,0 +1,1 @@
+a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)

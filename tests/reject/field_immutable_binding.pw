@@ -3,8 +3,9 @@
 import @Std/Io with { print }
 
 struct Counter {
-    mut val n: I64
+    pub mut val n: I64
 }
+pub impl Counter { factory }
 
 fn main() {
     val c: Counter = <Counter n=0 />

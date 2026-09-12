@@ -7,7 +7,8 @@ import @Std/Io with { print }
 trait Named { fn nm() -> I64 }
 trait Show { fn show() -> I64 }
 
-struct A { val a: I64 }
+struct A { pub val a: I64 }
+pub impl A { factory }
 pub impl A as Named { fn nm() -> I64 { return self.a } }
 
 // REJECT: headless-Self blanket conformance.

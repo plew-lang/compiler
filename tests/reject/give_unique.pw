@@ -1,7 +1,7 @@
-// A value-position if/match cannot yield a unique value yet (the result temp vs
-// the block's scope drops need per-path move handling). Use a statement form.
+// Yielding a bare unique place would copy it; give requires an explicit move.
 import @Std/Io with { write, print }
-unique struct File { val fd: I64  deinit { print(self.fd) } }
+unique struct File { pub val fd: I64  deinit { print(self.fd) } }
+pub impl File { factory }
 fn main() {
     val a: File = <File fd=1 />
     val b: File = <File fd=2 />

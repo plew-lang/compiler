@@ -1,7 +1,7 @@
-// Reassigning a unique place would copy the RHS place (double deinit) and drop the
-// old value without deinit. Rejected until deinit-on-reassign exists.
+// Assigning a bare unique place would copy it; reassignment requires an explicit move.
 import @Std/Io with { write, print }
-unique struct File { val fd: I64  deinit { print(self.fd) } }
+unique struct File { pub val fd: I64  deinit { print(self.fd) } }
+pub impl File { factory }
 fn main() {
     mut val x: File = <File fd=1 />
     val a: File = <File fd=2 />

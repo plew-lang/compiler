@@ -1,0 +1,1 @@
+comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison

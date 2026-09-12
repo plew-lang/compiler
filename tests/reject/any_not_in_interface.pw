@@ -4,7 +4,8 @@ import @Std/Io with { print }
 // the concrete type. Calling a method that is not a requirement of P is rejected
 // (here `area`, which exists on Circle but is not part of Drawable).
 trait Drawable { fn draw() -> I64 }
-struct Circle { val r: I64 }
+struct Circle { pub val r: I64 }
+pub impl Circle { factory }
 pub impl Circle as Drawable { fn draw() -> I64 { return self.r } }
 pub impl Circle { fn area() -> I64 { return self.r * self.r } }
 

@@ -5,7 +5,8 @@
 // is rejected rather than silently miscompiled. (Direct `Dictionary[K, any P]` with per-insert
 // boxing is fine; only the whole-container covariant CONVERSION is gated.)
 trait Shape { fn area() -> I64 }
-struct Sq { val s: I64 }
+struct Sq { pub val s: I64 }
+pub impl Sq { factory }
 pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 fn main() {
     mut val d: Dictionary[String, Sq] = [:]

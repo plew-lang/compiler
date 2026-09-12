@@ -3,10 +3,11 @@
 import @Std/Io with { print }
 
 struct Box {
-    val v: I64
+    pub val v: I64
 }
+pub impl Box { factory }
 
-impl Box {
+pub impl Box {
     fn plus(k: I64) -> I64 {
         return self.v + k
     }
