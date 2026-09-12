@@ -1165,24 +1165,6 @@ pub impl Comp {
         return false
     }
 
-    inout fn genericInstanceName(ref: U64) -> U64 {
-        val term = self.arena.typeTerms[ref]
-        // Record equality ignores its synthetic spelling.
-        if term.isRecord { return 0U64 }
-        if term.nameId != 0U64 { return term.nameId }
-        return intern(c: inout self, start: term.nameStart, len: term.nameLen)
-    }
-
-    inout fn genericInstanceIndex(ref: U64) -> U64 {
-        val nameId = self.genericInstanceName(ref: ref)
-        mut val index = self.monoWork.firstGenericInstanceNamed(nameId: nameId)
-        while index < self.monoWork.genericInstanceCount() {
-            if self.typeRefEq(a: self.monoWork.genericInstanceAt(index: index), b: ref) { return index }
-            index = self.monoWork.nextGenericInstanceNamed(index: index)
-        }
-        return self.monoWork.genericInstanceCount()
-    }
-
     inout fn scanType(ref: U64) {
         if ref >= self.arena.typeCount() {
             return
@@ -1250,7 +1232,13 @@ pub impl Comp {
         }
         if self.isGenericInst(ref: ref) {
             if self.tyRefIsGround(ref: ref) {
-                if self.genericInstanceIndex(ref: ref) < self.monoWork.genericInstanceCount() { return }
+                mut val j: U64 = 0
+                while j < self.monoWork.genInsts.count() {
+                    if self.typeRefEq(a: self.monoWork.genInsts[j], b: ref) {
+                        return
+                    }
+                    j += 1
+                }
                 if self.instArgCollidesParamName(instRef: ref) {
                     self.errorAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
                 }
@@ -1261,8 +1249,7 @@ pub impl Comp {
                     }
                 }
                 self.checkInstDepth(ref: ref)
-                val nameId = self.genericInstanceName(ref: ref)
-                self.monoWork.registerGenericInstance(ref: ref, nameId: nameId)
+                self.monoWork.genInsts.append(ref)
                 // scan the generic struct's fields under this instantiation's env so an
                 // `Array[T]` field registers its concrete element (`Array[I32]`) — the
                 // runtime is keyed off the instantiation, not the `PlewArray_T` template.

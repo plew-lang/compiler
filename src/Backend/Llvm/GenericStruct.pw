@@ -45,8 +45,8 @@ pub impl LlvmCtx {
         // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
         // an explicit `Optional[I64]` member) resolves to the already-created named type.
         mut val k: U64 = 0
-        while k < c.monoWork.genericInstanceCount() {
-            val ref: U64 = c.monoWork.genericInstanceAt(index: k)
+        while k < c.monoWork.genInsts.count() {
+            val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.typeAt(index: ref)
                 val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
@@ -184,8 +184,17 @@ pub impl LlvmCtx {
         }
         c.scanType(ref: ref)
         // scanType declined to record it (a gen-mode derive target) — leave it alone.
-        val k: U64 = c.genericInstanceIndex(ref: ref)
-        if k >= c.monoWork.genericInstanceCount() {
+        mut val k: U64 = c.monoWork.genInsts.count()
+        mut val gi: U64 = 0
+        while gi < c.monoWork.genInsts.count() {
+            if c.typeRefEq(a: c.monoWork.genInsts[gi], b: ref) {
+                k = gi
+                gi = c.monoWork.genInsts.count()
+            } else {
+                gi += 1
+            }
+        }
+        if k >= c.monoWork.genInsts.count() {
             return false
         }
         val t: TypeRef = c.arena.typeAt(index: ref)
@@ -252,8 +261,8 @@ pub impl LlvmCtx {
     // `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
     inout fn registerGenEnums(c: inout Comp) {
         mut val k: U64 = 0
-        while k < c.monoWork.genericInstanceCount() {
-            val ref: U64 = c.monoWork.genericInstanceAt(index: k)
+        while k < c.monoWork.genInsts.count() {
+            val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.typeAt(index: ref)
                 val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)

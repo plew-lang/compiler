@@ -7,7 +7,6 @@ part ./Ir/TraitOwners
 part ./Ir/Types
 part ./Ir/DeclarationNames
 part ./Ir/BodyInstances
-part ./Ir/MonoWork
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2938,10 +2937,7 @@ pub impl Modules { factory }
 // stored behind a heap pointer (deref-on-read / repoint-on-write keeps value
 // semantics); keyed by the field decl's nameStart.
 export struct MonoWork {
-    mut val genInsts: Array[U64] = []
-    mut val genericInstanceHeads: Dictionary[U64, U64] = [:]
-    mut val genericInstanceTails: Dictionary[U64, U64] = [:]
-    mut val genericInstanceNext: Array[U64] = []
+    pub mut val genInsts: Array[U64] = []
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []
     pub mut val fnThunks: Array[U64] = []

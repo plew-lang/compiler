@@ -5839,8 +5839,8 @@ pub impl Comp {
 
     inout fn scanGenInstMethodBodies() {
         mut val gi: U64 = 0
-        while gi < self.monoWork.genericInstanceCount() {
-            val instRef: U64 = self.monoWork.genericInstanceAt(index: gi)
+        while gi < self.monoWork.genInsts.count() {
+            val instRef: U64 = self.monoWork.genInsts[gi]
             val inst: TypeRef = self.arena.typeAt(index: instRef)
             // Array A: Array's own generic methods (append/get/set/removeLast, pure Plew
             // over self.data) are scanned like any other generic instance, so the transitive
