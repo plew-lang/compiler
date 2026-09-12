@@ -1,0 +1,12 @@
+import /Frontend with { Comp, spansEqual }
+import @Std/Io with { write }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.bytes = "abcabcabd".bytes()
+    if !spansEqual(c: inout compiler, aStart: 0U64, aLen: 3U64, bStart: 0U64, bLen: 3U64) { panic "same span" }
+    if !spansEqual(c: inout compiler, aStart: 0U64, aLen: 3U64, bStart: 3U64, bLen: 3U64) { panic "same bytes" }
+    if spansEqual(c: inout compiler, aStart: 0U64, aLen: 3U64, bStart: 6U64, bLen: 3U64) { panic "different bytes" }
+    if spansEqual(c: inout compiler, aStart: 0U64, aLen: 2U64, bStart: 0U64, bLen: 3U64) { panic "different lengths" }
+    if !spansEqual(c: inout compiler, aStart: 9U64, aLen: 0U64, bStart: 9U64, bLen: 0U64) { panic "empty end" }
+    write(s: "span-equality-ok\n")
+}

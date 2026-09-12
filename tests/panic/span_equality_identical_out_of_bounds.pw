@@ -1,0 +1,6 @@
+import /Frontend with { Comp, spansEqual }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    val same = spansEqual(c: inout compiler, aStart: 0U64, aLen: 1U64, bStart: 0U64, bLen: 1U64)
+    if !same { panic "unexpected inequality" }
+}

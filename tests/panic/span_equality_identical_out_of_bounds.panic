@@ -1,0 +1,1 @@
+compiler bug: interner stored a span outside the source buffer

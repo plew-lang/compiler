@@ -785,6 +785,7 @@ export fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U
     if aLen != bLen {
         return false
     }
+    if aStart == bStart { return true }
     mut val j: U64 = 0
     while j < aLen {
         if c.arena.bytes[aStart + j] != c.arena.bytes[bStart + j] {
