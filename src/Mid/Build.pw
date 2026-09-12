@@ -437,8 +437,31 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
             val projections = midAppendCallProjection(state: inout state, prefix: parent.argument.projections, projection: <MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
             return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=projections capability=2U64 typeTerm=typeTerm /> />
         }
+        Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
+            return midNormalizedReferenceArgument(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex)
+        }
+        Expr.Deref(base: val base) => {
+            return midNormalizedReferenceArgument(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
+        }
         _ => { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
     }
+}
+
+// Keep the evaluated reference in an owned temporary. Its pointee projection
+// is stored directly in the normalized argument pool; LLVM support remains
+// gated until the call's exclusivity checks have been elaborated.
+fn midNormalizedReferenceArgument(c: inout Comp, state: inout MidBuildState, base: U64, typeTerm: U64, hasField: Bool, fieldIndex: U64) -> MidNormalizedCallArgumentBuild {
+    val referenceTerm: U64 = c.semanticExprTerm(exprId: base)
+    if referenceTerm == 0U64 || !c.isMutableRefInst(ref: referenceTerm) { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
+    val reference: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: referenceTerm, allowAccessMarker: false)
+    match reference.error { MidBuildError.None => {} _ => { return <MidNormalizedCallArgumentBuild error=reference.error /> } }
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: referenceTerm)
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=referenceTerm /> value=<MidRvalue.Use operand=reference.operand /> />)
+    val start: U64 = state.callArgumentProjections.count()
+    state.callArgumentProjections.append(<MidProjection.Deref typeTerm=c.arena.typeAt(index: referenceTerm).args[0U64] />)
+    if hasField { state.callArgumentProjections.append(<MidProjection.Field index=fieldIndex typeTerm=typeTerm />) }
+    return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 local=local projections=<MidRange start=start len=state.callArgumentProjections.count() - start /> capability=2U64 typeTerm=typeTerm /> />
 }
 
 fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidNormalizedCallArgumentBuild {
