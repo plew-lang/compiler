@@ -1,0 +1,23 @@
+import /Ir with { MonoWork }
+import @Std/Io with { write }
+
+fn main() {
+    mut val work = <MonoWork />
+    if work.firstGenericInstanceNamed(nameId: 0U64) != 0U64 { panic "empty" }
+    work.registerGenericInstance(ref: 11U64, nameId: 7U64)
+    work.registerGenericInstance(ref: 22U64, nameId: 9U64)
+    work.registerGenericInstance(ref: 33U64, nameId: 7U64)
+    val first = work.firstGenericInstanceNamed(nameId: 7U64)
+    val next = work.nextGenericInstanceNamed(index: first)
+    if first != 0U64 || next != 2U64 { panic "order" }
+    if work.genericInstanceAt(index: next) != 33U64 { panic "row" }
+    if work.nextGenericInstanceNamed(index: next) != work.genericInstanceCount() { panic "end" }
+    mut val copy = work
+    work.registerGenericInstance(ref: 44U64, nameId: 7U64)
+    copy.registerGenericInstance(ref: 55U64, nameId: 0U64)
+    if copy.nextGenericInstanceNamed(index: next) != copy.genericInstanceCount() { panic "copy link" }
+    if work.firstGenericInstanceNamed(nameId: 0U64) != work.genericInstanceCount() { panic "copy head" }
+    if copy.genericInstanceAt(index: copy.firstGenericInstanceNamed(nameId: 0U64)) != 55U64 { panic "zero name" }
+    if work.genericInstanceAt(index: work.nextGenericInstanceNamed(index: next)) != 44U64 { panic "append" }
+    write(s: "generic-instance-index-ok\n")
+}
