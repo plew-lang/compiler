@@ -29,14 +29,13 @@ pub impl Comp {
     }
 
     inout fn methodRecvIsTrait(f: Func) -> Bool {
-        val declaration: Func = self.lexicalFunction(f: f)
-        if declaration.hasRecv {
+        if f.hasRecv {
             // Provenance and receiver kind are distinct.  A generated
             // concrete witness retains `provTraitOwner` so proof-driven
             // dispatch can identify its trait origin, but its receiver is
             // still the concrete type.  Only the receiver declaration itself
             // decides whether this is an abstract trait method.
-            return self.traitModuleByIdArity(traitId: declaration.recvId, arity: declaration.provTraitArity) != 4000000000U64
+            return self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity) != 4000000000U64
         }
         return false
     }
