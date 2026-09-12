@@ -3,11 +3,29 @@
 // Roots are concrete values in finalized calls/constructions, never the list
 // of imported declarations or provisional layout requests.
 pub impl Comp {
-    inout fn enqueueFinalDestruction(typeRef: U64, visited: inout Array[Bool]) {
+    inout fn visitDestructionType(typeRef: U64, visited: inout DestructionTypeVisits) -> Bool {
+        while visited.ids.count() <= typeRef { visited.ids.append(false) }
+        if visited.ids[typeRef] { return false }
+        visited.ids.set(i: typeRef, value: true)
+        val term = self.arena.typeTerms[typeRef]
+        mut val bucket: U64 = term.nameId
+        // Record identity is structural, independent of its synthesized name.
+        if term.isRecord { bucket = 0U64 }
+        mut val candidate: U64 = visited.heads.getOr(key: bucket, fallback: 0U64)
+        while candidate != 0U64 {
+            val index: U64 = candidate - 1U64
+            if self.typeRefEq(a: visited.terms[index], b: typeRef) { return false }
+            candidate = visited.next[index]
+        }
+        visited.terms.append(typeRef)
+        visited.next.append(visited.heads.getOr(key: bucket, fallback: 0U64))
+        visited.heads[bucket] = visited.terms.count()
+        return true
+    }
+
+    inout fn enqueueFinalDestruction(typeRef: U64, visited: inout DestructionTypeVisits) {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
-        while visited.count() <= typeRef { visited.append(false) }
-        if visited[typeRef] { return }
-        visited.set(i: typeRef, value: true)
+        if !self.visitDestructionType(typeRef: typeRef, visited: inout visited) { return }
         val type: TypeRef = self.arena.typeAt(index: typeRef)
         if type.isRecord {
             mut val index: U64 = 0U64

@@ -10,7 +10,9 @@
 
 pub impl Comp {
     inout fn moveOperandIsAggregatePartial(id: U64) -> Bool {
-        match self.arena.exprs[id] {
+        // Indexed reads are synthetic calls after Lower. Classify the saved
+        // source place, not the getter call used to read it.
+        match self.arena.exprs[self.materializablePlace(id: id)] {
             Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
             Expr.Index(base: _, index: _) => { return true }
             Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }

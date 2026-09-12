@@ -1,0 +1,21 @@
+// Separate concrete instances of the same recursive generic both stay reachable.
+import @Std/Io with { print }
+struct Chain[T] {
+    pub val value: T
+    pub val next: Optional[Chain[T]]
+}
+pub impl Chain { factory }
+fn main() {
+    val numbers: Chain[I64] = <Chain[I64] value=3I64 next=<Optional.Some v=<Chain[I64] value=5I64 next=<Optional.None /> /> /> />
+    val words: Chain[String] = <Chain[String] value="first" next=<Optional.Some v=<Chain[String] value="last" next=<Optional.None /> /> /> />
+    print(numbers.value)
+    match numbers.next {
+        Optional.Some(v: val tail) => { print(tail.value) }
+        Optional.None => { print(0I64) }
+    }
+    print(words.value)
+    match words.next {
+        Optional.Some(v: val tail) => { print(tail.value) }
+        Optional.None => { print("missing") }
+    }
+}

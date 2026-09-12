@@ -2736,7 +2736,7 @@ pub impl Comp {
                     requirement += 1U64
                 }
                 self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof bodies=bodies />)
-                mut val visited: Array[Bool] = []
+                mut val visited: DestructionTypeVisits = <DestructionTypeVisits />
                 self.enqueueFinalDestruction(typeRef: sourceRef, visited: inout visited)
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { self.finalizeConversionDependencies(conversion: element) }
@@ -4619,7 +4619,7 @@ pub impl Comp {
         // after its CallResolution has been frozen.
         mut val aggregateI: U64 = 0U64
         mut val callI: U64 = 0U64
-        mut val destructionTypes: Array[Bool] = []
+        mut val destructionTypes: DestructionTypeVisits = <DestructionTypeVisits />
         while bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
             if bodyI < self.monoWork.bodyInstances.count() {
                 self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])

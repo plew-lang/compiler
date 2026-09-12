@@ -2957,6 +2957,17 @@ export struct MonoWork {
 }
 pub impl MonoWork { factory }
 
+// Transient reachability state. Type IDs are allocation identities; grounding
+// can allocate a new row for a type already reached through a recursive field.
+// Name buckets narrow candidates, whose full TypeTerms are compared by Comp.
+export struct DestructionTypeVisits {
+    pub mut val ids: Array[Bool] = []
+    pub mut val heads: Dictionary[U64, U64] = [:]
+    pub mut val terms: Array[U64] = []
+    pub mut val next: Array[U64] = []
+}
+pub impl DestructionTypeVisits { factory }
+
 // Typed-AST cache (Phase B): each expression node's recovered `TypeInfo`, stored
 // as parallel scalar arrays keyed by expr id (struct-array IndexSet isn't in the
 // self-host subset). `typeOf` fills these lazily and PERSISTENTLY (one slot per
