@@ -5662,6 +5662,12 @@ pub impl Comp {
                         } else {
                             nextFn = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64)
                         }
+                        // A final protocol lookup can fail for an invalid iterand.
+                        // Diagnose that source error before publishing a missing
+                        // next target or asking its result recipe for an Item.
+                        if useProtocolTemplate && nextFn >= self.arena.functionCount() {
+                            self.errorAt(offset: self.exprOffset(id: iter), msg: "for-loop requires an Iterable or Iterator")
+                        }
                         val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
                         self.recordSelectedBodyCallee(selection: nextSelection)
                         if nextFn < self.arena.functionCount() {
