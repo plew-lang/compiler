@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 entries="src/Backend/Llvm/Entry.pw src/Backend/Llvm/Any.pw"
 legacy='\bMidBody\b|\bMidInstantiation\b|\bMidAccessElaboration\b|\binstantiateMidBody\b|\belaborateMidAccesses\b|\belaborateMidDrops\b|\bverifyMidBody\b|\bmidInitialLlvmPreflight\b|\bgenLlvmMidBody\b'
-canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midCanonicalLlvmPreflight genLlvmCanonicalMidBody'
+canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
 
 if rg -n "$legacy" $entries; then
     echo "legacy Mid consumer remains in a production entry" >&2
@@ -28,21 +28,25 @@ done
 # LLVM ABI argument position and the number of Mid source parameters are
 # separate facts. They coincide for ordinary functions only accidentally;
 # closures reserve ABI argument 0 for their environment.
-for needle in 'abiParameterCount: U64 = 0U64' 'abiParameterCount: abiParameterCount'; do
-    if ! grep -F "$needle" src/Backend/Llvm/Mid.pw >/dev/null; then
-        echo "canonical Mid ABI contract is missing $needle" >&2
+# Preflight validates the count once; the Ready value carries that evidence
+# to emission instead of passing a second, independently supplied count.
+for needle in 'abiParameterCount: abiParameterCount' 'MidLlvmPrepared.Ready canonical=elaborated abiParameterCount=abiParameterCount' 'prepared: preparedMid'; do
+    if ! grep -F "$needle" src/Backend/Llvm/Any.pw >/dev/null; then
+        echo "ordinary Mid preparation is missing $needle" >&2
         exit 1
     fi
 done
-if ! grep -F 'abiParameterCount: midAbiParameterCount' src/Backend/Llvm/Any.pw >/dev/null; then
-    echo "ordinary Mid emission does not carry its preflight ABI count" >&2
-    exit 1
-fi
+for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return false }' 'MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: _)'; do
+    if ! grep -F "$needle" src/Backend/Llvm/Mid.pw >/dev/null; then
+        echo "canonical Mid prepared-body contract is missing $needle" >&2
+        exit 1
+    fi
+done
 
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a
 # second AST-to-LLVM path that happens to run before `main`.
-global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midCanonicalLlvmPreflight genLlvmCanonicalMidBody'
+global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
 for symbol in $global_canonical; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer Mid pipeline is missing $symbol" >&2
