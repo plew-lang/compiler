@@ -1331,12 +1331,12 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             }
         }
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-            if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
+            if allowAccessMarker && !c.isMutableRefInst(ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
             return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex)
         }
         Expr.Deref(base: val base) => {
-            if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
+            if allowAccessMarker && !c.isMutableRefInst(ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
         }
         // An Array expression reaching Mid without a SemanticAggregate means
@@ -1521,6 +1521,27 @@ fn midMethodReceiverExpr(c: Comp, exprId: U64) -> U64 {
     }
 }
 
+// Views select the finalized callable; they do not create new runtime
+// storage. Both prior-result receiver variants evaluate the same dependency
+// and preserve its indexed inout provenance.
+fn midPriorCallReceiver(c: inout Comp, state: inout MidBuildState, priorExpr: U64, priorSite: CallSiteKey, directInout: Bool) -> MidReceiverBuild {
+    // A lowered index read is represented as a prior call result, but
+    // that representation does not make an inout use into a value
+    // use. Preserve the access marker exactly as for a direct
+    // receiver so the later CFG rewrite can perform the required
+    // getter-modify-set writeback. Materializing here would leave the
+    // parent method mutating only a detached temporary.
+    if directInout {
+        val candidate: U64 = c.decls.accessCandidateForExpr(exprId: priorExpr)
+        if candidate < c.decls.accessCandidateCount() {
+            return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
+        }
+    }
+    val built: MidOperandBuild = materializeMidCallValue(c: inout c, state: inout state, exprId: priorExpr, siteKey: priorSite)
+    match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
+    return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=built.operand /> />
+}
+
 // Build the value receiver from the recorded source evaluation child while
 // taking its ABI mode solely from the already selected Direct template. The
 // Expr match supplies only evaluation shape; it never performs method lookup
@@ -1547,23 +1568,11 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     match templateReceiver {
         CallTemplateReceiver.None => { return <MidReceiverBuild /> }
         CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorSite) => {
-            // A lowered index read is represented as a prior call result, but
-            // that representation does not make an inout use into a value
-            // use. Preserve the access marker exactly as for a direct
-            // receiver so the later CFG rewrite can perform the required
-            // getter-modify-set writeback. Materializing here would leave the
-            // parent method mutating only a detached temporary.
-            if directInout {
-                val candidate: U64 = c.decls.accessCandidateForExpr(exprId: priorExpr)
-                if candidate < c.decls.accessCandidateCount() {
-                    return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
-                }
-            }
-            val built: MidOperandBuild = materializeMidCallValue(c: inout c, state: inout state, exprId: priorExpr, siteKey: priorSite)
-            match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
-            return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=built.operand /> />
+            return midPriorCallReceiver(c: inout c, state: inout state, priorExpr: priorExpr, priorSite: priorSite, directInout: directInout)
         }
-        CallTemplateReceiver.PriorCallResultWithViews(exprId: _, siteKey: _, views: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+        CallTemplateReceiver.PriorCallResultWithViews(exprId: val priorExpr, siteKey: val priorSite, views: _) => {
+            return midPriorCallReceiver(c: inout c, state: inout state, priorExpr: priorExpr, priorSite: priorSite, directInout: directInout)
+        }
         CallTemplateReceiver.PriorProtocolResult(slot: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
         CallTemplateReceiver.PriorProtocolResultWithViews(slot: _, views: _) => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
         _ => {}

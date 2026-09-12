@@ -1000,6 +1000,44 @@ pub impl Comp {
         self.decls.accessUses.append(<AccessUse candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
     }
 
+    // Argument access provenance is independent of free/method call syntax.
+    // The selected declaration owns the parameter mapping and write mode;
+    // unresolved modes remain explicit until finalization.
+    inout fn recordArgumentAccessUses(parentExpr: U64, callee: U64, args: ArgRange) {
+        mut val accessArg: U64 = 0U64
+        while accessArg < args.len {
+            val arg: Arg = self.argAt(args: args, index: accessArg)
+            if arg.isInout {
+                // The source marker says that the author requests an
+                // access, not which ABI slot it occupies.  Preserve
+                // the selected parameter mapping here: defaults and
+                // labels can make source argument order differ from
+                // the declaration order, and only that declaration
+                // owns the final `isInout` mode.
+                mut val accessWrite: Bool = false
+                mut val paramIndex: U64 = args.len
+                if callee < self.arena.functionCount() {
+                    val selected: Func = self.arena.functionAt(index: callee)
+                    paramIndex = self.paramIndexForArg(params: selected.params, args: args, argIdx: accessArg)
+                    if paramIndex < selected.params.count() {
+                        accessWrite = self.funcParamAt(params: selected.params, index: paramIndex).isInout
+                    }
+                }
+                self.recordAccessUse(parentExpr: parentExpr, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: callee < self.arena.functionCount(), write: accessWrite)
+                // An explicit `inout rows[i]` owns the same detached
+                // get-modify-set write facet as an inout method
+                // receiver.  Record it at this producer boundary while
+                // the selected ABI still says that writeback occurs;
+                // Mono may then close the frozen setter call without
+                // reopening the authored Index expression.
+                if accessWrite {
+                    self.recordAccessWriteFacet(readExpr: arg.expr)
+                }
+            }
+            accessArg += 1U64
+        }
+    }
+
     // Record the detached IndexSet facet under exactly the same lexical
     // Record context as its Index read. The write node is a semantic template
     // only: its second argument is the read result as a type anchor and Mid
@@ -1191,42 +1229,7 @@ pub impl Comp {
                 } else {
                     self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
                 }
-                // Explicit `inout` arguments retain their source role in the
-                // call template. If one is an Index.index result, connect it
-                // to the storage candidate now; its write mode is known for a
-                // selected direct callee and explicitly deferred otherwise.
-                mut val accessArg: U64 = 0U64
-                while accessArg < args.len {
-                    val arg: Arg = self.argAt(args: args, index: accessArg)
-                    if arg.isInout {
-                        // The source marker says that the author requests an
-                        // access, not which ABI slot it occupies.  Preserve
-                        // the selected parameter mapping here: defaults and
-                        // labels can make source argument order differ from
-                        // the declaration order, and only that declaration
-                        // owns the final `isInout` mode.
-                        mut val accessWrite: Bool = false
-                        mut val paramIndex: U64 = args.len
-                        if cfi < self.arena.functionCount() {
-                            val selected: Func = self.arena.functionAt(index: cfi)
-                            paramIndex = self.paramIndexForArg(params: selected.params, args: args, argIdx: accessArg)
-                            if paramIndex < selected.params.count() {
-                                accessWrite = self.funcParamAt(params: selected.params, index: paramIndex).isInout
-                            }
-                        }
-                        self.recordAccessUse(parentExpr: exprId, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: cfi < self.arena.functionCount(), write: accessWrite)
-                        // An explicit `inout rows[i]` owns the same detached
-                        // get-modify-set write facet as an inout method
-                        // receiver.  Record it at this producer boundary while
-                        // the selected ABI still says that writeback occurs;
-                        // Mono may then close the frozen setter call without
-                        // reopening the authored Index expression.
-                        if accessWrite {
-                            self.recordAccessWriteFacet(readExpr: arg.expr)
-                        }
-                    }
-                    accessArg += 1U64
-                }
+                self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
@@ -1360,6 +1363,7 @@ pub impl Comp {
                 // the facet; nested indexes require this exact candidate
                 // identity to close every write dependency.
                 self.recordAccessWriteFacet(readExpr: recv)
+                self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
 
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
@@ -1392,6 +1396,13 @@ pub impl Comp {
                 if methodCallee >= self.arena.functionCount() {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
+                if methodCallee < self.arena.functionCount() {
+                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)
+                } else {
+                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: false, write: false)
+                }
+                self.recordAccessWriteFacet(readExpr: recv)
+                self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
             }
             Expr.ExtView(val recv, val source, val strip) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)

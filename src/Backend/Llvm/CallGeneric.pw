@@ -376,14 +376,20 @@ pub impl LlvmCtx {
         if LLVMIsNull(pb) != 0I32 {
             return
         }
+        self.emitInoutCellCheck(c: inout c, cell: pa, otherCell: pb)
+    }
+
+    // Shared by source and canonical callers. Both inputs are evaluated,
+    // retained cells; this helper never recovers source expressions.
+    inout fn emitInoutCellCheck(c: inout Comp, cell: LLVMValueRef, otherCell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_inout_overlap", fnTy: fty)
         mut val cav: Array[LLVMValueRef] = []
-        cav.append(pa)
-        cav.append(pb)
+        cav.append(cell)
+        cav.append(otherCell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 2U64, anon())
     }
 }

@@ -490,7 +490,29 @@ fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode) -> MidAccessErr
             val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
             val markerCount: U64 = canonicalAccessMarkerCount(c: c, term: term)
             val plan: MidCanonicalAccessPlan = canonicalAccessPlanForTerm(c: c, body: body, term: term)
-            if markerCount != 0U64 && !plan.valid { return <MidAccessError.InvalidAccessChain /> }
+            if markerCount != 0U64 && !plan.valid {
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid access invalid plan block=")
+                    eprintU64(n: blockI)
+                    mut val marker: U64 = 0U64
+                    while marker < markerCount {
+                        val site = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
+                        eprint(text: " marker=")
+                        eprintU64(n: marker)
+                        eprint(text: " candidate=")
+                        eprintU64(n: site.candidate)
+                        eprint(text: " parent=")
+                        eprintU64(n: site.parentResolution)
+                        eprint(text: " role=")
+                        eprintU64(n: site.role)
+                        eprint(text: " chain=")
+                        eprintU64(n: site.chainLen)
+                        marker += 1U64
+                    }
+                    eprint(text: "\n")
+                }
+                return <MidAccessError.InvalidAccessChain />
+            }
             mut val markerI: U64 = 0U64
             while markerI < markerCount {
                 val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
@@ -686,6 +708,21 @@ fn canonicalAccessSetterStart(c: Comp, body: MidBodyNode, term: MidTerminatorNod
     return start
 }
 
+// The last writeback stage starts at the original container, before any
+// subscript value became a temporary. Reserve that storage, not the ABI
+// address passed to the parent call. Indices deliberately do not distinguish
+// two accesses to the same container (spec/03).
+fn canonicalAccessParentBorrow(c: inout Comp, body: MidBodyNode, site: MidCanonicalAccessSite, place: U64, localBase: U64, plan: MidCanonicalAccessPlan, mutableLocalCount: U64) -> U64 {
+    if site.chainLen == 0U64 || place == 0U64 { return 0U64 }
+    val rootAccess: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: site.chainLen - 1U64)
+    if rootAccess == 0U64 || rootAccess > c.arena.semanticAccesses.count() { return 0U64 }
+    val access: SemanticAccess = c.arena.semanticAccesses[rootAccess - 1U64]
+    val storage: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: access.baseInput, root: 0U64, plan: plan, recipeLocalBase: localBase, mutableLocalCount: mutableLocalCount)
+    if storage == 0U64 { return 0U64 }
+    c.mid.operands.append(<MidOperandNode tag=4U64 place=place accessPlace=storage capability=2U64 />)
+    return c.mid.operands.count()
+}
+
 fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, localBase: U64, plan: MidCanonicalAccessPlan, mutableLocalCount: U64) -> MidAccessError {
     if term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidAccessError.UnresolvedAccessCall /> }
     val sourceTarget: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
@@ -703,7 +740,7 @@ fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term:
             val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: markerI)
             val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
             val projected: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: access.accessInput, root: valuePlace, plan: plan, recipeLocalBase: localBase, mutableLocalCount: mutableLocalCount)
-            val borrowed: U64 = canonicalAccessAppendInoutBorrow(c: inout c, place: projected)
+            val borrowed: U64 = canonicalAccessParentBorrow(c: inout c, body: body, site: site, place: projected, localBase: localBase, plan: plan, mutableLocalCount: mutableLocalCount)
             receiverId = canonicalAccessAppendValueReceiver(c: inout c, operand: borrowed)
             if receiverId == 0U64 { return <MidAccessError.UnsupportedAccessProjection /> }
             markerI = markerI + 1U64
@@ -723,7 +760,7 @@ fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term:
             val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: markerI)
             val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
             val projected: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: access.accessInput, root: valuePlace, plan: plan, recipeLocalBase: localBase, mutableLocalCount: mutableLocalCount)
-            val borrowed: U64 = canonicalAccessAppendInoutBorrow(c: inout c, place: projected)
+            val borrowed: U64 = canonicalAccessParentBorrow(c: inout c, body: body, site: site, place: projected, localBase: localBase, plan: plan, mutableLocalCount: mutableLocalCount)
             if borrowed == 0U64 { return <MidAccessError.UnsupportedAccessProjection /> }
             c.mid.callArguments.append(borrowed)
             markerI = markerI + 1U64

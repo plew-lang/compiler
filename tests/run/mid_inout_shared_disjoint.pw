@@ -1,0 +1,44 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    inout fn bump(other: inout Counter) {
+        self.value += 1
+        other.value += 10
+    }
+}
+extension Extra {
+    pub impl Counter {
+        inout fn increase(other: inout Counter) {
+            self.value += 1
+            other.value += 10
+        }
+    }
+}
+struct Pair {
+    pub mut val first: Counter
+    pub mut val second: Counter
+    pub mut val rows: Array[Counter]
+    pub mut val others: Array[Counter]
+}
+pub impl Pair { factory }
+fn bump(first: inout I64, second: inout I64) {
+    first += 1
+    second += 10
+}
+fn main() {
+    val pair: MutableRef[Pair] = <MutableRef[Pair] value=<Pair first=<Counter value=1 /> second=<Counter value=2 /> rows=[<Counter value=3 />] others=[<Counter value=4 />] /> />
+    val alias: MutableRef[Pair] = pair
+    // The cell is shared, but the first field after dereference differs.
+    bump(first: inout pair->first.value, second: inout alias->second.value)
+    pair->first.bump(other: inout alias->second)
+    // The same rule survives get-modify-set and the receiver/argument split.
+    pair->rows[0].bump(other: inout alias->others[0])
+    pair->rows[0]#Extra.increase(other: inout alias->others[0])
+    print(pair->first.value)
+    print(pair->second.value)
+    print(pair->rows[0].value)
+    print(pair->others[0].value)
+}

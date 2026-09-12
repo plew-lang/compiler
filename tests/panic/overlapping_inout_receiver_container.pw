@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    inout fn bump(other: inout Counter) {
+        print("must not run")
+        self.value += 1
+        other.value += 10
+    }
+}
+struct Holder { pub mut val values: Array[Counter] }
+pub impl Holder { factory }
+fn main() {
+    val reference: MutableRef[Holder] = <MutableRef[Holder] value=<Holder values=[<Counter value=1 />, <Counter value=2 />] /> />
+    val alias: MutableRef[Holder] = reference
+    reference->values[0].bump(other: inout alias->values[1])
+}

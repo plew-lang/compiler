@@ -87,7 +87,9 @@ fn instantiateCanonicalOperand(c: inout Comp, operandId: U64, environment: BodyI
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
     mut val place: U64 = 0U64
     if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) }
-    c.mid.operands.append(<MidOperandNode tag=source.tag place=place capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) accessCandidate=source.accessCandidate />)
+    mut val accessPlace: U64 = 0U64
+    if source.accessPlace != 0U64 { accessPlace = instantiateCanonicalPlace(c: inout c, placeId: source.accessPlace, environment: environment, itemRef: itemRef) }
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) accessCandidate=source.accessCandidate />)
     return c.mid.operands.count()
 }
 

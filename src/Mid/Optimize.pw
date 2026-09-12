@@ -24,6 +24,7 @@ fn countPlace(arena: MidCanonicalArena, placeId: U64, counts: inout Array[U64]) 
 fn countOperand(arena: MidCanonicalArena, operandId: U64, uses: inout Array[U64]) {
     if operandId == 0U64 || operandId > arena.operands.count() { return }
     countPlace(arena: arena, placeId: arena.operands[operandId - 1U64].place, counts: inout uses)
+    countPlace(arena: arena, placeId: arena.operands[operandId - 1U64].accessPlace, counts: inout uses)
 }
 
 fn countDestination(arena: MidCanonicalArena, placeId: U64, definitions: inout Array[U64], uses: inout Array[U64]) {

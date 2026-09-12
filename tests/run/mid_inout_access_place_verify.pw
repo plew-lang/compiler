@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Mid with { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidStatement, MidTerminator, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, verifyCanonicalMidBody }
+import /Mid/Ir with { MidOperandNode, MidPlaceNode }
+import /Mid/Verify with { MidVerifyError }
+
+fn accepted(alive: Bool, validPlace: Bool, tag: U64) -> Bool {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val storage = <MidPlace local=0U64 typeTerm=integer />
+    val temporary = <MidPlace local=1U64 typeTerm=integer />
+    mut val before: Array[MidStatement] = []
+    mut val after: Array[MidStatement] = [<MidStatement.Drop place=temporary />]
+    if alive { after.append(<MidStatement.Drop place=storage />) }
+    else { before.append(<MidStatement.Drop place=storage />) }
+    val body = <MidBody locals=[<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=before terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Borrow place=temporary capability=<MidBorrowCapability.Inout /> />] destination=temporary target=1U64 /> />, <MidBlock statements=after terminator=<MidTerminator.Return /> />] entry=0U64 />
+    val canonical = compiler.mid.store(body: body)
+    val stored = compiler.mid.bodies[canonical.body - 1U64]
+    val call = compiler.mid.terminators[compiler.mid.blocks[stored.blocks.start].terminator - 1U64]
+    val operandId = compiler.mid.callArguments[call.args.start]
+    val operand = compiler.mid.operands[operandId - 1U64]
+    compiler.mid.places.append(<MidPlaceNode local=0U64 typeTerm=integer />)
+    mut val accessPlace = compiler.mid.places.count()
+    if !validPlace { accessPlace += 1U64 }
+    compiler.mid.operands.set(i: operandId - 1U64, value: <MidOperandNode tag=tag place=operand.place capability=2U64 accessPlace=accessPlace />)
+    return match verifyCanonicalMidBody(c: compiler, canonical: canonical).error {
+        MidVerifyError.None => { give true }
+        _ => { give false }
+    }
+}
+fn main() {
+    assert(accepted(alive: true, validPlace: true, tag: 4U64))
+    assert(!accepted(alive: false, validPlace: true, tag: 4U64))
+    assert(!accepted(alive: true, validPlace: false, tag: 4U64))
+    assert(!accepted(alive: true, validPlace: true, tag: 3U64))
+    print("ok")
+}

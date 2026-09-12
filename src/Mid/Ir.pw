@@ -95,6 +95,10 @@ pub impl MidSwitchCase { factory }
 export struct MidOperandNode {
     pub val tag: U64
     pub val place: U64 = 0U64
+    // Inout's reserved storage may differ from the ABI temporary used by
+    // get-modify-set. Zero means `place`; otherwise this is a canonical
+    // container place with one-time-evaluated reference roots.
+    pub val accessPlace: U64 = 0U64
     pub val capability: U64 = 0U64
     pub val integerValue: U64 = 0U64
     pub val integerNegative: Bool = false

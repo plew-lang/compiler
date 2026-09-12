@@ -49,6 +49,21 @@ fn canonicalMidVerifyConsumeOperand(c: Comp, body: MidBodyNode, states: inout Ar
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag == 8U64 { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+    if operand.accessPlace != 0U64 {
+        if operand.tag != 4U64 || operand.capability != 2U64 || operand.accessPlace > c.mid.places.count() { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+        val storage: MidPlaceNode = c.mid.places[operand.accessPlace - 1U64]
+        if storage.projections.start > c.mid.projections.count() || storage.projections.len > c.mid.projections.count() - storage.projections.start { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+        if storage.rootTag == 1U64 {
+            if storage.local >= body.locals.len || storage.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=storage.local /> }
+            val local = c.mid.locals[body.locals.start + storage.local]
+            if !local.isBorrowed && !local.isInout {
+                match states[storage.local] {
+                    MidOwnership.Owned => {}
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=storage.local /> }
+                }
+            }
+        } else if !canonicalMidGlobalRootIsValid(c: c, place: storage) { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+    }
     if operand.tag != 2U64 { return <MidVerification /> }
     if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]

@@ -2844,6 +2844,81 @@ pub impl LlvmCtx {
     // final CallResolution and its argument range carries the selected ABI
     // modes.  Read those rows directly; never rebuild MidCallReceiver or an
     // Array[MidOperand] just to call the draft emitter.
+    fn midCanonicalInoutStorage(c: Comp, operand: MidOperandNode) -> U64 {
+        if operand.accessPlace != 0U64 { return operand.accessPlace }
+        return operand.place
+    }
+
+    // Dereference lending requires an owned, evaluated MutableRef home.
+    // This is the builder/access contract that pins the cell through the
+    // call and writeback; accepting a live mutable reference binding here
+    // would let another argument rebind it after the snapshot was taken.
+    inout fn midCanonicalInoutPlaceSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+        if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: placeId) { return false }
+        val place: MidPlaceNode = c.mid.places[placeId - 1U64]
+        mut val shared: Bool = false
+        mut val index: U64 = 0U64
+        while index < place.projections.len {
+            val projection: MidProjectionNode = c.mid.projections[place.projections.start + index]
+            if projection.tag == 3U64 {
+                if index != 0U64 || place.rootTag != 1U64 || place.local >= body.locals.len { return false }
+                val local: MidLocalDecl = c.mid.locals[body.locals.start + place.local]
+                if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || !c.isMutableRefInst(ref: local.typeTerm) { return false }
+                shared = true
+            } else if shared && projection.tag != 1U64 { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn midCanonicalInoutOperandSupported(c: inout Comp, body: MidBodyNode, operand: MidOperandNode) -> Bool {
+        if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalInoutPlaceSupported(c: inout c, body: body, placeId: operand.place) { return false }
+        if operand.accessPlace != 0U64 && !self.midCanonicalInoutPlaceSupported(c: inout c, body: body, placeId: operand.accessPlace) { return false }
+        return true
+    }
+
+    fn midCanonicalInoutIsShared(c: Comp, place: MidPlaceNode) -> Bool {
+        return place.projections.len != 0U64 && c.mid.projections[place.projections.start].tag == 3U64
+    }
+
+    inout fn midCanonicalEmitInoutPair(c: inout Comp, body: MidBodyNode, operand: MidOperandNode, other: MidOperandNode) {
+        val storage: MidPlaceNode = c.mid.places[self.midCanonicalInoutStorage(c: c, operand: operand) - 1U64]
+        val otherStorage: MidPlaceNode = c.mid.places[self.midCanonicalInoutStorage(c: c, operand: other) - 1U64]
+        // Value roots and the mixed value/pointee case were resolved by the
+        // frontend. Only two shared cells can require a dynamic comparison.
+        if !self.midCanonicalInoutIsShared(c: c, place: storage) || !self.midCanonicalInoutIsShared(c: c, place: otherStorage) { return }
+        if storage.projections.len > 1U64 && otherStorage.projections.len > 1U64 {
+            val field: MidProjectionNode = c.mid.projections[storage.projections.start + 1U64]
+            val otherField: MidProjectionNode = c.mid.projections[otherStorage.projections.start + 1U64]
+            if field.tag == 1U64 && otherField.tag == 1U64 && field.index != otherField.index { return }
+        }
+        val cellPlace: MidPlaceNode = <MidPlaceNode local=storage.local projections=<MidRange start=storage.projections.start len=1U64 /> typeTerm=c.mid.projections[storage.projections.start].typeTerm />
+        val otherCellPlace: MidPlaceNode = <MidPlaceNode local=otherStorage.local projections=<MidRange start=otherStorage.projections.start len=1U64 /> typeTerm=c.mid.projections[otherStorage.projections.start].typeTerm />
+        self.emitInoutCellCheck(c: inout c, cell: self.midCanonicalPlacePtr(c: inout c, body: body, place: cellPlace), otherCell: self.midCanonicalPlacePtr(c: inout c, body: body, place: otherCellPlace))
+    }
+
+    inout fn midCanonicalEmitInoutChecks(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode) {
+        mut val receiverOperand: U64 = 0U64
+        if term.callReceiver != 0U64 {
+            val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+            if receiver.tag == 2U64 && c.mid.operands[receiver.operand - 1U64].tag == 4U64 { receiverOperand = receiver.operand }
+        }
+        mut val index: U64 = 0U64
+        while index < term.args.len {
+            val operand: MidOperandNode = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+            if operand.tag == 4U64 {
+                if receiverOperand != 0U64 { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: c.mid.operands[receiverOperand - 1U64], other: operand) }
+                mut val prior: U64 = 0U64
+                while prior < index {
+                    val other: MidOperandNode = c.mid.operands[c.mid.callArguments[term.args.start + prior] - 1U64]
+                    if other.tag == 4U64 { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: other, other: operand) }
+                    prior += 1U64
+                }
+            }
+            index += 1U64
+        }
+    }
+
     inout fn midCanonicalReceiverSupported(c: inout Comp, body: MidBodyNode, receiverId: U64, passing: CallReceiverPassing) -> Bool {
         if receiverId == 0U64 || receiverId > c.mid.callReceivers.count() { return false }
         val receiver: MidCallReceiverNode = c.mid.callReceivers[receiverId - 1U64]
@@ -2862,7 +2937,7 @@ pub impl LlvmCtx {
                 // Keep the backend preflight in that same closed vocabulary;
                 // accepting a made-up "tag 3, capability 2" combination would
                 // make a correctly elaborated access fall back to source LLVM.
-                return operand.tag == 4U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place, allowDeref: false)
+                return self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand)
             }
             CallReceiverPassing.Move => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
@@ -2929,7 +3004,7 @@ pub impl LlvmCtx {
             if operandId == 0U64 || operandId > c.mid.operands.count() || c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.typeCount() { return <MidCallPreflight.ArgumentShape /> }
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
             match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => { if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place, allowDeref: false) { return <MidCallPreflight.Argument /> } }
+                CallArgumentPassing.Inout => { if !self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Move => { if operand.tag != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Borrow => {
                     if operand.tag == 3U64 {
@@ -3822,6 +3897,7 @@ pub impl LlvmCtx {
             values.append(value)
             argumentI = argumentI + 1U64
         }
+        self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
         else if useMethod { result = LLVMBuildCall2(self.b, self.genMethTy[methodSlot], self.genMethVal[methodSlot], arrayCPtr(values), values.count(), anon()) }
