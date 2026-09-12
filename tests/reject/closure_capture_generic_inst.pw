@@ -1,6 +1,8 @@
 struct Box[T] {
-    val value: T
+    pub val value: T
 }
+
+pub impl Box { factory }
 
 fn main() {
     val box: Box[I64] = <Box value=1 />
