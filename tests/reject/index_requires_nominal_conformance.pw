@@ -1,0 +1,7 @@
+// spec/12: a same-named method does not establish Index conformance.
+import @Std/Core with { Index }
+import @Std/Io with { print }
+struct Foo { pub val n: I64 }
+pub impl Foo { factory }
+pub impl Foo { fn index(key: I64) -> I64 { return self.n } }
+fn main() { val f = <Foo n=5I64 /> print(f[0I64]) }
