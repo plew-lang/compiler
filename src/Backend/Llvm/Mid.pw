@@ -2103,7 +2103,7 @@ pub impl LlvmCtx {
             currentTerm = c.mid.locals[body.locals.start + place.local].typeTerm
         } else if place.rootTag == 2U64 {
             val global: U64 = self.midCanonicalGlobalIndex(c: inout c, place: place)
-            if global >= c.arena.globals.count() || global >= self.gvalRef.count() || global >= self.gvalTref.count() || c.arena.globals[global].mutable != place.globalMutable || place.typeTerm == 0U64 || !c.typeRefEq(a: self.gvalTref[global], b: place.typeTerm) { return false }
+            if global >= c.arena.globals.count() || global >= self.gvalRef.count() || global >= self.gvalTref.count() || c.arena.globals[global].mutable != place.globalMutable || place.typeTerm == 0U64 { return false }
             currentTerm = self.gvalTref[global]
         } else { return false }
         mut val projectionI: U64 = 0U64
@@ -2122,6 +2122,8 @@ pub impl LlvmCtx {
             } else { return false }
             projectionI = projectionI + 1U64
         }
+        // A projected place has the leaf type, not the storage root type.
+        if place.rootTag == 2U64 { return currentTerm != 0U64 && c.typeRefEq(a: currentTerm, b: place.typeTerm) }
         return true
     }
 
