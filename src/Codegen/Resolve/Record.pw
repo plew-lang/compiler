@@ -393,7 +393,7 @@ pub impl Comp {
     // reach this one finalization point so they cannot diverge by silently
     // treating a view-qualified static call as a closure-field call.
     inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
-        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
         match staticResolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                 self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.staticRequirementResultType(resolution: staticResolution))
@@ -454,7 +454,7 @@ pub impl Comp {
             sourceTraitReceiver = self.methodRecvIsTrait(f: self.arena.functionAt(index: self.cur.checkFn))
         }
         if (sourceTraitReceiver || self.methodRecvIsTrait(f: f)) && (sourceTraitReceiver || f.originTraitId != 0U64) {
-            val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+            val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
             match staticResolution {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                     val result: U64 = self.staticRequirementResultType(resolution: staticResolution)
@@ -506,7 +506,7 @@ pub impl Comp {
         if f.isAssoc { finalReceiverSource = <CallTemplateReceiver.Term term=receiverTerm /> }
         mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if f.isProvided {
-            val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+            val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
             match resolution {
                 StaticMemberResolution.Requirement(proof: val selected, traitIdx: _, reqIdx: _) => { proof = selected }
                 StaticMemberResolution.Provided(proof: val selected, traitIdx: _, callee: _) => { proof = selected }
@@ -1120,7 +1120,7 @@ pub impl Comp {
                     val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
                     if baseTerm != 0U64 && baseTerm < self.arena.typeCount() {
                         val baseReceiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: baseExpr)
-                        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args)
+                        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
                         match resolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                                 self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.staticRequirementResultType(resolution: resolution))
@@ -1282,7 +1282,11 @@ pub impl Comp {
                 // Keep its symbolic signature and proof on the static route;
                 // the abstract checker validates that requirement, and Mono
                 // chooses the concrete witness only in the body environment.
-                val boundMember: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
+                if requiredTraitOwner != 0U64 {
+                    methodCallee = self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+                }
+                val boundMember: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
                 match boundMember {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodCallee = self.arena.functionCount() }
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
@@ -1319,6 +1323,14 @@ pub impl Comp {
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: self.directReceiverTemplateForExpr(exprId: recv), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
+                if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
+                    match self.callTemplateForCurrentBody(exprId: exprId).kind {
+                        CallTemplateKind.Pending => {
+                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing")
+                        }
+                        _ => {}
+                    }
                 }
                 // A synthetic index read used as this receiver is an access
                 // candidate.  Only a selected direct method supplies a final

@@ -1,0 +1,11 @@
+// IndexSet is required even when an ordinary setter has the same signature.
+import @Std/Core with { IndexSet }
+struct Shelf { pub mut val item: I64 }
+pub impl Shelf {
+    factory
+    inout fn indexSet(key: U64, value~: I64) { self.item = value }
+}
+fn main() {
+    mut val shelf = <Shelf item=0I64 />
+    shelf[0U64] = 1I64
+}

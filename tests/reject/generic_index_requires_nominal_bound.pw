@@ -1,0 +1,7 @@
+// A same-named member of another bound does not prove Index conformance.
+import @Std/Core with { Index }
+trait Lookup { fn index(key: U64) -> I64 }
+fn first[T](value: T) -> I64 where T: Lookup {
+    return value[0U64]
+}
+fn main() {}

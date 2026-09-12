@@ -841,7 +841,7 @@ pub impl Comp {
             mut val typeMatch2: U64 = self.arena.functionCount()
             mut val typeMatchEntry: U64 = self.decls.callableCount()
             mut val typeMatch2Entry: U64 = self.decls.callableCount()
-            mut val i: U64 = 0U64
+            mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
             while i < self.decls.callableCount() {
                 val cand: Callable = self.decls.callableAt(index: i)
                 val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -858,11 +858,19 @@ pub impl Comp {
                 } else {
                     sourceMatches = cand.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: cand, sources: sources)
                 }
+                // Direct conformance witnesses live on the bare callable surface.
+                // Their declared conformance is distinct from a provided copy's
+                // selected trait surface; neither is an anonymous same-name method.
+                mut val candidateTraitOwner = cand.traitOwner
+                if candidateTraitOwner == 0U64 { candidateTraitOwner = f.originTraitOwner }
+                if requiredTraitOwner != 0U64 && pass == 1U64 && cand.sourceKind == 0U64 {
+                    sourceMatches = candidateTraitOwner == requiredTraitOwner
+                }
                 // A trait requirement has no executable body. It participates
                 // in declaration-time static member resolution, but never in
                 // this concrete callable surface; otherwise a trait receiver
                 // proof makes the requirement compete with its implementation.
-                if sourceMatches && (requiredTraitOwner == 0U64 || cand.traitOwner == requiredTraitOwner) && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
+                if sourceMatches && (requiredTraitOwner == 0U64 || candidateTraitOwner == requiredTraitOwner) && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
                     if f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                         val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {
@@ -879,7 +887,7 @@ pub impl Comp {
                         }
                     }
                 }
-                i += 1U64
+                i = self.decls.nextCallableNamed(index: i)
             }
             if typeMatch != self.arena.functionCount() {
                 self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
