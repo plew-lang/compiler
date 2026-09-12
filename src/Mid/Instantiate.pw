@@ -893,7 +893,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bo
     val argumentStart: U64 = c.mid.callArguments.count()
     val conversionStatementStart: U64 = c.mid.statements.count()
     mut val argumentI: U64 = 0U64
-    mut val cleanupCount: U64 = 0U64
+    mut val cleanupPlaces: Array[U64] = []
     while argumentI < term.args.len {
         val conversion: U64 = c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)
         val targetType: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
@@ -941,11 +941,29 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bo
             c.mid.statements.append(<MidStatementNode tag=1U64 destination=temporaryPlace value=c.mid.rvalues.count() />)
             c.mid.operands.append(<MidOperandNode tag=1U64 place=temporaryPlace />)
             operand = c.mid.operands.count()
-            cleanupCount = cleanupCount + 1U64
+            cleanupPlaces.append(temporaryPlace)
         }
         match passing {
             CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand) }
-            _ => {}
+            CallArgumentPassing.Move => {
+                val source: MidOperandNode = c.mid.operands[operand - 1U64]
+                if source.tag != 2U64 {
+                    // A source Copy is an independent value, even when the
+                    // selected ABI consumes it. Materialize that ownership;
+                    // changing Copy(place) to Move(place) would consume the
+                    // caller's original binding instead.
+                    if source.tag != 1U64 && source.tag != 5U64 && source.tag != 6U64 && source.tag != 7U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
+                    if targetType == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
+                    c.mid.places.append(<MidPlaceNode local=nextLocal typeTerm=targetType />)
+                    nextLocal += 1U64
+                    val temporaryPlace: U64 = c.mid.places.count()
+                    c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=operand />)
+                    c.mid.statements.append(<MidStatementNode tag=1U64 destination=temporaryPlace value=c.mid.rvalues.count() />)
+                    c.mid.operands.append(<MidOperandNode tag=2U64 place=temporaryPlace />)
+                    operand = c.mid.operands.count()
+                }
+            }
+            CallArgumentPassing.Inout => {}
         }
         if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
         c.mid.callArguments.append(operand)
@@ -953,21 +971,21 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bo
     }
     val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
     if destination == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
-    if cleanupCount > 0U64 {
+    val sourceStatementCount: U64 = c.mid.statements.count() - conversionStatementStart
+    if cleanupPlaces.count() > 0U64 {
         c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=cleanupTarget args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
         val sourceTerminator: U64 = c.mid.terminators.count()
         val cleanupStart: U64 = c.mid.statements.count()
         mut val cleanupI: U64 = 0U64
-        while cleanupI < cleanupCount {
-            val conversionStatement: MidStatementNode = c.mid.statements[conversionStatementStart + cleanupI]
-            c.mid.statements.append(<MidStatementNode tag=3U64 destination=conversionStatement.destination />)
+        while cleanupI < cleanupPlaces.count() {
+            c.mid.statements.append(<MidStatementNode tag=3U64 destination=cleanupPlaces[cleanupI] />)
             cleanupI = cleanupI + 1U64
         }
         c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
-        return <MidCanonicalCallMaterialization sourceStatementCount=cleanupCount sourceTerminator=sourceTerminator cleanupStatements=<MidRange start=cleanupStart len=cleanupCount /> cleanupTerminator=c.mid.terminators.count() hasCleanup=true />
+        return <MidCanonicalCallMaterialization sourceStatementCount=sourceStatementCount sourceTerminator=sourceTerminator cleanupStatements=<MidRange start=cleanupStart len=cleanupPlaces.count() /> cleanupTerminator=c.mid.terminators.count() hasCleanup=true />
     }
     c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=continuation args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
-    return <MidCanonicalCallMaterialization sourceStatementCount=cleanupCount sourceTerminator=c.mid.terminators.count() />
+    return <MidCanonicalCallMaterialization sourceStatementCount=sourceStatementCount sourceTerminator=c.mid.terminators.count() />
 }
 
 // Canonical instantiation is a direct append-only rewrite. Converted borrow

@@ -1,0 +1,24 @@
+// A consuming ABI must receive an owned copy when the source expression
+// remains usable. Check both a binding and a projected field, including CoW.
+import @Std/Io with { print }
+import @Std/Core with { Ref, MutableRef }
+
+struct Payload { pub mut val values: Array[I64]  pub val label: String }
+pub impl Payload { factory }
+struct Envelope { pub val payload: Payload }
+pub impl Envelope { factory }
+
+fn main() {
+    mut val original: Payload = <Payload values=[10, 20] label="original" />
+    val first: MutableRef[Payload] = <MutableRef[Payload] value=original />
+    original.values.append(30)
+    val envelope: Envelope = <Envelope payload=original />
+    val second: Ref[Payload] = <Ref[Payload] value=envelope.payload />
+    original.values.append(40)
+    print(first->values.count())
+    print(second->values.count())
+    print(original.values.count())
+    print(envelope.payload.values.count())
+    print(first->label)
+    print(second->label)
+}
