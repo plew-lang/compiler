@@ -1258,6 +1258,17 @@ pub impl Comp {
                         methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
                     }
                 }
+                // A lexical bound selects a requirement/provided member, even
+                // when ordinary lookup can see a concrete witness elsewhere.
+                // Keep its symbolic signature and proof on the static route;
+                // the abstract checker validates that requirement, and Mono
+                // chooses the concrete witness only in the body environment.
+                val boundMember: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                match boundMember {
+                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodCallee = self.arena.functionCount() }
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
+                    _ => {}
+                }
                 // Context-type arguments from the selected method
                 // parameter. `receiverTerm` is the just-recorded semantic
                 // receiver fact; reopening `typeOf(recv)` here loses an
