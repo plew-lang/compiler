@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+import /Mid with { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidProjection, MidStatement, MidTerminator, verifyCanonicalMidBody }
+import /Mid/Verify with { MidVerifyError }
+
+fn replacement(reference: U64, pointee: U64, release: Bool, overwrite: Bool) -> MidBody {
+    val destination = <MidPlace local=0U64 projections=[<MidProjection.Deref typeTerm=pointee />] typeTerm=pointee />
+    val source = <MidPlace local=1U64 typeTerm=pointee />
+    mut val statements: Array[MidStatement] = []
+    if release { statements.append(<MidStatement.Drop place=destination />) }
+    if overwrite { statements.append(<MidStatement.Overwrite destination=destination source=source />) }
+    return <MidBody locals=[<MidLocalDecl typeTerm=reference sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=pointee sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] entry=0U64 />
+}
+fn valid(error: MidVerifyError) -> Bool {
+    return match error { MidVerifyError.None => { give true } _ => { give false } }
+}
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integer = compiler.internBytes(s: "I64")
+    val pointee = compiler.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val mutableName = compiler.internBytes(s: "MutableRef")
+    val readName = compiler.internBytes(s: "Ref")
+    val mutableType = compiler.pushType(t: <TypeRef nameStart=mutableName.nameStart nameLen=mutableName.nameLen args=[pointee] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    val readType = compiler.pushType(t: <TypeRef nameStart=readName.nameStart nameLen=readName.nameLen args=[pointee] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    val correct = compiler.mid.store(body: replacement(reference: mutableType, pointee: pointee, release: true, overwrite: true))
+    assert(valid(error: verifyCanonicalMidBody(c: compiler, canonical: correct).error))
+    val readOnly = compiler.mid.store(body: replacement(reference: readType, pointee: pointee, release: true, overwrite: true))
+    assert(!valid(error: verifyCanonicalMidBody(c: compiler, canonical: readOnly).error))
+    val missingRelease = compiler.mid.store(body: replacement(reference: mutableType, pointee: pointee, release: false, overwrite: true))
+    assert(!valid(error: verifyCanonicalMidBody(c: compiler, canonical: missingRelease).error))
+    val standaloneRelease = compiler.mid.store(body: replacement(reference: mutableType, pointee: pointee, release: true, overwrite: false))
+    assert(!valid(error: verifyCanonicalMidBody(c: compiler, canonical: standaloneRelease).error))
+    print("ok")
+}

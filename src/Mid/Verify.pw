@@ -113,13 +113,31 @@ fn canonicalMidVerifySuccessors(c: Comp, term: MidTerminatorNode) -> Array[U64] 
     return successors
 }
 
-fn canonicalMidPhysicalFieldPath(c: Comp, place: MidPlaceNode) -> Bool {
+// Field and dereference paths denote physical storage. Dereferencing a
+// MutableRef permits replacement of its pointee; Ref never grants this
+// capability. Index paths still require the semantic writeback elaborator.
+fn canonicalMidWritablePhysicalPath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Bool {
+    mut val currentTerm: U64 = 0U64
+    if place.rootTag == 1U64 && place.local < body.locals.len { currentTerm = c.mid.locals[body.locals.start + place.local].typeTerm }
     mut val projectionI: U64 = 0U64
     while projectionI < place.projections.len {
-        if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
-        projectionI = projectionI + 1U64
+        val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
+        if projection.tag == 3U64 {
+            if !c.isMutableRefInst(ref: currentTerm) { return false }
+        } else if projection.tag != 1U64 { return false }
+        currentTerm = projection.typeTerm
+        projectionI += 1U64
     }
     return true
+}
+
+fn canonicalMidPlaceHasDeref(c: Comp, place: MidPlaceNode) -> Bool {
+    mut val index: U64 = 0U64
+    while index < place.projections.len {
+        if c.mid.projections[place.projections.start + index].tag == 3U64 { return true }
+        index += 1U64
+    }
+    return false
 }
 
 // Freeze deliberately stores each occurrence of a draft Place as a fresh row,
@@ -290,7 +308,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if !canonicalMidPhysicalFieldPath(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
@@ -298,7 +316,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 // is nevertheless observable through ARC/deinit, so the
                 // completed body must prove the lowering's explicit release
                 // immediately before transferring the replacement.
-                if destination.rootTag == 2U64 {
+                if destination.rootTag == 2U64 || canonicalMidPlaceHasDeref(c: c, place: destination) {
                     if statementI == 0U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     val previous: MidStatementNode = c.mid.statements[block.statements.start + statementI - 1U64]
                     if previous.tag != 3U64 || !canonicalMidSamePlace(c: c, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
@@ -337,7 +355,14 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if statement.tag == 3U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if !canonicalMidPhysicalFieldPath(c: c, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                // A pointee drop is only the release half of a replacement,
+                // never disposal of a separately owned aggregate/root.
+                if canonicalMidPlaceHasDeref(c: c, place: place) {
+                    if statementI + 1U64 >= block.statements.len { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                    val following = c.mid.statements[block.statements.start + statementI + 1U64]
+                    if following.tag != 2U64 || !canonicalMidSamePlace(c: c, leftId: statement.destination, rightId: following.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                }
                 if place.rootTag == 2U64 {
                     if !place.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 } else if place.rootTag != 1U64 || place.local >= states.count() || place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }

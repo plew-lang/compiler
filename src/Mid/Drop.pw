@@ -651,13 +651,14 @@ fn canonicalMidAppendRootPlace(c: inout Comp, body: MidBodyNode, local: U64) -> 
     return c.mid.places.count()
 }
 
-fn canonicalMidPhysicalFieldPlace(c: Comp, placeId: U64) -> Bool {
+fn canonicalMidPhysicalStoragePlace(c: Comp, placeId: U64) -> Bool {
     if placeId == 0U64 || placeId > c.mid.places.count() { return false }
     val place: MidPlaceNode = c.mid.places[placeId - 1U64]
     if place.projections.len == 0U64 { return false }
     mut val projectionI: U64 = 0U64
     while projectionI < place.projections.len {
-        if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
+        val tag: U64 = c.mid.projections[place.projections.start + projectionI].tag
+        if tag != 1U64 && tag != 3U64 { return false }
         projectionI = projectionI + 1U64
     }
     return true
@@ -796,7 +797,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
                             }
                             _ => {}
                         }
-                    } else if destination.rootTag == 2U64 || canonicalMidPhysicalFieldPlace(c: c, placeId: statement.destination) {
+                    } else if destination.rootTag == 2U64 || canonicalMidPhysicalStoragePlace(c: c, placeId: statement.destination) {
                         c.mid.statements.append(<MidStatementNode tag=3U64 destination=statement.destination />)
                     }
                 }

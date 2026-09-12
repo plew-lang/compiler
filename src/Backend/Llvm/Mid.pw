@@ -3841,7 +3841,8 @@ pub impl LlvmCtx {
         } else { return false }
         mut val projectionI: U64 = 0U64
         while projectionI < place.projections.len {
-            if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
+            val tag: U64 = c.mid.projections[place.projections.start + projectionI].tag
+            if tag != 1U64 && tag != 3U64 { return false }
             projectionI = projectionI + 1U64
         }
         val value: LLVMValueRef = self.midCanonicalReadPlace(c: inout c, body: body, place: place)
@@ -4281,11 +4282,14 @@ pub impl LlvmCtx {
                     }
                 } else if statement.tag == 2U64 || statement.tag == 8U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return <MidLlvmPreflight.AssignmentProjection /> }
+                    if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: statement.destination) { return <MidLlvmPreflight.AssignmentProjection /> }
                 } else if statement.tag == 10U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidLlvmPreflight.DropProjection /> }
                     val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                     if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= body.locals.len || !c.mid.locals[body.locals.start + place.local].isCaptureCell { return <MidLlvmPreflight.DropProjection /> }
-                } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 5U64 || statement.tag == 7U64 {
+                } else if statement.tag == 3U64 || statement.tag == 4U64 {
+                    if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: statement.destination) { return <MidLlvmPreflight.DropProjection /> }
+                } else if statement.tag == 5U64 || statement.tag == 7U64 {
                 } else { return <MidLlvmPreflight.ScopeExit /> }
                 statementI = statementI + 1U64
             }

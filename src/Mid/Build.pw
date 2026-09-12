@@ -371,6 +371,17 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
             projections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
             return <MidPlaceLookup found=true place=<MidPlace rootTag=basePlace.place.rootTag local=basePlace.place.local globalTarget=basePlace.place.globalTarget globalMutable=basePlace.place.globalMutable projections=projections typeTerm=typeTerm /> />
         }
+        Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidPlaceLookup /> }
+            val built: MidOperandBuild = materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex)
+            match built.error { MidBuildError.None => {} _ => { return <MidPlaceLookup /> } }
+            match built.operand { MidOperand.Copy(place: val place) => { return <MidPlaceLookup found=true place=place /> } _ => { return <MidPlaceLookup /> } }
+        }
+        Expr.Deref(base: val base) => {
+            val built: MidOperandBuild = materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
+            match built.error { MidBuildError.None => {} _ => { return <MidPlaceLookup /> } }
+            match built.operand { MidOperand.Copy(place: val place) => { return <MidPlaceLookup found=true place=place /> } _ => { return <MidPlaceLookup /> } }
+        }
         _ => { return <MidPlaceLookup /> }
     }
 }
@@ -1275,11 +1286,11 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
             if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
-            return materializeMidReferenceRead(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex)
+            return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex)
         }
         Expr.Deref(base: val base) => {
             if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
-            return materializeMidReferenceRead(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
+            return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
         }
         // An Array expression reaching Mid without a SemanticAggregate means
         // its Record-time expected-result producer was not closed. Do not
@@ -1295,7 +1306,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
 // Hold the evaluated reference in an ordinary owned temporary. Its evaluation
 // scope keeps the cell alive across later argument evaluation and the call;
 // drop elaboration, rather than LLVM-side pin bookkeeping, closes that share.
-fn materializeMidReferenceRead(c: inout Comp, state: inout MidBuildState, base: U64, typeTerm: U64, hasField: Bool, fieldIndex: U64) -> MidOperandBuild {
+fn materializeMidReferencePlace(c: inout Comp, state: inout MidBuildState, base: U64, typeTerm: U64, hasField: Bool, fieldIndex: U64) -> MidOperandBuild {
     val referenceTerm: U64 = c.semanticExprTerm(exprId: base)
     if referenceTerm == 0U64 || !c.isStrongRefInst(ref: referenceTerm) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
     val pointeeTerm: U64 = c.arena.typeAt(index: referenceTerm).args[0U64]
@@ -1673,6 +1684,7 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             while projection < destinationLookup.place.projections.count() {
                 match destinationLookup.place.projections[projection] {
                     MidProjection.Field(index: _, typeTerm: _) => {}
+                    MidProjection.Deref(typeTerm: _) => {}
                     _ => { physicalFieldPath = false }
                 }
                 projection += 1U64

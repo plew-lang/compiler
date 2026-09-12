@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef, Ref }
+
+unique struct Cell {
+    pub mut val name: String
+    deinit { print(self.name) }
+}
+pub impl Cell { factory }
+struct Holder { pub val child: MutableRef[Cell] }
+pub impl Holder { factory }
+
+fn reset(reference: inout MutableRef[Cell]) -> String {
+    reference = <MutableRef[Cell] value=<Cell name=("new" + "-cell") /> />
+    print("rhs")
+    return "changed" + "-old"
+}
+fn replace(reference: inout MutableRef[Cell]) {
+    reference->name = reset(reference: inout reference)
+}
+fn nested(holder: Ref[Holder]) {
+    holder->child->name = "nested" + "-value"
+}
+fn main() {
+    mut val reference: MutableRef[Cell] = <MutableRef[Cell] value=<Cell name=("old" + "-cell") /> />
+    replace(reference: inout reference)
+    print(reference->name)
+    val holder: Ref[Holder] = <Ref[Holder] value=<Holder child=reference /> />
+    nested(holder: holder)
+    print(reference->name)
+}
