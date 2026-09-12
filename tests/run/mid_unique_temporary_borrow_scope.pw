@@ -1,0 +1,35 @@
+import @Std/Io with { print }
+
+unique struct Resource {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+pub impl Resource {
+    factory
+    fn positive() -> Bool { return self.tag > 0 }
+}
+fn resource(tag: I64) -> Resource { return <Resource tag=tag /> }
+fn positive(item: borrow Resource) -> Bool { return item.tag > 0 }
+fn later() -> Bool {
+    print("later")
+    return true
+}
+fn observe(first: Bool, second: Bool) {
+    if first && second { print("observe") }
+}
+fn consume(item: move Resource) { print("consume") }
+fn main() {
+    // The borrowed inner-call result lives through the outer call and all of
+    // its argument evaluation, rather than dying on the inner call edge.
+    observe(first: positive(item: resource(tag: 1)), second: later())
+    print("after argument")
+    observe(first: resource(tag: 2).positive(), second: later())
+    print("after receiver")
+    observe(first: positive(item: <Resource tag=4 />), second: later())
+    print("after aggregate")
+    val owner: Resource = resource(tag: 3)
+    observe(first: positive(item: borrow owner), second: later())
+    print("owner remains")
+    consume(item: move owner)
+    print("after move")
+}

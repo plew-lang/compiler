@@ -9,7 +9,7 @@ import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolut
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, canonicalMidBorrowOperand, canonicalMidMoveOperand }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
 
 export enum MidInstantiateError {
     None
@@ -741,11 +741,26 @@ fn canonicalRemapTarget(targets: Array[U64], target: U64) -> U64 {
     return target + (targets[sourceCount] - sourceCount)
 }
 
-fn canonicalBorrowOperand(c: inout Comp, operand: U64) -> U64 {
+fn canonicalBorrowOperand(c: inout Comp, operand: U64, locals: MidRange) -> U64 {
+    if operand == 0U64 || operand > c.mid.operands.count() { return 0U64 }
+    val value = c.mid.operands[operand - 1U64]
+    if value.tag == 2U64 {
+        // A computed unique value is published as Move for an owning use.
+        // A selected guaranteed use instead borrows its existing temporary
+        // home. Keep that home's full-expression scope and eventual Drop;
+        // neither consume it nor add a call-edge cleanup. This is not a
+        // rewrite of an authored move from a binding or a projected place.
+        if value.place == 0U64 || value.place > c.mid.places.count() { return 0U64 }
+        val place = c.mid.places[value.place - 1U64]
+        if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= locals.len { return 0U64 }
+        val local = c.mid.locals[locals.start + place.local]
+        if !local.isUnique || local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace { return 0U64 }
+        return canonicalMidBorrowPlace(arena: inout c.mid, place: value.place, capability: 1U64)
+    }
     return canonicalMidBorrowOperand(arena: inout c.mid, operandId: operand, capability: 1U64)
 }
 
-fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallReceiverPassing) -> U64 {
+fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallReceiverPassing, locals: MidRange) -> U64 {
     if receiver == 0U64 || receiver > c.mid.callReceivers.count() { return 0U64 }
     val source: MidCallReceiverNode = c.mid.callReceivers[receiver - 1U64]
     match passing {
@@ -755,7 +770,9 @@ fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallRecei
         }
         CallReceiverPassing.Borrow => {
             if source.tag != 2U64 { return 0U64 }
-            c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=canonicalBorrowOperand(c: inout c, operand: source.operand) />)
+            val operand = canonicalBorrowOperand(c: inout c, operand: source.operand, locals: locals)
+            if operand == 0U64 { return 0U64 }
+            c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=operand />)
             return c.mid.callReceivers.count()
         }
         CallReceiverPassing.Inout => {
@@ -828,7 +845,7 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
 // operation owns ABI validation, argument conversion and conversion cleanup.
 // It appends statements/terminators, but leaves block and local registration
 // to the surrounding rewrite, using nextLocal for conversion temporaries.
-export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bodyId: U64, environment: BodyInstance, itemRef: U64, continuation: U64, cleanupTarget: U64, nextLocal: inout U64) -> MidCanonicalCallMaterialization {
+export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, locals: MidRange, bodyId: U64, environment: BodyInstance, itemRef: U64, continuation: U64, cleanupTarget: U64, nextLocal: inout U64) -> MidCanonicalCallMaterialization {
     // Same-error `try` propagation has no callable at all. It is still
     // represented by the same parametric TryConversion site so the builder
     // does not inspect a BodyInstance; freeze it here into an ordinary copy
@@ -877,7 +894,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bo
     val callTarget: U64 = instantiateCanonicalCallTarget(c: inout c, targetId: term.callTarget, bodyId: bodyId, error: inout targetError)
     if callTarget == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingCallResolution /> /> }
     val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
-    val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing)
+    val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing, locals: locals)
     if receiver == 0U64 {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] Mid instantiate-passing-reject stage=receiver resolution=")
@@ -946,7 +963,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, bo
             cleanupPlaces.append(temporaryPlace)
         }
         match passing {
-            CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand) }
+            CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand, locals: locals) }
             CallArgumentPassing.Move => {
                 val source: MidOperandNode = c.mid.operands[operand - 1U64]
                 if source.tag != 2U64 {
@@ -1032,7 +1049,7 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
         val instantiatedStatementCount: U64 = c.mid.statements.count() - statementStart
         val terminator: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
         if terminator.tag == 4U64 {
-            val call: MidCanonicalCallMaterialization = materializeCanonicalMidCall(c: inout c, term: terminator, bodyId: bodyId, environment: environment, itemRef: itemRef, continuation: canonicalRemapTarget(targets: targets, target: terminator.target), cleanupTarget: canonicalRemapTarget(targets: targets, target: blockI) + 1U64, nextLocal: inout nextLocal)
+            val call: MidCanonicalCallMaterialization = materializeCanonicalMidCall(c: inout c, term: terminator, locals: source.locals, bodyId: bodyId, environment: environment, itemRef: itemRef, continuation: canonicalRemapTarget(targets: targets, target: terminator.target), cleanupTarget: canonicalRemapTarget(targets: targets, target: blockI) + 1U64, nextLocal: inout nextLocal)
             if midInstantiateHasError(error: call.error) { return <MidCanonicalInstantiation error=call.error /> }
             c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=instantiatedStatementCount + call.sourceStatementCount /> terminator=call.sourceTerminator />)
             outputBlockLen = outputBlockLen + 1U64

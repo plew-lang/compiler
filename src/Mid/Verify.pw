@@ -64,6 +64,23 @@ fn canonicalMidVerifyConsumeOperand(c: Comp, body: MidBodyNode, states: inout Ar
             }
         } else if !canonicalMidGlobalRootIsValid(c: c, place: storage) { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
     }
+    if operand.tag == 3U64 {
+        if operand.capability != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+        val borrowed = c.mid.places[operand.place - 1U64]
+        if borrowed.rootTag == 1U64 {
+            if borrowed.local >= body.locals.len || borrowed.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=borrowed.local /> }
+            val local = c.mid.locals[body.locals.start + borrowed.local]
+            // A guaranteed parameter/capture is owned by its caller. An owned
+            // unique local, including a borrowed computed value, must still
+            // be alive here; borrowing does not revive a consumed owner.
+            if local.isUnique && !local.isBorrowed && !local.isInout && !(local.isParameter && !local.ownsAtEntry) {
+                match states[borrowed.local] {
+                    MidOwnership.Owned => {}
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=borrowed.local /> }
+                }
+            }
+        }
+    }
     if operand.tag != 2U64 { return <MidVerification /> }
     if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
