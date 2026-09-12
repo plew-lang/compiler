@@ -86,6 +86,9 @@ for pw in tests/panic/*.pw; do
     [ -f "${pw%.pw}.panic" ] || hygiene="$hygiene no-golden:$pw"
 done
 
+# Verify that execution failures cannot pass a golden-output comparison.
+python3 ./test-runner-exit-status.py
+
 # --- run/ : compile, link, run, compare stdout to the golden .out ---
 run_total=$(count_cases tests/run/*.pw)
 progress_start run "$run_total"
@@ -109,8 +112,10 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
     if ! clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
     infile="tests/run/$name.in"
-    if [ -f "$infile" ]; then got=$("$bin" < "$infile" 2>/dev/null) || true
-    else got=$("$bin" 2>/dev/null) || true; fi
+    status=0
+    if [ -f "$infile" ]; then got=$("$bin" < "$infile" 2>/dev/null) || status=$?
+    else got=$("$bin" 2>/dev/null) || status=$?; fi
+    if [ "$status" -ne 0 ]; then echo "FAIL $name(exit:$status)"; exit 0; fi
     if [ "$got" = "$(cat "$out")" ]; then echo "PASS $name"; else echo "FAIL $name"; fi
 ' sh | progress_stream run "$run_total")
 pass=$(printf '%s\n' "$run_results" | grep -c '^PASS' || true)
@@ -843,7 +848,9 @@ part_results=$(printf '%s\n' tests/part/*/Main.pw tests/part/Main.pw | xargs -P 
     ll="/tmp/t_part_$name.ll"; bin="/tmp/t_part_$name"
     if ! "$PLEWC" "$main" > "$ll" 2>/dev/null; then echo "FAIL part/$name(reject)"; exit 0; fi
     if ! clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
-    got=$("$bin" 2>/dev/null) || true
+    status=0
+    got=$("$bin" 2>/dev/null) || status=$?
+    if [ "$status" -ne 0 ]; then echo "FAIL part/$name(exit:$status)"; exit 0; fi
     if [ "$got" = "$(cat "$dir/Main.out")" ]; then echo "PASS part/$name"; else echo "FAIL part/$name"; fi
 ' sh | progress_stream part "$part_total")
 qpass=$(printf '%s\n' "$part_results" | grep -c '^PASS' || true)
