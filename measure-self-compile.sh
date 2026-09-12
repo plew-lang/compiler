@@ -159,46 +159,8 @@ with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as t
         bufsize=0,
     )
     assert process.stderr is not None
-    selector = selectors.DefaultSelector()
-    selector.register(process.stderr, selectors.EVENT_READ)
-    while selector.get_map():
-        timeout = 5
-        if next_sample is not None:
-            timeout = max(0, min(timeout, next_sample - time.monotonic()))
-        ready = selector.select(timeout=timeout)
-        if not ready:
-            now = time.monotonic()
-            if next_sample is not None and now >= next_sample:
-                if process.poll() is None and last_event != "(no trace event yet)":
-                    sample_number += 1
-                    sample_path = os.path.join(out_dir, f"cpu-sample-{sample_number:03d}.txt")
-                    # `sample` reports native frames, including plew_rawbuf_*,
-                    # malloc, LLVM and generated Plew functions.  Do not fold the
-                    # diagnostic duration into wall-time performance comparisons.
-                    subprocess.run(
-                        [sample_command, str(process.pid), str(sample_duration), "-file", sample_path],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                    )
-                    cpu_samples.write(
-                        f"{sample_number}\t{now - started:.6f}\t{last_event}\t{os.path.basename(sample_path)}\n"
-                    )
-                    cpu_samples.flush()
-                    print(
-                        f"[perf] cpu-sample={sample_number} t={now - started:.3f}s last={last_event}",
-                        file=sys.stderr,
-                    )
-                next_sample = time.monotonic() + sample_interval
-            if now - last_progress >= 60:
-                process.terminate()
-                print(f"[perf] no compiler phase progress for 60s; terminating at last={last_event}", file=sys.stderr)
-                break
-            continue
-        raw = process.stderr.readline()
-        if not raw:
-            selector.unregister(process.stderr)
-            continue
+    def record_line(raw):
+        global last_event, last_progress, event_count
         elapsed = time.monotonic() - started
         stderr_log.write(raw)
         text = raw.decode("utf-8", errors="replace")
@@ -220,8 +182,95 @@ with open(llvm_path, "wb") as llvm, open(trace_path, "w", encoding="utf-8") as t
             if not trace_codegen:
                 sys.stderr.write(text)
                 sys.stderr.flush()
-    status = process.wait()
-elapsed = time.monotonic() - started
+
+    def stop_child(child):
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+        return child.wait()
+
+    selector = selectors.DefaultSelector()
+    os.set_blocking(process.stderr.fileno(), False)
+    selector.register(process.stderr, selectors.EVENT_READ)
+    pending_bytes = b""
+    sampler = None
+    sampler_started = None
+    sampler_timed_out = False
+    sample_status = open(os.path.join(out_dir, "cpu-sample-status.tsv"), "w", encoding="utf-8")
+    sample_status.write("sample\texit_status\treason\n")
+    try:
+        while selector.get_map() or process.poll() is None:
+            now = time.monotonic()
+            if sampler is not None:
+                result = sampler.poll()
+                if result is None and not sampler_timed_out and now - sampler_started > sample_duration + 5:
+                    sampler.kill()
+                    sampler_timed_out = True
+                reason = "timeout" if sampler_timed_out else "completed"
+                if result is not None:
+                    sample_status.write(f"{sample_number}\t{result}\t{reason}\n")
+                    sample_status.flush()
+                    sampler = None
+                    next_sample = time.monotonic() + sample_interval
+            # Schedule independently of stderr readiness. A continuously verbose
+            # compiler must neither starve sampling nor block behind it.
+            if sampler is None and next_sample is not None and now >= next_sample:
+                if process.poll() is None and last_event != "(no trace event yet)":
+                    sample_number += 1
+                    sample_path = os.path.join(out_dir, f"cpu-sample-{sample_number:03d}.txt")
+                    sampler = subprocess.Popen(
+                        [sample_command, str(process.pid), str(sample_duration), "-file", sample_path],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    sampler_started = time.monotonic()
+                    sampler_timed_out = False
+                    cpu_samples.write(f"{sample_number}\t{now - started:.6f}\t{last_event}\t{os.path.basename(sample_path)}\n")
+                    cpu_samples.flush()
+                    print(f"[perf] cpu-sample={sample_number} t={now - started:.3f}s last={last_event}", file=sys.stderr)
+                    next_sample = None
+                else:
+                    next_sample = now + sample_interval
+            if now - last_progress >= 60 and process.poll() is None:
+                print(f"[perf] no compiler phase progress for 60s; terminating at last={last_event}", file=sys.stderr)
+                stop_child(process)
+            timeout = 0.1 if sampler is not None else 1
+            if next_sample is not None:
+                timeout = max(0, min(timeout, next_sample - time.monotonic()))
+            if not selector.get_map():
+                try:
+                    process.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    pass
+                continue
+            for key, _ in selector.select(timeout=timeout):
+                chunk = os.read(key.fd, 65536)
+                if not chunk:
+                    selector.unregister(process.stderr)
+                    if pending_bytes:
+                        record_line(pending_bytes)
+                        pending_bytes = b""
+                    continue
+                pending_bytes += chunk
+                lines = pending_bytes.split(b"\n")
+                pending_bytes = lines.pop()
+                for line in lines:
+                    record_line(line + b"\n")
+        status = process.wait()
+        compiler_finished = time.monotonic()
+    finally:
+        if sampler is not None:
+            result = stop_child(sampler)
+            sample_status.write(f"{sample_number}\t{result}\tcompiler-ended\n")
+        sample_status.close()
+        selector.close()
+        process.stderr.close()
+        if process.poll() is None:
+            stop_child(process)
+
+elapsed = compiler_finished - started
 
 with open(os.path.join(out_dir, "summary.txt"), "w", encoding="utf-8") as summary:
     summary.write(f"wall_seconds={elapsed:.6f}\n")
