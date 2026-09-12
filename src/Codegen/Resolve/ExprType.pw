@@ -221,6 +221,21 @@ pub impl Comp {
         if f.isProvided && f.originTraitOwner != 0U64 {
             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
             val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
+            // Associated outputs belong to the declared trait owner. Do not
+            // construct a conformance proof for an output it does not declare.
+            val traitIndex = self.decls.traitIndexByOffset(offset: f.originTraitOwner)
+            if traitIndex >= self.decls.traitCount() { return 0U64 }
+            val trait = self.decls.traitAt(index: traitIndex)
+            mut val declaresItem = false
+            mut val index: U64 = 0U64
+            while index < trait.assocTypes.count() {
+                if self.traitBindAt(binds: trait.assocTypes, index: index).nameId == itemId {
+                    declaresItem = true
+                    break
+                }
+                index += 1U64
+            }
+            if !declaresItem { return 0U64 }
             val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />)
             itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
         }

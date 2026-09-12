@@ -140,6 +140,11 @@ pub impl Arena {
 pub impl Decls {
     fn traitCount() -> U64 { return self.traits.count() }
     fn traitAt(index: U64) -> TraitDef { return self.traits[index] }
+    fn traitIndexByOffset(offset: U64) -> U64 {
+        val entry = self.traitsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return self.traits.count() }
+        return entry - 1U64
+    }
     inout fn registerTrait(declaration~: TraitDef) {
         if self.traitsByOffset.getOr(key: declaration.nameStart, fallback: 0U64) == 0U64 {
             self.traitsByOffset[declaration.nameStart] = self.traits.count() + 1U64
