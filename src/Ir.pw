@@ -7,7 +7,6 @@ part ./Ir/TraitOwners
 part ./Ir/Types
 part ./Ir/DeclarationNames
 part ./Ir/BodyInstances
-part ./Ir/MonoWork
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -2943,8 +2942,7 @@ export struct MonoWork {
     pub mut val fnTypes: Array[U64] = []
     pub mut val fnThunks: Array[U64] = []
     pub mut val captures: Array[CaptureEntry] = []
-    mut val arrayElems: Array[Bind] = []
-    mut val arrayElementNames: Set[U64] = Set.new()
+    pub mut val arrayElems: Array[Bind] = []
     pub mut val boxedFields: Array[U64] = []
     // Concrete bodies reachable from program roots.  The frontend closes this
     // worklist before backend emission, so backend never has to resolve a call

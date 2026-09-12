@@ -99,8 +99,8 @@ pub impl Comp {
     // it is not a recorded element (genCElem falls back to the name path then).
     inout fn arrayElemRef(start: U64, len: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElementCount() {
-            val ae: Bind = self.monoWork.arrayElementAt(index: i)
+        while i < self.monoWork.arrayElems.count() {
+            val ae: Bind = self.monoWork.arrayElems[i]
             if spansEqual(c: inout self, aStart: ae.nameStart, aLen: ae.nameLen, bStart: start, bLen: len) {
                 return ae.fieldStart
             }
@@ -114,8 +114,8 @@ pub impl Comp {
     // type's head name. Used to recover a nested array's element name in exprType.
     inout fn arrayElemNameForRef(elemRef: U64) -> Bind {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElementCount() {
-            val ae: Bind = self.monoWork.arrayElementAt(index: i)
+        while i < self.monoWork.arrayElems.count() {
+            val ae: Bind = self.monoWork.arrayElems[i]
             // match by mangle (type refs are not interned, so the same type can have
             // a different index than the one stored at registration). Skip a non-ground
             // (template) entry like `Array[T]`'s element `T`: sameMangle resolves through

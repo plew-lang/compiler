@@ -10,8 +10,14 @@ pub impl Comp {
     // lowerType when it lowers an `Array[E]`.
     inout fn recordArrayElem(ty: PType) {
         if ty.isArray {
-            val nameId = intern(c: inout self, start: ty.start, len: ty.len)
-            if self.monoWork.hasArrayElementNamed(nameId: nameId) { return }
+            mut val i: U64 = 0
+            while i < self.monoWork.arrayElems.count() {
+                val e: Bind = self.monoWork.arrayElems[i]
+                if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
+                    return
+                }
+                i += 1
+            }
             mut val elemRef: U64 = 0
             if ty.ref < self.arena.typeCount() {
                 val at: TypeRef = self.arena.typeAt(index: ty.ref)
@@ -22,7 +28,7 @@ pub impl Comp {
             // a nested array element (`Array[Array[I32]]`) needs the inner
             // `PlewArray_<inner>` registered (and emitted) first.
             self.ensureArrayElemDeps(elemRef: elemRef)
-            self.monoWork.registerArrayElement(element: <Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />, nameId: nameId)
+            self.monoWork.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
         }
     }
 
