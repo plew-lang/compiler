@@ -3,6 +3,7 @@
 // expressions are never evaluated or compared, so even a CALL index changes nothing.
 import @Std/Io with { print }
 struct Cell { pub mut val v: I64 }
+pub impl Cell { factory }
 fn pick() -> U64 { return 0 }
 fn touch(a: inout Cell, b: inout I64) { a.v = 1  b = 2 }
 fn main() {

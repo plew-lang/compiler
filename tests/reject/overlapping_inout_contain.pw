@@ -2,6 +2,7 @@
 // — statically certain, so it is a compile error (not a runtime check).
 import @Std/Io with { print }
 struct Pair { pub mut val n: I64  pub mut val m: I64 }
+pub impl Pair { factory }
 fn f(a: inout Pair, b: inout I64) { a.n = 1I64  b = 2I64 }
 fn main() {
     mut val s: Pair = <Pair n=0 m=0 />

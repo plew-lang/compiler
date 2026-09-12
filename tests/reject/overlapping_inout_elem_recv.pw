@@ -3,6 +3,7 @@
 // — rejected statically whatever the indices (per-variable granularity, like Swift).
 import @Std/Io with { print }
 struct Pair { pub mut val n: I64  pub mut val m: I64 }
+pub impl Pair { factory }
 pub impl Pair {
     inout fn bump(other: inout I64) { self.n = self.n + 1  other = other + 10 }
 }

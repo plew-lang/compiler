@@ -2,6 +2,7 @@
 // the same place (spec/03 case ①): the receiver IS an inout position.
 import @Std/Io with { print }
 struct N { pub mut val v: I64 }
+pub impl N { factory }
 pub impl N { inout fn merge(other: inout N) { self.v = self.v + other.v  other.v = 0I64 } }
 fn main() {
     mut val n: N = <N v=7 />
