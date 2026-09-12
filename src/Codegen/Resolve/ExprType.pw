@@ -154,7 +154,7 @@ pub impl Comp {
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
         val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: receiverRef)
-        if receiverMatch.conformIdx == 0U64 { return <InstanceEnvironment /> }
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 { return <InstanceEnvironment /> }
         mut val fullArgs: Array[U64] = []
         mut val fi: U64 = 0U64
         while fi < f.typeParams.count() {
@@ -175,9 +175,38 @@ pub impl Comp {
                     pi += 1U64
                 }
             }
-            if target >= fullArgs.count() { target = binding.binder }
+            if binding.paramId == 0U64 && target >= fullArgs.count() { target = binding.binder }
             if target < fullArgs.count() {
                 fullArgs.set(i: target, value: binding.term)
+            }
+            bi += 1U64
+        }
+        // Nominal parameters and conformance-pattern parameters have different
+        // identities. A generated callable can carry the former even when its
+        // applicability pattern uses the latter. Bind nominal parameters from
+        // their own receiver declaration, never by a witness's array position.
+        val receiver = self.arena.typeAt(index: receiverRef)
+        mut val nominalParams: Array[Bind] = []
+        val structIndex = self.genericStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+        if structIndex < self.arena.structCount() {
+            nominalParams = self.arena.structAt(index: structIndex).typeParams
+        } else {
+            val enumIndex = self.genericEnumIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+            if enumIndex < self.arena.enumCount() { nominalParams = self.arena.enumAt(index: enumIndex).typeParams }
+        }
+        bi = 0U64
+        while bi < nominalParams.count() && bi < receiver.args.count() {
+            mut val pi: U64 = 0U64
+            while pi < f.typeParams.count() {
+                val parameter = self.funcBindAt(binds: f.typeParams, index: pi)
+                if nominalParams[bi].paramId != 0U64 && nominalParams[bi].paramId == parameter.paramId {
+                    if fullArgs[pi] != 0U64 && !self.typeRefEq(a: fullArgs[pi], b: receiver.args[bi]) {
+                        self.errorAt(offset: f.defOffset, msg: "internal error: receiver substitutions disagree for one parameter")
+                        return <InstanceEnvironment />
+                    }
+                    fullArgs.set(i: pi, value: receiver.args[bi])
+                }
+                pi += 1U64
             }
             bi += 1U64
         }
@@ -204,7 +233,28 @@ pub impl Comp {
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
-        return <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />
+        return self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />)
+    }
+
+    inout fn signatureTypeArguments(f: Func, environment: InstanceEnvironment) -> Array[U64] {
+        mut val args: Array[U64] = []
+        mut val pi: U64 = 0U64
+        while pi < f.typeParams.count() {
+            val parameter = self.funcBindAt(binds: f.typeParams, index: pi)
+            mut val value: U64 = 0U64
+            mut val bi: U64 = 0U64
+            while bi < environment.params.count() && bi < environment.args.count() {
+                val binding = environment.params[bi]
+                if (parameter.paramId != 0U64 && parameter.paramId == binding.paramId) || (parameter.paramId == 0U64 && binding.paramId == 0U64 && parameter.nameStart == binding.nameStart && parameter.nameLen == binding.nameLen) {
+                    value = environment.args[bi]
+                    break
+                }
+                bi += 1U64
+            }
+            args.append(value)
+            pi += 1U64
+        }
+        return args
     }
 
     // A provided member's associated Item is selected by the same receiver
@@ -258,53 +308,24 @@ pub impl Comp {
         return self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: environment.receiverRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: environment.receiverRef))
     }
 
-    // The concrete-receiver counterpart.  It uses the same declaration binder
-    // vector but preserves the legacy Self setup for a non-generic nominal
-    // receiver whose methodReceiverEnvironment is intentionally absent.
-    inout fn groundConcreteFinalMethodSignatureTerm(f: Func, recvTy: TypeInfo, args: ArgRange, signatureTerm: U64) -> U64 {
-        if signatureTerm == 0U64 || recvTy.nameLen == 0U64 || self.isGenericInst(ref: recvTy.ref) {
-            return 0U64
-        }
-        val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
-        if f.typeParams.count() > 0U64 {
-            if inferred.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: inferred)) {
-                return 0U64
-            }
-        }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedSelf: U64 = self.cur.selfRef
-        val savedItem: U64 = self.cur.itemRef
-        self.setSelfItemEnv(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, recvInstRef: 0U64)
-        self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
-        self.cur.typeArgs = inferred
-        val grounded: U64 = self.groundTypeRef(ref: signatureTerm)
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedSelf
-        self.cur.itemRef = savedItem
-        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) { return grounded }
-        return 0U64
-    }
-
     // Ground a final method callable through its receiver instance.  `a.m()` and
     // `a#Source.m()` have already converged to the same `Func`; they must therefore
     // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
     // this here (rather than in either syntax arm) makes source qualification a pure
     // selection concern, never a second generic-inference mechanism.
     inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
-        return self.groundFinalMethodSignatureTerm(f: f, receiverRef: recvTy.ref, args: args, signatureTerm: f.retTy)
+        mut val receiver = recvTy.ref
+        if receiver == 0U64 && recvTy.nameLen != 0U64 { receiver = self.simpleTypeRef(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen) }
+        return self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: f.retTy)
     }
 
     // Parameter contexts are part of the same immutable CallTemplate contract
     // as a return.  In particular this maps a method/impl ParamId, which
     // groundUnderInst cannot see, through the receiver-selected environment.
     inout fn groundFinalMethodParameter(f: Func, recvTy: TypeInfo, args: ArgRange, parameterTerm: U64) -> U64 {
-        mut val grounded: U64 = self.groundFinalMethodSignatureTerm(f: f, receiverRef: recvTy.ref, args: args, signatureTerm: parameterTerm)
-        if grounded == 0U64 {
-            grounded = self.groundConcreteFinalMethodSignatureTerm(f: f, recvTy: recvTy, args: args, signatureTerm: parameterTerm)
-        }
-        return grounded
+        mut val receiver = recvTy.ref
+        if receiver == 0U64 && recvTy.nameLen != 0U64 { receiver = self.simpleTypeRef(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen) }
+        return self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: parameterTerm)
     }
 
     // `fnArgsAllGround` is intentionally stricter: Mono may only enqueue a
@@ -319,13 +340,6 @@ pub impl Comp {
             i += 1U64
         }
         return true
-    }
-
-    // The non-generic receiver half of the same final-callable calculation.  `Self`
-    // and `Item` are receiver-relative even when the receiver itself has no type
-    // arguments; method-owned parameters are inferred from the call arguments.
-    inout fn groundConcreteFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
-        return self.groundConcreteFinalMethodSignatureTerm(f: f, recvTy: recvTy, args: args, signatureTerm: f.retTy)
     }
 
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
@@ -1012,10 +1026,6 @@ pub impl Comp {
                         if grounded != 0U64 {
                             return self.typeInfoOfRef(ref: grounded)
                         }
-                        val concreteGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef), args: args)
-                        if concreteGrounded != 0U64 {
-                            return self.typeInfoOfRef(ref: concreteGrounded)
-                        }
                         return self.declaredRetInfo(f: mf)
                     }
                 }
@@ -1196,10 +1206,6 @@ pub impl Comp {
                         val receiverGrounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args)
                         if receiverGrounded != 0U64 {
                             return self.typeInfoOfRef(ref: receiverGrounded)
-                        }
-                        val concreteReceiverGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: rt, args: args)
-                        if concreteReceiverGrounded != 0U64 {
-                            return self.typeInfoOfRef(ref: concreteReceiverGrounded)
                         }
                         // a non-generic receiver whose method returns a generic instantiation
                         // (`Counter.next() -> Optional[I64]`): keep the full ref so the caller

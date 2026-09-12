@@ -483,16 +483,7 @@ pub impl Comp {
             }
         }
         val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: returnReceiver, args: args)
-        mut val result: U64 = self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: f.retTy)
-        // `groundFinalMethodReturn` preserves symbolic receiver binders. A
-        // non-generic receiver has no such environment, and is instead the
-        // concrete half of the same final-callable calculation. Both are
-        // frontend type facts; leaving the latter to exprType would make an
-        // ordinary `String.bytes()[0]` force Mono to reconstruct a method
-        // result from the shared AST.
-        if result == 0U64 {
-            result = self.groundConcreteFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
-        }
+        val result: U64 = self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: f.retTy)
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected
         // callee so every downstream consumer sees the same method/impl
@@ -513,7 +504,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, resultTerm: result, proof: proof, receiverTypeTerm: returnReceiver)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result, proof: proof, receiverTypeTerm: returnReceiver)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen

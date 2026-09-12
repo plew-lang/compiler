@@ -883,23 +883,11 @@ pub impl Comp {
         val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
         mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if fnIdx < self.arena.functionCount() {
-            val f: Func = self.lexicalFunction(f: self.arena.functionAt(index: fnIdx))
-            // A copied provided body still contains the source trait's
-            // lexical `Self` ParamId.  Bind it here with the concrete
-            // conformer, alongside ordinary method/receiver binders.
-            if (f.isProvided || self.methodRecvIsTrait(f: f)) && f.provTraitOwner != 0U64 {
-                mut val ti: U64 = 0U64
-                while ti < self.decls.traitCount() {
-                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                    if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
-                        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
-                        params.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=traitDef.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
-                        values.append(canonicalRecv)
-                        break
-                    }
-                    ti += 1U64
-                }
-            }
+            // args belongs to the selected callable, whose binder vector can
+            // include receiver parameters before the source method's own
+            // parameters. Bind that exact vector by ParamId; lexicalFunction
+            // owns source lookup, not the positions in this argument list.
+            val f: Func = self.arena.functionAt(index: fnIdx)
             mut val i: U64 = 0U64
             while i < f.typeParams.count() && i < args.count() {
                 params.append(self.funcBindAt(binds: f.typeParams, index: i))
@@ -941,7 +929,41 @@ pub impl Comp {
                 }
             }
         }
-        return <InstanceEnvironment params=params args=values receiverRef=canonicalRecv proof=proof />
+        val environment = <InstanceEnvironment params=params args=values receiverRef=canonicalRecv proof=proof />
+        if fnIdx >= self.arena.functionCount() { return environment }
+        return self.withLexicalSelfBinding(f: self.arena.functionAt(index: fnIdx), environment: environment)
+    }
+
+    // The lexical trait Self is a ParamId, including below nominal type
+    // constructors. Both signature queries and executable bodies bind it from
+    // the selected receiver; Cursor's legacy Self spelling is not a binder.
+    inout fn withLexicalSelfBinding(f: Func, environment: InstanceEnvironment) -> InstanceEnvironment {
+        val declaration: Func = self.lexicalFunction(f: f)
+        if !(declaration.isProvided || self.methodRecvIsTrait(f: declaration)) || declaration.provTraitOwner == 0U64 { return environment }
+        val index = self.decls.traitIndexByOffset(offset: declaration.provTraitOwner)
+        if index >= self.decls.traitCount() { return environment }
+        val traitDef = self.decls.traitAt(index: index)
+        if traitDef.selfParamId == 0U64 { return environment }
+        mut val i: U64 = 0U64
+        while i < environment.params.count() {
+            if environment.params[i].paramId == traitDef.selfParamId {
+                if i >= environment.args.count() || !self.typeRefEq(a: environment.args[i], b: environment.receiverRef) {
+                    self.errorAt(offset: declaration.defOffset, msg: "internal error: lexical Self binding conflicts with selected receiver")
+                }
+                return environment
+            }
+            i += 1U64
+        }
+        val name = self.kwSpan(kw: "Self", kwLen: 4U64)
+        mut val params: Array[Bind] = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) paramId=traitDef.selfParamId fieldStart=name.fieldStart fieldLen=name.fieldLen />]
+        mut val values: Array[U64] = [environment.receiverRef]
+        i = 0U64
+        while i < environment.params.count() && i < environment.args.count() {
+            params.append(environment.params[i])
+            values.append(environment.args[i])
+            i += 1U64
+        }
+        return <InstanceEnvironment params=params args=values receiverRef=environment.receiverRef proof=environment.proof />
     }
 
     inout fn sameInstanceEnvironment(a: InstanceEnvironment, b: InstanceEnvironment) -> Bool {
@@ -1133,6 +1155,10 @@ pub impl Comp {
             i += 1U64
         }
         eprint(text: stringFromBytesUnchecked(bytes))
+        if t.paramId != 0U64 {
+            eprint(text: "@")
+            eprintU64(n: t.paramId)
+        }
         if t.assocNameId != 0U64 {
             eprint(text: ".")
             bytes = []
