@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+fn lower() -> I64 { print(11I64) return 2I64 }
+fn upper() -> I64 { print(22I64) return 5I64 }
+fn main() {
+    val open: HalfOpenRange[I64] = 1 ..< 4
+    val closed: ClosedRange[U64] = 3 ..= 6
+    print(open.start)
+    print(open.end)
+    print(closed.start)
+    print(closed.end)
+    val ordered = lower() ..< upper()
+    print(ordered.start)
+    print(ordered.end)
+}

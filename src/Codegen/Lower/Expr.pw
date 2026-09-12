@@ -341,6 +341,32 @@ pub impl Comp {
         return result
     }
 
+    // Range syntax is fixed sugar for ordinary aggregate construction. Keep
+    // both endpoint expressions in source order and let the common Make
+    // inference/checking pipeline determine their element type.
+    inout fn lowerSyntaxRange(expr: SyntaxExpr, ctxRef: U64 = 0U64) -> U64 {
+        mut val name: String = "HalfOpenRange"
+        if expr.flag0 { name = "ClosedRange" }
+        val typeName: Bind = self.internBytes(s: name)
+        val startName: Bind = self.internBytes(s: "start")
+        val endName: Bind = self.internBytes(s: "end")
+        mut val typeRef: U64 = 0U64
+        if ctxRef != 0U64 && ctxRef < self.arena.typeCount() {
+            val context: TypeRef = self.arena.typeAt(index: ctxRef)
+            if context.nameId == typeName.nameId && context.args.count() > 0U64 { typeRef = ctxRef }
+        }
+        val low: U64 = self.lowerSyntaxExpr(id: expr.child0)
+        val high: U64 = self.lowerSyntaxExpr(id: expr.child1)
+        val fields: Array[MakeField] = [
+            <MakeField nameStart=startName.nameStart nameLen=startName.nameLen value=low offset=expr.span.start />,
+            <MakeField nameStart=endName.nameStart nameLen=endName.nameLen value=high offset=expr.span.start />
+        ]
+        val result: U64 = self.pushExpr(e: <Expr.Make typeStart=typeName.nameStart typeLen=typeName.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=typeRef fields=self.pushMakeFields(fields: fields) />)
+        self.arena.exprSpanStart[result] = expr.span.start
+        self.arena.exprSpanEnd[result] = expr.span.end
+        return result
+    }
+
     // Context-aware SyntaxFile lowering. This mirrors lowerExprWithCtx without
     // reconstituting value AST nodes: context is semantic data, while every
     // child remains a stable immutable syntax ID.
@@ -365,6 +391,9 @@ pub impl Comp {
                 }
                 if ct.args.count() > 0U64 {
                     match e.kind {
+                        SyntaxExprKind.Range => {
+                            return self.lowerSyntaxRange(expr: e, ctxRef: ctxRef)
+                        }
                         SyntaxExprKind.Make => {
                             if !(e.flag0) {
                                 if syntaxExprTypeArgCount(file: self.syntax, expr: e) == 0U64 {
@@ -485,6 +514,9 @@ pub impl Comp {
                 }
                 val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: e.flag0)
                 result = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=e.nameSpan.start variantLen=e.nameSpan.end - e.nameSpan.start isEnum=e.flag0 ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+            }
+            SyntaxExprKind.Range => {
+                result = self.lowerSyntaxRange(expr: e)
             }
             SyntaxExprKind.ArrayLit => {
                 mut val elems: Array[U64] = []
