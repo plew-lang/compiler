@@ -13,3 +13,14 @@ if grep -E 'name=main category=' "$directory/coverage" >&2; then
     exit 1
 fi
 echo "PASS $source(mid)" >&2
+
+source=tests/run/unique_cond_return.pw
+echo "check $source(unique call result transfer)" >&2
+"$PLEWC" --emit-mid-coverage "$source" >"$directory/input.ll" 2>"$directory/coverage"
+# User deinit emission is a separate migration slice. The producer, consumer,
+# and caller of the unique result must all use the canonical ownership path.
+if grep -E 'name=(main|pick|sink) category=' "$directory/coverage" >&2; then
+    echo "FAIL $source(legacy unique call result)" >&2
+    exit 1
+fi
+echo "PASS $source(mid)" >&2

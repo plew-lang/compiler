@@ -826,7 +826,10 @@ fn midCallValueForSite(c: Comp, state: MidBuildState, siteKey: CallSiteKey) -> M
 // exact dependency the consumer recorded.
 fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U64, siteKey: CallSiteKey) -> MidOperandBuild {
     val prior: MidCallValueLookup = midCallValueForSite(c: c, state: state, siteKey: siteKey)
-    if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    if prior.found {
+        if midTermIsUnique(c: inout c, term: prior.place.typeTerm) { return <MidOperandBuild operand=<MidOperand.Move place=prior.place /> /> }
+        return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> />
+    }
     val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
     if !(c.sameCallSiteKey(a: template.siteKey, b: siteKey)) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
@@ -844,11 +847,15 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         }
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> />
     }
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: term)
+    val ownsUnique: Bool = midTermIsUnique(c: inout c, term: term)
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: term, isUnique: ownsUnique)
     val place: MidPlace = <MidPlace local=local typeTerm=term />
     val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
     match built { MidBuildError.None => {} _ => { return <MidOperandBuild operand=<MidOperand.Copy place=place /> error=built /> } }
     state.callValues.append(<MidCallValue siteKey=siteKey place=place />)
+    // A call result has the same ownership as a freshly built aggregate.
+    // Never let a unique result enter a consuming call as a Copy.
+    if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=place /> /> }
     return <MidOperandBuild operand=<MidOperand.Copy place=place /> />
 }
 
