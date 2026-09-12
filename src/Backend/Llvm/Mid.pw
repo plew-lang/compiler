@@ -1110,6 +1110,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0U64
         while i < place.projections.count() {
             match place.projections[i] {
+                MidProjection.Deref(typeTerm: _) => { return false }
                 MidProjection.Field(index: _, typeTerm: val typeTerm) => {
                     if typeTerm == 0U64 || typeTerm >= c.arena.typeCount() { return false }
                     currentTerm = typeTerm
@@ -2297,6 +2298,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0U64
         while i < place.projections.count() {
             match place.projections[i] {
+                MidProjection.Deref(typeTerm: _) => { panic "Mid dereference reached LLVM without place support" }
                 MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
                     pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, index, anon())
                     currentTy = self.llvmTypeOfRef(c: inout c, ref: typeTerm)

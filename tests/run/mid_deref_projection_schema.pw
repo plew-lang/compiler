@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Mid with { MidProjection, MidProjectionNode, MidPlace, MidBorrowCapability, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
+
+fn main() {
+    val source = <MidPlace local=0U64 projections=[<MidProjection.Deref typeTerm=11U64 />, <MidProjection.Field index=2U64 typeTerm=12U64 />] typeTerm=12U64 />
+    val destination = <MidPlace local=1U64 typeTerm=12U64 />
+    val assignment = <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=<MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> /> /> />
+    val draft = <MidBody locals=[<MidLocalDecl typeTerm=10U64 sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=12U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[assignment] terminator=<MidTerminator.Unreachable /> />] entry=0U64 />
+    mut val arena = <MidCanonicalArena />
+    val frozen: MidCanonicalBody = arena.store(body: draft)
+    assert(canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
+    val body = arena.bodies[frozen.body - 1U64]
+    val block = arena.blocks[body.blocks.start]
+    val statement = arena.statements[block.statements.start]
+    val value = arena.rvalues[statement.value - 1U64]
+    val operand = arena.operands[value.operand - 1U64]
+    val place = arena.places[operand.place - 1U64]
+    val deref = arena.projections[place.projections.start]
+    val field = arena.projections[place.projections.start + 1U64]
+    assert(place.local == 0U64)
+    assert(place.projections.len == 2U64)
+    assert(deref.tag == 3U64 && deref.typeTerm == 11U64)
+    assert(field.tag == 1U64 && field.index == 2U64 && field.typeTerm == 12U64)
+    arena.projections.set(i: place.projections.start, value: <MidProjectionNode tag=3U64 />)
+    assert(!canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
+    arena.projections.set(i: place.projections.start, value: <MidProjectionNode tag=3U64 typeTerm=11U64 indexLocal=1U64 />)
+    assert(!canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
+    arena.projections.set(i: place.projections.start, value: deref)
+    assert(canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
+    print("ok")
+}

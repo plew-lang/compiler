@@ -1129,6 +1129,9 @@ fn midApplyArgumentPassing(operand: MidOperand, passing: CallArgumentPassing) ->
 
 fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environment: BodyInstance, itemRef: U64) -> MidProjection {
     match projection {
+        MidProjection.Deref(typeTerm: val typeTerm) => {
+            return <MidProjection.Deref typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+        }
         MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
             return <MidProjection.Field index=index typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }

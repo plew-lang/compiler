@@ -48,7 +48,7 @@ export struct MidPlaceNode {
 }
 pub impl MidPlaceNode { factory }
 
-// `tag` is 1=Field, 2=Index.  A canonical node never embeds the draft
+// `tag` is 1=Field, 2=Index, 3=Deref.  A canonical node never embeds the draft
 // `MidProjection` enum: all payload fields remain scalar and the parent Place
 // owns only a range in this dedicated pool.
 export struct MidProjectionNode {
@@ -301,6 +301,9 @@ pub impl MidCanonicalBody { factory }
 // Field/index paths are already needed for assignments and future borrow/access
 // analysis; partial unique moves stay rejected by the frontend.
 export enum MidProjection {
+    // Cross from a strong reference value to its pointee storage. This is
+    // an aliasing boundary, not a field of the reference variable.
+    Deref(typeTerm: U64)
     // `typeTerm` is the frontend-selected type after this projection.  It is
     // needed for a nested GEP walk and prevents LLVM from reconstructing a
     // field declaration/type from a source spelling.
@@ -699,6 +702,9 @@ pub impl MidProgram { factory }
 
 fn midFreezeProjection(arena: inout MidCanonicalArena, projection: MidProjection) {
     match projection {
+        MidProjection.Deref(typeTerm: val typeTerm) => {
+            arena.projections.append(<MidProjectionNode tag=3U64 typeTerm=typeTerm />)
+        }
         MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
             arena.projections.append(<MidProjectionNode tag=1U64 index=index typeTerm=typeTerm />)
         }
@@ -1027,7 +1033,7 @@ fn midCanonicalOperandIsWellFormed(arena: MidCanonicalArena, operand: U64) -> Bo
     if operand == 0U64 || operand > arena.operands.count() { return false }
     val node: MidOperandNode = arena.operands[operand - 1U64]
     if node.tag >= 1U64 && node.tag <= 4U64 {
-        return node.place != 0U64 && node.place <= arena.places.count()
+        return midCanonicalPlaceIsWellFormed(arena: arena, place: node.place)
     }
     match node.tag {
         5U64 => { return true }
@@ -1046,7 +1052,8 @@ fn midCanonicalPlaceIsWellFormed(arena: MidCanonicalArena, place: U64) -> Bool {
     mut val i: U64 = 0U64
     while i < node.projections.len {
         val projection: MidProjectionNode = arena.projections[node.projections.start + i]
-        if projection.tag != 1U64 && projection.tag != 2U64 { return false }
+        if projection.tag != 1U64 && projection.tag != 2U64 && projection.tag != 3U64 { return false }
+        if projection.tag == 3U64 && (projection.typeTerm == 0U64 || projection.index != 0U64 || projection.indexLocal != 0U64) { return false }
         i = i + 1U64
     }
     return true
