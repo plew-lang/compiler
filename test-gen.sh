@@ -66,7 +66,11 @@ for app in tests/gen/*/App.pw; do
         fail=$((fail + 1)); failed="$failed $name(app-link)"; continue
     fi
     # 5. run + compare
-    got=$("$work/app" 2>/dev/null) || true
+    status=0
+    got=$("$work/app" 2>/dev/null) || status=$?
+    if [ "$status" -ne 0 ]; then
+        fail=$((fail + 1)); failed="$failed $name(exit:$status)"; continue
+    fi
     if [ "$got" = "$(cat "$dir/App.out")" ]; then
         pass=$((pass + 1))
     else

@@ -63,3 +63,20 @@ chmod +x "$output"
                         assert '(exit:' in result.stdout, result
                 assert result.returncode == 0, result
                 print(f'PASS {phase}/{case}', flush=True)
+    gen_source = Path(__file__).with_name('test-gen.sh').read_text()
+    gen_worker = gen_source.split('    # 5. run + compare\n', 1)[1].split('\ndone', 1)[0]
+    work = root / 'gen'
+    work.mkdir()
+    (work / 'App.out').write_text('expected\n')
+    for name, body, expected_pass in cases:
+        app = work / 'app'
+        app.write_text('#!/bin/sh\n' + body + '\n')
+        app.chmod(0o755)
+        script = ('work=$1; dir=$1; name=fixture; pass=0; fail=0; failed=""\n'
+                  'for iteration in once; do\n' + gen_worker +
+                  '\ndone\nprintf "%s %s" "$pass" "$fail"\n')
+        result = subprocess.run(['sh', '-c', script, 'sh', str(work)],
+                                text=True, capture_output=True)
+        assert result.returncode == 0, result
+        assert result.stdout == ('1 0' if expected_pass else '0 1'), result
+        print(f'PASS gen/{name}', flush=True)
