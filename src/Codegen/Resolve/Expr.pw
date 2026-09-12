@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
+import ../../Ir with { SemanticAggregateKind, SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateArgumentRange, CallTemplateTypeArgumentRange, CallTemplateOperandRange, CallTemplateViewRange, DynamicCallTemplateTarget, StaticMemberResolution }
 
 pub impl Comp {
 
@@ -1075,6 +1075,47 @@ pub impl Comp {
         // aggregate carrier, so Mid consumes the same selected E and never
         // reconstructs it from an element literal or method receiver query.
         match self.arena.exprs[exprId] {
+            Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
+                val expected = self.arena.typeTerms[expectedTerm]
+                mut val acceptsContext: Bool = false
+                if expected.hasDecl && expected.args.len > 0U64 && !expected.hasTopLevelView() {
+                    if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() {
+                        val written = self.arena.typeTerms[writtenTerm]
+                        acceptsContext = written.args.len == 0U64 && written.hasDecl && written.declOffset == expected.declOffset && !written.hasTopLevelView()
+                    } else if isEnum {
+                        // An enum constructor without written arguments has
+                        // no AST TypeRef. Its selected aggregate declaration
+                        // supplies identity; do not recover it by head spelling.
+                        val aggregateIndex = self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId)
+                        if aggregateIndex < self.decls.semanticAggregates.count() {
+                            match self.decls.semanticAggregates[aggregateIndex].kind {
+                                SemanticAggregateKind.Enum(enumIdx: val enumIndex, variantIndex: _) => {
+                                    if enumIndex < self.arena.enumCount() {
+                                        val declaration = self.arena.enumAt(index: enumIndex)
+                                        acceptsContext = declaration.defOffset == expected.declOffset && declaration.typeParams.count() == expected.args.len
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                if acceptsContext {
+                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                        mut val fieldIndex: U64 = 0U64
+                        while fieldIndex < fields.len {
+                            val field = self.makeFieldAt(fields: fields, index: fieldIndex)
+                            val info = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                            val fieldTerm = self.groundUnderInst(instRef: expectedTerm, tyRef: self.typedIrRefOfInfo(ti: info))
+                            self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: fieldTerm)
+                            if fieldTerm != 0U64 && self.tyRefIsGround(ref: fieldTerm) {
+                                self.recordArrayLitCtx(exprId: field.value, ctxRef: fieldTerm)
+                            }
+                            fieldIndex += 1U64
+                        }
+                        self.recordSemanticAggregate(exprId: exprId)
+                }
+            }
             // A suffix owns its type. An unsuffixed float is bidirectional in
             // the same way as an unsuffixed integer, but unlike integers the
             // old literal-context carrier has no float width. Publish the

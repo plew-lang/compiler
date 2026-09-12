@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+enum Packet[T] { Value(item: T) }
+struct Envelope[T] { pub val packet: Packet[T] }
+pub impl[T] Envelope[T] { factory }
+
+fn wrap[T](value: T) -> Packet[T] {
+    return <Packet.Value item=value />
+}
+fn text(packet: Packet[String]) -> String {
+    match packet { Packet.Value(item: val value) => { return value } }
+}
+fn main() {
+    val integer: Packet[I64] = wrap(value: 7I64)
+    match integer { Packet.Value(item: val value) => { print(value) } }
+    val envelope: Envelope[String] = <Envelope[String] packet=<Packet.Value item="field" /> />
+    print(text(packet: envelope.packet))
+    print(text(packet: <Packet.Value item="argument" />))
+    print(text(packet: wrap(value: "generic")))
+}
