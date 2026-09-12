@@ -1,0 +1,27 @@
+// Desugared subscripts retain their requirements independently of method names.
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Expr, Stmt, SyntheticCallKind }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val name = c.internBytes(s: "items")
+    val receiver = c.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
+    val key = c.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val read = c.lowerIndexRead(recv: receiver, key: key)
+    val site = c.decls.syntheticCallSites[c.syntheticCallSiteIndex(exprId: read)]
+    match site.kind { SyntheticCallKind.IndexRead => { print(1I64) } _ => { print(0I64) } }
+    val candidate = c.decls.accessCandidateAt(index: c.decls.accessCandidateForExpr(exprId: read))
+    val writeSite = c.decls.syntheticCallSites[c.syntheticCallSiteIndex(exprId: candidate.writeExpr)]
+    match writeSite.kind { SyntheticCallKind.IndexWrite => { print(1I64) } _ => { print(0I64) } }
+    val assignment = c.lowerIndexSetAssign(recv: receiver, key: key, value: key)
+    match c.arena.stmts[assignment] {
+        Stmt.ExprStmt(expr: val call) => {
+            val assignmentSite = c.decls.syntheticCallSites[c.syntheticCallSiteIndex(exprId: call)]
+            match assignmentSite.kind { SyntheticCallKind.IndexWrite => { print(1I64) } _ => { print(0I64) } }
+        }
+        _ => { print(0I64) }
+    }
+    val ordinary = c.synthMethodCall(recv: receiver, name: "index", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
+    print(c.syntheticCallSiteIndex(exprId: ordinary) == c.decls.syntheticCallSites.count())
+}

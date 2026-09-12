@@ -19,14 +19,14 @@ pub impl Comp {
         val place: U64 = self.pushExpr(e: <Expr.Index base=recv index=key />)
         val call: U64 = self.synthMethodCall(recv: recv, name: "index", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
         val originSerial: U64 = self.arena.exprOriginSerial[call]
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=0U64 />)
+        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=<SyntheticCallKind.IndexRead /> originSerial=originSerial receiverTerm=0U64 />)
         // The write facet intentionally uses the read result only as a
         // declaration-time Value type anchor. It is detached from executable
         // source and cannot be scanned/emitted as a second call; access
         // elaboration replaces it with the materialized temporary after the
         // selected parent ABI says writeback is necessary.
         val write: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: call, arg1HasLabel: false)
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=write originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
+        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=write kind=<SyntheticCallKind.IndexWrite /> originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
         self.decls.registerAccessCandidate(<AccessCandidate readExpr=call writeExpr=write placeExpr=place originSerial=originSerial />, expressionCount: self.arena.exprs.count())
         return call
     }

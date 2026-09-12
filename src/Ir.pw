@@ -2438,8 +2438,17 @@ pub impl ChainSite { factory }
 // lowering rule alongside that call site; Mono grounds it under BodyInstance
 // and publishes an ordinary CallResolution.  This is the same provenance rule
 // as ChainSite, generalized to non-source implementation calls.
+// The semantic requirement comes from desugaring, not the generated name.
+// An explicit call to a method named index remains an ordinary method call.
+export enum SyntheticCallKind {
+    Ordinary
+    IndexRead
+    IndexWrite
+}
+
 export struct SyntheticCallSite {
     pub val exprId: U64
+    pub val kind: SyntheticCallKind = <SyntheticCallKind.Ordinary />
     // Allocated at the synthesis point.  Generated nodes have no source span,
     // so an arena index is only a navigation anchor, never their origin.
     pub val originSerial: U64 = 0U64
