@@ -685,7 +685,7 @@ pub impl Comp {
     // vector, including method-owned arguments.  Use it for every result
     // projection so later backend consumers never have to ground a declaration
     // under their own incidental environment.
-    inout fn groundedSelectedCalleeReturn(callee: U64, recvRef: U64, calleeArgs: Array[U64]) -> U64 {
+    inout fn groundedSelectedCalleeReturn(callee: U64, environment: InstanceEnvironment) -> U64 {
         if callee >= self.arena.functionCount() { return 0U64 }
         val f: Func = self.arena.functionAt(index: callee)
         if !(f.hasRet) { return 0U64 }
@@ -695,18 +695,16 @@ pub impl Comp {
             }
             return 0U64
         }
-        val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef)
         return self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: environment.receiverRef, itemRef: self.bodyProvidedItemTerm(f: f, environment: environment))
     }
 
     // Parameter ABI types belong to the same completed call decision as its
     // result.  In particular, a generic free call `first[I64](value: Box[I64])`
     // must hand LLVM `Box[I64]`, not the declaration's symbolic `Box[T]`.
-    inout fn groundedSelectedCalleeParameterTypes(callee: U64, recvRef: U64, calleeArgs: Array[U64]) -> Array[U64] {
+    inout fn groundedSelectedCalleeParameterTypes(callee: U64, environment: InstanceEnvironment) -> Array[U64] {
         mut val out: Array[U64] = []
         if callee >= self.arena.functionCount() { return out }
         val f: Func = self.arena.functionAt(index: callee)
-        val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef)
         val itemRef: U64 = self.bodyProvidedItemTerm(f: f, environment: environment)
         mut val i: U64 = 0U64
         while i < f.params.count() {
@@ -3208,11 +3206,30 @@ pub impl Comp {
 
     inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], argumentSources: Array[CallTemplateArgument] = [], resultRef: U64 = 0U64, resultProjection: CallResultProjection = <CallResultProjection.Identity />, siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64) {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
+        // A callable body already owns the selected proof and all lexical
+        // substitutions. Reconstructing from its ABI receiver can choose a
+        // different proof and leave associated outputs unresolved.
+        mut val environment: InstanceEnvironment = <InstanceEnvironment />
+        if calleeBodyId != 0U64 {
+            if calleeBodyId > self.arena.bodyInstanceCount() {
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call has an invalid body identity")
+                return
+            }
+            val body: BodyInstance = self.arena.bodyInstanceAt(index: calleeBodyId - 1U64)
+            if body.fnIdx != callee {
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call body does not belong to its callee")
+                return
+            }
+            environment = body.environment
+        } else {
+            // Extern declarations have a signature but no executable body.
+            environment = self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef)
+        }
+        val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, environment: environment)
         val conversions: Array[ValueConversionProof] = self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params)
         val receiverPassing: CallReceiverPassing = self.selectedReceiverPassing(callee: callee)
         val argumentPassings: Array[CallArgumentPassing] = self.selectedArgumentPassings(callee: callee)
-        val carrierResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
+        val carrierResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
         mut val result: U64 = self.finalSelectedSourceResult(resultRef: resultRef, carrierRef: carrierResult)
         val f: Func = self.arena.functionAt(index: callee)
         if !(f.hasRet) {
@@ -3233,6 +3250,25 @@ pub impl Comp {
             result = 0U64
         } else {
             if result == 0U64 || !(self.callResultProjectionIsValid(carrierRef: carrierResult, resultRef: result, projection: resultProjection)) {
+                if self.traceCodegen {
+                    eprint(text: "[trace-codegen] result-projection mismatch body=")
+                    eprintU64(n: self.currentBodyInstanceId())
+                    eprint(text: " callee=")
+                    eprintU64(n: callee)
+                    eprint(text: " callee-body=")
+                    eprintU64(n: calleeBodyId)
+                    eprint(text: " receiver=")
+                    self.traceMonoTypeHead(ref: recvRef)
+                    eprint(text: " declaration=")
+                    self.traceMonoTypeHead(ref: f.retTy)
+                    eprint(text: " source=")
+                    self.traceMonoTypeHead(ref: resultRef)
+                    eprint(text: " selected=")
+                    self.traceMonoTypeHead(ref: result)
+                    eprint(text: " carrier=")
+                    self.traceMonoTypeHead(ref: carrierResult)
+                    eprint(text: "\n")
+                }
                 self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final call result projection does not match its carrier or source result")
                 return
             }
@@ -3821,7 +3857,8 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method selected a callable outside its proved trait")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
-                if resultRef == 0U64 { resultRef = self.groundedSelectedCalleeReturn(callee: callee, recvRef: receiverRef, calleeArgs: []) }
+                // Complete the result after enqueueSelectedCallee has inferred
+                // method arguments and selected the concrete body environment.
                 return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> />
             }
             _ => {}
@@ -4090,8 +4127,8 @@ pub impl Comp {
             self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit associated call template has no complete receiver substitution")
             return
         }
-        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvRef, calleeArgs: args)
-        self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
+        val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
+        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvRef, calleeArgs: args, calleeBodyId: calleeBodyId)
     }
 
     // Walk one already-selected concrete body instance.  It is the frontend
