@@ -380,39 +380,67 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
     return incoming
 }
 
-fn canonicalMidIsAccessibilityCliff(c: Comp, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]], blockI: U64, local: U64) -> Bool {
-    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return false }
-    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+// Immutable CFG facts shared by all local queries in this drop plan.
+struct MidDropPredecessors {
+    pub val blocks: Array[Array[U64]] = []
+    pub val ownership: Array[Array[MidOwnership]] = []
+    pub val accessibility: Array[Array[MidAccessibility]] = []
+}
+pub impl MidDropPredecessors { factory }
+
+fn canonicalMidDropPredecessors(c: Comp, body: MidBodyNode, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidDropPredecessors {
+    mut val predecessors: Array[Array[U64]] = []
+    mut val exits: Array[Array[MidOwnership]] = []
+    mut val accessExits: Array[Array[MidAccessibility]] = []
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        predecessors.append([])
+        blockI += 1U64
+    }
+    blockI = 0U64
+    while blockI < body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + blockI]
+        exits.append(canonicalMidTransferBlock(c: c, body: body, block: block, input: ownership[blockI]))
+        accessExits.append(canonicalMidAccessibilityTransfer(c: c, body: body, block: block, input: accessibility[blockI]))
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val successors = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+            mut val successorI: U64 = 0U64
+            while successorI < successors.count() {
+                val target = successors[successorI]
+                if target < body.blocks.len {
+                    mut val incoming = predecessors[target]
+                    incoming.append(blockI)
+                    predecessors.set(i: target, value: incoming)
+                }
+                successorI += 1U64
+            }
+        }
+        blockI += 1U64
+    }
+    return <MidDropPredecessors blocks=predecessors ownership=exits accessibility=accessExits />
+}
+
+fn canonicalMidIsAccessibilityCliff(body: MidBodyNode, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]], predecessors: MidDropPredecessors, blockI: U64, local: U64) -> Bool {
     if blockI >= body.blocks.len || blockI >= ownership.count() || blockI >= accessibility.count() || local >= ownership[blockI].count() || local >= accessibility[blockI].count() { return false }
     match ownership[blockI][local] { MidOwnership.MaybeOwned => {} _ => { return false } }
     match accessibility[blockI][local] { MidAccessibility.Unavailable => {} _ => { return false } }
     if blockI == body.entry { return true }
-    mut val sawPredecessor: Bool = false
-    mut val predecessor: U64 = 0U64
-    while predecessor < body.blocks.len {
-        val source: MidBlockNode = c.mid.blocks[body.blocks.start + predecessor]
-        if source.terminator != 0U64 && source.terminator <= c.mid.terminators.count() {
-            val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[source.terminator - 1U64])
-            mut val successorI: U64 = 0U64
-            while successorI < successors.count() {
-                if successors[successorI] == blockI {
-                    sawPredecessor = true
-                    val predecessorOwnership: Array[MidOwnership] = canonicalMidTransferBlock(c: c, body: body, block: source, input: ownership[predecessor])
-                    val predecessorAccessibility: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(c: c, body: body, block: source, input: accessibility[predecessor])
-                    if local >= predecessorOwnership.count() || local >= predecessorAccessibility.count() { return false }
-                    match predecessorOwnership[local] {
-                        MidOwnership.MaybeOwned => {
-                            match predecessorAccessibility[local] { MidAccessibility.Unavailable => {} _ => { return true } }
-                        }
-                        _ => { return true }
-                    }
-                }
-                successorI = successorI + 1U64
+    val incoming = predecessors.blocks[blockI]
+    mut val predecessorI: U64 = 0U64
+    while predecessorI < incoming.count() {
+        val predecessor = incoming[predecessorI]
+        val predecessorOwnership = predecessors.ownership[predecessor]
+        val predecessorAccessibility = predecessors.accessibility[predecessor]
+        if local >= predecessorOwnership.count() || local >= predecessorAccessibility.count() { return false }
+        match predecessorOwnership[local] {
+            MidOwnership.MaybeOwned => {
+                match predecessorAccessibility[local] { MidAccessibility.Unavailable => {} _ => { return true } }
             }
+            _ => { return true }
         }
-        predecessor = predecessor + 1U64
+        predecessorI += 1U64
     }
-    return !sawPredecessor
+    return incoming.count() == 0U64
 }
 
 // Planning is deliberately separate from row emission: a flag exists only
@@ -427,6 +455,7 @@ pub impl MidCanonicalDropPlan { factory }
 fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidCanonicalDropPlan {
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidCanonicalDropPlan /> }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    val predecessors = canonicalMidDropPredecessors(c: c, body: body, ownership: ownership, accessibility: accessibility)
     mut val needsFlag: Array[Bool] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
@@ -439,7 +468,7 @@ fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[A
         mut val blockCliffs: Array[Bool] = []
         localI = 0U64
         while localI < body.locals.len {
-            val cliff: Bool = canonicalMidIsAccessibilityCliff(c: c, canonical: canonical, ownership: ownership, accessibility: accessibility, blockI: blockI, local: localI)
+            val cliff: Bool = canonicalMidIsAccessibilityCliff(body: body, ownership: ownership, accessibility: accessibility, predecessors: predecessors, blockI: blockI, local: localI)
             blockCliffs.append(cliff)
             if blockI < ownership.count() && blockI < accessibility.count() && localI < ownership[blockI].count() && localI < accessibility[blockI].count() {
                 match ownership[blockI][localI] {
