@@ -503,8 +503,8 @@ pub impl Comp {
     // passes (the element head is `Ref`, not the unique type).
     inout fn checkArrayElemsNotUnique() {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElems.count() {
-            val ae: Bind = self.monoWork.arrayElems[i]
+        while i < self.monoWork.arrayElementCount() {
+            val ae: Bind = self.monoWork.arrayElementAt(index: i)
             if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.

@@ -1,0 +1,17 @@
+import /Ir with { MonoWork, Bind }
+import @Std/Io with { write }
+
+fn main() {
+    mut val work = <MonoWork />
+    if work.hasArrayElementNamed(nameId: 7U64) { panic "empty" }
+    work.registerArrayElement(element: <Bind nameStart=10U64 nameLen=2U64 fieldStart=33U64 fieldLen=0U64 />, nameId: 7U64)
+    mut val copy = work
+    work.registerArrayElement(element: <Bind nameStart=20U64 nameLen=3U64 fieldStart=44U64 fieldLen=0U64 />, nameId: 9U64)
+    copy.registerArrayElement(element: <Bind nameStart=30U64 nameLen=4U64 fieldStart=55U64 fieldLen=0U64 />, nameId: 0U64)
+    if !work.hasArrayElementNamed(nameId: 7U64) || !work.hasArrayElementNamed(nameId: 9U64) { panic "missing" }
+    if copy.hasArrayElementNamed(nameId: 9U64) || work.hasArrayElementNamed(nameId: 0U64) { panic "copy membership" }
+    if !copy.hasArrayElementNamed(nameId: 0U64) { panic "zero name" }
+    if work.arrayElementCount() != 2U64 || copy.arrayElementCount() != 2U64 { panic "copy count" }
+    if work.arrayElementAt(index: 0U64).fieldStart != 33U64 || work.arrayElementAt(index: 1U64).fieldStart != 44U64 || copy.arrayElementAt(index: 1U64).fieldStart != 55U64 { panic "order or payload" }
+    write(s: "array-element-name-index-ok\n")
+}

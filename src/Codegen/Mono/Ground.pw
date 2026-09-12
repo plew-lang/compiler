@@ -616,15 +616,9 @@ pub impl Comp {
             nLen = mn.nameLen
             fRef = re
         }
-        mut val i: U64 = 0
-        while i < self.monoWork.arrayElems.count() {
-            val ae: Bind = self.monoWork.arrayElems[i]
-            if spansEqual(c: inout self, aStart: ae.nameStart, aLen: ae.nameLen, bStart: nStart, bLen: nLen) {
-                return
-            }
-            i += 1
-        }
-        self.monoWork.arrayElems.append(<Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />)
+        val nameId = intern(c: inout self, start: nStart, len: nLen)
+        if self.monoWork.hasArrayElementNamed(nameId: nameId) { return }
+        self.monoWork.registerArrayElement(element: <Bind nameStart=nStart nameLen=nLen fieldStart=fRef fieldLen=0 />, nameId: nameId)
     }
 
     inout fn recordTypeKeyFromRef(ref: U64) -> Array[U8] {

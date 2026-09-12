@@ -1,0 +1,10 @@
+// Array runtime demands retain their dependency-first registration order.
+pub impl MonoWork {
+    fn arrayElementCount() -> U64 { return self.arrayElems.count() }
+    fn arrayElementAt(index: U64) -> Bind { return self.arrayElems[index] }
+    fn hasArrayElementNamed(nameId: U64) -> Bool { return self.arrayElementNames.contains(nameId) }
+    inout fn registerArrayElement(element: Bind, nameId: U64) {
+        self.arrayElementNames.insert(nameId)
+        self.arrayElems.append(element)
+    }
+}
