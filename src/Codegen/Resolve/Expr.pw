@@ -1398,6 +1398,11 @@ pub impl Comp {
         while k < fields.len {
             val mf: MakeField = self.makeFieldAt(fields: fields, index: k)
             if intern(c: inout self, start: mf.nameStart, len: mf.nameLen) == fieldNameId {
+                // Recorded child terms preserve lexical ParamIds, views and
+                // complete generic arguments. The early pre-Record scan has
+                // no such fact yet and retains its existing TypeInfo bridge.
+                val recorded: U64 = self.semanticExprTerm(exprId: mf.value)
+                if recorded != 0U64 { return recorded }
                 val ti: TypeInfo = self.exprType(id: mf.value)
                 if ti.kind == 3 {
                     return 0U64

@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+struct Measurement[T] {
+    pub val low: T
+    pub val high: T
+}
+pub impl Measurement { factory }
+fn main() {
+    val values: Array[I64] = [1I64, 2I64, 3I64]
+    val forward = <Measurement low=0 high=values.count() />
+    val reverse = <Measurement high=values.count() low=1 />
+    print(forward.low)
+    print(forward.high)
+    print(reverse.low)
+    print(reverse.high)
+}

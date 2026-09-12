@@ -1,0 +1,9 @@
+struct Measurement[T] {
+    pub val low: T
+    pub val high: T
+}
+pub impl Measurement { factory }
+fn limit() -> U8 { return 3U8 }
+fn main() {
+    val value = <Measurement low=256 high=limit() />
+}

@@ -1439,18 +1439,31 @@ pub impl Comp {
                 self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                mut val i: U64 = 0
+                // First collect every field's semantic type in this lexical
+                // environment. Early global inference cannot resolve a local
+                // receiver's method result, and field order must not decide
+                // whether a sibling literal receives its inferred context.
+                mut val i: U64 = 0U64
+                while i < fields.len {
+                    self.recordExpr(exprId: self.makeFieldAt(fields: fields, index: i).value, chainHoleRef: chainHoleRef)
+                    i += 1U64
+                }
+                mut val instance: U64 = ty
+                if !isEnum && !self.isGenericInst(ref: instance) {
+                    val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
+                    if inferred != 0U64 { instance = inferred }
+                }
+                i = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef)
                     val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
                     mut val ctxRef: U64 = self.typedIrRefOfInfo(ti: ft)
                     // a generic construction's field context is the DECLARED field type
                     // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
                     // instance so the literal records `Array[I64]`, and never store a
                     // still-parametric context (a non-instance Make leaves it as-is).
-                    if ctxRef != 0U64 && ty != 0U64 && self.isGenericInst(ref: ty) {
-                        ctxRef = self.groundUnderInst(instRef: ty, tyRef: ctxRef)
+                    if ctxRef != 0U64 && instance != 0U64 && self.isGenericInst(ref: instance) {
+                        ctxRef = self.groundUnderInst(instRef: instance, tyRef: ctxRef)
                     }
                     // A field declaration is a bidirectional semantic input
                     // for *every* expression placed in that field.  In a
@@ -1470,15 +1483,11 @@ pub impl Comp {
                     self.recordArrayLitCtx(exprId: field.value, ctxRef: arrayCtx)
                     i += 1
                 }
-                // A named construction already owns its complete TypeTerm from
-                // Lower.  It is the value's declared instance (including
-                // lexical generic arguments), so reopening exprType would only
-                // reconstruct the same fact from spelling and can erase those
-                // arguments. Anonymous records intentionally keep the fallback:
-                // their term is assembled from field terms by the record
-                // canonicalizer, not stored on this node.
-                if ty != 0U64 {
-                    self.recordSemanticExprTerm(exprId: exprId, term: ty)
+                // Keep the selected instance as a semantic fact. The source
+                // Make remains unchanged; aggregate finalization and later
+                // body instances consume the same recorded TypeTerm.
+                if instance != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: instance)
                 }
                 self.recordSemanticAggregate(exprId: exprId)
             }

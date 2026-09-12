@@ -223,7 +223,13 @@ pub impl Comp {
                 self.checkLitCtx(id: index, eKind: 1, eBits: 64, eSgn: false)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                self.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
+                // Record may infer an instance from lexical child terms after
+                // Lower's context-free Make was created. Validate literals
+                // against that semantic instance, just as aggregate consumers
+                // do, rather than discarding it for the old syntax field.
+                mut val instance: U64 = self.semanticExprTerm(exprId: id)
+                if instance == 0U64 { instance = ty }
+                self.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: instance, fields: fields)
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
