@@ -9,7 +9,7 @@ pub impl Grid {
     factory
 
     inout fn firstRowCount() -> U64 {
-        return self.rows[0I64].count()
+        return self.rows[0U64].count()
     }
 }
 

@@ -14,12 +14,12 @@ struct Shelf {
 pub impl Shelf { factory }
 
 fn appendFirst(shelf: inout Shelf, value: I64) {
-    shelf.cells[0I64].values.append(value)
+    shelf.cells[0U64].values.append(value)
 }
 
 fn main() {
     mut val shelf = <Shelf cells=[<Cell values=[] />] />
     appendFirst(shelf: inout shelf, value: 7I64)
-    assert(shelf.cells[0I64].values[0I64] == 7I64)
+    assert(shelf.cells[0U64].values[0U64] == 7I64)
     print("ok")
 }

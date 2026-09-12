@@ -13,12 +13,12 @@ pub impl Counter {
 }
 
 fn resetTriple(rows: inout Array[Array[Array[Counter]]]) -> I32 {
-    return rows[0I64][0I64][0I64].takeAndReset()
+    return rows[0U64][0U64][0U64].takeAndReset()
 }
 
 fn main() {
     mut val rows: Array[Array[Array[Counter]]] = []
     rows.append([[<Counter n=7I32 />]])
     print(resetTriple(rows: inout rows))
-    print(rows[0I64][0I64][0I64].n)
+    print(rows[0U64][0U64][0U64].n)
 }

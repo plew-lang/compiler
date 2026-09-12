@@ -22,5 +22,5 @@ fn grow(counter: inout Counter) -> U64 {
 fn main() {
     mut val counter = <Counter values=[1I64] />
     print(grow(counter: inout counter))
-    print(counter.values[1I64])
+    print(counter.values[1U64])
 }

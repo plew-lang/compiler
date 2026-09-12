@@ -9,13 +9,13 @@ fn append99(item: inout Array[I32]) {
 }
 
 fn appendFirst(rows: inout Array[Array[I32]]) {
-    append99(item: inout rows[0I64])
+    append99(item: inout rows[0U64])
 }
 
 fn main() {
     mut val rows: Array[Array[I32]] = []
     rows.append([1I32, 2I32])
     appendFirst(rows: inout rows)
-    print(rows[0I64].count())
-    print(rows[0I64][2I64])
+    print(rows[0U64].count())
+    print(rows[0U64][2U64])
 }

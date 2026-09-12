@@ -16,12 +16,12 @@ struct Shelf { pub mut val counters: Array[Counter] }
 pub impl Shelf { factory }
 
 fn resetShelf(shelf: inout Shelf) -> I32 {
-    return shelf.counters[0I64].takeAndReset()
+    return shelf.counters[0U64].takeAndReset()
 }
 
 fn main() {
     mut val shelf: Shelf = <Shelf counters=[] />
     shelf.counters.append(<Counter n=7I32 />)
     print(resetShelf(shelf: inout shelf))
-    print(shelf.counters[0I64].n)
+    print(shelf.counters[0U64].n)
 }

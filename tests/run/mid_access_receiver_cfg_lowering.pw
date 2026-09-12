@@ -20,7 +20,7 @@ pub impl Counter {
 }
 
 fn resetFirst(xs: inout Array[Counter]) -> I32 {
-    val old: I32 = xs[0I64].takeAndReset()
+    val old: I32 = xs[0U64].takeAndReset()
     return old
 }
 
@@ -28,5 +28,5 @@ fn main() {
     mut val xs: Array[Counter] = []
     xs.append(<Counter n=7I32 />)
     print(resetFirst(xs: inout xs))
-    print(xs[0I64].n)
+    print(xs[0U64].n)
 }

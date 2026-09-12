@@ -17,8 +17,8 @@ fn main() {
     mut val xs: Array[Counter] = []
     val counter: Counter = <Counter n=7I32 />
     xs.append(counter)
-    val taken: I32 = xs[0I64].takeAndReset()
-    val after: I32 = xs[0I64].takeAndReset()
+    val taken: I32 = xs[0U64].takeAndReset()
+    val after: I32 = xs[0U64].takeAndReset()
     print(taken)
     print(after)
 }
