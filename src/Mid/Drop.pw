@@ -205,14 +205,8 @@ export fn analyzeCanonicalMidOwnership(c: Comp, canonical: MidCanonicalBody) -> 
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        val before: Array[MidOwnership] = incoming[successor]
-                        mut val merged: Array[MidOwnership] = []
-                        localI = 0U64
-                        while localI < before.count() {
-                            merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
-                            localI = localI + 1U64
-                        }
-                        if midOwnershipStateChanged(before: before, after: merged) {
+                        mut val merged: Array[MidOwnership] = incoming[successor]
+                        if midJoinOwnershipStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
                                 worklist.append(successor)
@@ -385,14 +379,8 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        val before: Array[MidAccessibility] = incoming[successor]
-                        mut val merged: Array[MidAccessibility] = []
-                        localI = 0U64
-                        while localI < before.count() {
-                            merged.append(midAccessibilityJoin(left: before[localI], right: out[localI]))
-                            localI = localI + 1U64
-                        }
-                        if midAccessibilityStateChanged(before: before, after: merged) {
+                        mut val merged: Array[MidAccessibility] = incoming[successor]
+                        if midJoinAccessibilityStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
                                 worklist.append(successor)
@@ -693,14 +681,8 @@ fn canonicalMidOwnershipAfterCliffs(c: Comp, canonical: MidCanonicalBody, plan: 
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        val before: Array[MidOwnership] = incoming[successor]
-                        mut val merged: Array[MidOwnership] = []
-                        localI = 0U64
-                        while localI < before.count() {
-                            merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
-                            localI = localI + 1U64
-                        }
-                        if midOwnershipStateChanged(before: before, after: merged) {
+                        mut val merged: Array[MidOwnership] = incoming[successor]
+                        if midJoinOwnershipStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
                                 worklist.append(successor)
@@ -1026,6 +1008,47 @@ fn midScopeEnd(body: MidBody, scope: U64) -> U64 {
 // The join for an affine root local. Once paths disagree, later joins cannot
 // recover a single state without a new dominating Assign, which transfer handles
 // before propagating to successors.
+// Join into the existing value so unchanged edges need no allocation.
+// The first changed element triggers ordinary Array CoW, preserving snapshots.
+fn midJoinOwnershipStates(states: inout Array[MidOwnership], incoming: Array[MidOwnership]) -> Bool {
+    mut val changed: Bool = false
+    mut val index: U64 = 0U64
+    while index < states.count() {
+        val before: MidOwnership = states[index]
+        val joined: MidOwnership = midOwnershipJoin(left: before, right: incoming[index])
+        val differs: Bool = match before {
+            MidOwnership.Owned => match joined { MidOwnership.Owned => false, _ => true },
+            MidOwnership.Consumed => match joined { MidOwnership.Consumed => false, _ => true },
+            MidOwnership.MaybeOwned => match joined { MidOwnership.MaybeOwned => false, _ => true }
+        }
+        if differs {
+            states.set(i: index, value: joined)
+            changed = true
+        }
+        index += 1U64
+    }
+    return changed
+}
+
+fn midJoinAccessibilityStates(states: inout Array[MidAccessibility], incoming: Array[MidAccessibility]) -> Bool {
+    mut val changed: Bool = false
+    mut val index: U64 = 0U64
+    while index < states.count() {
+        val before: MidAccessibility = states[index]
+        val joined: MidAccessibility = midAccessibilityJoin(left: before, right: incoming[index])
+        val differs: Bool = match before {
+            MidAccessibility.Available => match joined { MidAccessibility.Available => false, _ => true },
+            MidAccessibility.Unavailable => match joined { MidAccessibility.Unavailable => false, _ => true }
+        }
+        if differs {
+            states.set(i: index, value: joined)
+            changed = true
+        }
+        index += 1U64
+    }
+    return changed
+}
+
 fn midOwnershipJoin(left: MidOwnership, right: MidOwnership) -> MidOwnership {
     match left {
         MidOwnership.Owned => {
