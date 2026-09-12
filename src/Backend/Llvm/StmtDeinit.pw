@@ -216,7 +216,7 @@ pub impl LlvmCtx {
         // The six cursor/table comparisons are the fixed-point condition itself. Keeping
         // the sole use at the loop header gives one source of truth for entry and re-entry:
         // a pass which declares no further witness bodies ends without an auxiliary flag.
-        while self.dropWitDone < self.dropWitReg.count() || self.retWitDone < self.retWitSidx.count() || self.copyWitDone < self.copyWitSidx.count() || self.enumRelWitDone < self.enumRelWitReg.count() || self.enumRetWitDone < self.enumRetWitEid.count() || self.enumCopyWitDone < self.enumCopyWitEid.count() {
+        while self.dropWitDone < self.dropWitReg.count() || self.retWitDone < self.retWitReg.count() || self.copyWitDone < self.copyWitSidx.count() || self.enumRelWitDone < self.enumRelWitReg.count() || self.enumRetWitDone < self.enumRetWitEid.count() || self.enumCopyWitDone < self.enumCopyWitEid.count() {
             // These are phase boundaries rather than a per-witness log: the tables may be
             // large, but each boundary identifies the one family whose current cursor made
             // no observable progress.  `--trace-phases` therefore distinguishes a genuinely
@@ -225,7 +225,7 @@ pub impl LlvmCtx {
             tracePhaseCount(c: inout c, label: "backend:witness:drop-pending", count: self.dropWitReg.count() - self.dropWitDone)
             self.emitDropWitnessBodies(c: inout c)
             tracePhase(c: inout c, label: "backend:witness:drop-done")
-            tracePhaseCount(c: inout c, label: "backend:witness:retain-pending", count: self.retWitSidx.count() - self.retWitDone)
+            tracePhaseCount(c: inout c, label: "backend:witness:retain-pending", count: self.retWitReg.count() - self.retWitDone)
             self.emitRetainWitnessBodies(c: inout c)
             tracePhase(c: inout c, label: "backend:witness:retain-done")
             tracePhaseCount(c: inout c, label: "backend:witness:copy-pending", count: self.copyWitSidx.count() - self.copyWitDone)

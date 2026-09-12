@@ -1033,7 +1033,7 @@ pub impl LlvmCtx {
                                         // CoW-SHARE the struct place into the payload (rc++ its
                                         // heap fields); the gateway CoWs before any mutation.
                                         val psv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-                                        self.emitStructRetain(c: inout c, v: psv, sidx: psi)
+                                        self.emitStructRetain(c: inout c, v: psv, sidx: psi, ref: self.exprTypeRef(c: inout c, id: valExpr))
                                         agg = LLVMBuildInsertValue(self.b, agg, psv, fj, anon())
                                         handled = true
                                     }

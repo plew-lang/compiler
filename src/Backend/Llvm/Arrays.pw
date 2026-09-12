@@ -812,7 +812,7 @@ pub impl LlvmCtx {
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
                 val didSet: Bool = self.setStructEnv(c: inout c, ref: sref)
-                self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+                self.emitStructRetain(c: inout c, v: v, sidx: sidx, ref: sref)
                 if didSet {
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
@@ -1194,7 +1194,7 @@ pub impl LlvmCtx {
                 val savedA: Array[U64] = c.cur.typeArgs
                 val didSet: Bool = self.setStructEnv(c: inout c, ref: typeRef)
                 if retain {
-                    self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+                    self.emitStructRetain(c: inout c, v: v, sidx: sidx, ref: typeRef)
                 } else {
                     self.emitDeinitValue(c: inout c, v: v, sidx: sidx, ref: typeRef)
                 }
@@ -1214,23 +1214,15 @@ pub impl LlvmCtx {
         }
     }
 
-    // Shallow-retain a struct value's heap-owning fields (an array field's buffer; a nested
-    // struct/enum field recursively) so a second owner co-owns them — used for an Array[Struct]
-    // CoW element retain, a by-value struct arg, and the CoW-SHARE of a struct place (1-3a).
-    // Mirrors `deepCopyStructValue`'s field dispatch EXACTLY (grounded array via
-    // `arrayFieldElemRef`, boxed skip, `localStructIdxFor` struct recursion, grounded enum via
-    // `emitEnumRetainRef`) so it rc-bumps precisely the buffers deep-copy would have made
-    // independent — i.e. every buffer a later in-place mutation must CoW (rc>1) for value
-    // semantics. The active generic env must be set by the caller (consumeIntoOwned does so via
-    // setStructEnv) for the grounding to resolve. Balanced by `emitDeinitValue` at drop; the
-    // release side never exceeds the retain side, so any residual asymmetry surfaces as a
-    // LeakSanitizer report in the ASan gate (level C), never as a UAF.
-    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
-        // a concrete registered struct: call its retain witness instead of inlining the
-        // walker (fields are concrete, so the witness body is env-independent). A generic
-        // struct stays unregistered and is walked inline under the caller's env.
-        if self.structSlotForSidx(structIndex: sidx) < self.genStructRefs.count() {
-            val slot: U64 = self.structRetainWitness(c: inout c, sidx: sidx)
+    // Retain and drop use the same concrete layout registration identity.
+    // Nested instances of one declaration (Box[Box[String]], Box[String])
+    // must call different witnesses rather than trigger an inline cycle guard.
+    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64, ref: U64) {
+        mut val reg: U64 = self.genStructRefs.count()
+        if ref != 0U64 && c.isGenericInst(ref: ref) { reg = self.genStructSlot(c: inout c, ref: ref) }
+        if reg >= self.genStructRefs.count() { reg = self.structSlotForSidx(structIndex: sidx) }
+        if reg < self.genStructRefs.count() {
+            val slot: U64 = self.structRetainWitness(c: inout c, reg: reg)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
             LLVMBuildCall2(self.b, self.retWitTy[slot], self.retWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -1286,54 +1278,53 @@ pub impl LlvmCtx {
         self.arcPop()
     }
 
-    // The retWit* slot for struct `sidx`, or retWitSidx.count() if none declared yet.
-    inout fn retWitSlot(sidx: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.retWitSidx.count() {
-            if self.retWitSidx[i] == sidx {
-                return i
-            }
-            i += 1
+    // The retain witness key is a concrete genStruct registration, just as
+    // for drop witnesses. Declaration indices cannot identify generic ABIs.
+    inout fn retWitSlot(reg: U64) -> U64 {
+        mut val index: U64 = 0U64
+        while index < self.retWitReg.count() {
+            if self.retWitReg[index] == reg { return index }
+            index += 1U64
         }
-        return self.retWitSidx.count()
+        return self.retWitReg.count()
     }
 
-    // Ensure the per-type retain witness `void @pwretain<sidx>(structVal)` is declared, and
-    // return its retWit* slot. Body emitted later (emitRetainWitnessBodies). Caller must have
-    // checked `sidx` is a registered struct.
-    inout fn structRetainWitness(c: inout Comp, sidx: U64) -> U64 {
-        val found: U64 = self.retWitSlot(sidx: sidx)
-        if found < self.retWitSidx.count() {
-            return found
-        }
-        val reg: U64 = self.structSlotForSidx(structIndex: sidx)
+    inout fn structRetainWitness(c: inout Comp, reg: U64) -> U64 {
+        val found: U64 = self.retWitSlot(reg: reg)
+        if found < self.retWitReg.count() { return found }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genStructTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwretain".bytes())
-        appendU64Dec(into: inout nm, n: sidx)
+        appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.retWitSidx.append(sidx)
+        self.retWitReg.append(reg)
         self.retWitVal.append(fv)
         self.retWitTy.append(fty)
-        return self.retWitSidx.count() - 1U64
+        return self.retWitReg.count() - 1U64
     }
 
-    // Emit the body of every declared retain witness: the field-retain walker over its single
-    // struct-value parameter. Drained by a growing cursor (a walk may declare sub-struct
-    // witnesses). Called once after the main emit pass, alongside the drop witnesses.
+    // Each witness owns its generic environment. Calls to nested witnesses
+    // grow the worklist without recursively inlining the same declaration.
     inout fn emitRetainWitnessBodies(c: inout Comp) {
-        while self.retWitDone < self.retWitSidx.count() {
-            val s: U64 = self.retWitDone
-            val sidx: U64 = self.retWitSidx[s]
-            val fv: LLVMValueRef = self.retWitVal[s]
+        while self.retWitDone < self.retWitReg.count() {
+            val slot: U64 = self.retWitDone
+            val reg: U64 = self.retWitReg[slot]
+            val fv: LLVMValueRef = self.retWitVal[slot]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitRetainWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx)
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setStructEnv(c: inout c, ref: self.genStructRefs[reg])
+            self.emitRetainWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: self.genStructDefs[reg])
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
             LLVMBuildRetVoid(self.b)
-            self.retWitDone += 1
+            self.retWitDone += 1U64
         }
     }
 

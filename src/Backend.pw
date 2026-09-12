@@ -332,13 +332,10 @@ struct LlvmCtx {
     pub mut val dropWitReg: Array[U64]
     pub mut val dropWitVal: Array[LLVMValueRef]
     pub mut val dropWitTy: Array[LLVMTypeRef]
-    // per-struct retain witnesses, keyed by struct index (parallel arrays): ONE
-    // `void @pwretain<sidx>(structVal)` shallow-retains that type's heap-owning fields
-    // (array buffers, nested struct/enum), so every CoW-share / by-value-arg retain
-    // site emits a single call instead of inlining the walker. Same lifecycle as the
-    // drop witnesses. Only CONCRETE registered structs are routed (env-independent);
-    // a generic struct stays unregistered and is walked inline under the caller's env.
-    pub mut val retWitSidx: Array[U64]
+    // Per-instance retain witnesses, keyed by genStruct registration like
+    // drop witnesses. Each pwretain<reg> uses that instance's ABI and generic
+    // environment; nested instances of one struct declaration remain distinct.
+    pub mut val retWitReg: Array[U64]
     pub mut val retWitVal: Array[LLVMValueRef]
     pub mut val retWitTy: Array[LLVMTypeRef]
     // per-struct deep-copy witnesses, keyed by struct index (parallel arrays): ONE
@@ -885,7 +882,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
