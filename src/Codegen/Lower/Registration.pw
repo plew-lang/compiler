@@ -741,7 +741,7 @@ pub impl Comp {
             val ci: U64 = f.originConformIdx - 1U64
             if ci < self.decls.conforms.count() {
                 val origin: Conform = self.decls.conforms[ci]
-                originIsTraitSubject = self.isTraitName(start: origin.typeStart, len: origin.typeLen)
+                originIsTraitSubject = self.decls.hasTraitName(nameId: origin.typeId)
             }
         }
         if originIsTraitSubject && recvRef != 0U64 {

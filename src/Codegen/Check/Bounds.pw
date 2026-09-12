@@ -345,7 +345,7 @@ pub impl Comp {
                         mut val ci: U64 = 0U64
                         while ci < self.decls.conforms.count() {
                             val edge: Conform = self.decls.conforms[ci]
-                            if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
+                            if self.decls.hasTraitName(nameId: edge.typeId) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
                                 mut val ti: U64 = 0U64
                                 while ti < self.decls.traitCount() {
                                     val traitDef: TraitDef = self.decls.traitAt(index: ti)

@@ -763,7 +763,7 @@ pub impl Comp {
         // source witness/binder owner and is deliberately not used to infer
         // the edge subject: a provided `impl A { fn double }` copied through
         // `impl B as A` has source trait A but placement subject B.
-        val placementIsTraitSubject: Bool = self.isTraitName(start: cf.typeStart, len: cf.typeLen)
+        val placementIsTraitSubject: Bool = self.decls.hasTraitName(nameId: cf.typeId)
         if cf.traitId != f.originTraitId || cf.traitStart != f.originTraitOwner { return <StaticConformanceProof.Missing /> }
         // A direct implementation owns its output through its own witness;
         // keep that precise substitution rather than rediscovering a wider

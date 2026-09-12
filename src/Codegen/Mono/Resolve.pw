@@ -112,7 +112,7 @@ pub impl Comp {
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
-            if !cf.derived && !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
+            if !cf.derived && !(self.decls.hasTraitName(nameId: cf.typeId)) && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
                 val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true)
                 if witness.conformIdx != 0U64 {
                     mut val edges: Array[WitnessMatch] = []
@@ -135,7 +135,7 @@ pub impl Comp {
             ci = 0U64
             while ci < self.decls.conforms.count() {
                 val edge: Conform = self.decls.conforms[ci]
-                if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
+                if self.decls.hasTraitName(nameId: edge.typeId) && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
                     val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs, selfRef: baseRef)
                     if witness.conformIdx != 0U64 {
                         mut val edges: Array[WitnessMatch] = state.edges

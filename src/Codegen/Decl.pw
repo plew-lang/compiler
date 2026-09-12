@@ -546,7 +546,7 @@ pub impl Comp {
                 // `T` precisely when the current declaration proves T: B.
                 // This is a trait-pattern source, so receiver head spelling
                 // must not be compared to T.
-                if typeRef != 0U64 && self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                if typeRef != 0U64 && self.decls.hasTraitName(nameId: cf.typeId) {
                     val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
                     val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />)
                     match proof {
@@ -575,7 +575,7 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) && cf.extId == 0U64 {
                 if cf.traitId == aTraitId && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
-                    if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                    if self.decls.hasTraitName(nameId: cf.typeId) {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
                         if self.conformExistsTraitInstance(typeId: tId, traitId: cf.typeId, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
                             count += 1
@@ -601,7 +601,7 @@ pub impl Comp {
             // facts too (not only trait-subject `impl B as A` edges).
             val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: traitArgs)
             if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && matchResult.conformIdx != 0U64 && self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues) {
-                if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
+                if !(self.decls.hasTraitName(nameId: cf.typeId)) {
                     return true
                 }
             }
@@ -610,7 +610,7 @@ pub impl Comp {
                 // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
                 // a bare inter-trait conform whose subject trait is the view, or an
                 // extension conform whose extId is the view.
-                if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                if self.decls.hasTraitName(nameId: cf.typeId) {
                     mut val viaView: Bool = false
                     if cf.extId == 0U64 {
                         if cf.typeId == viewId {
@@ -650,13 +650,13 @@ pub impl Comp {
                 // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
                 // those stay view-gated (`value#Ext`), handled by the extension machinery —
                 // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
-                if cf.extId == 0U64 && self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                if cf.extId == 0U64 && self.decls.hasTraitName(nameId: cf.typeId) {
                     // candidate concrete types: those conforming to the subject trait B.
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
                         if cand.traitId == cf.typeId && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=cand.traitArgs />) {
-                            if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
+                            if !(self.decls.hasTraitName(nameId: cand.typeId)) {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
                                 // is already view-rooted (T reaches B only via #root), the

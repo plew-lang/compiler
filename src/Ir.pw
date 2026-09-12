@@ -1120,7 +1120,7 @@ export struct Conform {
     pub val sourceModule: U64
     pub val typeStart: U64
     pub val typeLen: U64
-    pub val typeId: U64 = 0
+    pub val typeId: U64
     // Full structured subject type. The legacy typeId/typeArity pair is kept for
     // older conformance walks, but declaration registration must distinguish
     // `Box[I64]` from `Box[String]` and alpha-equivalent generic subjects.
