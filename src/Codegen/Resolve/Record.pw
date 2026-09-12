@@ -1306,12 +1306,12 @@ pub impl Comp {
                 // argument sources; context does not permit implicit conversion.
                 if methodCallee < self.arena.functionCount() {
                     val selectedMethod: Func = self.arena.functionAt(index: methodCallee)
-                    val mps: Array[Param] = self.copyFuncParams(params: selectedMethod.params)
                     mut val mk: U64 = 0U64
                     while mk < args.len {
                         val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
-                        if parameterIndex < mps.count() {
-                            val mctx: U64 = self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: mps[parameterIndex].ty)
+                        if parameterIndex < selectedMethod.params.count() {
+                            val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
+                            val mctx: U64 = self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty)
                             if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
                                 val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
                                 val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
