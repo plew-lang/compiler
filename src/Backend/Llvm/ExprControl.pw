@@ -330,7 +330,7 @@ pub impl LlvmCtx {
                     // (`C` "compatible with" `any P`), skipping a required conversion. The
                     // frontend already rejects a missing `from`, so the error below is a
                     // defensive backstop.
-                    val ffi: U64 = c.bodyCallee(exprId: tryId)
+                    val ffi: U64 = c.bodyCallee(exprId: tryId, slot: 1U64)
                     if ffi >= c.arena.functionCount() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "internal error: Mono did not finalize the `try` error-conversion factory")
                     }

@@ -1,7 +1,7 @@
 // `try` error conversion (spec/13): when the function's error type E differs from
 // the operand's E', `try` converts E' -> E through E's `from` factory (an anonymous
 // `factory(from:)`). Mirrors `x as E`; here the aggregate `AppErr` absorbs `IoErr`.
-import @Std/Core
+import @Std/Core with { From }
 import @Std/Io with { print }
 
 struct IoErr { pub val code: I32 }
@@ -9,7 +9,7 @@ pub impl IoErr { factory }
 struct AppErr { pub val code: I32 }
 pub impl AppErr { factory }
 
-pub impl AppErr {
+pub impl AppErr as From[IoErr] {
     factory(from: IoErr) {
         return <AppErr code=from.code + 100 />
     }
