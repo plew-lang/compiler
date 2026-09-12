@@ -72,7 +72,28 @@ pub impl Arena {
         return self.structs.count()
     }
 
+    fn firstEnumNamed(nameId: U64) -> U64 {
+        val entry = self.enumNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.enums.count()
+    }
+
+    fn firstGenericEnumNamed(nameId: U64) -> U64 {
+        val entry = self.genericEnumNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.enums.count()
+    }
+
     inout fn registerEnum(declaration~: EnumDef) {
+        val entry = self.enums.count() + 1U64
+        if self.enumNameHeads.getOr(key: declaration.nameId, fallback: 0U64) == 0U64 {
+            self.enumNameHeads[declaration.nameId] = entry
+        }
+        if declaration.typeParams.count() > 0U64 {
+            if self.genericEnumNameHeads.getOr(key: declaration.nameId, fallback: 0U64) == 0U64 {
+                self.genericEnumNameHeads[declaration.nameId] = entry
+            }
+        }
         if self.enumsByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
             self.enumsByOffset[declaration.defOffset] = self.enums.count() + 1U64
         }

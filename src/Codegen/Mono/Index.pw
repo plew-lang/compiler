@@ -21,28 +21,11 @@ pub impl Comp {
     // Index in c.arena.enums of ANY enum named (nameStart,nameLen) — generic or not.
     inout fn anyEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.enumCount() {
-            if self.arena.enumAt(index: i).nameId == qId {
-                return i
-            }
-            i += 1
-        }
-        return self.arena.enumCount()
+        return self.arena.firstEnumNamed(nameId: qId)
     }
 
     inout fn genericEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.enumCount() {
-            val e: EnumDef = self.arena.enumAt(index: i)
-            if e.typeParams.count() > 0 {
-                if e.nameId == qId {
-                    return i
-                }
-            }
-            i += 1
-        }
-        return self.arena.enumCount()
+        return self.arena.firstGenericEnumNamed(nameId: qId)
     }
 }

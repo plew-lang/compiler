@@ -2285,6 +2285,8 @@ export struct Arena {
     mut val structNameNext: Array[U64] = []
     mut val enums: Array[EnumDef] = []
     mut val enumsByOffset: Dictionary[U64, U64] = [:]
+    mut val enumNameHeads: Dictionary[U64, U64] = [:]
+    mut val genericEnumNameHeads: Dictionary[U64, U64] = [:]
     // Canonical scalar semantic type rows. `types` is the legacy mirror while
     // consumers migrate; both tables have the same index during that period.
     // New hot-path readers must use typeTerms and these owner-specific pools.

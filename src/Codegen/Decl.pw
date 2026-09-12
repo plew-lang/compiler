@@ -907,14 +907,7 @@ pub impl Comp {
         // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
-        mut val i: U64 = 0
-        while i < self.arena.enumCount() {
-            if self.arena.enumAt(index: i).nameId == q {
-                return i
-            }
-            i += 1
-        }
-        return self.arena.enumCount()
+        return self.arena.firstEnumNamed(nameId: q)
     }
 
     // enumIdxByName restricted to a CONCRETE (0-type-param) declaration — the backend's

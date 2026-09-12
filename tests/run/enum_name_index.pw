@@ -1,0 +1,52 @@
+import /Ir with { Arena, Bind, EnumDef }
+import @Std/Io with { write }
+
+fn enumeration(nameId: U64, generic: Bool) -> EnumDef {
+    mut val parameters: Array[Bind] = []
+    if generic { parameters.append(<Bind nameStart=0U64 nameLen=0U64 nameId=42U64 fieldStart=0U64 fieldLen=0U64 />) }
+    return <EnumDef nameStart=0U64 nameLen=0U64 nameId=nameId typeParams=parameters variants=[] isUnique=false />
+}
+fn verify(arena: Arena, nameId: U64) {
+    mut val first = arena.enumCount()
+    mut val generic = arena.enumCount()
+    mut val index: U64 = 0U64
+    while index < arena.enumCount() {
+        val declaration = arena.enumAt(index: index)
+        if declaration.nameId == nameId {
+            if first == arena.enumCount() { first = index }
+            if declaration.typeParams.count() > 0U64 {
+                if generic == arena.enumCount() { generic = index }
+            }
+        }
+        index += 1U64
+    }
+    if arena.firstEnumNamed(nameId: nameId) != first { panic "first mismatch" }
+    if arena.firstGenericEnumNamed(nameId: nameId) != generic { panic "generic mismatch" }
+}
+fn main() {
+    mut val arena: Arena = <Arena />
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    mut val index: U64 = 0U64
+    while index < 80U64 {
+        arena.registerEnum(enumeration(nameId: index % 17U64, generic: index % 3U64 == 0U64))
+        mut val query: U64 = 0U64
+        while query < 19U64 {
+            verify(arena: arena, nameId: query)
+            query += 1U64
+        }
+        index += 1U64
+    }
+    mut val copy = arena
+    arena.registerEnum(enumeration(nameId: 18446744073709551615U64, generic: true))
+    copy.registerEnum(enumeration(nameId: 18446744073709551615U64, generic: false))
+    arena.registerEnum(enumeration(nameId: 0U64, generic: false))
+    copy.registerEnum(enumeration(nameId: 0U64, generic: true))
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: copy, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    verify(arena: copy, nameId: 18446744073709551615U64)
+    if arena.enumCount() != 82U64 || copy.enumCount() != 82U64 { panic "copy row mutation escaped" }
+    if copy.firstGenericEnumNamed(nameId: 18446744073709551615U64) != copy.enumCount() { panic "original generic index escaped" }
+    write(s: "enum-name-index-ok\n")
+}
