@@ -57,7 +57,7 @@ pub impl LlvmCtx {
         if refIsAny(c: inout c, ref: pt) {
             return self.anyTy
         }
-        if c.isGenericInst(ref: pt) {
+        if c.isGenericInst(ref: pt) || (pt < c.arena.typeCount() && c.arena.typeAt(index: pt).isRecord) {
             return self.llvmTypeOfRef(c: inout c, ref: pt)
         }
         // a bare scalar type param (`v: T` with T -> F64 / I32): use the GROUNDED name so the
@@ -118,15 +118,11 @@ pub impl LlvmCtx {
             if refIsAny(c: inout c, ref: rt) {
                 return self.anyTy
             }
-            if c.isGenericInst(ref: rt) {
+            if c.isGenericInst(ref: rt) || (rt < c.arena.typeCount() && c.arena.typeAt(index: rt).isRecord) {
                 return self.llvmTypeOfRef(c: inout c, ref: rt)
             }
-            // lower from the GROUNDED return ref's name (not the declared `f.retStart`
-            // span) ONLY when grounding actually transformed a real ret type — so a
-            // grounded anonymous record (`(v:T)` -> `(v:I32)`) resolves to its concrete
-            // instance's struct type, not the i64-defaulting template. When grounding is a
-            // no-op (`rt == f.retTy`) or there is no structured ret ref (`f.retTy == 0`, a
-            // derived witness carrying only `f.retStart`), fall back to the declared span.
+            // Scalar substitutions use their grounded spelling. Legacy derived
+            // witnesses without a structured result keep the declared span.
             if f.retTy != 0U64 {
                 if rt != f.retTy {
                     if rt < c.arena.typeCount() {

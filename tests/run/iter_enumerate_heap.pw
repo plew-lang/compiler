@@ -1,0 +1,22 @@
+// A record layout materialized from a grounded adapter result must retain and
+// destroy heap fields correctly, including the loop's destructured bindings.
+import @Std/Core with { Iterator }
+import @Std/Io with { print }
+
+struct Words { pub mut val remaining: I32 }
+pub impl Words { factory }
+pub impl Words as Iterator {
+    type Item = String
+    inout fn next() -> Optional[String] {
+        if self.remaining == 0I32 { return <Optional.None /> }
+        self.remaining -= 1I32
+        return <Optional.Some v="rec" + "ord" />
+    }
+}
+
+fn main() {
+    for (index: val index, value: val word) in <Words remaining=2I32 />.enumerate() {
+        print(index)
+        print(word)
+    }
+}

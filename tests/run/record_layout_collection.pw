@@ -1,0 +1,50 @@
+// Layout collection consumes semantic fields, even after pure substitution has
+// left an opaque template name attached. Equal records share a layout; equal
+// spellings with different nominal owners must not share one.
+import /Frontend with { Comp }
+import /Ir with { TypeRef, Bind }
+import @Std/Io with { write }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val label = compiler.internBytes(s: "value")
+    val template = compiler.internBytes(s: "(value:T)")
+    val integer = compiler.internBytes(s: "I32")
+    val integerRef = compiler.pushType(t: <TypeRef nameStart=integer.nameStart nameLen=integer.nameLen args=[] />)
+    val record = compiler.pushType(t: <TypeRef nameStart=template.nameStart nameLen=template.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[integerRef] />)
+    val grounded = compiler.groundTypeRef(ref: record)
+    if !compiler.typeRefEq(a: grounded, b: record) { panic "ground record meaning changed" }
+    if compiler.arena.structCount() != 0U64 { panic "pure grounding registered a layout" }
+    val parameter = compiler.internBytes(s: "T")
+    val parameterRef = compiler.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=7U64 args=[] />)
+    val abstract = compiler.rebuildRecordTypeTerm(t: compiler.arena.typeAt(index: record), fieldTerms: [parameterRef])
+    compiler.cur.typeParams = [<Bind nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=7U64 fieldStart=0U64 fieldLen=0U64 />]
+    compiler.cur.typeArgs = [integerRef]
+    val substituted = compiler.groundTypeRef(ref: abstract)
+    compiler.cur.typeParams = []
+    compiler.cur.typeArgs = []
+    if !compiler.typeRefEq(a: substituted, b: record) { panic "record substitution lost field terms" }
+    if compiler.arena.structCount() != 0U64 { panic "record substitution registered a layout" }
+    compiler.inCollection = true
+    compiler.scanType(ref: grounded)
+    val layout = compiler.recordStructIndex(ref: record)
+    if layout >= compiler.arena.structCount() { panic "ground record layout missing" }
+    val count = compiler.arena.structCount()
+    compiler.scanType(ref: record)
+    if compiler.arena.structCount() != count { panic "record layout not deduplicated" }
+    val nominal = compiler.internBytes(s: "Payload")
+    val first = compiler.pushType(t: <TypeRef nameStart=nominal.nameStart nameLen=nominal.nameLen args=[] hasDecl=true declOffset=11U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=nominal.nameStart nameLen=nominal.nameLen args=[] hasDecl=true declOffset=22U64 />)
+    val firstRecord = compiler.rebuildRecordTypeTerm(t: compiler.arena.typeAt(index: record), fieldTerms: [first])
+    val secondRecord = compiler.rebuildRecordTypeTerm(t: compiler.arena.typeAt(index: record), fieldTerms: [second])
+    compiler.scanType(ref: firstRecord)
+    compiler.scanType(ref: secondRecord)
+    val firstLayout = compiler.recordStructIndex(ref: firstRecord)
+    val secondLayout = compiler.recordStructIndex(ref: secondRecord)
+    if firstLayout >= compiler.arena.structCount() || secondLayout >= compiler.arena.structCount() || firstLayout == secondLayout { panic "nominal field identity lost" }
+    val nested = compiler.rebuildRecordTypeTerm(t: compiler.arena.typeAt(index: record), fieldTerms: [secondRecord])
+    compiler.scanType(ref: nested)
+    if compiler.recordStructIndex(ref: nested) >= compiler.arena.structCount() { panic "nested record layout missing" }
+    write(s: "record-layout-collection-ok\n")
+}

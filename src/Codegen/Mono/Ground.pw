@@ -715,6 +715,43 @@ pub impl Comp {
         return self.arena.structCount()
     }
 
+    // Materialize an ABI layout from closed semantic fields at the collection
+    // boundary. Grounding itself may already have happened in a BodyInstance;
+    // neither a changed child nor an attached template is a prerequisite here.
+    inout fn collectRecordLayout(ref: U64) {
+        if !self.inCollection || !self.tyRefIsGround(ref: ref) { return }
+        if self.recordStructIndex(ref: ref) < self.arena.structCount() { return }
+        val term: TypeRef = self.arena.typeAt(index: ref)
+        if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() {
+            self.errorAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record fields during layout collection")
+            return
+        }
+        mut val fields: Array[FieldDef] = []
+        mut val index: U64 = 0U64
+        while index < term.recordFieldTerms.count() {
+            val labelId: U64 = term.recordFieldLabels[index]
+            if labelId == 0U64 || labelId > self.interner.entries.count() {
+                self.errorAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record label during layout collection")
+                return
+            }
+            val label: InternedSpan = self.interner.entries[labelId - 1U64]
+            val fieldRef: U64 = term.recordFieldTerms[index]
+            val field: TypeRef = self.arena.typeAt(index: fieldRef)
+            fields.append(<FieldDef nameStart=label.start nameLen=label.len nameId=labelId tyStart=field.nameStart tyLen=field.nameLen tyNameId=field.nameId tyIsArray=false ty=fieldRef isMut=false hasDefault=false defaultVal=0U64 vis=2U64 />)
+            index += 1U64
+        }
+        mut val name: Bind = self.internBytes(s: stringFromBytesUnchecked(self.recordTypeKeyFromRef(ref: ref)))
+        // The readable spelling is not semantic identity (same-spelled nominal
+        // declarations and existential fields can differ). Structural matching
+        // above deduplicates; disambiguate occupied ABI names without aliasing.
+        mut val suffix: U64 = self.arena.structCount()
+        while self.arena.firstStructNamed(nameId: name.nameId) < self.arena.structCount() {
+            name = self.internTmpName(prefix: "(record.layout.", n: suffix)
+            suffix += 1U64
+        }
+        self.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=fields isUnique=false isExtern=false />)
+    }
+
     inout fn groundRecordStruct(ref: U64) -> U64 {
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.nameLen == 0U64 {
@@ -831,11 +868,7 @@ pub impl Comp {
                 ri += 1U64
             }
             if !changed { return ref }
-            val rebuilt: U64 = self.rebuildRecordTypeTerm(t: t, fieldTerms: fields)
-            // This is the sole semantic→ABI boundary for records: the traversal
-            // above consumed only Record children; materialization registers the
-            // concrete synthetic layout needed by the current LLVM backend.
-            return self.groundRecordStruct(ref: rebuilt)
+            return self.rebuildRecordTypeTerm(t: t, fieldTerms: fields)
         }
         if t.assocNameId != 0U64 {
             return self.resolveTy(tyRef: ref)
@@ -1211,12 +1244,10 @@ pub impl Comp {
                 self.scanType(ref: t.recordFieldTerms[field])
                 field += 1U64
             }
+            self.collectRecordLayout(ref: ref)
         }
-        // Legacy name-only record adapters still require their registered fields.
-        // an anonymous record `(index:U64, value:I32)` (grounded + registered above by
-        // groundTypeRef -> groundRecordStruct): scan its field types so a nested generic /
-        // array / Ref element registers too. Records carry no type args, so the args loop
-        // above misses their components. Detect by the leading `(`.
+        // Legacy name-only adapters still use groundRecordStruct and carry
+        // their fields in the registered layout instead of explicit children.
         if !t.isRecord && t.nameLen > 0U64 {
             if self.arena.bytes[t.nameStart] == 40U8 {
                 val rsi: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)

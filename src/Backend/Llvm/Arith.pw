@@ -313,35 +313,21 @@ pub impl LlvmCtx {
                 gty = rgty
             }
         }
-        // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
-        // (Lower.pw): resolve its record struct from the construction context — the
-        // enclosing field/payload builder sets `self.expectedTy` to the field's declared
-        // record type (a `(`-prefixed canonical name). Without this, a record used as an
-        // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
-        if typeLen == 0U64 {
-            if self.expectedTy != 0U64 {
-                // ground the expected record type through the active env so a record built
-                // in a generic body (`return (v: x)` where the declared return is `(v: T)`)
-                // resolves to its concrete instance `(v: I32)` — not the i64-defaulting
-                // template. Mirrors the `gty` grounding above for named generic structs.
-                mut val exTy: U64 = self.expectedTy
-                if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
-                    exTy = c.groundTypeRef(ref: exTy)
-                }
-                if exTy < c.arena.typeCount() {
-                    val et: TypeRef = c.arena.typeAt(index: exTy)
-                    if et.isRecord {
-                        // Grounded record terms may retain the template's name.
-                        // Use the same structural layout identity as llvmTypeOfRef.
-                        val layout: U64 = c.recordStructIndex(ref: exTy)
-                        val rreg: U64 = self.structSlotForSidx(structIndex: layout)
-                        if rreg < self.genStructRefs.count() {
-                            self.expectedTy = 0U64
-                            return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: layout), sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
-                        }
-                    }
-                }
+        // Record construction and its ABI type consume the same semantic fields,
+        // including named lowered literals that retain a template attachment.
+        mut val recordType: U64 = gty
+        if typeLen == 0U64 && self.expectedTy != 0U64 {
+            recordType = c.groundTypeRef(ref: self.expectedTy)
+        }
+        if recordType != 0U64 && recordType < c.arena.typeCount() && c.arena.typeAt(index: recordType).isRecord {
+            val layout: U64 = c.recordStructIndex(ref: recordType)
+            val slot: U64 = self.structSlotForSidx(structIndex: layout)
+            if slot >= self.genStructRefs.count() {
+                c.errorAt(offset: typeStart, msg: "internal error (compiler bug): record construction requires a registered semantic layout")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
+            self.expectedTy = 0U64
+            return self.buildStructValue(c: inout c, sd: c.arena.structAt(index: layout), sty: self.genStructTys[slot], fields: fields, errOffset: typeStart)
         }
         if isEnum {
             return self.genLlvmMakeEnum(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
