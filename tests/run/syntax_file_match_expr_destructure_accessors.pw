@@ -19,6 +19,7 @@ fn main() {
         _ => { print(0U64) }
     }
     print(syntaxExprMatchArmCount(file: file, expr: matchExpr))
+    // The arm contains one statement: give 2U64.
     print(syntaxBlockStmtCount(file: file, block: syntaxBlock(file: file, id: arm.body)))
     match destructure.kind {
         SyntaxStmtKind.Destructure => { print(1U64) }
