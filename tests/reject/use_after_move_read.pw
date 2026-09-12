@@ -1,7 +1,9 @@
 // spec/03: reading a moved-out local (here moving it into a struct field) is invalid.
 import @Std/Io with { print }
-unique struct File { val fd: I64  deinit { print(self.fd) } }
-unique struct Holder { val f: File }
+unique struct File { pub val fd: I64  deinit { print(self.fd) } }
+pub impl File { factory }
+unique struct Holder { pub val f: File }
+pub impl Holder { factory }
 fn take(f: move File) { }
 fn main() {
     mut val u: File = <File fd=1I64 />
