@@ -172,43 +172,55 @@ export fn analyzeCanonicalMidOwnership(c: Comp, canonical: MidCanonicalBody) -> 
     if body.entry >= body.blocks.len { return incoming }
     incoming.set(i: body.entry, value: initial)
     reachable.set(i: body.entry, value: true)
-    mut val changed: Bool = true
-    while changed {
-        changed = false
-        blockI = 0U64
-        while blockI < body.blocks.len {
-            if reachable[blockI] {
-                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
-                val out: Array[MidOwnership] = canonicalMidTransferBlock(c: c, body: body, block: block, input: incoming[blockI])
-                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
-                    val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
-                    mut val successorI: U64 = 0U64
-                    while successorI < successors.count() {
-                        val successor: U64 = successors[successorI]
-                        if successor < body.blocks.len {
-                            if !reachable[successor] {
-                                incoming.set(i: successor, value: out)
-                                reachable.set(i: successor, value: true)
-                                changed = true
-                            } else {
-                                val before: Array[MidOwnership] = incoming[successor]
-                                mut val merged: Array[MidOwnership] = []
-                                localI = 0U64
-                                while localI < before.count() {
-                                    merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
-                                    localI = localI + 1U64
-                                }
-                                if midOwnershipStateChanged(before: before, after: merged) {
-                                    incoming.set(i: successor, value: merged)
-                                    changed = true
-                                }
+    // Only a changed input can change a block's transfer result. Keep at
+    // most one pending visit per block while propagating to the fixed point.
+    mut val pending: Array[Bool] = []
+    blockI = 0U64
+    while blockI < body.blocks.len {
+        pending.append(false)
+        blockI += 1U64
+    }
+    mut val worklist: Array[U64] = [body.entry]
+    pending.set(i: body.entry, value: true)
+    mut val next: U64 = 0U64
+    while next < worklist.count() {
+        blockI = worklist[next]
+        next += 1U64
+        pending.set(i: blockI, value: false)
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        val out: Array[MidOwnership] = canonicalMidTransferBlock(c: c, body: body, block: block, input: incoming[blockI])
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+            mut val successorI: U64 = 0U64
+            while successorI < successors.count() {
+                val successor: U64 = successors[successorI]
+                if successor < body.blocks.len {
+                    if !reachable[successor] {
+                        incoming.set(i: successor, value: out)
+                        reachable.set(i: successor, value: true)
+                        if !pending[successor] {
+                            worklist.append(successor)
+                            pending.set(i: successor, value: true)
+                        }
+                    } else {
+                        val before: Array[MidOwnership] = incoming[successor]
+                        mut val merged: Array[MidOwnership] = []
+                        localI = 0U64
+                        while localI < before.count() {
+                            merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
+                            localI = localI + 1U64
+                        }
+                        if midOwnershipStateChanged(before: before, after: merged) {
+                            incoming.set(i: successor, value: merged)
+                            if !pending[successor] {
+                                worklist.append(successor)
+                                pending.set(i: successor, value: true)
                             }
                         }
-                        successorI = successorI + 1U64
                     }
                 }
+                successorI = successorI + 1U64
             }
-            blockI = blockI + 1U64
         }
     }
     return incoming
@@ -338,43 +350,55 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
     if body.entry >= body.blocks.len { return incoming }
     incoming.set(i: body.entry, value: initial)
     reachable.set(i: body.entry, value: true)
-    mut val changed: Bool = true
-    while changed {
-        changed = false
-        blockI = 0U64
-        while blockI < body.blocks.len {
-            if reachable[blockI] {
-                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
-                val out: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(c: c, body: body, block: block, input: incoming[blockI])
-                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
-                    val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
-                    mut val successorI: U64 = 0U64
-                    while successorI < successors.count() {
-                        val successor: U64 = successors[successorI]
-                        if successor < body.blocks.len {
-                            if !reachable[successor] {
-                                incoming.set(i: successor, value: out)
-                                reachable.set(i: successor, value: true)
-                                changed = true
-                            } else {
-                                val before: Array[MidAccessibility] = incoming[successor]
-                                mut val merged: Array[MidAccessibility] = []
-                                localI = 0U64
-                                while localI < before.count() {
-                                    merged.append(midAccessibilityJoin(left: before[localI], right: out[localI]))
-                                    localI = localI + 1U64
-                                }
-                                if midAccessibilityStateChanged(before: before, after: merged) {
-                                    incoming.set(i: successor, value: merged)
-                                    changed = true
-                                }
+    // Only a changed input can change a block's transfer result. Keep at
+    // most one pending visit per block while propagating to the fixed point.
+    mut val pending: Array[Bool] = []
+    blockI = 0U64
+    while blockI < body.blocks.len {
+        pending.append(false)
+        blockI += 1U64
+    }
+    mut val worklist: Array[U64] = [body.entry]
+    pending.set(i: body.entry, value: true)
+    mut val next: U64 = 0U64
+    while next < worklist.count() {
+        blockI = worklist[next]
+        next += 1U64
+        pending.set(i: blockI, value: false)
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        val out: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(c: c, body: body, block: block, input: incoming[blockI])
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+            mut val successorI: U64 = 0U64
+            while successorI < successors.count() {
+                val successor: U64 = successors[successorI]
+                if successor < body.blocks.len {
+                    if !reachable[successor] {
+                        incoming.set(i: successor, value: out)
+                        reachable.set(i: successor, value: true)
+                        if !pending[successor] {
+                            worklist.append(successor)
+                            pending.set(i: successor, value: true)
+                        }
+                    } else {
+                        val before: Array[MidAccessibility] = incoming[successor]
+                        mut val merged: Array[MidAccessibility] = []
+                        localI = 0U64
+                        while localI < before.count() {
+                            merged.append(midAccessibilityJoin(left: before[localI], right: out[localI]))
+                            localI = localI + 1U64
+                        }
+                        if midAccessibilityStateChanged(before: before, after: merged) {
+                            incoming.set(i: successor, value: merged)
+                            if !pending[successor] {
+                                worklist.append(successor)
+                                pending.set(i: successor, value: true)
                             }
                         }
-                        successorI = successorI + 1U64
                     }
                 }
+                successorI = successorI + 1U64
             }
-            blockI = blockI + 1U64
         }
     }
     return incoming
@@ -632,43 +656,55 @@ fn canonicalMidOwnershipAfterCliffs(c: Comp, canonical: MidCanonicalBody, plan: 
     if body.entry >= body.blocks.len { return incoming }
     incoming.set(i: body.entry, value: initial)
     reachable.set(i: body.entry, value: true)
-    mut val changed: Bool = true
-    while changed {
-        changed = false
-        blockI = 0U64
-        while blockI < body.blocks.len {
-            if reachable[blockI] {
-                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
-                val out: Array[MidOwnership] = canonicalMidTransferBlockAfterCliffs(c: c, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
-                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
-                    val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
-                    mut val successorI: U64 = 0U64
-                    while successorI < successors.count() {
-                        val successor: U64 = successors[successorI]
-                        if successor < body.blocks.len {
-                            if !reachable[successor] {
-                                incoming.set(i: successor, value: out)
-                                reachable.set(i: successor, value: true)
-                                changed = true
-                            } else {
-                                val before: Array[MidOwnership] = incoming[successor]
-                                mut val merged: Array[MidOwnership] = []
-                                localI = 0U64
-                                while localI < before.count() {
-                                    merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
-                                    localI = localI + 1U64
-                                }
-                                if midOwnershipStateChanged(before: before, after: merged) {
-                                    incoming.set(i: successor, value: merged)
-                                    changed = true
-                                }
+    // Only a changed input can change a block's transfer result. Keep at
+    // most one pending visit per block while propagating to the fixed point.
+    mut val pending: Array[Bool] = []
+    blockI = 0U64
+    while blockI < body.blocks.len {
+        pending.append(false)
+        blockI += 1U64
+    }
+    mut val worklist: Array[U64] = [body.entry]
+    pending.set(i: body.entry, value: true)
+    mut val next: U64 = 0U64
+    while next < worklist.count() {
+        blockI = worklist[next]
+        next += 1U64
+        pending.set(i: blockI, value: false)
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        val out: Array[MidOwnership] = canonicalMidTransferBlockAfterCliffs(c: c, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+            mut val successorI: U64 = 0U64
+            while successorI < successors.count() {
+                val successor: U64 = successors[successorI]
+                if successor < body.blocks.len {
+                    if !reachable[successor] {
+                        incoming.set(i: successor, value: out)
+                        reachable.set(i: successor, value: true)
+                        if !pending[successor] {
+                            worklist.append(successor)
+                            pending.set(i: successor, value: true)
+                        }
+                    } else {
+                        val before: Array[MidOwnership] = incoming[successor]
+                        mut val merged: Array[MidOwnership] = []
+                        localI = 0U64
+                        while localI < before.count() {
+                            merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
+                            localI = localI + 1U64
+                        }
+                        if midOwnershipStateChanged(before: before, after: merged) {
+                            incoming.set(i: successor, value: merged)
+                            if !pending[successor] {
+                                worklist.append(successor)
+                                pending.set(i: successor, value: true)
                             }
                         }
-                        successorI = successorI + 1U64
                     }
                 }
+                successorI = successorI + 1U64
             }
-            blockI = blockI + 1U64
         }
     }
     return incoming
