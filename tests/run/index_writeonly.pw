@@ -1,0 +1,14 @@
+// A simple subscript assignment requires IndexSet, without an Index read.
+import @Std/Core with { IndexSet }
+import @Std/Io with { print }
+struct Shelf { pub mut val item: I64 }
+pub impl Shelf { factory }
+pub impl Shelf as IndexSet[U64] {
+    type Value = I64
+    inout fn indexSet(key: U64, value~: I64) { self.item = value }
+}
+fn main() {
+    mut val shelf = <Shelf item=0I64 />
+    shelf[0U64] = 3I64
+    print(shelf.item)
+}

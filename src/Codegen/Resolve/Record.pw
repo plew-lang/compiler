@@ -1236,55 +1236,59 @@ pub impl Comp {
                     i += 1
                 }
                 val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv))
-                mut val methodCallee: U64 = self.resolvedCallee(id: exprId)
-                // A factory is lowered to Expr.Method but its receiver is a
-                // type spelling, not a value receiver.  Select its associated
-                // callable here while Record still owns that lexical/type-name
-                // source; Mono must only ground the resulting Direct template.
-                if methodCallee >= self.arena.functionCount() {
-                    val assocRecv: Bind = self.assocRecvName(recv: recv)
-                    if assocRecv.nameLen != 0U64 {
-                        methodCallee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    }
-                }
-                // Some valid inherited surfaces (notably a newtype's
-                // underlying methods) have no early type-cache callee. Record
-                // still owns the one frontend selection: resolve it now from
-                // the already-recorded receiver, rather than leaving Mono to
-                // reopen this method Expr during finalization.
-                if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 {
-                    methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
-                }
-                // A parametric field receiver (`self.items: Array[T]`) has a
-                // complete TypeTerm but can still require the ordinary
-                // syntax-aware frontend query for its intrinsic collection
-                // surface. This is still declaration-time source selection:
-                // Record owns the lexical `self.items` scope and publishes the
-                // resulting template once; Mono only grounds it later.
-                if methodCallee >= self.arena.functionCount() {
-                    methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                }
-                // Newtype member inheritance selects the underlying surface
-                // while preserving the authored newtype as the value term.
-                // The finalizer already normalizes that receiver for the
-                // selected declaration; Record must make the same frontend
-                // selection so it can publish a Direct template first.
-                if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
-                    val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
-                    val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
-                    if underlying != 0U64 && underlying < self.arena.typeCount() {
-                        val under: TypeRef = self.arena.typeAt(index: underlying)
-                        methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
-                    }
-                }
-                // A lexical bound selects a requirement/provided member, even
-                // when ordinary lookup can see a concrete witness elsewhere.
-                // Keep its symbolic signature and proof on the static route;
-                // the abstract checker validates that requirement, and Mono
-                // chooses the concrete witness only in the body environment.
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
-                if requiredTraitOwner != 0U64 {
+                // Verify publishes this cache through resolveWrittenMethod, so a
+                // selected entry already satisfies the synthetic requirement.
+                // Only unresolved receivers need the parametric Record query.
+                mut val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                if requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
                     methodCallee = self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+                } else if requiredTraitOwner == 0U64 {
+                    // A factory is lowered to Expr.Method but its receiver is a
+                    // type spelling, not a value receiver.  Select its associated
+                    // callable here while Record still owns that lexical/type-name
+                    // source; Mono must only ground the resulting Direct template.
+                    if methodCallee >= self.arena.functionCount() {
+                        val assocRecv: Bind = self.assocRecvName(recv: recv)
+                        if assocRecv.nameLen != 0U64 {
+                            methodCallee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        }
+                    }
+                    // Some valid inherited surfaces (notably a newtype's
+                    // underlying methods) have no early type-cache callee. Record
+                    // still owns the one frontend selection: resolve it now from
+                    // the already-recorded receiver, rather than leaving Mono to
+                    // reopen this method Expr during finalization.
+                    if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 {
+                        methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                    }
+                    // A parametric field receiver (`self.items: Array[T]`) has a
+                    // complete TypeTerm but can still require the ordinary
+                    // syntax-aware frontend query for its intrinsic collection
+                    // surface. This is still declaration-time source selection:
+                    // Record owns the lexical `self.items` scope and publishes the
+                    // resulting template once; Mono only grounds it later.
+                    if methodCallee >= self.arena.functionCount() {
+                        methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
+                    // Newtype member inheritance selects the underlying surface
+                    // while preserving the authored newtype as the value term.
+                    // The finalizer already normalizes that receiver for the
+                    // selected declaration; Record must make the same frontend
+                    // selection so it can publish a Direct template first.
+                    if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+                        val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
+                        val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
+                        if underlying != 0U64 && underlying < self.arena.typeCount() {
+                            val under: TypeRef = self.arena.typeAt(index: underlying)
+                            methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
+                        }
+                    }
+                    // A lexical bound selects a requirement/provided member, even
+                    // when ordinary lookup can see a concrete witness elsewhere.
+                    // Keep its symbolic signature and proof on the static route;
+                    // the abstract checker validates that requirement, and Mono
+                    // chooses the concrete witness only in the body environment.
                 }
                 val boundMember: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
                 match boundMember {
