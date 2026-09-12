@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref, MutableRef }
+
+struct Record {
+    pub val number: I64
+    pub val name: String
+}
+pub impl Record {
+    factory
+    fn label() -> String { return self.name }
+}
+fn read(reference: Ref[Record]) -> String { return reference->name }
+fn readMutable(reference: MutableRef[Record]) -> I64 { return reference->number }
+fn readMethod(reference: Ref[Record]) -> String { return reference->label() }
+fn make() -> Ref[Record] {
+    print("make")
+    return <Ref[Record] value=<Record number=7 name="temporary" /> />
+}
+fn main() {
+    val reference: Ref[Record] = <Ref[Record] value=<Record number=42 name="shared" /> />
+    val mutableReference: MutableRef[Record] = <MutableRef[Record] value=<Record number=11 name="mutable" /> />
+    print(read(reference: reference))
+    print(readMutable(reference: mutableReference))
+    print(readMethod(reference: reference))
+    val name: String = make()->name
+    print(name)
+}

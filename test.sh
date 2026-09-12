@@ -209,6 +209,12 @@ else
     fail=$((fail + 1)); failed="$failed mid-strong-cell"
 fi
 
+if sh ./test-mid-reference-read.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-reference-read"
+fi
+
 # Conversion runtime tests must not silently exercise a legacy boundary.
 if sh ./test-mid-owned-conversion.sh; then
     :

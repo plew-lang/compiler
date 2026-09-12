@@ -1844,6 +1844,9 @@ pub impl LlvmCtx {
                 self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
                 currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
                 pointer = self.arrElemPtr(elemTy: currentTy, data: data, idx: index)
+            } else if projection.tag == 3U64 {
+                pointer = self.refCellFromValue(v: LLVMBuildLoad2(self.b, currentTy, pointer, anon()))
+                currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
             } else { return LLVMConstNull(self.ptrty) }
             projectionI = projectionI + 1U64
         }
@@ -2091,7 +2094,7 @@ pub impl LlvmCtx {
         return LLVMBuildLoad2(self.b, targetLlvmType, resultSlot, anon())
     }
 
-    inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+    inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64, allowDeref: Bool = true) -> Bool {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
         mut val currentTerm: U64 = 0U64
@@ -2111,6 +2114,10 @@ pub impl LlvmCtx {
                 currentTerm = projection.typeTerm
             } else if projection.tag == 2U64 {
                 if projection.indexLocal >= body.locals.len || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() || currentTerm == 0U64 { return false }
+                currentTerm = projection.typeTerm
+            } else if projection.tag == 3U64 {
+                if !allowDeref || currentTerm == 0U64 || !c.isStrongRefInst(ref: currentTerm) || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() { return false }
+                if !c.typeRefEq(a: c.arena.typeAt(index: currentTerm).args[0U64], b: projection.typeTerm) { return false }
                 currentTerm = projection.typeTerm
             } else { return false }
             projectionI = projectionI + 1U64
@@ -2853,7 +2860,7 @@ pub impl LlvmCtx {
                 // Keep the backend preflight in that same closed vocabulary;
                 // accepting a made-up "tag 3, capability 2" combination would
                 // make a correctly elaborated access fall back to source LLVM.
-                return operand.tag == 4U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)
+                return operand.tag == 4U64 && operand.capability == 2U64 && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place, allowDeref: false)
             }
             CallReceiverPassing.Move => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return false }
@@ -2920,7 +2927,7 @@ pub impl LlvmCtx {
             if operandId == 0U64 || operandId > c.mid.operands.count() || c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI) >= c.arena.typeCount() { return <MidCallPreflight.ArgumentShape /> }
             val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
             match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => { if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
+                CallArgumentPassing.Inout => { if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place, allowDeref: false) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Move => { if operand.tag != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return <MidCallPreflight.Argument /> } }
                 CallArgumentPassing.Borrow => {
                     if operand.tag == 3U64 {
@@ -3226,7 +3233,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalBufferInoutOperandSupported(c: inout Comp, body: MidBodyNode, bufferRef: U64, operandId: U64) -> Bool {
         if bufferRef == 0U64 || bufferRef >= c.arena.typeCount() || operandId == 0U64 || operandId > c.mid.operands.count() { return false }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-        if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) { return false }
+        if operand.tag != 4U64 || operand.capability != 2U64 || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place, allowDeref: false) { return false }
         return c.typeRefEq(a: c.mid.places[operand.place - 1U64].typeTerm, b: bufferRef)
     }
 
