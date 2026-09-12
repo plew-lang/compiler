@@ -157,14 +157,16 @@ export fn analyzeCanonicalMidOwnership(c: Comp, canonical: MidCanonicalBody) -> 
         if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
         localI = localI + 1U64
     }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidOwnership] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidOwnership.Consumed />)
+        localI += 1U64
+    }
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
-        mut val empty: Array[MidOwnership] = []
-        localI = 0U64
-        while localI < body.locals.len {
-            empty.append(<MidOwnership.Consumed />)
-            localI = localI + 1U64
-        }
         incoming.append(empty)
         reachable.append(false)
         blockI = blockI + 1U64
@@ -335,14 +337,16 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
         if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidAccessibility.Available />) } else { initial.append(<MidAccessibility.Unavailable />) }
         localI = localI + 1U64
     }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidAccessibility] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidAccessibility.Unavailable />)
+        localI += 1U64
+    }
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
-        mut val empty: Array[MidAccessibility] = []
-        localI = 0U64
-        while localI < body.locals.len {
-            empty.append(<MidAccessibility.Unavailable />)
-            localI = localI + 1U64
-        }
         incoming.append(empty)
         reachable.append(false)
         blockI = blockI + 1U64
@@ -641,14 +645,16 @@ fn canonicalMidOwnershipAfterCliffs(c: Comp, canonical: MidCanonicalBody, plan: 
         if c.mid.locals[body.locals.start + localI].ownsAtEntry || c.mid.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
         localI = localI + 1U64
     }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidOwnership] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidOwnership.Consumed />)
+        localI += 1U64
+    }
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
-        mut val empty: Array[MidOwnership] = []
-        localI = 0U64
-        while localI < body.locals.len {
-            empty.append(<MidOwnership.Consumed />)
-            localI = localI + 1U64
-        }
         incoming.append(empty)
         reachable.append(false)
         blockI = blockI + 1U64
