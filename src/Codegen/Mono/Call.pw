@@ -1958,6 +1958,16 @@ pub impl Comp {
                     return
                 }
                 val requirement: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementSlot - 1U64)
+                // Callability is a source-level property of the selected requirement.
+                // Check it before grounding: erased Self cannot supply an input type.
+                if self.reqUsesSelfInInput(req: requirement) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+                    return
+                }
+                if !self.reqRetSelfErasable(req: requirement) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)")
+                    return
+                }
                 mut val parameters: Array[Bind] = []
                 mut val values: Array[U64] = []
                 if !self.anyBindingEnv(anyRef: selection.receiverRef, traitIdx: traitIndex, outParams: inout parameters, outArgs: inout values) {
