@@ -386,6 +386,23 @@ fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64,
     }
 }
 
+// Nested index evaluation may publish other arguments into the same pool.
+// Extend in place only when this argument still owns the tail; otherwise
+// republish its immutable prefix before adding the next projection.
+fn midAppendCallProjection(state: inout MidBuildState, prefix: MidRange, projection: MidProjection) -> MidRange {
+    mut val start = prefix.start
+    if prefix.start + prefix.len != state.callArgumentProjections.count() {
+        start = state.callArgumentProjections.count()
+        mut val index: U64 = 0U64
+        while index < prefix.len {
+            state.callArgumentProjections.append(state.callArgumentProjections[prefix.start + index])
+            index += 1U64
+        }
+    }
+    state.callArgumentProjections.append(projection)
+    return <MidRange start=start len=prefix.len + 1U64 />
+}
+
 // Build an inout call argument without ever materializing the transitional
 // MidOperand(MidPlace(Array[Projection])) shape.  The source place is already
 // semantically frozen; this only writes its selected root/projections into
@@ -396,7 +413,7 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
         Expr.Ident(start: _, len: _) => {
             val root: MidPlaceLookup = midPlaceForRecordedIdent(c: inout c, state: state, exprId: exprId, typeTerm: typeTerm)
             if !root.found { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnboundLocalIdentifier /> /> }
-            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=root.place.rootTag local=root.place.local globalTarget=root.place.globalTarget globalMutable=root.place.globalMutable capability=2U64 typeTerm=typeTerm /> />
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=root.place.rootTag local=root.place.local globalTarget=root.place.globalTarget globalMutable=root.place.globalMutable projections=<MidRange start=state.callArgumentProjections.count() len=0U64 /> capability=2U64 typeTerm=typeTerm /> />
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             if exprId >= c.arena.semanticExprTypes.count() { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
@@ -406,8 +423,8 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
             if base < c.arena.semanticExprTypes.count() { baseTerm = c.arena.semanticExprTypes[base].term }
             val parent: MidNormalizedCallArgumentBuild = midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm)
             match parent.error { MidBuildError.None => {} _ => { return parent } }
-            state.callArgumentProjections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
-            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=<MidRange start=parent.argument.projections.start len=parent.argument.projections.len + 1U64 /> capability=2U64 typeTerm=typeTerm /> />
+            val projections = midAppendCallProjection(state: inout state, prefix: parent.argument.projections, projection: <MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=projections capability=2U64 typeTerm=typeTerm /> />
         }
         Expr.Index(base: val base, index: val index) => {
             val baseTerm: U64 = c.semanticExprTerm(exprId: base)
@@ -417,8 +434,8 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
             if indexTerm == 0U64 { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
             val evaluated: MidIndexLocalBuild = midIndexLocalForSourceExpr(c: inout c, state: inout state, exprId: index, typeTerm: indexTerm)
             match evaluated.error { MidBuildError.None => {} _ => { return <MidNormalizedCallArgumentBuild error=evaluated.error /> } }
-            state.callArgumentProjections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
-            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=<MidRange start=parent.argument.projections.start len=parent.argument.projections.len + 1U64 /> capability=2U64 typeTerm=typeTerm /> />
+            val projections = midAppendCallProjection(state: inout state, prefix: parent.argument.projections, projection: <MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
+            return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 rootTag=parent.argument.rootTag local=parent.argument.local globalTarget=parent.argument.globalTarget globalMutable=parent.argument.globalMutable projections=projections capability=2U64 typeTerm=typeTerm /> />
         }
         _ => { return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
     }

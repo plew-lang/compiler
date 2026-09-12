@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+struct Storage {
+    pub mut val first: I64
+    pub mut val second: I64
+    pub mut val values: Array[I64]
+}
+pub impl Storage { factory }
+
+fn replace(slot: inout I64, value: I64) { slot = value }
+fn next(index: inout I64) -> U64 {
+    index += 1I64
+    return 0U64
+}
+
+fn main() {
+    mut val storage = <Storage first=1I64 second=2I64 values=[3I64] />
+    mut val counter = <Storage first=10I64 second=20I64 values=[] />
+    replace(slot: inout storage.first, value: 11I64)
+    replace(slot: inout storage.second, value: 22I64)
+    val index = next(index: inout counter.second)
+    replace(slot: inout storage.values[index], value: 33I64)
+    print(storage.first)
+    print(storage.second)
+    print(storage.values[0U64])
+    print(counter.first)
+    print(counter.second)
+}
