@@ -829,7 +829,7 @@ pub impl Comp {
     // differ only in the receiver surface they address; their active source
     // set, provenance narrowing, overload ranking, and ambiguity rule are
     // identical.
-    inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, associated: Bool, recvRef: U64 = 0U64) -> U64 {
+    inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, associated: Bool, recvRef: U64 = 0U64, requiredTraitOwner: U64 = 0U64) -> U64 {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -862,7 +862,7 @@ pub impl Comp {
                 // in declaration-time static member resolution, but never in
                 // this concrete callable surface; otherwise a trait receiver
                 // proof makes the requirement compete with its implementation.
-                if sourceMatches && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
+                if sourceMatches && (requiredTraitOwner == 0U64 || cand.traitOwner == requiredTraitOwner) && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
                     if f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                         val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {
@@ -904,8 +904,8 @@ pub impl Comp {
         return self.arena.functionCount()
     }
 
-    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
-        return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: recvRef)
+    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, requiredTraitOwner: U64 = 0U64) -> U64 {
+        return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: recvRef, requiredTraitOwner: requiredTraitOwner)
     }
 
     inout fn findAssocInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
@@ -954,7 +954,7 @@ pub impl Comp {
     // Selection over an already-resolved semantic receiver. A ChainHole
     // continuation owns that receiver term structurally, so re-deriving it
     // from the context-free ExprId query would discard the payload binding.
-    inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
+    inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> U64 {
         val rt: TypeInfo = receiverType
         if !(rt.kind == 2 || rt.kind == 3 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.functionCount()
@@ -1001,10 +1001,17 @@ pub impl Comp {
                 _ => {}
             }
         }
-        if sources.count() > 0U64 {
-            mfi = self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        if requiredTraitOwner != 0U64 {
+            val ownerIndex = self.decls.traitOwnerIndex(offset: requiredTraitOwner)
+            if ownerIndex >= self.decls.traitOwnerCount() { return self.arena.functionCount() }
+            val owner = self.decls.traitOwnerAt(index: ownerIndex)
+            val ownerLen = owner.nameLen
+            self.appendViewSource(sources: inout sources, source: <ViewSource kind=2U64 id=intern(c: inout self, start: requiredTraitOwner, len: ownerLen) owner=requiredTraitOwner arity=owner.arity />)
         }
-        if mfi >= self.arena.functionCount() {
+        if sources.count() > 0U64 {
+            mfi = self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner)
+        }
+        if mfi >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
             mfi = self.findMethod(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         }
         return mfi

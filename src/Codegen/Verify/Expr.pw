@@ -114,7 +114,7 @@ pub impl Comp {
                         return
                     }
                 }
-                val mf: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mf: U64 = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.nameLen != 0U64 { self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
                 self.recordResolvedMethodCallee(id: id, callee: mf)

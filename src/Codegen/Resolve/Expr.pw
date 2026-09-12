@@ -36,6 +36,20 @@ pub impl Comp {
 
 pub impl Comp {
 
+    inout fn syntheticRequiredTraitOwner(exprId: U64) -> U64 {
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index >= self.decls.syntheticCallSites.count() { return 0U64 }
+        match self.decls.syntheticCallSites[index].kind {
+            SyntheticCallKind.IndexRead => { return self.coreTraitOwner(name: "Index", arity: 1U64) }
+            SyntheticCallKind.IndexWrite => { return self.coreTraitOwner(name: "IndexSet", arity: 1U64) }
+            SyntheticCallKind.Ordinary => { return 0U64 }
+        }
+    }
+
+    inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
+        return self.resolveMethodFinalForType(recv: recv, receiverType: self.typeOf(id: recv), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
+    }
+
     // Pre-resolved final callable for Call / Method / ExtMethod expression `id`.
     // The AST node owns the decision, including a `#` source key; verification,
     // type recovery and codegen therefore cannot drift by looking it up again.
@@ -75,7 +89,7 @@ pub impl Comp {
                     _ => {}
                 }
                 if !abstractBound {
-                    r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                    r = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
