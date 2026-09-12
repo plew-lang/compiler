@@ -482,7 +482,8 @@ pub impl Comp {
                 returnReceiver = underlying
             }
         }
-        mut val result: U64 = self.groundFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
+        val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: returnReceiver, args: args)
+        mut val result: U64 = self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: f.retTy)
         // `groundFinalMethodReturn` preserves symbolic receiver binders. A
         // non-generic receiver has no such environment, and is instead the
         // concrete half of the same final-callable calculation. Both are
@@ -496,7 +497,6 @@ pub impl Comp {
         // not a Mono inference request.  Persist it beside the selected
         // callee so every downstream consumer sees the same method/impl
         // environment used above for result and argument terms.
-        val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: returnReceiver, args: args)
         // An associated factory's syntactic qualifier can itself lower through
         // method-shaped nodes (for example `MutableRef[Cell]`).  It is never a
         // value produced by that node: its semantic receiver is the selected

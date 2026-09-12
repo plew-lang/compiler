@@ -233,8 +233,14 @@ pub impl Comp {
     inout fn groundFinalMethodSignatureTerm(f: Func, receiverRef: U64, args: ArgRange, signatureTerm: U64) -> U64 {
         if signatureTerm == 0U64 { return 0U64 }
         val environment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: receiverRef, args: args)
-        if environment.receiverRef == 0U64 { return 0U64 }
-        return self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: receiverRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: receiverRef))
+        return self.groundFinalMethodSignatureInEnvironment(f: f, environment: environment, signatureTerm: signatureTerm)
+    }
+
+    // Consumers that retain the selected environment must use that same
+    // substitution for signature grounding instead of inferring it again.
+    inout fn groundFinalMethodSignatureInEnvironment(f: Func, environment: InstanceEnvironment, signatureTerm: U64) -> U64 {
+        if signatureTerm == 0U64 || environment.receiverRef == 0U64 { return 0U64 }
+        return self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: environment.receiverRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: environment.receiverRef))
     }
 
     // The concrete-receiver counterpart.  It uses the same declaration binder
