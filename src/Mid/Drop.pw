@@ -436,10 +436,9 @@ fn canonicalMidDropPredecessors(c: Comp, body: MidBodyNode, ownership: Array[Arr
     return <MidDropPredecessors blocks=predecessors ownership=exits accessibility=accessExits />
 }
 
-fn canonicalMidIsAccessibilityCliff(body: MidBodyNode, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]], predecessors: MidDropPredecessors, blockI: U64, local: U64) -> Bool {
-    if blockI >= body.blocks.len || blockI >= ownership.count() || blockI >= accessibility.count() || local >= ownership[blockI].count() || local >= accessibility[blockI].count() { return false }
-    match ownership[blockI][local] { MidOwnership.MaybeOwned => {} _ => { return false } }
-    match accessibility[blockI][local] { MidAccessibility.Unavailable => {} _ => { return false } }
+// Called only for a MaybeOwned/Unavailable local. The block planner owns
+// that shared predicate; this query only distinguishes an incoming cliff.
+fn canonicalMidCliffFromPredecessors(body: MidBodyNode, predecessors: MidDropPredecessors, blockI: U64, local: U64) -> Bool {
     if blockI == body.entry { return true }
     val incoming = predecessors.blocks[blockI]
     mut val predecessorI: U64 = 0U64
@@ -481,33 +480,43 @@ fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[A
     mut val cliffs: Array[Array[Bool]] = []
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
+        mut val blockOwnership: Array[MidOwnership] = []
+        if blockI < ownership.count() { blockOwnership = ownership[blockI] }
+        mut val blockAccessibility: Array[MidAccessibility] = []
+        if blockI < accessibility.count() { blockAccessibility = accessibility[blockI] }
         mut val blockCliffs: Array[Bool] = []
         localI = 0U64
         while localI < body.locals.len {
-            val cliff: Bool = canonicalMidIsAccessibilityCliff(body: body, ownership: ownership, accessibility: accessibility, predecessors: predecessors, blockI: blockI, local: localI)
-            blockCliffs.append(cliff)
-            if blockI < ownership.count() && blockI < accessibility.count() && localI < ownership[blockI].count() && localI < accessibility[blockI].count() {
-                match ownership[blockI][localI] {
+            mut val cliff: Bool = false
+            if localI < blockOwnership.count() && localI < blockAccessibility.count() {
+                match blockOwnership[localI] {
                     MidOwnership.MaybeOwned => {
-                        match accessibility[blockI][localI] { MidAccessibility.Unavailable => { needsFlag.set(i: localI, value: true) } _ => {} }
+                        match blockAccessibility[localI] {
+                            MidAccessibility.Unavailable => {
+                                needsFlag.set(i: localI, value: true)
+                                cliff = canonicalMidCliffFromPredecessors(body: body, predecessors: predecessors, blockI: blockI, local: localI)
+                            }
+                            _ => {}
+                        }
                     }
                     _ => {}
                 }
             }
-            localI = localI + 1U64
+            blockCliffs.append(cliff)
+            localI += 1U64
         }
         val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
-            if statement.tag == 12U64 && blockI < ownership.count() && statement.bindingLocal < body.locals.len && statement.bindingLocal < ownership[blockI].count() {
-                match ownership[blockI][statement.bindingLocal] { MidOwnership.MaybeOwned => { needsFlag.set(i: statement.bindingLocal, value: true) } _ => {} }
+            if statement.tag == 12U64 && statement.bindingLocal < body.locals.len && statement.bindingLocal < blockOwnership.count() {
+                match blockOwnership[statement.bindingLocal] { MidOwnership.MaybeOwned => { needsFlag.set(i: statement.bindingLocal, value: true) } _ => {} }
             }
-            if statement.tag == 6U64 && statement.scope < body.scopes.len && blockI < ownership.count() {
+            if statement.tag == 6U64 && statement.scope < body.scopes.len {
                 val scope: MidScope = c.mid.scopes[body.scopes.start + statement.scope]
                 localI = scope.firstLocal
-                while localI < scope.firstLocal + scope.localCount && localI < body.locals.len && localI < ownership[blockI].count() {
-                    match ownership[blockI][localI] { MidOwnership.MaybeOwned => { needsFlag.set(i: localI, value: true) } _ => {} }
+                while localI < scope.firstLocal + scope.localCount && localI < body.locals.len && localI < blockOwnership.count() {
+                    match blockOwnership[localI] { MidOwnership.MaybeOwned => { needsFlag.set(i: localI, value: true) } _ => {} }
                     localI = localI + 1U64
                 }
             }
