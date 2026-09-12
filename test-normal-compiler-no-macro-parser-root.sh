@@ -43,7 +43,7 @@ fi
 # Declaring a method from every genInst recreates unfinalized bodies after Mono
 # has closed the graph, so this must iterate the same BodyInstance table.
 methods='src/Backend/Llvm/GenMethods.pw'
-if ! rg -q 'while bodyIndex < c\.arena\.bodyInstances\.count\(\)' "$methods"; then
+if ! rg -q 'while bodyIndex < c\.arena\.bodyInstanceCount\(\)' "$methods"; then
     echo "generic-method declaration is not driven by final body instances" >&2
     exit 1
 fi

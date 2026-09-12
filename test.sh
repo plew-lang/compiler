@@ -396,24 +396,20 @@ for n in $(printf '%s\n' "$mid_coverage_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 
-# Coverage reasons are a closed Mid-internal sum. A non-call expression
-# statement used to collapse every unsupported operand/form into one label;
-# pin one concrete form so coverage remains useful for choosing the next
-# lowering slice.
-mid_build_reason_results=$(sh -c '
+# The discarded-expression lowering now handles ordinary values as well as
+# calls. Keep the old integer-expression fixture as a positive Mid regression;
+# expecting its retired unsupported category would require reintroducing a hole.
+mid_expr_statement_results=$(sh -c '
     source="tests/run/mid_build_expr_stmt_category.pw"
-    coverage="/tmp/t_mid_build_reason_$$.coverage"
-    if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_build_reason_$$.ll 2>"$coverage"; then
-        echo "FAIL mid-build-reason(emit)"; exit 0
+    coverage="/tmp/t_mid_expr_statement_$$.coverage"
+    if ! "$PLEWC" --require-mid --emit-mid-coverage "$source" >/tmp/t_mid_expr_statement_$$.ll 2>"$coverage"; then
+        cat "$coverage" >&2
+        echo "FAIL mid-expression-statement(emit)"; exit 0
     fi
-    if grep -q "name=ignoredValue category=build:unsupported:expression-statement" "$coverage"; then
-        echo "PASS mid-build-reason"
-    else
-        echo "FAIL mid-build-reason(category)"
-    fi
+    echo "PASS mid-expression-statement"
 ' sh)
-mbrpass=$(printf '%s\n' "$mid_build_reason_results" | grep -c '^PASS' || true)
-for n in $(printf '%s\n' "$mid_build_reason_results" | sed -n 's/^FAIL //p'); do
+mespass=$(printf '%s\n' "$mid_expr_statement_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_expr_statement_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 
@@ -881,6 +877,6 @@ for n in $(printf '%s\n' "$pr_results" | sed -n 's/^FAIL //p'); do
 done
 
 echo "----"
-echo "plewc: run=$pass  midcoverage=$mcpass  midbuildreason=$mbrpass  midshortcircuit=$mscpass  midenummatch=$mempass  midpayloadreturn=$mprpass  midpayloadlessenumreturn=$mperpass  midlocalassign=$mlapass  midindexplace=$mipass  midinout=$mirpass  midborrowedread=$mbrrpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
+echo "plewc: run=$pass  midcoverage=$mcpass  midexpressionstatement=$mespass  midbufferreserve=$mbrpass  midshortcircuit=$mscpass  midenummatch=$mempass  midpayloadreturn=$mprpass  midpayloadlessenumreturn=$mperpass  midlocalassign=$mlapass  midindexplace=$mipass  midinout=$mirpass  midborrowedread=$mbrrpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]
