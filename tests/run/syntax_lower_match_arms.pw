@@ -18,8 +18,8 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val arms = c.lowerSyntaxStmtMatchArms(stmt: stmt, isExpr: false)
+    val arms = c.lowerSyntaxMatchArms(arms: stmt.arms, isExpr: false)
     print(arms.len)
-    print(c.arena.matchArms.count())
+    print(c.arena.matchArmPool.count())
     print(c.arena.blocks.count())
 }
