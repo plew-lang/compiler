@@ -3,7 +3,7 @@ import /Ir with { MatchSource }
 import /Mid with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
 
 fn main() {
-    val source: MidPlace = <MidPlace local=2U64 projections=[<MidProjection.Field index=3U64 typeTerm=11U64 />, <MidProjection.Index indexLocal=4U64 typeTerm=12U64 />] typeTerm=12U64 />
+    val source: MidPlace = <MidPlace local=2U64 projections=[<MidProjection.Field isBoxed=false index=3U64 typeTerm=11U64 />, <MidProjection.Index indexLocal=4U64 typeTerm=12U64 />] typeTerm=12U64 />
     val destination: MidPlace = <MidPlace local=5U64 typeTerm=13U64 />
     val argument: MidOperand = <MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> />
     val aggregate: MidRvalue = <MidRvalue.Aggregate exprId=17U64 kind=<MidAggregateKind.Enum enumIdx=18U64 variantIndex=19U64 /> resultTerm=20U64 fieldCount=1U64 elements=[<MidAggregateElement fieldIndex=0U64 operand=argument targetTerm=21U64 isBoxed=true conversion=22U64 />] />

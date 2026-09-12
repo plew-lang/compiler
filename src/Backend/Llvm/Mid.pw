@@ -1002,7 +1002,7 @@ pub impl LlvmCtx {
                         mut val projection: U64 = 0U64
                         while projection < destination.projections.count() {
                             match destination.projections[projection] {
-                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                                 _ => { physicalFieldPath = false }
                             }
                             projection += 1U64
@@ -1021,7 +1021,7 @@ pub impl LlvmCtx {
                         mut val projection: U64 = 0U64
                         while projection < place.projections.count() {
                             match place.projections[projection] {
-                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                                 _ => { physicalFieldPath = false }
                             }
                             projection += 1U64
@@ -1111,7 +1111,7 @@ pub impl LlvmCtx {
         while i < place.projections.count() {
             match place.projections[i] {
                 MidProjection.Deref(typeTerm: _) => { return false }
-                MidProjection.Field(index: _, typeTerm: val typeTerm) => {
+                MidProjection.Field(index: _, typeTerm: val typeTerm, isBoxed: _) => {
                     if typeTerm == 0U64 || typeTerm >= c.arena.typeCount() { return false }
                     currentTerm = typeTerm
                 }
@@ -1361,7 +1361,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             val grown: LLVMValueRef = self.growBuf(c: inout c, data: data, elemTy: elemTy, count: count)
@@ -1389,7 +1389,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             val additional: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
@@ -1419,7 +1419,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val index: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
@@ -1457,7 +1457,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val beforeGrow: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: beforeGrow)
                                             val index: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
@@ -1493,7 +1493,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
@@ -1522,7 +1522,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             val index: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
@@ -1553,7 +1553,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             val index: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
@@ -1584,7 +1584,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             self.rawbufSetCount(c: inout c, data: data, n: LLVMConstInt(self.i64ty, 0U64, 0I32))
@@ -1610,7 +1610,7 @@ pub impl LlvmCtx {
                                 MidOperand.Borrow(place: val place, capability: val capability) => {
                                     match capability {
                                         MidBorrowCapability.Inout => {
-                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place)
+                                            val slot: LLVMValueRef = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)
                                             val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             val requested: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
@@ -1694,7 +1694,7 @@ pub impl LlvmCtx {
                 CallReceiverPassing.Inout => {
                     match operand {
                         MidOperand.Borrow(place: val place, capability: val capability) => {
-                            match capability { MidBorrowCapability.Inout => { values.append(self.midPlacePtr(c: inout c, body: body, place: place)) } _ => { return false } }
+                            match capability { MidBorrowCapability.Inout => { values.append(self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true)) } _ => { return false } }
                         }
                         _ => { return false }
                     }
@@ -1717,7 +1717,7 @@ pub impl LlvmCtx {
             CallArgumentPassing.Inout => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => {
-                        match capability { MidBorrowCapability.Inout => { value = self.midPlacePtr(c: inout c, body: body, place: place) } _ => { return false } }
+                        match capability { MidBorrowCapability.Inout => { value = self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true) } _ => { return false } }
                     }
                     _ => { return false }
                 }
@@ -1811,7 +1811,7 @@ pub impl LlvmCtx {
         return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
     }
 
-    inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMValueRef {
+    inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> LLVMValueRef {
         mut val pointer: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val currentTy: LLVMTypeRef = self.i64ty
         if place.rootTag == 1U64 {
@@ -1836,6 +1836,10 @@ pub impl LlvmCtx {
             if projection.tag == 1U64 {
                 pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, projection.index, anon())
                 currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
+                if projection.isBoxed {
+                    if forWrite { self.privatizeValueCell(c: inout c, slot: pointer, typeRef: projection.typeTerm) }
+                    pointer = LLVMBuildLoad2(self.b, self.ptrty, pointer, anon())
+                }
             } else if projection.tag == 2U64 {
                 if projection.indexLocal >= body.locals.len { return LLVMConstNull(self.ptrty) }
                 val array: LLVMValueRef = LLVMBuildLoad2(self.b, currentTy, pointer, anon())
@@ -2300,7 +2304,7 @@ pub impl LlvmCtx {
         return self.midLocalTy(c: inout c, body: body, local: place.local)
     }
 
-    inout fn midPlacePtr(c: inout Comp, body: MidBody, place: MidPlace) -> LLVMValueRef {
+    inout fn midPlacePtr(c: inout Comp, body: MidBody, place: MidPlace, forWrite: Bool = false) -> LLVMValueRef {
         if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return LLVMConstNull(self.ptrty) }
         mut val pointer: LLVMValueRef = self.midLocalPtr(body: body, local: place.local)
         mut val currentTy: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: place.local)
@@ -2308,9 +2312,13 @@ pub impl LlvmCtx {
         while i < place.projections.count() {
             match place.projections[i] {
                 MidProjection.Deref(typeTerm: _) => { panic "Mid dereference reached LLVM without place support" }
-                MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
+                MidProjection.Field(index: val index, typeTerm: val typeTerm, isBoxed: val isBoxed) => {
                     pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, index, anon())
                     currentTy = self.llvmTypeOfRef(c: inout c, ref: typeTerm)
+                    if isBoxed {
+                        if forWrite { self.privatizeValueCell(c: inout c, slot: pointer, typeRef: typeTerm) }
+                        pointer = LLVMBuildLoad2(self.b, self.ptrty, pointer, anon())
+                    }
                 }
                 MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
                     // The index local was materialized by Mid before this
@@ -2412,14 +2420,14 @@ pub impl LlvmCtx {
         mut val projection: U64 = 0U64
         while projection < place.projections.count() {
             match place.projections[projection] {
-                MidProjection.Field(index: _, typeTerm: _) => {}
+                MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                 _ => { physicalFieldPath = false }
             }
             projection += 1U64
         }
         if place.local >= body.locals.count() || !physicalFieldPath { return }
         val typeRef: U64 = place.typeTerm
-        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place, forWrite: true), anon())
         self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: false)
     }
 
@@ -2815,12 +2823,12 @@ pub impl LlvmCtx {
             MidStatement.Overwrite(destination: val destination, source: val source) => {
                 val ty: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: destination)
                 val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
-                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
+                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
             }
             MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
                 val ty: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: destination)
                 val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
-                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
+                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
             }
             MidStatement.Drop(place: val place) => { self.midEmitDrop(c: inout c, body: body, place: place) }
             MidStatement.ReleaseCaptureCell(place: _) => { LLVMBuildUnreachable(self.b) }
@@ -3490,7 +3498,7 @@ pub impl LlvmCtx {
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
                                 val bufferOperand: MidOperandNode = c.mid.operands[bufferOperandId - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 val grown: LLVMValueRef = self.growBuf(c: inout c, data: data, elemTy: elementTy, count: count)
@@ -3507,7 +3515,7 @@ pub impl LlvmCtx {
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
                                 val bufferOperand: MidOperandNode = c.mid.operands[bufferOperandId - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 val additional: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
@@ -3519,7 +3527,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
                                 self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
@@ -3538,7 +3546,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val beforeGrow: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: beforeGrow)
                                 val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
@@ -3557,7 +3565,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
@@ -3571,7 +3579,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
@@ -3587,7 +3595,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
@@ -3603,7 +3611,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 self.rawbufSetCount(c: inout c, data: data, n: LLVMConstInt(self.i64ty, 0U64, 0I32))
@@ -3614,7 +3622,7 @@ pub impl LlvmCtx {
                                 val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                 val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
                                 val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
-                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64], forWrite: true)
                                 val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
                                 val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                 val requested: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
@@ -3867,7 +3875,7 @@ pub impl LlvmCtx {
         if receiver.tag == 2U64 {
             val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
             match selected.receiverPassing {
-                CallReceiverPassing.Inout => { values.append(self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])) }
+                CallReceiverPassing.Inout => { values.append(self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true)) }
                 CallReceiverPassing.Borrow => { values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) }
                 CallReceiverPassing.Move => { values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) }
                 _ => { return false }
@@ -3885,7 +3893,7 @@ pub impl LlvmCtx {
             val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
             match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => { value = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64]) }
+                CallArgumentPassing.Inout => { value = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true) }
                 _ => {
                     value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)
                     if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
@@ -3904,7 +3912,7 @@ pub impl LlvmCtx {
         else { result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon()) }
         if callee.hasRet {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
-            LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            LLVMBuildStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
         }
         return true
     }
@@ -3923,7 +3931,7 @@ pub impl LlvmCtx {
             if tag != 1U64 && tag != 3U64 { return false }
             projectionI = projectionI + 1U64
         }
-        val value: LLVMValueRef = self.midCanonicalReadPlace(c: inout c, body: body, place: place)
+        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midCanonicalPlaceTy(c: inout c, body: body, place: place), self.midCanonicalPlacePtr(c: inout c, body: body, place: place, forWrite: true), anon())
         self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: false)
         return true
     }
@@ -4081,7 +4089,7 @@ pub impl LlvmCtx {
                 LLVMBuildStore(self.b, cell, self.midCanonicalLocalPtr(body: body, local: destination.local))
                 LLVMBuildStore(self.b, value, cell)
             } else {
-                LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+                LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
             }
             return true
         }
@@ -4089,7 +4097,7 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-            LLVMBuildStore(self.b, self.midCanonicalReadPlace(c: inout c, body: body, place: source), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            LLVMBuildStore(self.b, self.midCanonicalReadPlace(c: inout c, body: body, place: source), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
             return true
         }
         if statement.tag == 3U64 { return self.midCanonicalEmitDrop(c: inout c, body: body, placeId: statement.destination) }

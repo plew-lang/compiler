@@ -105,7 +105,7 @@ fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, roo
                 c.mid.projections.append(c.mid.projections[parent.projections.start + projectionI])
                 projectionI = projectionI + 1U64
             }
-            c.mid.projections.append(<MidProjectionNode tag=1U64 index=input.fieldIndex typeTerm=input.typeTerm />)
+            c.mid.projections.append(<MidProjectionNode tag=1U64 isBoxed=input.fieldIsBoxed index=input.fieldIndex typeTerm=input.typeTerm />)
             c.mid.places.append(<MidPlaceNode rootTag=parent.rootTag local=parent.local globalTarget=parent.globalTarget globalMutable=parent.globalMutable projections=<MidRange start=projectionStart len=parent.projections.len + 1U64 /> typeTerm=input.typeTerm />)
             return c.mid.places.count()
         }
@@ -1126,7 +1126,7 @@ fn midAccessPlace(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidPlace {
             val basePlace: MidPlace = midAccessPlace(c: c, body: body, exprId: base, term: c.arena.semanticExprTypes[base].term)
             if !midAccessPlaceIsValid(body: body, place: basePlace) { return basePlace }
             mut val projections: Array[MidProjection] = basePlace.projections
-            projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=term />)
+            projections.append(<MidProjection.Field isBoxed=semantic.fieldProjectionIsBoxed index=semantic.fieldProjectionIndex typeTerm=term />)
             return <MidPlace rootTag=basePlace.rootTag local=basePlace.local globalTarget=basePlace.globalTarget globalMutable=basePlace.globalMutable projections=projections typeTerm=term />
         }
         _ => {}
@@ -1170,7 +1170,7 @@ fn midAccessProjectedValuePlace(c: Comp, rootExpr: U64, accessExpr: U64, accessT
             val semantic: SemanticExprType = c.arena.semanticExprTypes[accessExpr]
             if !(semantic.hasFieldProjection) { return <MidPlace rootTag=0U64 local=0U64 typeTerm=root.typeTerm /> }
             mut val projections: Array[MidProjection] = basePlace.projections
-            projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=semantic.term />)
+            projections.append(<MidProjection.Field isBoxed=semantic.fieldProjectionIsBoxed index=semantic.fieldProjectionIndex typeTerm=semantic.term />)
             return <MidPlace rootTag=root.rootTag local=root.local globalTarget=root.globalTarget globalMutable=root.globalMutable projections=projections typeTerm=semantic.term />
         }
         _ => {}

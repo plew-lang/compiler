@@ -4415,7 +4415,7 @@ pub impl Comp {
                 if !semantic.hasFieldProjection { return 0U64 }
                 val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)
                 if baseInput == 0U64 { return 0U64 }
-                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex typeTerm=term />)
+                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex fieldIsBoxed=semantic.fieldProjectionIsBoxed typeTerm=term />)
             }
             Expr.Deref(base: val base) => {
                 val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
@@ -4434,7 +4434,7 @@ pub impl Comp {
                 if baseInput == 0U64 { return 0U64 }
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=self.arena.typeAt(index: referenceTerm).args[0U64] />)
                 val dereference: U64 = self.arena.semanticAccessInputs.count()
-                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=dereference fieldIndex=semantic.fieldProjectionIndex typeTerm=term />)
+                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=dereference fieldIndex=semantic.fieldProjectionIndex fieldIsBoxed=semantic.fieldProjectionIsBoxed typeTerm=term />)
             }
             _ => { return 0U64 }
         }
@@ -4456,7 +4456,7 @@ pub impl Comp {
                 if !semantic.hasFieldProjection { return 0U64 }
                 val baseInput: U64 = self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
                 if baseInput == 0U64 { return 0U64 }
-                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex typeTerm=semantic.term />)
+                self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=3U64 base=baseInput fieldIndex=semantic.fieldProjectionIndex fieldIsBoxed=semantic.fieldProjectionIsBoxed typeTerm=semantic.term />)
                 return self.arena.semanticAccessInputs.count()
             }
             _ => { return 0U64 }

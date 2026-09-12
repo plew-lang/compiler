@@ -876,6 +876,30 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
+    // A hidden value cell is shared by Copy and detached only before a
+    // mutable projection. The slot and grounded pointee type are frozen
+    // layout facts; this operation never recovers a source field or type.
+    inout fn privatizeValueCell(c: inout Comp, slot: LLVMValueRef, typeRef: U64) {
+        val cell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        mut val indices: Array[LLVMValueRef] = [LLVMConstInt(self.i64ty, 18446744073709551615U64, 0I32)]
+        val countPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(indices), 1U64, anon())
+        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        val shared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        val split: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.split"))
+        val continuation: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.cont"))
+        LLVMBuildCondBr(self.b, shared, split, continuation)
+        LLVMPositionBuilderAtEnd(self.b, split)
+        val type: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: typeRef)
+        val value: LLVMValueRef = LLVMBuildLoad2(self.b, type, cell, anon())
+        self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true)
+        val fresh: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(type), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        LLVMBuildStore(self.b, value, fresh)
+        LLVMBuildStore(self.b, fresh, slot)
+        val ignored: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        LLVMBuildBr(self.b, continuation)
+        LLVMPositionBuilderAtEnd(self.b, continuation)
+    }
+
     // Release one owner of an rc'd CELL holding a single value of type `ref`:
     // decrement its rc, and at 0 destroy the pointee's owned heap (classifier-routed
     // valueArc — landing on per-instance release WITNESS calls, so a recursive

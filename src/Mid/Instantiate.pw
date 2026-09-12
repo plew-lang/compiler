@@ -75,7 +75,7 @@ fn instantiateCanonicalPlace(c: inout Comp, placeId: U64, environment: BodyInsta
     mut val i: U64 = 0U64
     while i < source.projections.len {
         val projection: MidProjectionNode = c.mid.projections[source.projections.start + i]
-        c.mid.projections.append(<MidProjectionNode tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        c.mid.projections.append(<MidProjectionNode isBoxed=projection.isBoxed tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         i = i + 1U64
     }
     c.mid.places.append(<MidPlaceNode rootTag=source.rootTag local=source.local globalTarget=source.globalTarget globalMutable=source.globalMutable projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
@@ -1176,8 +1176,8 @@ fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environmen
         MidProjection.Deref(typeTerm: val typeTerm) => {
             return <MidProjection.Deref typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
-        MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
-            return <MidProjection.Field index=index typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+        MidProjection.Field(index: val index, typeTerm: val typeTerm, isBoxed: val isBoxed) => {
+            return <MidProjection.Field isBoxed=isBoxed index=index typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
         MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
             return <MidProjection.Index indexLocal=indexLocal typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />

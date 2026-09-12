@@ -1056,13 +1056,17 @@ pub impl Comp {
             self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
             val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
             val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
+            mut val isBoxed: Bool = false
             mut val fieldCount: U64 = receiver.recordFieldTerms.count()
             if !receiver.isRecord {
                 val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
-                if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
+                if structIndex < self.arena.structCount() {
+                    fieldCount = self.arena.structAt(index: structIndex).fields.count()
+                    if fieldIndex < fieldCount { isBoxed = self.fieldIsBoxed(f: self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)) }
+                }
             }
             if fieldIndex < fieldCount {
-                self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex)
+                self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex, isBoxed: isBoxed)
             }
         }
     }

@@ -368,6 +368,7 @@ export struct SemanticExprType {
     // reopening a field spelling after the frontend freeze.
     pub val hasFieldProjection: Bool = false
     pub val fieldProjectionIndex: U64 = 0U64
+    pub val fieldProjectionIsBoxed: Bool = false
 }
 pub impl SemanticExprType { factory }
 
@@ -2550,6 +2551,7 @@ export struct SemanticAccessInput {
     pub val integerBool: Bool = false
     pub val base: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
+    pub val fieldIsBoxed: Bool = false
     // tag=6 only. The selected getter result is a value dependency, not an
     // addressability claim: a parent access may use it as a key, while only
     // the parent access's base chain receives reverse writeback.

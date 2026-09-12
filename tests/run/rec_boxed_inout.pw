@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+struct Node {
+    pub val value: String
+    pub mut val next: Optional[Node]
+}
+pub impl Node { factory }
+fn clear(next: inout Optional[Node]) {
+    next = <Optional.None />
+}
+fn show(node: Node) {
+    match node.next {
+        Optional.Some(v: val child) => { print(child.value) }
+        Optional.None => { print("empty") }
+    }
+}
+fn main() {
+    mut val original: Node = <Node value="root" next=<Optional.Some v=<Node value="child" next=<Optional.None /> /> /> />
+    val copy: Node = original
+    clear(next: inout original.next)
+    show(node: copy)
+    show(node: original)
+    original.next = copy.next
+    original.next = original.next
+    show(node: original)
+    show(node: copy)
+}

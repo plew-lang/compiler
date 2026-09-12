@@ -3,7 +3,7 @@ import @Std/Core with { assert }
 import /Mid with { MidProjection, MidProjectionNode, MidPlace, MidBorrowCapability, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
 
 fn main() {
-    val source = <MidPlace local=0U64 projections=[<MidProjection.Deref typeTerm=11U64 />, <MidProjection.Field index=2U64 typeTerm=12U64 />] typeTerm=12U64 />
+    val source = <MidPlace local=0U64 projections=[<MidProjection.Deref typeTerm=11U64 />, <MidProjection.Field isBoxed=true index=2U64 typeTerm=12U64 />] typeTerm=12U64 />
     val destination = <MidPlace local=1U64 typeTerm=12U64 />
     val assignment = <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=<MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> /> /> />
     val draft = <MidBody locals=[<MidLocalDecl typeTerm=10U64 sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=12U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[assignment] terminator=<MidTerminator.Unreachable /> />] entry=0U64 />
@@ -21,10 +21,12 @@ fn main() {
     assert(place.local == 0U64)
     assert(place.projections.len == 2U64)
     assert(deref.tag == 3U64 && deref.typeTerm == 11U64)
-    assert(field.tag == 1U64 && field.index == 2U64 && field.typeTerm == 12U64)
+    assert(field.tag == 1U64 && field.index == 2U64 && field.typeTerm == 12U64 && field.isBoxed)
     arena.projections.set(i: place.projections.start, value: <MidProjectionNode tag=3U64 />)
     assert(!canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
     arena.projections.set(i: place.projections.start, value: <MidProjectionNode tag=3U64 typeTerm=11U64 indexLocal=1U64 />)
+    assert(!canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
+    arena.projections.set(i: place.projections.start, value: <MidProjectionNode tag=3U64 typeTerm=11U64 isBoxed=true />)
     assert(!canonicalMidBodyIsWellFormed(arena: arena, body: frozen))
     arena.projections.set(i: place.projections.start, value: deref)
     assert(canonicalMidBodyIsWellFormed(arena: arena, body: frozen))

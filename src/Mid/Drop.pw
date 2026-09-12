@@ -1875,7 +1875,7 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         mut val projection: U64 = 0U64
                         while projection < destination.projections.count() {
                             match destination.projections[projection] {
-                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                                 _ => { physicalFieldPath = false }
                             }
                             projection += 1U64

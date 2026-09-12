@@ -52,6 +52,7 @@ pub impl MidPlaceNode { factory }
 // `MidProjection` enum: all payload fields remain scalar and the parent Place
 // owns only a range in this dedicated pool.
 export struct MidProjectionNode {
+    pub val isBoxed: Bool = false
     pub val tag: U64
     pub val index: U64 = 0U64
     pub val indexLocal: U64 = 0U64
@@ -310,8 +311,10 @@ export enum MidProjection {
     Deref(typeTerm: U64)
     // `typeTerm` is the frontend-selected type after this projection.  It is
     // needed for a nested GEP walk and prevents LLVM from reconstructing a
-    // field declaration/type from a source spelling.
-    Field(index: U64, typeTerm: U64)
+    // field declaration/type from a source spelling. `isBoxed` preserves
+    // the selected hidden value-cell representation without changing the
+    // logical field type or introducing shared reference identity.
+    Field(index: U64, typeTerm: U64, isBoxed: Bool)
     // The subscript expression is evaluated before this place is used and its
     // value lives in `indexLocal`.  Storing a stable local identity (rather
     // than an Operand or source ExprId) makes the projection acyclic and
@@ -709,8 +712,8 @@ fn midFreezeProjection(arena: inout MidCanonicalArena, projection: MidProjection
         MidProjection.Deref(typeTerm: val typeTerm) => {
             arena.projections.append(<MidProjectionNode tag=3U64 typeTerm=typeTerm />)
         }
-        MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
-            arena.projections.append(<MidProjectionNode tag=1U64 index=index typeTerm=typeTerm />)
+        MidProjection.Field(index: val index, typeTerm: val typeTerm, isBoxed: val isBoxed) => {
+            arena.projections.append(<MidProjectionNode tag=1U64 isBoxed=isBoxed index=index typeTerm=typeTerm />)
         }
         MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
             arena.projections.append(<MidProjectionNode tag=2U64 indexLocal=indexLocal typeTerm=typeTerm />)
@@ -1057,6 +1060,7 @@ fn midCanonicalPlaceIsWellFormed(arena: MidCanonicalArena, place: U64) -> Bool {
     while i < node.projections.len {
         val projection: MidProjectionNode = arena.projections[node.projections.start + i]
         if projection.tag != 1U64 && projection.tag != 2U64 && projection.tag != 3U64 { return false }
+        if projection.tag != 1U64 && projection.isBoxed { return false }
         if projection.tag == 3U64 && (projection.typeTerm == 0U64 || projection.index != 0U64 || projection.indexLocal != 0U64) { return false }
         i = i + 1U64
     }

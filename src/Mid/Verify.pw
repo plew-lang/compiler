@@ -186,7 +186,7 @@ fn canonicalMidSamePlace(c: Comp, leftId: U64, rightId: U64) -> Bool {
     while projectionI < left.projections.len {
         val leftProjection: MidProjectionNode = c.mid.projections[left.projections.start + projectionI]
         val rightProjection: MidProjectionNode = c.mid.projections[right.projections.start + projectionI]
-        if leftProjection.tag != rightProjection.tag || leftProjection.index != rightProjection.index || leftProjection.indexLocal != rightProjection.indexLocal || leftProjection.typeTerm != rightProjection.typeTerm { return false }
+        if leftProjection.tag != rightProjection.tag || leftProjection.index != rightProjection.index || leftProjection.indexLocal != rightProjection.indexLocal || leftProjection.typeTerm != rightProjection.typeTerm || leftProjection.isBoxed != rightProjection.isBoxed { return false }
         projectionI = projectionI + 1U64
     }
     return true
@@ -708,7 +708,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     mut val projection: U64 = 0U64
                     while projection < destination.projections.count() {
                         match destination.projections[projection] {
-                            MidProjection.Field(index: _, typeTerm: _) => {}
+                            MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                             _ => { physicalFieldPath = false }
                         }
                         projection += 1U64
@@ -766,7 +766,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     mut val projection: U64 = 0U64
                     while projection < place.projections.count() {
                         match place.projections[projection] {
-                            MidProjection.Field(index: _, typeTerm: _) => {}
+                            MidProjection.Field(index: _, typeTerm: _, isBoxed: _) => {}
                             _ => { physicalFieldPath = false }
                         }
                         projection += 1U64
