@@ -1017,6 +1017,25 @@ pub impl Comp {
         self.cur.recordingAccessWriteFacet = false
     }
 
+    // Field and Arrow share the same declaration-time selection. Arrow's
+    // receiver term is its pointee; Mid must not repeat this layout lookup.
+    inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) {
+        val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
+        if fieldTerm != 0U64 {
+            self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
+            val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
+            val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
+            mut val fieldCount: U64 = receiver.recordFieldTerms.count()
+            if !receiver.isRecord {
+                val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+                if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
+            }
+            if fieldIndex < fieldCount {
+                self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex)
+            }
+        }
+    }
+
     // Record an expression under an optional-chain payload supplied by its
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
@@ -1384,20 +1403,7 @@ pub impl Comp {
                 // groundedTypeOf. `groundUnderInst` preserves a symbolic
                 // receiver argument (Box[T]) for later body grounding.
                 val baseTerm: U64 = self.parametricExprTerm(exprId: base)
-                val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
-                if fieldTerm != 0U64 {
-                    self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
-                    val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
-                    val receiver: TypeRef = self.arena.typeAt(index: baseTerm)
-                    mut val fieldCount: U64 = receiver.recordFieldTerms.count()
-                    if !receiver.isRecord {
-                        val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
-                        if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
-                    }
-                    if fieldIndex < fieldCount {
-                        self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex)
-                    }
-                }
+                self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
@@ -1600,7 +1606,7 @@ pub impl Comp {
                 if self.isStrongRefInst(ref: refTerm) {
                     val reference: TypeRef = self.arena.typeAt(index: refTerm)
                     if reference.args.count() > 0U64 {
-                        self.recordSemanticExprTerm(exprId: exprId, term: self.fieldTypeRefOfReceiver(receiverRef: reference.args[0], fieldStart: nameStart, fieldLen: nameLen))
+                        self.recordFieldSelection(exprId: exprId, receiverTerm: reference.args[0], nameStart: nameStart, nameLen: nameLen)
                     }
                 }
             }

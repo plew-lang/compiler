@@ -1,0 +1,34 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, Expr }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integer = compiler.internBytes(s: "I64")
+    val integerType = compiler.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val first = compiler.internBytes(s: "first")
+    val second = compiler.internBytes(s: "second")
+    val recordType = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[first.nameId, second.nameId] recordFieldTerms=[integerType, integerType] />)
+    val reference = compiler.internBytes(s: "MutableRef")
+    val referenceType = compiler.pushType(t: <TypeRef nameStart=reference.nameStart nameLen=reference.nameLen args=[recordType] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    // ChainHole supplies an explicit receiver type, avoiding a fake local or
+    // an ambient type environment in this Record integration fixture.
+    compiler.arena.exprs.append(<Expr.ChainHole />)
+    compiler.arena.exprs.append(<Expr.Arrow base=0U64 nameStart=second.nameStart nameLen=second.nameLen />)
+    compiler.recordExpr(exprId: 1U64, chainHoleRef: referenceType)
+    val arrow = compiler.arena.semanticExprTypes[1U64]
+    assert(arrow.hasFieldProjection && arrow.fieldProjectionIndex == 1U64)
+    assert(compiler.typeRefEq(a: arrow.term, b: integerType))
+    compiler.arena.exprs.append(<Expr.ChainHole />)
+    compiler.arena.exprs.append(<Expr.Field base=2U64 nameStart=second.nameStart nameLen=second.nameLen />)
+    compiler.recordExpr(exprId: 3U64, chainHoleRef: recordType)
+    val field = compiler.arena.semanticExprTypes[3U64]
+    assert(field.hasFieldProjection && field.fieldProjectionIndex == arrow.fieldProjectionIndex)
+    assert(compiler.typeRefEq(a: field.term, b: arrow.term))
+    compiler.recordSemanticExprTerm(exprId: 1U64, term: integerType)
+    val updated = compiler.arena.semanticExprTypes[1U64]
+    assert(updated.hasFieldProjection && updated.fieldProjectionIndex == 1U64)
+    print("ok")
+}
