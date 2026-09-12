@@ -1264,8 +1264,8 @@ pub impl Comp {
                 // Array's nested argument and can leave `[1, 2]` without its
                 // required Array[I32] context. This is a producer boundary,
                 // so ground the declaration parameter once under that term.
-                // Validate numeric literals before freezing argument sources:
-                // the selected parameter supplies context, not an ABI repair.
+                // Validate both contextual literals and typed values before freezing
+                // argument sources; context does not permit implicit conversion.
                 if methodCallee < self.arena.functionCount() {
                     val selectedMethod: Func = self.arena.functionAt(index: methodCallee)
                     val mps: Array[Param] = self.copyFuncParams(params: selectedMethod.params)
@@ -1280,6 +1280,7 @@ pub impl Comp {
                                 self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
                                 self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
                                 self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
+                                self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
                             }
                         }
                         mk += 1U64
