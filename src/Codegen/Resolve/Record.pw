@@ -403,6 +403,26 @@ pub impl Comp {
             }
             _ => {
                 self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                // All declaration-time candidate families have been queried.
+                // Do not defer an invalid written call to Mono's invariant check.
+                if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && self.syntheticRequiredTraitOwner(exprId: exprId) == 0U64 {
+                    val siteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+                    val templateIndex = self.callTemplateIndex(siteKey: siteKey)
+                    mut val selected = false
+                    if templateIndex < self.decls.callTemplates.count() {
+                        match self.decls.callTemplates[templateIndex].kind {
+                            CallTemplateKind.Pending => {}
+                            _ => { selected = true }
+                        }
+                    }
+                    if !selected {
+                        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeAt(index: receiverTerm).isAny {
+                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface")
+                        } else {
+                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list")
+                        }
+                    }
+                }
             }
         }
     }
