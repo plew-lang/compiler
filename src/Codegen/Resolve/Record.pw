@@ -1532,7 +1532,9 @@ pub impl Comp {
                             fieldTerm = self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
                         }
                     }
-                    self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
+                    if !self.recordsFieldDefault(field: field) {
+                        self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
+                    }
                     i += 1U64
                 }
                 // Constructions without sufficient declared context infer
@@ -1541,6 +1543,7 @@ pub impl Comp {
                     val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
                     if inferred != 0U64 { instance = inferred }
                 }
+                mut val completedFields: Array[MakeField] = []
                 i = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
@@ -1557,6 +1560,18 @@ pub impl Comp {
                             ctxRef = self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
                         }
                     }
+                    mut val value: U64 = field.value
+                    if self.recordsFieldDefault(field: field) {
+                        value = self.recordFieldDefaultCall(field: field, instance: instance, resultTerm: ctxRef)
+                        if completedFields.count() == 0U64 {
+                            mut val fieldIndex: U64 = 0U64
+                            while fieldIndex < fields.len {
+                                completedFields.append(self.makeFieldAt(fields: fields, index: fieldIndex))
+                                fieldIndex += 1U64
+                            }
+                        }
+                        completedFields.set(i: i, value: <MakeField nameStart=field.nameStart nameLen=field.nameLen value=value offset=field.offset origin=field.origin />)
+                    }
                     // A field declaration is a bidirectional semantic input
                     // for *every* expression placed in that field.  In a
                     // generic body it is intentionally parametric (`Buffer[E]`),
@@ -1564,7 +1579,7 @@ pub impl Comp {
                     // `Buffer[String]`.  Dropping it merely because it is not
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
-                    self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: ctxRef)
+                    self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: ctxRef)
                     // Empty array literals are different: their AST-owned
                     // literal type must itself be concrete, so retain the old
                     // ground-only gate for this literal-specific adapter.
@@ -1572,12 +1587,14 @@ pub impl Comp {
                     if arrayCtx != 0U64 && !(self.tyRefIsGround(ref: arrayCtx)) {
                         arrayCtx = 0U64
                     }
-                    self.recordArrayLitCtx(exprId: field.value, ctxRef: arrayCtx)
+                    self.recordArrayLitCtx(exprId: value, ctxRef: arrayCtx)
                     i += 1
                 }
-                // Keep the selected instance as a semantic fact. The source
-                // Make remains unchanged; aggregate finalization and later
-                // body instances consume the same recorded TypeTerm.
+                if completedFields.count() != 0U64 {
+                    self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: completedFields) />)
+                }
+                // Aggregate finalization and body instances consume this
+                // selected TypeTerm and the completed per-occurrence operands.
                 if instance != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: instance)
                 }

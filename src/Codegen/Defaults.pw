@@ -273,6 +273,89 @@ pub impl Comp {
         return <Optional.Some v=projected />
     }
 
+    // Field defaults have the same independent full-expression contract as
+    // parameter defaults. Keep the original struct ParamIds, including binders
+    // absent from the result type; each construction supplies the full instance.
+    inout fn prepareFieldDefaultGenerators() {
+        if self.decls.fieldDefaultGeneratorRanges.count() != 0U64 { return }
+        val limit: U64 = self.arena.structCount()
+        mut val structIndex: U64 = 0U64
+        while structIndex < limit {
+            val source: StructDef = self.arena.structAt(index: structIndex)
+            val start: U64 = self.decls.fieldDefaultGeneratorFunctions.count()
+            val binders: FuncBindRange = self.pushFuncBinds(binds: source.typeParams)
+            mut val fieldIndex: U64 = 0U64
+            while fieldIndex < source.fields.count() {
+                val field: FieldDef = source.fields[fieldIndex]
+                mut val functionId: U64 = 0U64
+                if field.hasDefault {
+                    val functionIndex: U64 = self.arena.functionCount()
+                    val name: Bind = self.internTmpName(prefix: "$fieldDefault", n: functionIndex)
+                    val returned: U64 = self.pushStmt(s: <Stmt.Return value=field.defaultVal hasValue=true offset=field.nameStart />)
+                    val body: U64 = self.pushBlock(stmts: [returned])
+                    self.arena.registerFunction(<Func
+                        nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+                        typeParams=binders
+                        hasRet=true retStart=field.tyStart retLen=field.tyLen
+                        retIsArray=field.tyIsArray retTy=field.ty body=body
+                        hasRecv=false recvStart=0U64 recvLen=0U64
+                        selfInout=false selfMove=false isAssoc=false
+                        isAsync=false isExtern=false defOffset=source.defOffset />)
+                    functionId = functionIndex + 1U64
+                }
+                self.decls.fieldDefaultGeneratorFunctions.append(functionId)
+                fieldIndex += 1U64
+            }
+            self.decls.fieldDefaultGeneratorRanges.append(<DefaultGeneratorRange start=start len=source.fields.count() />)
+            structIndex += 1U64
+        }
+    }
+
+    fn recordsFieldDefault(field: MakeField) -> Bool {
+        if !self.cur.recordCallTemplates || self.decls.fieldDefaultGeneratorRanges.count() == 0U64 { return false }
+        match field.origin {
+            MakeFieldOrigin.DeclarationDefault => { return true }
+            _ => { return false }
+        }
+    }
+
+    inout fn recordFieldDefaultCall(field: MakeField, instance: U64, resultTerm: U64) -> U64 {
+        if instance == 0U64 || instance >= self.arena.typeCount() {
+            self.errorAt(offset: field.offset, msg: "internal error: field default has no selected construction instance")
+            return self.arena.exprs.count()
+        }
+        val instanceType: TypeRef = self.arena.typeAt(index: instance)
+        val structIndex: U64 = self.anyStructIndex(nameStart: instanceType.nameStart, nameLen: instanceType.nameLen)
+        val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
+        if structIndex >= self.decls.fieldDefaultGeneratorRanges.count() {
+            self.errorAt(offset: field.offset, msg: "internal error: field default has no declaration owner")
+            return self.arena.exprs.count()
+        }
+        val range: DefaultGeneratorRange = self.decls.fieldDefaultGeneratorRanges[structIndex]
+        if fieldIndex >= range.len {
+            self.errorAt(offset: field.offset, msg: "internal error: field default has no declaration slot")
+            return self.arena.exprs.count()
+        }
+        val functionId: U64 = self.decls.fieldDefaultGeneratorFunctions[range.start + fieldIndex]
+        if functionId == 0U64 {
+            self.errorAt(offset: field.offset, msg: "internal error: field default has no selected generator")
+            return self.arena.exprs.count()
+        }
+        val generator: U64 = functionId - 1U64
+        val arguments: Array[U64] = self.copyTypeTermArgs(ref: instance)
+        if arguments.count() != self.arena.functionAt(index: generator).typeParams.count() {
+            self.errorAt(offset: field.offset, msg: "internal error: field default instance has incomplete type arguments")
+            return self.arena.exprs.count()
+        }
+        // The authored expression belongs only to the generator. A previously
+        // completed occurrence retains its own synthetic call identity.
+        mut val existing: U64 = self.arena.exprs.count()
+        if field.value != self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex).defaultVal {
+            existing = field.value
+        }
+        return self.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.None />, calleeTypeArgs: arguments, resultTerm: resultTerm, existingExpr: existing)
+    }
+
     // Prepare before semantic recording, after checking the authored defaults.
     // The caller must transfer default-expression ownership to these bodies
     // when enabling this phase; recording the same expression as both a parent

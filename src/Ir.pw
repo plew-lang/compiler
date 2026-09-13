@@ -2844,6 +2844,9 @@ export struct Decls {
     pub mut val funcParamPool: Array[Param] = []
     pub mut val defaultGeneratorRanges: Array[DefaultGeneratorRange] = []
     pub mut val defaultGeneratorFunctions: Array[U64] = []
+    // Struct declaration / field position selects an independent default body.
+    pub mut val fieldDefaultGeneratorRanges: Array[DefaultGeneratorRange] = []
+    pub mut val fieldDefaultGeneratorFunctions: Array[U64] = []
     pub mut val deinits: Array[Bind] = []
     pub mut val assocBindings: Array[AssocBinding] = []
     pub mut val pubFactories: Array[U64] = []

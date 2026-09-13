@@ -1747,6 +1747,7 @@ export fn runFrontend(c: inout Comp) {
     tracePhase(c: inout c, label: "verify:done")
     tracePhase(c: inout c, label: "default-generators:start")
     c.prepareDefaultArgumentGenerators()
+    c.prepareFieldDefaultGenerators()
     tracePhase(c: inout c, label: "default-generators:done")
     // TypeTerm recording deliberately precedes generic checking, but a
     // CallTemplate is source-selection evidence and needs the verified
