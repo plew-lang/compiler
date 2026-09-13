@@ -34,7 +34,10 @@ pub impl LlvmCtx {
     inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Bool {
         if selected.callee >= c.arena.functionCount() { return false }
         val declaration: Func = c.arena.functionAt(index: selected.callee)
-        if !declaration.isExtern || !declaration.isCExtern || declaration.hasRecv || declaration.isAsync { return false }
+        // Only a closed Direct target denotes a raw external symbol. Bundled
+        // runtime operations (including timers) have a separate descriptor.
+        match selected.target { CallTarget.Direct => {} _ => { return false } }
+        if !declaration.isExtern || declaration.hasRecv || declaration.isAsync { return false }
         if declaration.typeParams.count() != 0U64 || selected.parameterTypeRefs.count() != declaration.params.count() { return false }
         val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
         mut val index: U64 = 0U64

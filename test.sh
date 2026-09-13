@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# Raw external symbols and bundled runtime targets retain distinct identities.
+if sh ./test-mid-direct-extern.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-direct-extern"
+fi
+
 # Reference cell control preserves borrowed inputs and owned results.
 if sh ./test-mid-cell-control.sh; then
     :

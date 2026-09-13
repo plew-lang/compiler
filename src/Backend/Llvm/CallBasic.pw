@@ -8,6 +8,16 @@
 // fn TypeRef args = [retTy, paramTy0, paramTy1, ...].
 
 pub impl LlvmCtx {
+    inout fn genTimerSleep(c: inout Comp, duration: LLVMValueRef) -> LLVMValueRef {
+        mut val sty: Array[LLVMTypeRef] = []
+        sty.append(self.i64ty)
+        val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
+        val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", fnTy: sleepTy)
+        mut val sargs: Array[LLVMValueRef] = []
+        sargs.append(self.extendToI64(v: duration, unsigned: false))
+        return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
+    }
+
     // Both legacy expression lowering and Mid CFG lowering consume the same
     // final descriptor.  Keep the carrier-to-source-value projection here as
     // the legacy counterpart of `midProjectCallResult`; neither path may
@@ -331,6 +341,7 @@ pub impl LlvmCtx {
                     match intrinsic {
                         RuntimeIntrinsic.HashSeed => { return self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty) }
                         RuntimeIntrinsic.EntropyU64 => { return self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_random_u64", resultType: self.i64ty) }
+                        RuntimeIntrinsic.TimerSleep => { return self.genTimerSleep(c: inout c, duration: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)) }
                         RuntimeIntrinsic.StrongCellNew => { return self.genLlvmRefNew(c: inout c, valueExpr: c.argAt(args: args, index: 0U64).expr) }
                         RuntimeIntrinsic.StrongCellWeak => { return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)) }
                         RuntimeIntrinsic.StrongCellCopy => { return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)) }
@@ -397,17 +408,6 @@ pub impl LlvmCtx {
             resolvedPlewIntrinsic = cfIntrinsic.isExtern && !(cfIntrinsic.isCExtern)
         }
         if resolvedPlewIntrinsic {
-        // `sleep(ms: I64) -> Promise[I64]` (@Std/Async intrinsic): a timer promise,
-        // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
-            mut val sty: Array[LLVMTypeRef] = []
-            sty.append(self.i64ty)
-            val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
-            val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", fnTy: sleepTy)
-            mut val sargs: Array[LLVMValueRef] = []
-            sargs.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
-            return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
-        }
         // @Std/Process argCount() -> I64.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
             mut val ptys: Array[LLVMTypeRef] = []

@@ -2095,6 +2095,7 @@ pub impl Comp {
                         match intrinsic {
                             RuntimeIntrinsic.HashSeed => { match other { RuntimeIntrinsic.HashSeed => { return true } _ => {} } }
                             RuntimeIntrinsic.EntropyU64 => { match other { RuntimeIntrinsic.EntropyU64 => { return true } _ => {} } }
+                            RuntimeIntrinsic.TimerSleep => { match other { RuntimeIntrinsic.TimerSleep => { return true } _ => {} } }
                             RuntimeIntrinsic.StrongCellNew => { match other { RuntimeIntrinsic.StrongCellNew => { return true } _ => {} } }
                             RuntimeIntrinsic.StrongCellWeak => { match other { RuntimeIntrinsic.StrongCellWeak => { return true } _ => {} } }
                             RuntimeIntrinsic.StrongCellCopy => { match other { RuntimeIntrinsic.StrongCellCopy => { return true } _ => {} } }

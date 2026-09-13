@@ -742,6 +742,7 @@ pub impl LlvmCtx {
                         RuntimeIntrinsic.HashSeed => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                         RuntimeIntrinsic.EntropyU64 => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                         RuntimeIntrinsic.StrongCellNew => { return <MidCallPreflight.Target /> }
+                        RuntimeIntrinsic.TimerSleep => { return <MidCallPreflight.Async /> }
                         RuntimeIntrinsic.StrongCellWeak => { return <MidCallPreflight.Target /> }
                         RuntimeIntrinsic.StrongCellCopy => { return <MidCallPreflight.Target /> }
                         RuntimeIntrinsic.WeakCellAlive => { return <MidCallPreflight.Target /> }
@@ -1181,6 +1182,7 @@ pub impl LlvmCtx {
                 RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midLocalPtr(body: body, local: destination.local)) return true }
                 RuntimeIntrinsic.EntropyU64 => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_random_u64", resultType: self.i64ty), self.midLocalPtr(body: body, local: destination.local)) return true }
                 RuntimeIntrinsic.StrongCellNew => { return false }
+                RuntimeIntrinsic.TimerSleep => { return false }
                 RuntimeIntrinsic.StrongCellWeak => { return false }
                 RuntimeIntrinsic.StrongCellCopy => { return false }
                 RuntimeIntrinsic.WeakCellAlive => { return false }

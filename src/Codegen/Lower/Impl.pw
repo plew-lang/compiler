@@ -49,6 +49,9 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
+        if owner == self.modules.asyncModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
+            return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.TimerSleep /> />
+        }
         if owner == self.modules.randomModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
             return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.EntropyU64 /> />
         }
@@ -106,6 +109,9 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cFree") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CFree /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
+        }
+        if owner == self.modules.asyncModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
+            return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.TimerSleep /> />
         }
         if owner == self.modules.randomModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
             return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.EntropyU64 /> />

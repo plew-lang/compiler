@@ -1540,6 +1540,7 @@ export enum BufferIntrinsic {
 export enum RuntimeIntrinsic {
     HashSeed
     EntropyU64
+    TimerSleep
     StrongCellNew
     StrongCellWeak
     StrongCellCopy
@@ -2964,6 +2965,7 @@ export struct Modules {
     pub mut val ffiModule: U64 = 4000000000U64
     // Entropy is owned by the explicitly imported bundled Random module.
     pub mut val randomModule: U64 = 4000000000U64
+    pub mut val asyncModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 

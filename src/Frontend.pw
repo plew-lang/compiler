@@ -1236,6 +1236,9 @@ export fn runFrontend(c: inout Comp) {
         mut val randomPath: Array[U8] = []
         appendBytes(into: inout randomPath, from: stdRoot)
         appendBytes(into: inout randomPath, from: "Random.pw".bytes())
+        mut val asyncPath: Array[U8] = []
+        appendBytes(into: inout asyncPath, from: stdRoot)
+        appendBytes(into: inout asyncPath, from: "Async.pw".bytes())
         if genMode {
             // The synthesized derive-runner calls `write` even when the target file
             // does not import @Std/Io itself.  Load the real bundled declaration in
@@ -1331,6 +1334,19 @@ export fn runFrontend(c: inout Comp) {
                 }
                 if pathMatchesRandom {
                     c.modules.randomModule = moduleId
+                }
+            }
+            if path.count() == asyncPath.count() {
+                mut val pathMatchesAsync: Bool = true
+                mut val pathIndex: U64 = 0U64
+                while pathIndex < path.count() {
+                    if path[pathIndex] != asyncPath[pathIndex] {
+                        pathMatchesAsync = false
+                    }
+                    pathIndex += 1U64
+                }
+                if pathMatchesAsync {
+                    c.modules.asyncModule = moduleId
                 }
             }
             mut val hasPkgRoot: Bool = false
