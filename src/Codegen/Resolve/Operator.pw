@@ -34,7 +34,7 @@ pub impl Comp {
         if !(isBinTraitOp(op: op)) || self.cur.checkFn >= self.arena.functionCount() { return 0U64 }
         val receiverRef: U64 = self.inferType(id: lhs)
         if receiverRef == 0U64 { return 0U64 }
-        val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64)
+        val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64)
         return self.staticRequirementResultType(resolution: resolution)
     }
 

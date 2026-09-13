@@ -1,0 +1,4 @@
+// A user trait named Eq is not the semantic source of equality syntax.
+trait Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool }
+fn invalid[T](first: T, second: T) -> Bool where T: Eq { return first == second }
+fn main() {}

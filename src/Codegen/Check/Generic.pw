@@ -381,23 +381,15 @@ pub impl Comp {
                             need = self.binOpTraitName(op: op)
                         }
                         if need.bytes().count() != 0U64 {
-                            // Arithmetic/bitwise operator typing and its
-                            // capability check must share one proof query.
-                            // Looking only at the trait's spelling loses the
-                            // selected `Add[Rhs, Output=…]` instance and made
-                            // an existing bound appear missing.
-                            if isBinTraitOp(op: op) {
-                                val receiverRef: U64 = self.inferType(id: lhs)
-                                val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: need, memberName: binTraitMethodName(op: op), arity: 2U64)
-                                match resolution {
-                                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
-                                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
-                                    StaticMemberResolution.Missing => {
-                                        self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
-                                    }
+                            // Capability checking and call recording consume
+                            // the same requirement and inherited-bound proof.
+                            val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: self.inferType(id: lhs), isUnary: false)
+                            match resolution {
+                                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
+                                StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
+                                StaticMemberResolution.Missing => {
+                                    self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                                 }
-                            } else if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
-                                self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                             }
                         }
                     }

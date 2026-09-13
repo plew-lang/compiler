@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+import @Std/Core with { Eq, Ord, Ordering }
+
+trait Ranked: Ord {}
+trait Tagged: Ranked {}
+struct Reverse { pub val value: I64 }
+pub impl Reverse { factory }
+impl Reverse as Eq {
+    assoc fn eq(lhs~: Reverse, rhs~: Reverse) -> Bool { return lhs.value == rhs.value }
+}
+impl Reverse as Ord {
+    assoc fn compare(lhs~: Reverse, rhs~: Reverse) -> Ordering {
+        if lhs.value > rhs.value { return <Ordering.Less /> }
+        if lhs.value == rhs.value { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
+impl Reverse as Ranked {}
+impl Reverse as Tagged {}
+
+fn flag(value: Bool) { if value { print(1I64) } else { print(0I64) } }
+fn comparisons[T](first: T, second: T) where T: Tagged {
+    flag(value: first < second)
+    flag(value: first > second)
+    flag(value: first <= second)
+    flag(value: first >= second)
+    flag(value: first == first)
+    flag(value: first != first)
+}
+fn main() { comparisons(first: <Reverse value=1I64 />, second: <Reverse value=2I64 />) }

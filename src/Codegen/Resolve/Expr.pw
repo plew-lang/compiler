@@ -755,7 +755,7 @@ pub impl Comp {
             return <StaticMemberResolution.Missing />
         }
         if isBinTraitOp(op: op) {
-            return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64)
+            return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64)
         }
         if op == opEq() || op == opNe() {
             return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: "Eq", memberName: "eq", arity: 2U64)

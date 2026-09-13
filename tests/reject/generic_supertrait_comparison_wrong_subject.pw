@@ -1,0 +1,7 @@
+import @Std/Core with { Ord }
+trait Ranked: Ord {}
+trait Unordered {}
+fn invalid[T, U](first: U, second: U) -> Bool where T: Ranked, U: Unordered {
+    return first < second
+}
+fn main() {}
