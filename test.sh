@@ -173,6 +173,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-nominal-construction"
 fi
 
+# Synthetic deinitializers retain the declared receiver TypeTerm.
+if sh ./test-mid-deinit-receivers.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-deinit-receivers"
+fi
+
 # Unit results must remain distinct from missing call-result type facts.
 if sh ./test-mid-unit-call-results.sh; then
     :

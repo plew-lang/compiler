@@ -2319,11 +2319,8 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
     val f: Func = c.arena.functionAt(index: fnIdx)
-    // A Mid ABI local must have a frontend-resolved TypeTerm.  Synthetic
-    // deinit walkers currently rely on the legacy receiver spelling path and
-    // use the zero sentinel here; treating it as I64 would miscompile the
-    // receiver.  Keep them out of Mid until their semantic receiver term is
-    // published by the frontend.
+    // All receivers, including synthetic methods, require a frontend-resolved
+    // TypeTerm. The zero sentinel is never a scalar or a spelling-based type.
     if f.hasRecv && f.recvTy == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
