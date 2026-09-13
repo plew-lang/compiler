@@ -213,18 +213,15 @@ pub impl Comp {
                 val idx: U64 = self.lowerExpr(e: index)
                 result = self.lowerIndexRead(recv: b, key: idx)
             }
-            ExprAst.Make(val typeName, typeNameSpan: _, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
+            ExprAst.Make(val typeName, val typeNameSpan, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
                 val tn: Bind = self.internBytes(s: typeName)
-                mut val tyRef: U64 = 0
-                if typeArgs.count() > 0 {
-                    mut val targs: Array[U64] = []
-                    mut val ti: U64 = 0
-                    while ti < typeArgs.count() {
-                        targs.append(self.lowerType(t: typeArgs[ti]).ref)
-                        ti += 1
-                    }
-                    tyRef = self.pushType(t: <TypeRef nameStart=tn.nameStart nameLen=tn.nameLen args=targs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                mut val targs: Array[U64] = []
+                mut val ti: U64 = 0U64
+                while ti < typeArgs.count() {
+                    targs.append(self.lowerType(t: typeArgs[ti]).ref)
+                    ti += 1U64
                 }
+                val tyRef = self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
                 if isEnum {
@@ -503,10 +500,7 @@ pub impl Comp {
                     typeArgs.append(self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i)).ref)
                     i += 1U64
                 }
-                mut val tyRef: U64 = 0U64
-                if typeArgs.count() > 0U64 {
-                    tyRef = self.pushType(t: <TypeRef nameStart=e.name.start nameLen=e.name.end - e.name.start args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-                }
+                val tyRef = self.lowerConstructionType(nameStart: e.name.start, nameLen: e.name.end - e.name.start, args: typeArgs, siteOffset: e.name.start)
                 val typeId: U64 = intern(c: inout self, start: e.name.start, len: e.name.end - e.name.start)
                 mut val variantId: U64 = 0U64
                 if e.flag0 {

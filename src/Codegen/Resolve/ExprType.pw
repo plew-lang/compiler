@@ -913,19 +913,12 @@ pub impl Comp {
                         g = self.groundTypeRef(ref: ty)
                     }
                 }
-                // A context-typed record construction already owns its complete
-                // Record TypeTerm in `ty`.  Do not discard it merely because the
-                // synthetic ABI layout is non-generic: later compatibility,
-                // inference, and field selection must see the same structural
-                // children as the annotated context.
+                // Keep the written construction identity for nominal and
+                // structural types alike; spelling is not a replacement for
+                // the resolved declaration or lexical binder.
                 if g != 0U64 && g < self.arena.typeCount() {
-                    if self.arena.typeAt(index: g).isRecord {
-                        val rt: TypeRef = self.arena.typeAt(index: g)
-                        return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=g viewExtId=rt.viewExtId />
-                    }
-                }
-                if self.isGenericInst(ref: g) {
-                    return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=g />
+                    val resultType = self.arena.typeAt(index: g)
+                    return <TypeInfo kind=2 nameStart=resultType.nameStart nameLen=resultType.nameLen ref=g viewExtId=resultType.viewExtId />
                 }
                 return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
             }

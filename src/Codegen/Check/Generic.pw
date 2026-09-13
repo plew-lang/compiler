@@ -695,6 +695,7 @@ pub impl Comp {
                 // Lang-item references do not have declaration fields, but
                 // their `value` field has the single type argument.
                 if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
+                    if et.args.count() != 1U64 { return false }
                     mut val refFieldIdx: U64 = 0U64
                     while refFieldIdx < fields.len {
                         val field: MakeField = self.makeFieldAt(fields: fields, index: refFieldIdx)
@@ -708,6 +709,7 @@ pub impl Comp {
                 if isEnum {
                     val ei: U64 = self.anyEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
                     if ei >= self.arena.enumCount() { return false }
+                    if et.args.count() != self.arena.enumAt(index: ei).typeParams.count() { return false }
                     val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     if vi >= self.arena.enumAt(index: ei).variants.count() { return false }
                     self.genericCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields, makeFields: fields)
@@ -715,6 +717,7 @@ pub impl Comp {
                 }
                 val si: U64 = self.anyStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
                 if si >= self.arena.structCount() { return false }
+                if et.args.count() != self.arena.structAt(index: si).typeParams.count() { return false }
                 self.genericCheckFieldsUnder(params: self.arena.structAt(index: si).typeParams, targs: et.args, defFields: self.arena.structAt(index: si).fields, makeFields: fields)
                 return true
             }

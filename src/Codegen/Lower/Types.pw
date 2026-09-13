@@ -25,6 +25,28 @@ pub impl Comp {
     }
 
 
+    // Construction heads retain the same lexical identity as written type
+    // annotations, including when their explicit argument list is empty.
+    inout fn lowerConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64) -> U64 {
+        if nameLen == 0U64 { return 0U64 }
+        mut val paramId: U64 = 0U64
+        mut val site = siteOffset
+        mut val index: U64 = 0U64
+        while index < self.cur.typeParams.count() {
+            val parameter = self.cur.typeParams[index]
+            if spansEqual(c: inout self, aStart: parameter.nameStart, aLen: parameter.nameLen, bStart: nameStart, bLen: nameLen) {
+                paramId = parameter.paramId
+                site = 0U64
+            }
+            index += 1U64
+        }
+        if args.count() == 0U64 {
+            val associated = self.lowerLexicalAssociatedType(nameStart: nameStart, nameLen: nameLen, paramId: paramId)
+            if associated != 0U64 { return associated }
+        }
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=site />)
+    }
+
     // Register an Array element type name for later monomorphization (deduped by the
     // element name span, which is mangled for compound elements). fieldStart carries
     // the element's structured ref so genCElem / the runtime recover its C type and
