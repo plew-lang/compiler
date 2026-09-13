@@ -378,6 +378,15 @@ pub impl Comp {
                 val result: U64 = self.staticRequirementResultType(resolution: resolution)
                 if result != 0U64 { return self.typeInfoOfRef(ref: result) }
             }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
+                val declaration = self.arena.functionAt(index: callee)
+                val inferred = self.finalMethodEnvironment(f: declaration, receiverRef: semanticReceiver, args: args)
+                if inferred.receiverRef != 0U64 {
+                    val environment = <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=inferred.receiverRef proof=proof />
+                    val result = self.groundTermForBody(ref: declaration.retTy, environment: environment, selfRef: semanticReceiver, itemRef: 0U64)
+                    if result != 0U64 { return self.typeInfoOfRef(ref: result) }
+                }
+            }
             _ => {}
         }
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)

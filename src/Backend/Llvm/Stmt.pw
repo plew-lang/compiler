@@ -76,7 +76,11 @@ pub impl LlvmCtx {
         }
         val s: Stmt = c.arena.stmts[id]
         match s {
-            Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            Stmt.Let(mutable: _, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, ty: val declaredTy, val init) => {
+                // The annotation belongs to the active BodyInstance, including
+                // its selected proof. A temporary receiver Cursor must not
+                // reinterpret a nested associated projection in local storage.
+                val ty = c.groundTermForBody(ref: declaredTy, environment: c.cur.bodyEnvironment, selfRef: c.cur.bodySelfRef, itemRef: c.cur.bodyItemRef)
                 // extension-view invariance (spec/09): an explicit annotation `val v:
                 // P#Ext = init` requires the initializer's view to match — no implicit
                 // application/drop of a view.
@@ -152,10 +156,7 @@ pub impl LlvmCtx {
                             // return/param type (else accumulator `Array[Item]` ≠ return `Array[I64]`).
                             mut val litElemRef: U64 = 0
                             if ty != 0U64 {
-                                mut val gt: U64 = ty
-                                if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
-                                    gt = c.groundTypeRef(ref: ty)
-                                }
+                                val gt: U64 = ty
                                 if c.arena.typeAt(index: gt).args.count() > 0U64 {
                                     litElemRef = c.arena.typeAt(index: gt).args[0]
                                 }
