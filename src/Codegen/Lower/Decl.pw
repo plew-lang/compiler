@@ -283,6 +283,19 @@ pub impl Comp {
         return <FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis />
     }
 
+    // The declaration's own receiver preserves its lexical binder identities.
+    // Synthetic methods use the same type contract as written impl methods.
+    inout fn lowerDeclaredReceiver(nameStart: U64, nameLen: U64, parameters: Array[Bind], siteOffset: U64) -> U64 {
+        mut val arguments: Array[U64] = []
+        mut val index: U64 = 0U64
+        while index < parameters.count() {
+            val parameter = parameters[index]
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
+            index += 1U64
+        }
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=arguments isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=siteOffset />)
+    }
+
     inout fn lowerSyntaxStructDecl(d: SyntaxDecl) {
         val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -298,7 +311,7 @@ pub impl Comp {
             val noParams: Array[Param] = []
             val noTypeParams: Array[Bind] = []
             val body: U64 = self.lowerSyntaxBlock(id: d.deinitBody)
-            self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
+            self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) recvTy=self.lowerDeclaredReceiver(nameStart: d.name.start, nameLen: d.name.end - d.name.start, parameters: typeParams, siteOffset: d.name.start) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
             self.decls.deinits.append(<Bind nameStart=d.name.start nameLen=d.name.end - d.name.start fieldStart=d.name.start fieldLen=d.name.end - d.name.start />)
         }
         self.arena.registerStruct(<StructDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
@@ -405,7 +418,7 @@ pub impl Comp {
             val body: U64 = self.lowerBlock(b: d.deinitBody)
             val noParams: Array[Param] = []
             val noTypeParams: Array[Bind] = []
-            self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
+            self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) recvTy=self.lowerDeclaredReceiver(nameStart: nm.nameStart, nameLen: nm.nameLen, parameters: typeParams, siteOffset: d.nameSpan.start) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
             self.decls.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
         }
         self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
