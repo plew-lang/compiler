@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+
+fn main() {
+    print(18446744073709551615 as U64)
+    print(-9223372036854775808 as I64)
+    print('あ' as U16)
+    print(7 as F32)
+    print(-7 as F64)
+}
