@@ -462,6 +462,11 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
         return 0U64
     }
+    val closureBodyId = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment.environment)
+    if closureBodyId == 0U64 {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
+        return 0U64
+    }
     val captureStart: U64 = c.mid.closureCaptures.count()
     mut val captureI: U64 = 0U64
     while captureI < source.elements.len {
@@ -485,7 +490,7 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         c.mid.closureCaptures.append(<MidClosureCaptureNode bindingTarget=raw.bindingTarget typeTerm=expectedType mode=raw.mode operand=operand />)
         captureI += 1U64
     }
-    c.mid.rvalues.append(<MidRvalueNode tag=19U64 exprId=source.exprId closureBodyKey=source.closureBodyKey resultTerm=functionType elements=<MidRange start=captureStart len=source.elements.len /> />)
+    c.mid.rvalues.append(<MidRvalueNode tag=19U64 exprId=source.exprId closureBodyKey=source.closureBodyKey closureBodyId=closureBodyId resultTerm=functionType elements=<MidRange start=captureStart len=source.elements.len /> />)
     return c.mid.rvalues.count()
 }
 

@@ -141,6 +141,8 @@ export struct MidRvalueNode {
     // distinct from exprId: the latter navigates to the source value fact,
     // while this key names the callable body that receives its environment.
     pub val closureBodyKey: U64 = 0U64
+    // Zero while parametric; Instantiate binds the lexical environment.
+    pub val closureBodyId: U64 = 0U64
 }
 pub impl MidRvalueNode { factory }
 
