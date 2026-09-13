@@ -8,7 +8,7 @@ work=$(mktemp -d tmp/gen_ast.XXXXXX)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 cp tests/genast/UnresolvedField.pw "$work/App.pw"
 cp Plew.toml Plew.lock "$work/"
-# Match the temporary local Syntax dependency used by test-gen.sh.
+# Use the committed dependency manifest and lock, as in test-gen.sh.
 printf '%s\n' 'check gen-input-ast: compile derive runner' >&2
 "$PLEWC" --gen "$work/App.pw" > "$work/harness.ll"
 "$PLEWC" --runtime > "$work/runtime.c"
