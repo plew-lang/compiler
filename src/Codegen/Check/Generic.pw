@@ -984,106 +984,112 @@ pub impl Comp {
         self.popLocals(mark: mark)
     }
 
+    // Check one lexical declaration under its authored abstract bounds.
+    // Selection belongs to the caller; generated provided copies remain excluded.
+    inout fn checkGenericFunction(fnIdx: U64) {
+        val f: Func = self.arena.functionAt(index: fnIdx)
+        // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
+        // block). Generic externs like `arrayPush[T]` would otherwise have block 0
+        // (some unrelated function's body) walked under their own bound-less type
+        // params, mis-flagging method calls inside it.
+        // walk generic templates (any module — bound checks), and trait
+        // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
+        // a dead provided method (no conforming type, so no concrete copy is verified)
+        // would otherwise escape all checks. Every module is walked (std included — no
+        // trusted-import boundary).
+        mut val shouldCheck: Bool = false
+        if f.typeParams.count() > 0 {
+            shouldCheck = true
+        }
+        if self.methodRecvIsTrait(f: f) {
+            shouldCheck = true
+        }
+        // A provided-method copy is checked exactly once: at its source
+        // `impl Trait { ... }` declaration, against the abstract trait
+        // interface. `isProvided` is the IR fact that denotes a generated
+        // copy; `srcTraitId` is merely optional provenance and is absent
+        // for some direct/generic copies. Rechecking any copy can mix its
+        // concrete receiver with the source body's `Self` / associated
+        // proof and accepts or rejects a different program.
+        if f.isProvided {
+            shouldCheck = false
+        }
+        if shouldCheck && !f.isExtern {
+            // A generic declaration body can recursively resolve a large
+            // symbolic call graph.  Mark the exact authored body before
+            // entering it: a repeated phase name is not progress, whereas
+            // this monotonically increasing declaration index is.
+            tracePhaseProgress(c: inout self, label: "generic-body-check:function", count: fnIdx, stride: 16U64)
+            // Generic signature views are authored source-sets even though
+            // their TypeRefs carry siteOffset=0 (the general verifier uses
+            // that sentinel to skip concrete receiver checks).  Validate
+            // their structural cycle rule here, once per declaration.
+            mut val pi: U64 = 0U64
+            while pi < f.params.count() {
+                val param: Param = self.funcParamAt(params: f.params, index: pi)
+                self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
+                pi += 1U64
+            }
+            self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
+            val noArgs: Array[U64] = []
+            self.cur.locals = []
+            self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+            self.cur.hasRecv = f.hasRecv
+            self.cur.recvStart = f.recvStart
+            self.cur.recvLen = f.recvLen
+            self.cur.extId = f.extId
+            self.cur.selfInout = f.selfInout
+            self.cur.recvInstRef = 0
+            // Install the declaration binders before building Self: the
+            // receiver's arguments must carry these ParamIds, not just
+            // same-spelled names from a previous body.
+            self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
+            self.cur.typeArgs = noArgs
+            // Declaration-time generic checking has no selected executable
+            // body instance. Leaving a prior Record/Mono body environment
+            // installed lets a symbolic `Self` be rebound through an
+            // unrelated receiver pattern (for example `Array[Item]`),
+            // which invents a concrete conformance while checking a trait
+            // template. Keep this semantic boundary explicit: abstract
+            // Self and associated projections may only use the current
+            // declaration's binders and static proof.
+            self.cur.bodyFnIdx = 18446744073709551615U64
+            self.cur.bodyEnvironment = <InstanceEnvironment />
+            self.cur.bodyId = 0U64
+            self.cur.bodySelfRef = 0U64
+            self.cur.bodyItemRef = 0U64
+            // Every declaration body, including a trait-provided one,
+            // carries its receiver as a complete semantic TypeTerm.  In
+            // particular, abstract `Self` must not degrade to the trait
+            // name: `Self#Iterator.Item` is a projection on the implicit
+            // proof, whereas `Iterator#Iterator.Item` (or a later
+            // accidental concrete receiver) is not.  isSelfTypeInProvided
+            // recognizes this explicit Self term above.
+            self.cur.selfRef = self.parametricSelfRef(f: f)
+            self.cur.itemRef = self.abstractProvidedItemRef(f: f)
+            // This is a declaration-time symbolic environment: function
+            // binders are active but have no concrete arguments. Keeping
+            // them here lets every type query distinguish `T` from an
+            // unknown type and discharge `where T: P[...]` constraints.
+            self.cur.checkFn = fnIdx
+            mut val pi: U64 = 0
+            while pi < f.params.count() {
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
+                // Parameter annotations belong to this declaration's
+                // abstract environment, including associated types nested
+                // in a function value's parameter and result types.
+                val parameterTerm: U64 = self.groundTypeRef(ref: p.ty)
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
+                pi += 1
+            }
+            self.checkBoundsBlock(blkId: f.body)
+        }
+    }
+
     inout fn checkGenericBodies() {
         mut val fi: U64 = 0
         while fi < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: fi)
-            // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
-            // block). Generic externs like `arrayPush[T]` would otherwise have block 0
-            // (some unrelated function's body) walked under their own bound-less type
-            // params, mis-flagging method calls inside it.
-            // walk generic templates (any module — bound checks), and trait
-            // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
-            // a dead provided method (no conforming type, so no concrete copy is verified)
-            // would otherwise escape all checks. Every module is walked (std included — no
-            // trusted-import boundary).
-            mut val shouldCheck: Bool = false
-            if f.typeParams.count() > 0 {
-                shouldCheck = true
-            }
-            if self.methodRecvIsTrait(f: f) {
-                shouldCheck = true
-            }
-            // A provided-method copy is checked exactly once: at its source
-            // `impl Trait { ... }` declaration, against the abstract trait
-            // interface. `isProvided` is the IR fact that denotes a generated
-            // copy; `srcTraitId` is merely optional provenance and is absent
-            // for some direct/generic copies. Rechecking any copy can mix its
-            // concrete receiver with the source body's `Self` / associated
-            // proof and accepts or rejects a different program.
-            if f.isProvided {
-                shouldCheck = false
-            }
-            if shouldCheck && !f.isExtern {
-                // A generic declaration body can recursively resolve a large
-                // symbolic call graph.  Mark the exact authored body before
-                // entering it: a repeated phase name is not progress, whereas
-                // this monotonically increasing declaration index is.
-                tracePhaseProgress(c: inout self, label: "generic-body-check:function", count: fi, stride: 16U64)
-                // Generic signature views are authored source-sets even though
-                // their TypeRefs carry siteOffset=0 (the general verifier uses
-                // that sentinel to skip concrete receiver checks).  Validate
-                // their structural cycle rule here, once per declaration.
-                mut val pi: U64 = 0U64
-                while pi < f.params.count() {
-                    val param: Param = self.funcParamAt(params: f.params, index: pi)
-                    self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
-                    pi += 1U64
-                }
-                self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
-                val noArgs: Array[U64] = []
-                self.cur.locals = []
-                self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
-                self.cur.hasRecv = f.hasRecv
-                self.cur.recvStart = f.recvStart
-                self.cur.recvLen = f.recvLen
-                self.cur.extId = f.extId
-                self.cur.selfInout = f.selfInout
-                self.cur.recvInstRef = 0
-                // Install the declaration binders before building Self: the
-                // receiver's arguments must carry these ParamIds, not just
-                // same-spelled names from a previous body.
-                self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
-                self.cur.typeArgs = noArgs
-                // Declaration-time generic checking has no selected executable
-                // body instance. Leaving a prior Record/Mono body environment
-                // installed lets a symbolic `Self` be rebound through an
-                // unrelated receiver pattern (for example `Array[Item]`),
-                // which invents a concrete conformance while checking a trait
-                // template. Keep this semantic boundary explicit: abstract
-                // Self and associated projections may only use the current
-                // declaration's binders and static proof.
-                self.cur.bodyFnIdx = 18446744073709551615U64
-                self.cur.bodyEnvironment = <InstanceEnvironment />
-                self.cur.bodyId = 0U64
-                self.cur.bodySelfRef = 0U64
-                self.cur.bodyItemRef = 0U64
-                // Every declaration body, including a trait-provided one,
-                // carries its receiver as a complete semantic TypeTerm.  In
-                // particular, abstract `Self` must not degrade to the trait
-                // name: `Self#Iterator.Item` is a projection on the implicit
-                // proof, whereas `Iterator#Iterator.Item` (or a later
-                // accidental concrete receiver) is not.  isSelfTypeInProvided
-                // recognizes this explicit Self term above.
-                self.cur.selfRef = self.parametricSelfRef(f: f)
-                self.cur.itemRef = self.abstractProvidedItemRef(f: f)
-                // This is a declaration-time symbolic environment: function
-                // binders are active but have no concrete arguments. Keeping
-                // them here lets every type query distinguish `T` from an
-                // unknown type and discharge `where T: P[...]` constraints.
-                self.cur.checkFn = fi
-                mut val pi: U64 = 0
-                while pi < f.params.count() {
-                    val p: Param = self.funcParamAt(params: f.params, index: pi)
-                    // Parameter annotations belong to this declaration's
-                    // abstract environment, including associated types nested
-                    // in a function value's parameter and result types.
-                    val parameterTerm: U64 = self.groundTypeRef(ref: p.ty)
-                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
-                    pi += 1
-                }
-                self.checkBoundsBlock(blkId: f.body)
-            }
+            self.checkGenericFunction(fnIdx: fi)
             fi += 1
         }
         self.cur.locals = []
