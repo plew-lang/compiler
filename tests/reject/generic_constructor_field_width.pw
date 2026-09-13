@@ -1,0 +1,3 @@
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+fn main() { val box = <Box[I64] value=1I32 /> }

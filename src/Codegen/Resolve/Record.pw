@@ -200,19 +200,8 @@ pub impl Comp {
         if iterTy.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: iterTy.nameStart, len: iterTy.nameLen, kw: "Array") {
             return iterTy.args[0]
         }
-        // An Iterable is not itself the cursor. Its selected Iter witness
-        // owns the next() Item; using Item on the iterable (or its bare type
-        // name) loses the element type for conditionally conforming cursors.
-        val iterableOwner: U64 = self.coreTraitOwner(name: "Iterable")
-        if iterableOwner != 0U64 {
-            val iteratorName: Bind = self.internBytes(s: "Iter")
-            val iteratorTerm: U64 = self.assocBindingFor(baseRef: iterTerm, traitId: self.internBytes(s: "Iterable").nameId, traitOwner: iterableOwner, traitArgs: [], assocId: iteratorName.nameId)
-            if iteratorTerm != 0U64 && iteratorTerm < self.arena.typeCount() {
-                val iteratorType: TypeRef = self.arena.typeAt(index: iteratorTerm)
-                val element: U64 = self.assocItemRef(recvStart: iteratorType.nameStart, recvLen: iteratorType.nameLen, recvInstRef: iteratorTerm)
-                if element != 0U64 { return element }
-            }
-        }
+        val protocolItem: U64 = self.iterableProtocolItemTerm(iterTerm: iterTerm)
+        if protocolItem != 0U64 { return protocolItem }
         // Prefer the resolved source carried by the iterator-producing call.
         // It is a declaration owner, so a user trait spelled `Iterator` can
         // never capture this proof query. A direct iterator value has no call
@@ -1548,8 +1537,12 @@ pub impl Comp {
                     // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
                     // instance so the literal records `Array[I64]`, and never store a
                     // still-parametric context (a non-instance Make leaves it as-is).
-                    if ctxRef != 0U64 && instance != 0U64 && self.isGenericInst(ref: instance) {
-                        ctxRef = self.groundUnderInst(instRef: instance, tyRef: ctxRef)
+                    if instance != 0U64 {
+                        if isEnum {
+                            ctxRef = self.typedIrRefOfInfo(ti: self.genericEnumFieldTypeInfo(instRef: instance, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                        } else {
+                            ctxRef = self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                        }
                     }
                     // A field declaration is a bidirectional semantic input
                     // for *every* expression placed in that field.  In a

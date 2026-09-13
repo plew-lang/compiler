@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+enum Rows { Values(items: Array[I64]) }
+fn count(rows: Rows) -> U64 {
+    match rows {
+        Rows.Values(items: val items) => { return items.count() }
+    }
+}
+fn main() {
+    val signed = <Box[I8] value=-128 />
+    val unsigned = <Box[U64] value=18446744073709551615 />
+    print(signed.value)
+    print(unsigned.value)
+    print(count(rows: <Rows.Values items=[] />))
+}

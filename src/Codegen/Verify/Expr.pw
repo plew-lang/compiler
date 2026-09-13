@@ -269,6 +269,9 @@ pub impl Comp {
                         }
                     }
                 }
+                // A construction owns its selected type even outside a typed
+                // Let/return/argument. Check generic field values here too.
+                self.tcCheckMakeFields(expectedRef: self.parametricExprTerm(exprId: id), makeId: id)
                 // a NON-GENERIC struct's field value whose category disagrees with the
                 // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
                 // — reject (same reliable-value discipline as the let-annotation check).

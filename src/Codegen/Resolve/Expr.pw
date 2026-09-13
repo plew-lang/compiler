@@ -1164,8 +1164,12 @@ pub impl Comp {
                         mut val fieldIndex: U64 = 0U64
                         while fieldIndex < fields.len {
                             val field = self.makeFieldAt(fields: fields, index: fieldIndex)
-                            val info = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
-                            val fieldTerm = self.groundUnderInst(instRef: expectedTerm, tyRef: self.typedIrRefOfInfo(ti: info))
+                            mut val fieldTerm: U64 = 0U64
+                            if isEnum {
+                                fieldTerm = self.typedIrRefOfInfo(ti: self.genericEnumFieldTypeInfo(instRef: expectedTerm, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                            } else {
+                                fieldTerm = self.fieldTypeRefOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                            }
                             self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: fieldTerm)
                             if fieldTerm != 0U64 && self.tyRefIsGround(ref: fieldTerm) {
                                 self.recordArrayLitCtx(exprId: field.value, ctxRef: fieldTerm)
