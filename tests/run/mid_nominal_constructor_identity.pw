@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+fn echo[P](value: P) -> P { return value }
+struct P {
+    pub val value: String
+    pub val count: I64 = 7I64
+}
+pub impl P { factory }
+fn main() {
+    val parser: P = <P value="heap" + "-value" />
+    print(parser.value)
+    print(parser.count)
+}
