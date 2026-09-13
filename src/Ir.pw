@@ -3121,6 +3121,9 @@ export struct Cursor {
     pub mut val bodyItemRef: U64 = 0
     // The body currently being scanned/emitted. Together with
     // `bodyEnvironment` it identifies an Arena.finalCallees entry.
+    // A closure's templates are recorded and closed with its lexical parent.
+    // Final scanning preserves that readiness while switching synthetic body keys.
+    pub mut val closureCallTemplatesClosed: Bool = false
     pub mut val globalInitializerTarget: Optional[U64] = <Optional.None />
     pub mut val bodyFnIdx: U64 = 18446744073709551615U64
     // 1-based Arena.bodyInstances identity for the active semantic body.

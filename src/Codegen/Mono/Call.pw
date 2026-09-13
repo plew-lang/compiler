@@ -5323,7 +5323,10 @@ pub impl Comp {
                 val savedMark: U64 = self.cur.captureMark
                 val savedBodyFn: U64 = self.cur.bodyFnIdx
                 val savedBodyEnvironment: InstanceEnvironment = self.cur.bodyEnvironment
+                val savedClosureReadiness: Bool = self.cur.closureCallTemplatesClosed
+                val lexicalReadiness: Bool = self.callTemplatesClosedForBody(fnIdx: savedBodyFn)
                 val enclMark: U64 = self.scopeMark()
+                self.cur.closureCallTemplatesClosed = lexicalReadiness
                 self.cur.closureId = exprId
                 self.cur.inClosure = true
                 self.cur.captureMark = enclMark
@@ -5351,6 +5354,7 @@ pub impl Comp {
                 self.scanBlockInsts(blkId: body)
                 self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
                 self.popLocals(mark: enclMark)
+                self.cur.closureCallTemplatesClosed = savedClosureReadiness
                 self.cur.closureId = savedId
                 self.cur.inClosure = savedIn
                 self.cur.captureMark = savedMark
