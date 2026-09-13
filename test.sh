@@ -375,6 +375,11 @@ if sh ./test-mid-self-layout.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-self-layout"
 fi
+if sh ./test-mid-struct-pattern.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-struct-pattern"
+fi
 if sh ./test-mid-body-receiver.sh; then
     :
 else
