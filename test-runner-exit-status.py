@@ -148,3 +148,18 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
             assert result.returncode == 0, result
             assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
             print(f'PASS asan-compile/reject={reject}/exit={code}', flush=True)
+
+# Every preparation failure must produce a result instead of disappearing.
+asan = Path(__file__).with_name('asan-gate.sh').read_text()
+with tempfile.TemporaryDirectory(prefix='plew-asan-preparation-') as directory:
+    root = Path(directory)
+    guards = [line for line in asan.splitlines()
+              if 'diagnostic: $err.' in line and 'exit 0;' in line]
+    assert len(guards) == 6, guards
+    for index, guard in enumerate(guards):
+        script = ('PLEWC=false; OPT=false; CLANG=false; f=fixture; '
+                  'll=$1/input.ll; err=$1/error; bin=$1/binary; RT=; extra_c=; PLEW_LD=\n' + guard)
+        result = subprocess.run(['sh','-c',script,'sh',str(root)],capture_output=True,text=True)
+        assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
+        assert 'diagnostic:' in result.stdout, result
+        print(f'PASS asan-preparation/{index}', flush=True)

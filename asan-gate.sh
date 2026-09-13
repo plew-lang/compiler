@@ -126,12 +126,12 @@ fi
 echo "== C. run corpus under ASan + LeakSanitizer =="
 c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
-    [ -f "tests/run/$name.out" ] || exit 0
+    [ -f "tests/run/$name.out" ] || { echo "FAIL $f: missing golden output"; exit 0; }
     ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
-    "$PLEWC" --asan "$f" > "$ll" 2>/dev/null || exit 0
+    "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     extra_c=""; [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
-    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
-    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || exit 0
+    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     run_exit=0
     infile="tests/run/$name.in"
     if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
@@ -175,11 +175,11 @@ echo "== D. panic corpus under ASan (abort paths) =="
 # genuine memory errors before the trap still report (and fail the level).
 d_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
-    [ -f "tests/panic/$name.panic" ] || exit 0
+    [ -f "tests/panic/$name.panic" ] || { echo "FAIL $f: missing panic expectation"; exit 0; }
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
-    "$PLEWC" --asan "$f" > "$ll" 2>/dev/null || exit 0
-    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
-    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>/dev/null || exit 0
+    "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
+    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     want=$(cat "tests/panic/$name.panic")
     code=0
     # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
