@@ -82,7 +82,7 @@ python3 ./trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -
 # instrumented compiler must live in compiler/ (removed on exit).
 # Keep ASan instrumentation and frame pointers, with the standard -O1 level
 # so the whole compile corpus can exercise a practical instrumented compiler.
-python3 ./trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
+python3 ./trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
 echo "== A. self-compile under ASan =="

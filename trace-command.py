@@ -41,7 +41,7 @@ with log_path.open('wb') as log:
             while b'\n' in pending:
                 line, pending = pending.split(b'\n', 1)
                 phase = line.startswith(b'[trace-phase]')
-                llvm = line.startswith((b'Running pass:', b'Running analysis:', b'Invalidating analysis:'))
+                llvm = line.startswith((b'Running pass:', b'Running analysis:', b'Invalidating analysis:')) or (line.startswith(b'[') and b" Executing Pass '" in line)
                 if llvm or (phase and line != last_phase):
                     last_progress = time.monotonic()
                     events_seen += 1
