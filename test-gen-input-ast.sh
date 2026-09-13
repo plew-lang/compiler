@@ -9,7 +9,6 @@ trap 'rm -rf "$work"' EXIT HUP INT TERM
 cp tests/genast/UnresolvedField.pw "$work/App.pw"
 cp Plew.toml Plew.lock "$work/"
 # Match the temporary local Syntax dependency used by test-gen.sh.
-if [ -d ../syntax ]; then ln -sfn "$(cd ../syntax && pwd)" tmp/syntax; fi
 printf '%s\n' 'check gen-input-ast: compile derive runner' >&2
 "$PLEWC" --gen "$work/App.pw" > "$work/harness.ll"
 "$PLEWC" --runtime > "$work/runtime.c"

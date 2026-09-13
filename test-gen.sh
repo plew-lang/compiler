@@ -26,12 +26,7 @@ export PLEWC
 [ -x "$PLEWC" ] || { echo "run ./bootstrap.sh first" >&2; exit 1; }
 
 mkdir -p tmp
-# TEMP: Plew.toml pins @Plew/Syntax to the local `path = "../syntax"` (relative to
-# the compiler package root) while the syntax parser is iterated on. Each gen test
-# runs from a copy under tmp/gen_<name>/, so its `../syntax` resolves to tmp/syntax
-# — bridge that to the real package with a symlink. Harmless once Plew.toml reverts
-# to the git pin (the symlink is then just unused).
-ln -sfn "$(cd ../syntax && pwd)" tmp/syntax
+# Scratch packages use the same committed manifest and lock as the compiler.
 RT=tmp/gen_rt.c
 "$PLEWC" --runtime > "$RT"
 
