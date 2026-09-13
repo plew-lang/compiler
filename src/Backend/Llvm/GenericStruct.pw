@@ -142,12 +142,15 @@ pub impl LlvmCtx {
     // instance it reaches; when collection was complete this never fires and the
     // emitted module is byte-identical.
     inout fn genStructSlot(c: inout Comp, ref: U64) -> U64 {
-        val i: U64 = self.genStructSlotRaw(c: inout c, ref: ref)
+        // A top-level view selects a method surface, never a physical layout.
+        // Preserve views inside type arguments: those belong to the instance.
+        val storageRef: U64 = c.typeRefWithoutOuterViews(ref: ref)
+        val i: U64 = self.genStructSlotRaw(c: inout c, ref: storageRef)
         if i < self.genStructRefs.count() {
             return i
         }
-        if self.ensureGenInstRegistered(c: inout c, ref: ref) {
-            return self.genStructSlotRaw(c: inout c, ref: ref)
+        if self.ensureGenInstRegistered(c: inout c, ref: storageRef) {
+            return self.genStructSlotRaw(c: inout c, ref: storageRef)
         }
         return self.genStructRefs.count()
     }
@@ -455,12 +458,15 @@ pub impl LlvmCtx {
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.
     // Demand-registers on a miss, like genStructSlot.
     inout fn genEnumSlot(c: inout Comp, ref: U64) -> U64 {
-        val i: U64 = self.genEnumSlotRaw(c: inout c, ref: ref)
+        // A top-level view selects a method surface, never a physical layout.
+        // Preserve views inside type arguments: those belong to the instance.
+        val storageRef: U64 = c.typeRefWithoutOuterViews(ref: ref)
+        val i: U64 = self.genEnumSlotRaw(c: inout c, ref: storageRef)
         if i < self.genEnumRefs.count() {
             return i
         }
-        if self.ensureGenInstRegistered(c: inout c, ref: ref) {
-            return self.genEnumSlotRaw(c: inout c, ref: ref)
+        if self.ensureGenInstRegistered(c: inout c, ref: storageRef) {
+            return self.genEnumSlotRaw(c: inout c, ref: storageRef)
         }
         return self.genEnumRefs.count()
     }
