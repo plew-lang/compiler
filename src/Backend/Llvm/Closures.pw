@@ -94,11 +94,11 @@ pub impl LlvmCtx {
             val slotPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon())
             val cref: U64 = self.captureArcRef(c: inout c, cap: cap)
             if cap.boxed {
-                self.emitCellRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon()), ref: cref)
+                self.emitCellRelease(c: inout c, cell: llvmLoad(self.b, self.ptrty, slotPtr, anon()), ref: cref)
             } else {
                 if cref != 0U64 {
                     if c.arcNeedsRelease(ref: cref) {
-                        val cv: LLVMValueRef = LLVMBuildLoad2(self.b, self.captureValueTy(c: inout c, cap: cap), slotPtr, anon())
+                        val cv: LLVMValueRef = llvmLoad(self.b, self.captureValueTy(c: inout c, cap: cap), slotPtr, anon())
                         self.valueArc(c: inout c, v: cv, typeRef: cref, retain: false)
                     }
                 }
@@ -128,7 +128,7 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.cont"))
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        val dropFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, env, anon())
+        val dropFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, env, anon())
         val haveDrop: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), dropFn, LLVMConstNull(self.ptrty), anon())
         LLVMBuildCondBr(self.b, haveDrop, callBB, tailBB)
         LLVMPositionBuilderAtEnd(self.b, callBB)
@@ -405,7 +405,7 @@ pub impl LlvmCtx {
                         while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
                             val slotTy: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: cap)
-                            val cv: LLVMValueRef = LLVMBuildLoad2(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon()), anon())
+                            val cv: LLVMValueRef = llvmLoad(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon()), anon())
                             // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
                             // the local directly to it (ty = the value type), so reads/writes
                             // in the body go through the same cell as the enclosing scope.
@@ -421,7 +421,7 @@ pub impl LlvmCtx {
                                 ci += 1
                             } else {
                             val a: LLVMValueRef = self.entryAlloca(ty: slotTy)
-                            LLVMBuildStore(self.b, cv, a)
+                            llvmStore(self.b, cv, a)
                             mut val cRef: U64 = 0
                             if cap.boxed {
                                 cRef = cap.ty

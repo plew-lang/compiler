@@ -93,7 +93,7 @@ pub impl LlvmCtx {
                 val savedSA: Array[U64] = c.cur.typeArgs
                 val didSetS: Bool = self.setStructEnv(c: inout c, ref: structScrutRef)
                 val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
-                LLVMBuildStore(self.b, sv, sslot0)
+                llvmStore(self.b, sv, sslot0)
                 // an owned temporary scrutinee: register it so it is released on every
                 // exit (mirrors the statement struct-match; a raw alloca leaked it).
                 val sStructSentinel: U64 = 18446744073709551615U64
@@ -151,7 +151,7 @@ pub impl LlvmCtx {
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
-        LLVMBuildStore(self.b, sv, sslot)
+        llvmStore(self.b, sv, sslot)
         // An owned temporary scrutinee (a call/construction result — e.g. the `?.`
         // desugar's `base.chain()`): the match is its only owner, so register it as an
         // anonymous owned local, released on every exit — a diverging arm's return
@@ -168,7 +168,7 @@ pub impl LlvmCtx {
                 self.locMoved[scrutTempLi] = true
             }
         }
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vmatch.end"))
         mut val checkBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         mut val lastWasWildcard: Bool = false
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
             self.terminated = false
             if arm.isWildcard {
                 if consuming {
-                    self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, sty, sslot, anon()), eid: eid, ety: sty)
+                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty)
                 }
             } else {
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
@@ -296,8 +296,8 @@ pub impl LlvmCtx {
         val operandIsPlace: Bool = exprAliasesPlace(c: inout c, id: expr)
         val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: expr)
         val eslot: LLVMValueRef = self.entryAlloca(ty: eety)
-        LLVMBuildStore(self.b, ev, eslot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, eety, eslot, 0U64, anon()), anon())
+        llvmStore(self.b, ev, eslot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, eety, eslot, 0U64, anon()), anon())
         val isErr: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, errVi, 0I32), anon())
         val errBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "try.err"))
         val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "try.ok"))
@@ -308,7 +308,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, errBB)
         val didE: Bool = self.setEnumEnv(c: inout c, ref: exprRef)
         val errPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: errVi)
-        val errPayload: LLVMValueRef = LLVMBuildLoad2(self.b, errPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
+        val errPayload: LLVMValueRef = llvmLoad(self.b, errPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val errVal: LLVMValueRef = LLVMBuildExtractValue(self.b, errPayload, 0U64, anon())
         if didE { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         // error conversion (spec/13): when the function's error type E differs from the
@@ -379,7 +379,7 @@ pub impl LlvmCtx {
         self.terminated = false
         val didO: Bool = self.setEnumEnv(c: inout c, ref: exprRef)
         val okPayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eeid, vi: okVi)
-        val okPayload: LLVMValueRef = LLVMBuildLoad2(self.b, okPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
+        val okPayload: LLVMValueRef = llvmLoad(self.b, okPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val okVal: LLVMValueRef = LLVMBuildExtractValue(self.b, okPayload, 0U64, anon())
         if didO { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         // a place operand's Ok payload is a +0 alias, but `try`'s consumer treats the

@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+// Zero-sized physical storage must not erase evaluation or resource lifetime.
+struct Empty {}
+pub impl Empty { factory }
+struct Nested { pub val first: Empty pub val second: Empty }
+pub impl Nested { factory }
+unique struct Token { deinit { print(90I64) } }
+pub impl Token { factory }
+fn effect() -> Empty { print(1I64) return <Empty /> }
+fn consume(value: Nested) { print(2I64) }
+fn exercise() {
+    consume(value: <Nested first=effect() second=effect() />)
+    val resource: MutableRef[Token] = <MutableRef[Token] value=<Token /> />
+    print(3I64)
+}
+fn main() { exercise() }

@@ -376,7 +376,7 @@ pub impl LlvmCtx {
         mut val slot: LLVMValueRef = LLVMGetParam(fv, argIdx)
         if !p.isInout {
             slot = self.entryAlloca(ty: pty)
-            LLVMBuildStore(self.b, LLVMGetParam(fv, argIdx), slot)
+            llvmStore(self.b, LLVMGetParam(fv, argIdx), slot)
         }
         self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot, ty: pty, kind: kind, structIdx: structIndex, isArr: isArray, elemTy: elementType, elemKind: elementKind, typeRef: typeRef)
         if isArray { self.setLocalElemTypeRef(ref: term.args[0]) }

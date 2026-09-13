@@ -37,7 +37,7 @@ pub impl LlvmCtx {
                 val savedSA: Array[U64] = c.cur.typeArgs
                 val didSetS: Bool = self.setStructEnv(c: inout c, ref: structScrutRef)
                 val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
-                LLVMBuildStore(self.b, sv, sslot0)
+                llvmStore(self.b, sv, sslot0)
                 // an owned struct-scrutinee temp (a call/construction result, not a place):
                 // register it so its heap (array / Ref / String / sub-struct fields) is
                 // released once — via dropScope on a return/break arm, or explicitly on
@@ -109,7 +109,7 @@ pub impl LlvmCtx {
         }
         // store the scrutinee so payload fields can be read back as a variant struct.
         val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
-        LLVMBuildStore(self.b, sv, sslot)
+        llvmStore(self.b, sv, sslot)
         // If the scrutinee is an owned temporary (a call/construction result, not a place),
         // the match is its only owner. Register it as an anonymous owned enum local so it is
         // released on EVERY exit path: a `return`/`break` inside an arm drops it via
@@ -127,7 +127,7 @@ pub impl LlvmCtx {
                 self.locMoved[scrutTempLi] = true
             }
         }
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "match.end"))
         // the tag-test chain lives in `checkBB`; each arm body lives in its own block.
         // Re-position at checkBB before every compare so emitting an arm body (which
@@ -157,7 +157,7 @@ pub impl LlvmCtx {
             self.terminated = false
             if arm.isWildcard {
                 if consuming {
-                    self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, sty, sslot, anon()), eid: eid, ety: sty)
+                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty)
                 }
             } else {
                 // bind the payload under the enum env, then restore the outer env so the
@@ -234,7 +234,7 @@ pub impl LlvmCtx {
     inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, instanceRef: U64, consuming: Bool) {
         if arm.binds.len == 0U64 {
             if consuming {
-                self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy)
+                self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy)
             }
             return
         }
@@ -247,7 +247,7 @@ pub impl LlvmCtx {
         // construction and release.
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
         val payloadStorage: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: scrutTy, scrutSlot: scrutSlot, instanceRef: instanceRef)
-        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadStorage, anon())
+        val payload: LLVMValueRef = llvmLoad(self.b, payloadTy, payloadStorage, anon())
         val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
         mut val bi: U64 = 0
         while bi < arm.binds.len {
@@ -336,7 +336,7 @@ pub impl LlvmCtx {
                 val rawFv: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fidx, anon())
                 mut val fv: LLVMValueRef = rawFv
                 if c.fieldIsBoxed(f: fd) {
-                    fv = LLVMBuildLoad2(self.b, pty, fv, anon())
+                    fv = llvmLoad(self.b, pty, fv, anon())
                 }
                 if b.nameLen == 0U64 {
                     if consuming {
@@ -354,7 +354,7 @@ pub impl LlvmCtx {
                 } else {
                     slot = self.entryAlloca(ty: pty)
                 }
-                LLVMBuildStore(self.b, fv, slot)
+                llvmStore(self.b, fv, slot)
                 // A payload bind BORROWS the scrutinee's heap: it is immutable (the parser
                 // never produces a `mut` pattern bind — spec/11 binds are read-only here), so
                 // it can neither mutate in place (no CoW privatization) nor be moved out. Any
@@ -509,9 +509,9 @@ pub impl LlvmCtx {
                 if fidx < fs.count() {
                     val fld: FieldDef = fs[fidx]
                     val fty: LLVMTypeRef = self.llvmTypeFor(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
-                    val fv: LLVMValueRef = LLVMBuildLoad2(self.b, fty, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, fidx, anon()), anon())
+                    val fv: LLVMValueRef = llvmLoad(self.b, fty, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, fidx, anon()), anon())
                     val slot: LLVMValueRef = self.entryAlloca(ty: fty)
-                    LLVMBuildStore(self.b, fv, slot)
+                    llvmStore(self.b, fv, slot)
                     mut val elemTy: LLVMTypeRef = self.i64ty
                     mut val elemKind: U64 = 0
                     if fld.tyIsArray {

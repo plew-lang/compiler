@@ -32,10 +32,10 @@ pub impl LlvmCtx {
         rv = self.consumeIntoOwned(c: inout c, v: rv, expr: valueExpr, typeRef: typeRef)
         if destroyOld {
             if c.arcNeedsRelease(ref: typeRef) {
-                self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, placeTy, placePtr, anon()), typeRef: typeRef, retain: false)
+                self.valueArc(c: inout c, v: llvmLoad(self.b, placeTy, placePtr, anon()), typeRef: typeRef, retain: false)
             }
         }
-        LLVMBuildStore(self.b, rv, placePtr)
+        llvmStore(self.b, rv, placePtr)
     }
 
     // The grounded type ref of field `fld` for a store through base instance `baseRef`:
@@ -492,7 +492,7 @@ pub impl LlvmCtx {
                     }
                 }
                 self.dropShadowedUnique(c: inout c, nameStart: nameStart, nameLen: nameLen)
-                LLVMBuildStore(self.b, v, slot)
+                llvmStore(self.b, v, slot)
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 if isCellHome {
                     self.setLocalCellHome()
@@ -550,9 +550,9 @@ pub impl LlvmCtx {
                                 // evaluated + retained, so a self-assign (`d = d`) stays
                                 // balanced. A moved-out local has nothing to destroy.
                                 if !(self.locMoved[li]) {
-                                    self.emitAnyRelease(c: inout c, fat: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()))
+                                    self.emitAnyRelease(c: inout c, fat: llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon()))
                                 }
-                                LLVMBuildStore(self.b, arv, self.locPtr[li])
+                                llvmStore(self.b, arv, self.locPtr[li])
                                 self.locMoved[li] = false
                                 return
                             }
@@ -611,10 +611,10 @@ pub impl LlvmCtx {
                                             // its heap independently of the source binding).
                                             val bv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: value), valueExpr: value)
                                             self.expectedTy = 0U64
-                                            val oldCell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, gep, anon())
+                                            val oldCell: LLVMValueRef = llvmLoad(self.b, self.ptrty, gep, anon())
                                             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-                                            LLVMBuildStore(self.b, bv, cell)
-                                            LLVMBuildStore(self.b, cell, gep)
+                                            llvmStore(self.b, bv, cell)
+                                            llvmStore(self.b, cell, gep)
                                             // drop the displaced owner AFTER the repoint (the
                                             // RHS was deep-copied above, so destroying the old
                                             // pointee cannot free anything the new cell shares).

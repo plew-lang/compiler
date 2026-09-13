@@ -478,6 +478,9 @@ extern(c) {
     fn LLVMStructCreateNamed(ctx~: LLVMContextRef, name~: CPtr[U8]) -> LLVMTypeRef
     fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
     fn LLVMCountStructElementTypes(structTy~: LLVMTypeRef) -> U32
+    fn LLVMIsOpaqueStruct(structTy~: LLVMTypeRef) -> I32
+    fn LLVMGetElementType(ty~: LLVMTypeRef) -> LLVMTypeRef
+    fn LLVMGetArrayLength2(ty~: LLVMTypeRef) -> U64
     fn LLVMArrayType2(elemTy~: LLVMTypeRef, count~: U64) -> LLVMTypeRef
     fn LLVMBuildStructGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, idx~: U64, name~: CPtr[U8]) -> LLVMValueRef
     // count is the C API's `unsigned`; declared U64 here because Plew has no
@@ -1884,4 +1887,35 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
         vi += 1
     }
     return true
+}
+
+// Physical memory operations have no work for a zero-sized aggregate. Keep
+// evaluation, allocation and ownership at their callers; only omit the memory
+// access itself. This also avoids forming a spurious access range for ASan.
+fn llvmTypeHasStorage(valueType~: LLVMTypeRef) -> Bool {
+    val kind: U32 = LLVMGetTypeKind(valueType)
+    if kind == 10U32 {
+        // An opaque declaration is not a completed zero-sized layout.
+        if LLVMIsOpaqueStruct(valueType) != 0I32 { return true }
+        val count: U32 = LLVMCountStructElementTypes(valueType)
+        mut val index: U32 = 0U32
+        while index < count {
+            if llvmTypeHasStorage(LLVMStructGetTypeAtIndex(valueType, index)) { return true }
+            index += 1U32
+        }
+        return false
+    }
+    if kind == 11U32 {
+        return LLVMGetArrayLength2(valueType) != 0U64 && llvmTypeHasStorage(LLVMGetElementType(valueType))
+    }
+    return true
+}
+
+fn llvmLoad(builder~: LLVMBuilderRef, valueType~: LLVMTypeRef, address~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef {
+    if !llvmTypeHasStorage(valueType) { return LLVMConstNull(valueType) }
+    return LLVMBuildLoad2(builder, valueType, address, name)
+}
+
+fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValueRef) {
+    if llvmTypeHasStorage(LLVMTypeOf(value)) { LLVMBuildStore(builder, value, address) }
 }

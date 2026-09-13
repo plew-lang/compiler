@@ -16,7 +16,7 @@ pub impl LlvmCtx {
         val data: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32))
         mut val i: U64 = 0U64
         while i < values.count() {
-            LLVMBuildStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
+            llvmStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1U64
         }
         return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
@@ -63,7 +63,7 @@ pub impl LlvmCtx {
                 ev = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elem), elemTy: elemTy), expr: elem, typeRef: elemRef)
                 self.expectedTy = 0U64
             }
-            LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
+            llvmStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
         }
         return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, n, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
@@ -83,7 +83,7 @@ pub impl LlvmCtx {
             val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
             val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
             self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-            val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+            val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
             // An index read is a fresh value under value semantics.  Retain the
             // ARC-bearing element before returning it, matching Buffer.get.
             if c.arcNeedsRelease(ref: elemRef) {
@@ -292,7 +292,7 @@ pub impl LlvmCtx {
         gav.append(LLVMSizeOf(elemTy))
         gav.append(count)
         val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
-        LLVMBuildStore(self.b, newdata, slot)
+        llvmStore(self.b, newdata, slot)
         // value semantics: a struct/array/String PLACE element copies (a literal / call
         // result already owns its buffer and passes through). A `Ref` element place is
         // RETAINED (shared) on store — keyed off the buffer's grounded element ref `er`
@@ -300,7 +300,7 @@ pub impl LlvmCtx {
         // ground to `Ref` on its own), so the buffer co-owns the cell.
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
         val ev: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
-        LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
+        llvmStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
         self.rawbufSetCount(c: inout c, data: newdata, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
@@ -326,7 +326,7 @@ pub impl LlvmCtx {
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
         // an element READ returns an OWNED (+1) value for EVERY ARC class (buffer-floor
         // §4; exprAliasesPlace answers false for Index, so every consumer balances this
         // one count). Ref/WeakRef retain here too — the old exclusion assumed the
@@ -372,11 +372,11 @@ pub impl LlvmCtx {
         val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
         val slotPtr: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
         if c.arcNeedsRelease(ref: er) {
-            val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, slotPtr, anon())
-            LLVMBuildStore(self.b, rv, slotPtr)
+            val old: LLVMValueRef = llvmLoad(self.b, elemTy, slotPtr, anon())
+            llvmStore(self.b, rv, slotPtr)
             self.valueArc(c: inout c, v: old, typeRef: er, retain: false)
         } else {
-            LLVMBuildStore(self.b, rv, slotPtr)
+            llvmStore(self.b, rv, slotPtr)
         }
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
@@ -403,7 +403,7 @@ pub impl LlvmCtx {
         // empty-guard: index 0 must be in range (count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount), anon())
+        val popped: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount), anon())
         self.rawbufSetCount(c: inout c, data: data, n: newCount)
         return popped
     }
@@ -425,7 +425,7 @@ pub impl LlvmCtx {
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val popped: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         // shift [idx+1, count) down by one over the hole at idx (n = newCount - idx; n=0
         // when removing the last element -> memmove no-op).
@@ -452,7 +452,7 @@ pub impl LlvmCtx {
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val popped: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: idx, src: newCount, n: LLVMConstInt(self.i64ty, 1U64, 0I32))
         self.rawbufSetCount(c: inout c, data: data, n: newCount)
@@ -566,13 +566,13 @@ pub impl LlvmCtx {
         self.emitBoundsCheck(c: inout c, idx: idx, count: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         // grow for the extra element, store the (possibly new) data back into the slot.
         val data: LLVMValueRef = self.growBuf(c: inout c, data: data0, elemTy: elemTy, count: count)
-        LLVMBuildStore(self.b, data, slot)
+        llvmStore(self.b, data, slot)
         // open a hole at idx: shift [idx, count) up by one (n = count - idx; n=0 -> no-op).
         self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: LLVMBuildAdd(self.b, idx, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: idx, n: LLVMBuildSub(self.b, count, idx, anon()))
         // keyed off the grounded element ref so a `Ref` place element is retained on store
         // (the value expr is the generic `value: T` param — see genLlvmBufferAppend).
         val ev: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: self.bufElemRef(c: inout c, id: recv))
-        LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx))
+        llvmStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx))
         self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
@@ -592,7 +592,7 @@ pub impl LlvmCtx {
         val add: LLVMValueRef = self.genLlvmExpr(c: inout c, id: addCapExpr)
         val mincap: LLVMValueRef = LLVMBuildAdd(self.b, count, add, anon())
         val data: LLVMValueRef = self.rawbufReserve(c: inout c, data: data0, elemSize: LLVMSizeOf(elemTy), mincap: mincap)
-        LLVMBuildStore(self.b, data, slot)
+        llvmStore(self.b, data, slot)
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 

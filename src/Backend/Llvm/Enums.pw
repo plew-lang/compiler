@@ -412,8 +412,8 @@ pub impl LlvmCtx {
         }
         self.arcPush(sidx: self.enumArcKey(eid: eid))
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
-        LLVMBuildStore(self.b, v, slot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        llvmStore(self.b, v, slot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
         while vi < c.arena.enumAt(index: eid).variants.count() {
@@ -424,7 +424,7 @@ pub impl LlvmCtx {
                 LLVMBuildCondBr(self.b, isV, thenBB, contBB)
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
-                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                val pv: LLVMValueRef = llvmLoad(self.b, pty, payloadPtr, anon())
                 val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
@@ -482,8 +482,8 @@ pub impl LlvmCtx {
         }
         self.arcPush(sidx: self.enumArcKey(eid: eid))
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
-        LLVMBuildStore(self.b, v, slot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        llvmStore(self.b, v, slot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
         while vi < c.arena.enumAt(index: eid).variants.count() {
@@ -494,7 +494,7 @@ pub impl LlvmCtx {
                 LLVMBuildCondBr(self.b, isV, thenBB, contBB)
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
-                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                val pv: LLVMValueRef = llvmLoad(self.b, pty, payloadPtr, anon())
                 val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
@@ -740,8 +740,8 @@ pub impl LlvmCtx {
     // is placed into a longer-lived owner (so the source's drop does not free it).
     inout fn deepCopyEnumValue(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) -> LLVMValueRef {
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
-        LLVMBuildStore(self.b, v, slot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        llvmStore(self.b, v, slot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
         val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
         mut val vi: U64 = 0
         while vi < c.arena.enumAt(index: eid).variants.count() {
@@ -752,7 +752,7 @@ pub impl LlvmCtx {
                 LLVMBuildCondBr(self.b, isV, thenBB, contBB)
                 LLVMPositionBuilderAtEnd(self.b, thenBB)
                 val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
-                mut val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                mut val pv: LLVMValueRef = llvmLoad(self.b, pty, payloadPtr, anon())
                 val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
                 mut val fj: U64 = 0
                 while fj < fs.count() {
@@ -797,13 +797,13 @@ pub impl LlvmCtx {
                     }
                     fj += 1
                 }
-                LLVMBuildStore(self.b, pv, payloadPtr)
+                llvmStore(self.b, pv, payloadPtr)
                 LLVMBuildBr(self.b, contBB)
                 LLVMPositionBuilderAtEnd(self.b, contBB)
             }
             vi += 1
         }
-        return LLVMBuildLoad2(self.b, ety, slot, anon())
+        return llvmLoad(self.b, ety, slot, anon())
     }
 
     // Construct an enum value `<E.V f=e ... />`: alloca {tag,payload}, store the tag
@@ -870,8 +870,8 @@ pub impl LlvmCtx {
         // zero the whole cell first (tag + payload) so unused payload words are
         // deterministic — a payload-less variant then has an all-zero payload, making
         // tag+word structural `==` well-defined.
-        LLVMBuildStore(self.b, LLVMConstNull(ety), slot)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
+        llvmStore(self.b, LLVMConstNull(ety), slot)
+        llvmStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
         if fs.count() > 0U64 {
             val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
@@ -927,7 +927,7 @@ pub impl LlvmCtx {
                     val boxedVal: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
                     val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
                     val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-                    LLVMBuildStore(self.b, boxedVal, cell)
+                    llvmStore(self.b, boxedVal, cell)
                     agg = LLVMBuildInsertValue(self.b, agg, cell, fj, anon())
                 } else {
                     // a payload field of array type — declared `Array[E]` or a type param
@@ -1063,9 +1063,9 @@ pub impl LlvmCtx {
                 }
                 fj += 1
             }
-            LLVMBuildStore(self.b, agg, LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon()))
+            llvmStore(self.b, agg, LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon()))
         }
-        return LLVMBuildLoad2(self.b, ety, slot, anon())
+        return llvmLoad(self.b, ety, slot, anon())
     }
 
 }
@@ -1078,8 +1078,8 @@ pub impl LlvmCtx {
     // value. The payload value types must match the variant's payload struct.
     inout fn buildEnumFromValues(c: inout Comp, eid: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
-        LLVMBuildStore(self.b, LLVMConstNull(ety), slot)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
+        llvmStore(self.b, LLVMConstNull(ety), slot)
+        llvmStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         if payloadVals.count() > 0U64 {
             val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
             mut val agg: LLVMValueRef = LLVMGetUndef(payloadTy)
@@ -1088,8 +1088,8 @@ pub impl LlvmCtx {
                 agg = LLVMBuildInsertValue(self.b, agg, payloadVals[j], j, anon())
                 j += 1
             }
-            LLVMBuildStore(self.b, agg, LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon()))
+            llvmStore(self.b, agg, LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon()))
         }
-        return LLVMBuildLoad2(self.b, ety, slot, anon())
+        return llvmLoad(self.b, ety, slot, anon())
     }
 }

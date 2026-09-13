@@ -453,7 +453,7 @@ pub impl LlvmCtx {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: r)
         val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
-        return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
+        return llvmLoad(self.b, pty, cellPtr, anon())
     }
 
     // Build a strong reference-cell value for the `refNew` / `mutableRefNew` intrinsic:
@@ -474,7 +474,7 @@ pub impl LlvmCtx {
         // the cell, and the strong-0 pointee destroy would then double-free (#7). A
         // place pointee is CoW-shared/retained into the cell; a fresh value moves in.
         v = self.consumeIntoOwned(c: inout c, v: v, expr: valueExpr, typeRef: pr)
-        LLVMBuildStore(self.b, v, cell)
+        llvmStore(self.b, v, cell)
         return cell
     }
 

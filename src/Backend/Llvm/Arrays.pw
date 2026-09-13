@@ -305,7 +305,7 @@ pub impl LlvmCtx {
             val boxedVal: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
             val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-            LLVMBuildStore(self.b, boxedVal, cell)
+            llvmStore(self.b, boxedVal, cell)
             return cell
         }
         // build the value in the field's (grounded) type context, then route ALL
@@ -475,7 +475,7 @@ pub impl LlvmCtx {
     // Load the data pointer from an array STORAGE SLOT (an array local / field alloca): the
     // slot holds the single data pointer.
     inout fn arrSlotData(c: inout Comp, slot: LLVMValueRef) -> LLVMValueRef {
-        return LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        return llvmLoad(self.b, self.ptrty, slot, anon())
     }
     // Load the live count from an array STORAGE SLOT (the slot's data pointer's header count).
     inout fn arrSlotCount(c: inout Comp, slot: LLVMValueRef) -> LLVMValueRef {
@@ -483,7 +483,7 @@ pub impl LlvmCtx {
     }
     // Store a data pointer into an array STORAGE SLOT.
     inout fn arrSlotSetData(c: inout Comp, slot: LLVMValueRef, data: LLVMValueRef) {
-        LLVMBuildStore(self.b, data, slot)
+        llvmStore(self.b, data, slot)
     }
     // Store a count into an array STORAGE SLOT (into the slot's data pointer's header). The
     // data pointer must already be stored (every caller does arrSlotSetData first, on grow/CoW).
@@ -880,21 +880,21 @@ pub impl LlvmCtx {
     // mutable projection. The slot and grounded pointee type are frozen
     // layout facts; this operation never recovers a source field or type.
     inout fn privatizeValueCell(c: inout Comp, slot: LLVMValueRef, typeRef: U64) {
-        val cell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        val cell: LLVMValueRef = llvmLoad(self.b, self.ptrty, slot, anon())
         mut val indices: Array[LLVMValueRef] = [LLVMConstInt(self.i64ty, 18446744073709551615U64, 0I32)]
         val countPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(indices), 1U64, anon())
-        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        val count: LLVMValueRef = llvmLoad(self.b, self.i64ty, countPtr, anon())
         val shared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         val split: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.split"))
         val continuation: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.cont"))
         LLVMBuildCondBr(self.b, shared, split, continuation)
         LLVMPositionBuilderAtEnd(self.b, split)
         val type: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: typeRef)
-        val value: LLVMValueRef = LLVMBuildLoad2(self.b, type, cell, anon())
+        val value: LLVMValueRef = llvmLoad(self.b, type, cell, anon())
         self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true)
         val fresh: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(type), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-        LLVMBuildStore(self.b, value, fresh)
-        LLVMBuildStore(self.b, fresh, slot)
+        llvmStore(self.b, value, fresh)
+        llvmStore(self.b, fresh, slot)
         val ignored: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
         LLVMBuildBr(self.b, continuation)
         LLVMPositionBuilderAtEnd(self.b, continuation)
@@ -920,7 +920,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         if ref != 0U64 {
             if c.arcNeedsRelease(ref: ref) {
-                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: ref), cell, anon())
+                val pv: LLVMValueRef = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: ref), cell, anon())
                 self.valueArc(c: inout c, v: pv, typeRef: ref, retain: false)
             }
         }
@@ -1024,7 +1024,7 @@ pub impl LlvmCtx {
             val pr: U64 = c.arena.typeAt(index: refTy).args[0]
             if c.arcNeedsRelease(ref: pr) {
                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
-                self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), typeRef: pr, retain: false)
+                self.valueArc(c: inout c, v: llvmLoad(self.b, pty, cell, anon()), typeRef: pr, retain: false)
             }
         }
         LLVMBuildBr(self.b, decBB)
@@ -1388,18 +1388,18 @@ pub impl LlvmCtx {
     // Emit `for i in 0..count() { v = data[i]; retain ? retainValue(v) : releaseValue(v) }`.
     inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) {
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
+        llvmStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.cond"))
         val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.body"))
         val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.end"))
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
-        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, iSlot, anon())
+        val iv: LLVMValueRef = llvmLoad(self.b, self.i64ty, iSlot, anon())
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
-        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
+        val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
         self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: retain)
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
+        llvmStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
     }
@@ -1412,18 +1412,18 @@ pub impl LlvmCtx {
             return
         }
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
-        LLVMBuildStore(self.b, start, iSlot)
+        llvmStore(self.b, start, iSlot)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.cond"))
         val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.body"))
         val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.end"))
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
-        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, iSlot, anon())
+        val iv: LLVMValueRef = llvmLoad(self.b, self.i64ty, iSlot, anon())
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, end, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
-        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
+        val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
         self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: false)
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
+        llvmStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
     }

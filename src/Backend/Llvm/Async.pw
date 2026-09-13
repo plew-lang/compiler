@@ -245,24 +245,24 @@ pub impl LlvmCtx {
         self.curAsyncState = self.curAsyncState + 1
         val state: U64 = self.curAsyncState
         val subPromise: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operandId)
-        LLVMBuildStore(self.b, subPromise, self.asyncFrameSlot(c: inout c, idx: 2U64))
+        llvmStore(self.b, subPromise, self.asyncFrameSlot(c: inout c, idx: 2U64))
         // drop every live anonymous argument/receiver TEMP before suspending: their
         // borrowers (calls in the just-evaluated await operand's statement) have
         // returned, and a temp's alloca home does not survive a resume (fresh stack
         // frame — any post-resume drop would be a stale frame read). Marked moved so
         // no later drain or exit re-drops them.
         self.dropLiveAnonTemps(c: inout c)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
+        llvmStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
         val donePtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 0U64, anon())
-        val done: LLVMValueRef = LLVMBuildLoad2(self.b, self.i32ty, donePtr, anon())
+        val done: LLVMValueRef = llvmLoad(self.b, self.i32ty, donePtr, anon())
         val doneNz: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), done, LLVMConstInt(self.i32ty, 0U64, 0I32), anon())
         val resumeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "async.resume"))
         val suspendBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "async.suspend"))
         LLVMBuildCondBr(self.b, doneNz, resumeBB, suspendBB)
         // suspend: register (resume fn, frame) as the promise's continuation, return.
         LLVMPositionBuilderAtEnd(self.b, suspendBB)
-        LLVMBuildStore(self.b, self.curResumeFn, LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 2U64, anon()))
-        LLVMBuildStore(self.b, self.curFrameBase, LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 3U64, anon()))
+        llvmStore(self.b, self.curResumeFn, LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 2U64, anon()))
+        llvmStore(self.b, self.curFrameBase, LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 3U64, anon()))
         LLVMBuildRetVoid(self.b)
         // resume target (also the dispatch case for this state).
         LLVMAddCase(self.curAsyncSwitch, LLVMConstInt(self.i32ty, state, 0I32), resumeBB)
@@ -274,9 +274,9 @@ pub impl LlvmCtx {
     // the suspend doesn't dominate the resume block, reached via the dispatch switch),
     // then load its `value` (type-erased i64).
     inout fn asyncSubValue(c: inout Comp) -> LLVMValueRef {
-        val sub: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
+        val sub: LLVMValueRef = llvmLoad(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
         val valPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, sub, 1U64, anon())
-        return LLVMBuildLoad2(self.b, self.i64ty, valPtr, anon())
+        return llvmLoad(self.b, self.i64ty, valPtr, anon())
     }
 
     // Drop (and mark moved) every live anonymous owned temp (registerArgTemp homes:
@@ -303,7 +303,7 @@ pub impl LlvmCtx {
     // may be awaited again. Called AFTER the resume's value read.
     inout fn asyncDropAwaitedTemp(c: inout Comp, operandId: U64) {
         if !(exprAliasesPlace(c: inout c, id: operandId)) {
-            val sub: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
+            val sub: LLVMValueRef = llvmLoad(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
             self.rawbufDrop(c: inout c, cell: sub)
         }
     }
@@ -324,7 +324,7 @@ pub impl LlvmCtx {
         }
         val slot: LLVMValueRef = self.asyncFrameSlot(c: inout c, idx: self.asyncFieldNext)
         self.asyncFieldNext = self.asyncFieldNext + 1
-        LLVMBuildStore(self.b, v, slot)
+        llvmStore(self.b, v, slot)
         mut val tref: U64 = 0
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
             tref = 0U64
@@ -361,7 +361,7 @@ pub impl LlvmCtx {
         // frame owns them; `value` is already computed and type-erased i64, so dropping
         // first is safe), resolve, release the frame's own promise count, free the frame.
         self.dropScope(c: inout c, fromMark: 0U64, excludeLi: self.nLocals)
-        val promiseSelf: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 1U64), anon())
+        val promiseSelf: LLVMValueRef = llvmLoad(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 1U64), anon())
         mut val rargs: Array[LLVMValueRef] = []
         rargs.append(promiseSelf)
         rargs.append(value)
@@ -478,7 +478,7 @@ pub impl LlvmCtx {
         }
         val frame: LLVMValueRef = self.asyncFrameAlloc(c: inout c, frameTy: frameTy)
         // __f->__state = 0
-        LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(self.b, frameTy, frame, 0U64, anon()))
+        llvmStore(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(self.b, frameTy, frame, 0U64, anon()))
         // copy params into frame fields 3.. — an ESCAPE: the frame OWNS its copy
         // (spec/14: no borrow crosses the async boundary — the returned Promise can
         // outlive the caller's binding), so retain each heap-carrying param here,
@@ -488,7 +488,7 @@ pub impl LlvmCtx {
         mut val pi: U64 = 0
         while pi < f.params.count() {
             val pv: LLVMValueRef = LLVMGetParam(entryFn, pi)
-            LLVMBuildStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
+            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
             val param: Param = c.funcParamAt(params: f.params, index: pi)
             if c.arcNeedsRelease(ref: param.ty) {
                 self.valueArc(c: inout c, v: pv, typeRef: param.ty, retain: true)
@@ -498,7 +498,7 @@ pub impl LlvmCtx {
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a
         // synchronously-completing resume frees the frame, so __f->__self would dangle).
         val promiseSelf: LLVMValueRef = self.asyncPromiseNew(c: inout c)
-        LLVMBuildStore(self.b, promiseSelf, LLVMBuildStructGEP2(self.b, frameTy, frame, 1U64, anon()))
+        llvmStore(self.b, promiseSelf, LLVMBuildStructGEP2(self.b, frameTy, frame, 1U64, anon()))
         if !(isMain) {
             // the to-be-returned Promise VALUE is a second owner, retained BEFORE the
             // resume call: a synchronously-completing resume releases the frame's count
@@ -541,7 +541,7 @@ pub impl LlvmCtx {
             self.asyncSlotPtrs.append(LLVMBuildStructGEP2(self.b, frameTy, self.curFrameBase, fidx, anon()))
             fidx += 1
         }
-        val state: LLVMValueRef = LLVMBuildLoad2(self.b, self.i32ty, self.asyncSlotPtrs[0], anon())
+        val state: LLVMValueRef = llvmLoad(self.b, self.i32ty, self.asyncSlotPtrs[0], anon())
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, startBB, 8U32)
         LLVMPositionBuilderAtEnd(self.b, startBB)
         self.terminated = false

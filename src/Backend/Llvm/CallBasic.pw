@@ -324,7 +324,7 @@ pub impl LlvmCtx {
                 c.errorAt(offset: nameStart, msg: "internal error: final closure callable has no matching local storage")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            val cloVal: LLVMValueRef = LLVMBuildLoad2(self.b, self.closureTy, self.locPtr[cli], anon())
+            val cloVal: LLVMValueRef = llvmLoad(self.b, self.closureTy, self.locPtr[cli], anon())
             return self.emitClosureCallValue(c: inout c, cloVal: cloVal, fnRef: fnRef, args: args)
         }
         // Runtime ABI calls are already closed by the frontend-selected

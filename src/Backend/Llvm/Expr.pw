@@ -65,7 +65,7 @@ pub impl LlvmCtx {
                     li = self.findLocal(c: inout c, start: start, len: len)
                 }
                 if li < self.nLocals {
-                    return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                    return llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
                 }
                 c.errorAt(offset: start, msg: "LLVM backend: unknown identifier (only locals supported so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -229,7 +229,7 @@ pub impl LlvmCtx {
                                 c.cur.typeParams = savedBP
                                 c.cur.typeArgs = savedBA
                             }
-                            val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pteTy, raw, anon())
+                            val pv: LLVMValueRef = llvmLoad(self.b, pteTy, raw, anon())
                             if !baseIsPlace {
                                 if c.arcNeedsRelease(ref: pg) {
                                     self.valueArc(c: inout c, v: pv, typeRef: pg, retain: true)
@@ -303,7 +303,7 @@ pub impl LlvmCtx {
                         if thunkOk {
                             thunkV = self.buildClosureDropThunk(c: inout c, cloId: id, caps: caps)
                         }
-                        LLVMBuildStore(self.b, thunkV, LLVMBuildStructGEP2(self.b, envTy, env, 0U64, anon()))
+                        llvmStore(self.b, thunkV, LLVMBuildStructGEP2(self.b, envTy, env, 0U64, anon()))
                         mut val ci: U64 = 0
                         while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
@@ -318,7 +318,7 @@ pub impl LlvmCtx {
                                     if self.locCellHome[li] {
                                         self.rawbufRetain(c: inout c, cell: self.locPtr[li])
                                     }
-                                    LLVMBuildStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
+                                    llvmStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
                                 } else {
                                     // a by-value capture is an owned, independent value
                                     // (spec/04): CoW-SHARE the local's heap into the env
@@ -327,14 +327,14 @@ pub impl LlvmCtx {
                                     // locals, so no write can ever split the share). The drop
                                     // thunk releases the same classes symmetrically at env
                                     // death, so the local's own scope-exit drop stays balanced.
-                                    val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                                    val cv2: LLVMValueRef = llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
                                     val ccr: U64 = self.captureArcRef(c: inout c, cap: cap)
                                     if ccr != 0U64 {
                                         if c.arcNeedsRelease(ref: ccr) {
                                             self.valueArc(c: inout c, v: cv2, typeRef: ccr, retain: true)
                                         }
                                     }
-                                    LLVMBuildStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
+                                    llvmStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
                                 }
                             }
                             ci += 1

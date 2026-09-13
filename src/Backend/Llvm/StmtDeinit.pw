@@ -277,7 +277,7 @@ pub impl LlvmCtx {
         // cascade below (release [0,count) then free); a scalar element type just drops
         // the rc-tracked outer buffer.
         if self.locIsArr[li] {
-            val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            val arr: LLVMValueRef = llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
             val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
             // an element type that owns heap (a nested array): release its buffer rc and,
             // at 0, release each element's heap (recursively) before freeing — instead of
@@ -298,7 +298,7 @@ pub impl LlvmCtx {
         // the `Buffer[T]` type argument.
         if self.locTypeRef[li] != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: self.locTypeRef[li]).nameStart, len: c.arena.typeAt(index: self.locTypeRef[li]).nameLen, kw: "Buffer") {
-                val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
+                val bdata: LLVMValueRef = llvmLoad(self.b, self.ptrty, self.locPtr[li], anon())
                 mut val ber: U64 = 0
                 if c.arena.typeAt(index: self.locTypeRef[li]).args.count() > 0U64 {
                     ber = c.arena.typeAt(index: self.locTypeRef[li]).args[0]
@@ -323,7 +323,7 @@ pub impl LlvmCtx {
             // passed without a retain (genArgValue), so releasing it here would
             // under-count the strong rc and free a cell the caller still owns. A `move`
             // Ref param IS owned and releases here.
-            val lv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
+            val lv: LLVMValueRef = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
             self.emitRefRelease(c: inout c, cell: self.refCellFromValue(v: lv), refTy: self.locTypeRef[li])
             return
         }
@@ -332,7 +332,7 @@ pub impl LlvmCtx {
         // owned-flag gate as Ref (un-owned bindings were skipped at the top). Balances the weak
         // retain at each WeakRef place-copy.
         if c.isWeakRefLikeInst(ref: self.locTypeRef[li]) {
-            val lv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
+            val lv: LLVMValueRef = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
             self.weakRelease(c: inout c, cell: self.refCellFromValue(v: lv))
             return
         }
@@ -343,7 +343,7 @@ pub impl LlvmCtx {
             // anonymous argument TEMPORARY (registerArgTemp — any class). Route through
             // the classifier when the grounded ref is stored; the legacy enum path
             // covers a ref-less enum local.
-            val ev: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            val ev: LLVMValueRef = llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
             if self.locTypeRef[li] != 0U64 {
                 if c.arcNeedsRelease(ref: self.locTypeRef[li]) {
                     self.valueArc(c: inout c, v: ev, typeRef: self.locTypeRef[li], retain: false)
@@ -363,14 +363,14 @@ pub impl LlvmCtx {
             if !(c.arcNeedsRelease(ref: ltr)) {
                 return
             }
-            val sv: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            val sv: LLVMValueRef = llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
             self.valueArc(c: inout c, v: sv, typeRef: ltr, retain: false)
             return
         }
         if !(self.structNeedsDeinit(c: inout c, sidx: sidx)) {
             return
         }
-        val selfVal: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+        val selfVal: LLVMValueRef = llvmLoad(self.b, self.locTy[li], self.locPtr[li], anon())
         self.emitDeinitValue(c: inout c, v: selfVal, sidx: sidx, ref: 0U64)
     }
 

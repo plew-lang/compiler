@@ -143,8 +143,8 @@ pub impl LlvmCtx {
                 while gi < c.arena.globals.count() {
                     self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
                     val li: U64 = self.nLocals - 1U64
-                    val cur: LLVMValueRef = LLVMBuildLoad2(self.b, self.gvalLty[gi], self.locPtr[li], anon())
-                    LLVMBuildStore(self.b, cur, self.gvalRef[gi])
+                    val cur: LLVMValueRef = llvmLoad(self.b, self.gvalLty[gi], self.locPtr[li], anon())
+                    llvmStore(self.b, cur, self.gvalRef[gi])
                     gi += 1U64
                 }
             }

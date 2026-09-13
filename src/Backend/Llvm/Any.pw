@@ -125,7 +125,7 @@ pub impl LlvmCtx {
         // persists); a by-value self is loaded from the box.
         mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
         if !(req.selfInout) {
-            selfArg = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+            selfArg = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
         }
         mut val av: Array[LLVMValueRef] = []
         av.append(selfArg)
@@ -179,10 +179,10 @@ pub impl LlvmCtx {
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
-        val srcVal: LLVMValueRef = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
         val copied: LLVMValueRef = self.deepCopyStructValue(c: inout c, v: srcVal, sidx: sidx)
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-        LLVMBuildStore(self.b, copied, cell)
+        llvmStore(self.b, copied, cell)
         LLVMBuildRet(self.b, cell)
         LLVMPositionBuilderAtEnd(self.b, savedBB)
         return fv
@@ -209,7 +209,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
         if c.arcNeedsRelease(ref: instRef) {
-            val v: LLVMValueRef = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
             self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }
         LLVMBuildRetVoid(self.b)
@@ -237,7 +237,7 @@ pub impl LlvmCtx {
         mut val gepIdx: Array[LLVMValueRef] = []
         gepIdx.append(LLVMConstInt(self.i64ty, 1U64, 0I32))
         val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vt, arrayCPtr(gepIdx), 1U64, anon())
-        val dropFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
+        val dropFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, slotPtr, anon())
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
@@ -261,7 +261,7 @@ pub impl LlvmCtx {
         mut val rcIdx: Array[LLVMValueRef] = []
         rcIdx.append(LLVMConstInt(self.i64ty, 18446744073709551615U64, 0I32))
         val rcPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(rcIdx), 1U64, anon())
-        val rc: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, rcPtr, anon())
+        val rc: LLVMValueRef = llvmLoad(self.b, self.i64ty, rcPtr, anon())
         val isShared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), rc, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         val splitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.split"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.cont"))
@@ -269,11 +269,11 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, splitBB)
         val fresh: LLVMValueRef = self.copyAnyValue(c: inout c, fat: fat)
         val ignore: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
-        LLVMBuildStore(self.b, fresh, place)
+        llvmStore(self.b, fresh, place)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
         // reload from the place: the fresh fat on the split path, the original otherwise.
-        return LLVMBuildLoad2(self.b, self.anyTy, place, anon())
+        return llvmLoad(self.b, self.anyTy, place, anon())
     }
 
     // Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
@@ -283,7 +283,7 @@ pub impl LlvmCtx {
     inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> LLVMValueRef {
         val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-        val copyFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, vtPtr, anon())
+        val copyFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, vtPtr, anon())
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
@@ -381,7 +381,7 @@ pub impl LlvmCtx {
     inout fn boxIntoAny(c: inout Comp, sourceRef: U64, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
         val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: sourceRef)
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-        LLVMBuildStore(self.b, v, cell)
+        llvmStore(self.b, v, cell)
         val vt: LLVMValueRef = self.ensureAnyVtable(c: inout c, sourceRef: sourceRef, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, cell, 0U64, anon())
@@ -550,8 +550,8 @@ pub impl LlvmCtx {
         val dstEid: U64 = self.genEnumDefs[dstGe]
         val dstEty: LLVMTypeRef = self.genEnumTys[dstGe]
         val srcSlot: LLVMValueRef = self.entryAlloca(ty: srcEty)
-        LLVMBuildStore(self.b, srcEnum, srcSlot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, srcEty, srcSlot, 0U64, anon()), anon())
+        llvmStore(self.b, srcEnum, srcSlot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, srcEty, srcSlot, 0U64, anon()), anon())
         val srcPayloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, srcEty, srcSlot, 1U64, anon())
         val resSlot: LLVMValueRef = self.entryAlloca(ty: dstEty)
         val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "eraseenum.end"))
@@ -570,7 +570,7 @@ pub impl LlvmCtx {
                 c.cur.typeParams = c.arena.enumAt(index: srcEid).typeParams
                 c.cur.typeArgs = c.arena.typeAt(index: srcRef).args
                 val srcPty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: srcEid, vi: vi)
-                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, srcPty, srcPayloadPtr, anon())
+                val pv: LLVMValueRef = llvmLoad(self.b, srcPty, srcPayloadPtr, anon())
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA
                 mut val fj: U64 = 0
@@ -606,16 +606,16 @@ pub impl LlvmCtx {
             val dv: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: dstEid, ety: dstEty, vi: vi, payloadVals: payloadVals)
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
-            LLVMBuildStore(self.b, dv, resSlot)
+            llvmStore(self.b, dv, resSlot)
             LLVMBuildBr(self.b, endBB)
             LLVMPositionBuilderAtEnd(self.b, nextBB)
             vi += 1
         }
         // unreachable tag (every variant handled above): a deterministic zero keeps the value well-formed.
-        LLVMBuildStore(self.b, LLVMConstNull(dstEty), resSlot)
+        llvmStore(self.b, LLVMConstNull(dstEty), resSlot)
         LLVMBuildBr(self.b, endBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
-        return LLVMBuildLoad2(self.b, dstEty, resSlot, anon())
+        return llvmLoad(self.b, dstEty, resSlot, anon())
     }
 
     // Erase `Array[srcElem] -> Array[dstElem]` (srcElem a concrete conforming to the trait
@@ -630,23 +630,23 @@ pub impl LlvmCtx {
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: srcData)
         val newData: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(dstElemTy), cap: count)
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
+        llvmStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "erasearr.cond"))
         val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "erasearr.body"))
         val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "erasearr.end"))
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
-        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, iSlot, anon())
+        val iv: LLVMValueRef = llvmLoad(self.b, self.i64ty, iSlot, anon())
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
-        mut val srcElem: LLVMValueRef = LLVMBuildLoad2(self.b, srcElemTy, self.arrElemPtr(elemTy: srcElemTy, data: srcData, idx: iv), anon())
+        mut val srcElem: LLVMValueRef = llvmLoad(self.b, srcElemTy, self.arrElemPtr(elemTy: srcElemTy, data: srcData, idx: iv), anon())
         // borrow contract: the repack produces a fresh, independently-owned element (leaf box /
         // nested container) that BORROWS `srcElem` — retain happens at the actual leaf (or an
         // enum's verbatim field), never here, so a nested container does not double-count and
         // leak. The source array is left untouched (the caller still owns it).
         val erased: LLVMValueRef = self.eraseCovariantToAny(c: inout c, v: srcElem, srcRef: srcElemRef, dstRef: dstElemRef)
-        LLVMBuildStore(self.b, erased, self.arrElemPtr(elemTy: dstElemTy, data: newData, idx: iv))
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
+        llvmStore(self.b, erased, self.arrElemPtr(elemTy: dstElemTy, data: newData, idx: iv))
+        llvmStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
         return self.arrValMake(c: inout c, data: newData, count: count, aggTy: self.arrayInstTy(c: inout c, elemRef: dstElemRef))
@@ -690,7 +690,7 @@ pub impl LlvmCtx {
             // shared box in practice.
             val fatPlace: LLVMValueRef = self.placePtrStrict(c: inout c, id: recv)
             if LLVMIsNull(fatPlace) == 0I32 {
-                fat = self.privatizeAnyBox(c: inout c, fat: LLVMBuildLoad2(self.b, self.anyTy, fatPlace, anon()), place: fatPlace)
+                fat = self.privatizeAnyBox(c: inout c, fat: llvmLoad(self.b, self.anyTy, fatPlace, anon()), place: fatPlace)
                 gotFat = true
             }
         }
@@ -710,7 +710,7 @@ pub impl LlvmCtx {
         mut val gepIdx: Array[LLVMValueRef] = []
         gepIdx.append(LLVMConstInt(self.i64ty, slot + 1U64, 0I32))
         val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
-        val fnPtr: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
+        val fnPtr: LLVMValueRef = llvmLoad(self.b, self.ptrty, slotPtr, anon())
         // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,
         // grounding the requirement's `Rhs`/`Item`/`Output` under the existential's
         // bindings (matching the thunk built in buildAnyThunk).
@@ -1208,7 +1208,7 @@ pub impl LlvmCtx {
             mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
             if !(f.selfInout) {
                 selfPtr = self.entryAlloca(ty: recvTy)
-                LLVMBuildStore(self.b, LLVMGetParam(fv, 0U64), selfPtr)
+                llvmStore(self.b, LLVMGetParam(fv, 0U64), selfPtr)
             }
             // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
             // `self.m()` in the body resolves through the same extension (so it is

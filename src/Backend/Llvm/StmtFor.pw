@@ -13,7 +13,7 @@ pub impl LlvmCtx {
         val loV: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: lo), target: vty, unsigned: true)
         val hiV: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: hi), target: vty, unsigned: true)
         val islot: LLVMValueRef = self.entryAlloca(ty: vty)
-        LLVMBuildStore(self.b, loV, islot)
+        llvmStore(self.b, loV, islot)
         self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "for.cond"))
         val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "for.body"))
@@ -22,7 +22,7 @@ pub impl LlvmCtx {
         val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "for.end"))
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
-        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, vty, islot, anon())
+        val iv: LLVMValueRef = llvmLoad(self.b, vty, islot, anon())
         mut val pred: U32 = llvmIntUlt()
         if inclusive {
             pred = llvmIntUle()
@@ -38,8 +38,8 @@ pub impl LlvmCtx {
         }
         // step: increment the counter and re-test.
         LLVMPositionBuilderAtEnd(self.b, stepBB)
-        val iv2: LLVMValueRef = LLVMBuildLoad2(self.b, vty, islot, anon())
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv2, LLVMConstInt(vty, 1U64, 0I32), anon()), islot)
+        val iv2: LLVMValueRef = llvmLoad(self.b, vty, islot, anon())
+        llvmStore(self.b, LLVMBuildAdd(self.b, iv2, LLVMConstInt(vty, 1U64, 0I32), anon()), islot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
         self.terminated = false
@@ -233,7 +233,7 @@ pub impl LlvmCtx {
     inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, iterInstRef: U64, ownsIter: Bool, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, body: U64) {
         val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
         val iterSlot: LLVMValueRef = self.entryAlloca(ty: iterTy)
-        LLVMBuildStore(self.b, iterVal, iterSlot)
+        llvmStore(self.b, iterVal, iterSlot)
         // An OWNED iterator (created via iterator(), holding +1 on the source
         // collection's buffer) is registered as an anonymous owned local so a
         // `return` inside the body releases it via its unwind (an unregistered
@@ -279,18 +279,18 @@ pub impl LlvmCtx {
         nArgs.append(iterSlot)
         val opt: LLVMValueRef = LLVMBuildCall2(self.b, nextTy, nextVal, arrayCPtr(nArgs), 1U64, anon())
         val optSlot: LLVMValueRef = self.entryAlloca(ty: optTy)
-        LLVMBuildStore(self.b, opt, optSlot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())
+        llvmStore(self.b, opt, optSlot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())
         val isSome: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, someVi, 0I32), anon())
         LLVMBuildCondBr(self.b, isSome, bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
         // bind x = the Some payload's field 0.
-        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, optTy, optSlot, 1U64, anon()), anon())
+        val payload: LLVMValueRef = llvmLoad(self.b, payloadTy, LLVMBuildStructGEP2(self.b, optTy, optSlot, 1U64, anon()), anon())
         val xVal: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, 0U64, anon())
         val xTy: LLVMTypeRef = LLVMTypeOf(xVal)
         val xSlot: LLVMValueRef = self.entryAlloca(ty: xTy)
-        LLVMBuildStore(self.b, xVal, xSlot)
+        llvmStore(self.b, xVal, xSlot)
         mut val xRef: U64 = itemFs[0].ty
         mut val xStart: U64 = itemFs[0].tyStart
         mut val xLen: U64 = itemFs[0].tyLen
@@ -373,7 +373,7 @@ pub impl LlvmCtx {
         if igs < self.genStructRefs.count() {
             val isidx: U64 = self.genStructDefs[igs]
             if self.structNeedsDeinit(c: inout c, sidx: isidx) {
-                self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, iterTy, iterSlot, anon()), sidx: isidx, ref: iterInstRef)
+                self.emitDeinitValue(c: inout c, v: llvmLoad(self.b, iterTy, iterSlot, anon()), sidx: isidx, ref: iterInstRef)
             }
         }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
@@ -424,17 +424,17 @@ pub impl LlvmCtx {
         // shared box, mutated in place).
         val opt: LLVMValueRef = self.genLlvmAnyDispatch(c: inout c, recv: iter, anyRef: anyRef, traitIdx: traitIdx, slot: nextSlot, args: c.pushArgs(args: noArgs), callOffset: 0U64)
         val optSlot: LLVMValueRef = self.entryAlloca(ty: optTy)
-        LLVMBuildStore(self.b, opt, optSlot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())
+        llvmStore(self.b, opt, optSlot)
+        val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())
         val isSome: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, someVi, 0I32), anon())
         LLVMBuildCondBr(self.b, isSome, bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
-        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, optTy, optSlot, 1U64, anon()), anon())
+        val payload: LLVMValueRef = llvmLoad(self.b, payloadTy, LLVMBuildStructGEP2(self.b, optTy, optSlot, 1U64, anon()), anon())
         val xVal: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, 0U64, anon())
         val xTy: LLVMTypeRef = LLVMTypeOf(xVal)
         val xSlot: LLVMValueRef = self.entryAlloca(ty: xTy)
-        LLVMBuildStore(self.b, xVal, xSlot)
+        llvmStore(self.b, xVal, xSlot)
         mut val xRef: U64 = itemFs[0].ty
         mut val xStart: U64 = itemFs[0].tyStart
         mut val xLen: U64 = itemFs[0].tyLen

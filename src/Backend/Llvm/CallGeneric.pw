@@ -131,7 +131,7 @@ pub impl LlvmCtx {
                     if c.placeHasDeref(id: base) {
                         val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
                         if LLVMIsNull(basePlace.ptr) == 0I32 {
-                            arr = LLVMBuildLoad2(self.b, basePlace.pointeeTy, basePlace.ptr, anon())
+                            arr = llvmLoad(self.b, basePlace.pointeeTy, basePlace.ptr, anon())
                             loaded = true
                         }
                     }
@@ -592,7 +592,7 @@ pub impl LlvmCtx {
         // drops all live anonymous temps (emitLlvmAsyncSuspend), so a temp never needs
         // to survive a resume.
         val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
-        LLVMBuildStore(self.b, v, slot)
+        llvmStore(self.b, v, slot)
         self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
     }
 
