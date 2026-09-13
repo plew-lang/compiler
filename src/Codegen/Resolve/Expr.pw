@@ -330,8 +330,23 @@ pub impl Comp {
     // template. Globals use a fixed sentinel: lazy preparation may append Func
     // rows, so the current function count cannot be a persistent owner key.
     inout fn callTemplateOwner(fnIdx: U64) -> U64 {
-        if fnIdx < self.arena.functionCount() { return fnIdx }
+        // Synthetic closure keys already have a stable identity. Collapsing
+        // them to the global owner aliases unrelated semantic body facts.
+        if fnIdx < self.arena.functionCount() || fnIdx >= 9223372036854775808U64 { return fnIdx }
         return 18446744073709551615U64
+    }
+
+    // Source bodies, including closures, expose their own declared result.
+    // Closure facts are published before walking the nested body in Record.
+    inout fn semanticBodyReturnTerm(fnIdx: U64) -> U64 {
+        if fnIdx < self.arena.functionCount() { return self.arena.functionAt(index: fnIdx).retTy }
+        mut val index: U64 = 0U64
+        while index < self.decls.semanticClosures.count() {
+            val closure: SemanticClosure = self.decls.semanticClosures[index]
+            if closure.bodyKey == fnIdx { return closure.returnTypeTerm }
+            index += 1U64
+        }
+        return 0U64
     }
 
     // A conferred callable executes an authored body under its own proof.

@@ -1137,6 +1137,9 @@ pub impl Comp {
             // adapter so a parametric annotation (`Optional[Box[T]]`) cannot
             // be collapsed to its head spelling by TypeInfo recovery.
             Expr.Ident(val start, val len) => {
+                // Record owns the complete lexical walk, including generic
+                // closure bodies that the declaration checker does not enter.
+                val binding: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                 // `self` is the receiver's declaration-time TypeTerm, not an
                 // ordinary local. Recording that lexical source is what lets
                 // a structural projection such as `self.items` retain
@@ -1701,12 +1704,13 @@ pub impl Comp {
             // locals (captures resolve to the enclosing bindings) — the hole the check
             // passes leave open (neither checkGenericBodies nor this pass's caller
             // descends into closures for scope reasons; here scoping is all we need).
-            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, val body) => {
+            Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, val body) => {
                 // A closure literal has an ordinary semantic function TypeTerm.
                 // Recording it here lets a concrete generic-call inference
                 // consume the same parametric producer as every other
                 // expression instead of reconstructing it through exprType.
                 self.recordSemanticExprTerm(exprId: exprId, term: self.closureFnTypeRef(params: params, retTy: retTy))
+                self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
                 val mark: U64 = self.scopeMark()
                 // A closure owns a distinct Mono body key.  Its CallTemplates
                 // must use the same owner while retaining the enclosing lexical
@@ -1770,11 +1774,9 @@ pub impl Comp {
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     self.recordExpr(exprId: value)
-                    if self.cur.checkFn < self.arena.functionCount() {
-                        val expected: U64 = self.arena.functionAt(index: self.cur.checkFn).retTy
-                        self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
-                        self.recordArrayLitCtx(exprId: value, ctxRef: expected)
-                    }
+                    val expected: U64 = self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn)
+                    self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
+                    self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                 }
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {

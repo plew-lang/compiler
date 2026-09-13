@@ -145,378 +145,202 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, contBB)
     }
 
-    // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count().
-    inout fn closureSlot(id: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.cloIdx.count() {
-            if self.cloIdx[i] == id {
-                return i
-            }
-            i += 1
+    // Missing keys are never materialized after frontend finalization.
+    inout fn closureSlot(bodyId: U64) -> U64 {
+        mut val index: U64 = 0U64
+        while index < self.closures.count() {
+            if self.closures[index].bodyId == bodyId { return index }
+            index += 1U64
         }
-        return self.cloIdx.count()
+        return self.closures.count()
     }
-}
 
-pub impl LlvmCtx {
-
-    // Declare a closure as `__closure<id>(ptr env, params...)` (env first per the
-    // uniform closure ABI) and cache it. Idempotent (skips an already-declared id);
-    // a closure with an unsupported (boxed) capture is left undeclared.
-    inout fn declareClosure(c: inout Comp, id: U64) {
-        if self.closureSlot(id: id) < self.cloIdx.count() {
+    inout fn declareClosure(c: inout Comp, semanticIndex: U64, environment: InstanceEnvironment) {
+        val closure: SemanticClosure = c.decls.semanticClosures[semanticIndex]
+        val bodyId: U64 = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment)
+        if bodyId == 0U64 {
+            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized BodyInstance")
             return
         }
-        if !(closureSupported(c: inout c, cloId: id)) {
+        if self.closureSlot(bodyId: bodyId) < self.closures.count() { return }
+        val functionType: U64 = c.groundTermForBody(ref: closure.functionTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+        if functionType == 0U64 || functionType >= c.arena.typeCount() {
+            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure signature is not grounded")
             return
         }
-        match c.arena.exprs[id] {
-            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, body: _) => {
-                mut val ptys: Array[LLVMTypeRef] = []
-                ptys.append(self.ptrty)
-                mut val pi: U64 = 0
-                while pi < params.count() {
-                    ptys.append(self.paramLlvmTy(c: inout c, p: params[pi]))
-                    pi += 1
-                }
-                mut val rty: LLVMTypeRef = self.voidty
-                if hasRet {
-                    if c.isGenericInst(ref: retTy) {
-                        rty = self.llvmTypeOfRef(c: inout c, ref: retTy)
-                    } else {
-                        rty = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
-                    }
-                }
-                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
-                mut val nm: Array[U8] = []
-                appendBytes(into: inout nm, from: "__closure".bytes())
-                appendU64Dec(into: inout nm, n: id)
-                nm.append(0)
-                val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-                self.cloIdx.append(id)
-                self.cloVal.append(fv)
-                self.cloTy.append(fty)
+        val signature: TypeRef = c.arena.typeAt(index: functionType)
+        mut val grounded: Bool = signature.args.count() == closure.parameters.count() + 1U64
+        mut val termI: U64 = 0U64
+        while termI < signature.args.count() {
+            // Zero is the existing Unit result representation, not a missing
+            // argument type. Value parameters must always be nonzero and ground.
+            if termI != 0U64 || closure.hasReturn {
+                if signature.args[termI] == 0U64 || !c.tyRefIsGround(ref: signature.args[termI]) { grounded = false }
             }
-            _ => {}
+            termI += 1U64
         }
-    }
-
-    // Walk an expression / statement / block, declaring every Closure it contains
-    // (and nested closures via the declared closure's own body scan, run later).
-    inout fn scanExprClosures(c: inout Comp, id: U64) {
-        match c.arena.exprs[id] {
-            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
-                self.declareClosure(c: inout c, id: id)
-            }
-            Expr.Unary(op: _, val operand) => { self.scanExprClosures(c: inout c, id: operand) }
-            Expr.Binary(op: _, val lhs, val rhs) => { self.scanExprClosures(c: inout c, id: lhs) self.scanExprClosures(c: inout c, id: rhs) }
-            Expr.Call(nameStart: _, nameLen: _, val args) => {
-                mut val i: U64 = 0
-                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
-            }
-            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
-                self.scanExprClosures(c: inout c, id: recv)
-                mut val i: U64 = 0
-                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
-            }
-            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
-                self.scanExprClosures(c: inout c, id: recv)
-                mut val i: U64 = 0
-                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
-            }
-            Expr.ExtView(val recv, source: _, strip: _) => {
-                self.scanExprClosures(c: inout c, id: recv)
-            }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                mut val i: U64 = 0
-                while i < fields.len { self.scanExprClosures(c: inout c, id: c.makeFieldAt(fields: fields, index: i).value) i += 1 }
-            }
-            Expr.Array(val elems) => {
-                mut val i: U64 = 0
-                while i < elems.len { self.scanExprClosures(c: inout c, id: c.exprAt(exprs: elems, index: i)) i += 1 }
-            }
-            Expr.Index(val base, val index) => { self.scanExprClosures(c: inout c, id: base) self.scanExprClosures(c: inout c, id: index) }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.scanExprClosures(c: inout c, id: operand) }
-            Expr.MatchExpr(val scrut, val arms) => {
-                self.scanExprClosures(c: inout c, id: scrut)
-                mut val i: U64 = 0
-                while i < arms.len {
-                    self.scanBlockClosures(c: inout c, id: c.matchArmAt(arms: arms, index: i).body)
-                    i += 1
-                }
-            }
-            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                self.scanExprClosures(c: inout c, id: cond)
-                self.scanBlockClosures(c: inout c, id: thenBlk)
-                self.scanBlockClosures(c: inout c, id: elseBlk)
-            }
-            Expr.OptChain(val base, val cont) => {
-                self.scanExprClosures(c: inout c, id: base)
-                self.scanExprClosures(c: inout c, id: cont)
-            }
-            Expr.ChainHole => {}
-            Expr.Try(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
-            Expr.Deref(val base) => { self.scanExprClosures(c: inout c, id: base) }
-            Expr.Move(val operand, isBorrow: _) => { self.scanExprClosures(c: inout c, id: operand) }
-            Expr.Await(val operand) => { self.scanExprClosures(c: inout c, id: operand) }
-            _ => {}
-        }
-    }
-
-    inout fn scanStmtClosures(c: inout Comp, id: U64) {
-        match c.arena.stmts[id] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { self.scanExprClosures(c: inout c, id: init) }
-            Stmt.Assign(val target, val value) => { self.scanExprClosures(c: inout c, id: target) self.scanExprClosures(c: inout c, id: value) }
-            Stmt.ExprStmt(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
-            Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { self.scanExprClosures(c: inout c, id: value) } }
-            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                self.scanExprClosures(c: inout c, id: cond)
-                self.scanBlockClosures(c: inout c, id: thenBlk)
-                if hasElse { self.scanBlockClosures(c: inout c, id: elseBlk) }
-            }
-            Stmt.While(val cond, val body) => { self.scanExprClosures(c: inout c, id: cond) self.scanBlockClosures(c: inout c, id: body) }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
-                self.scanExprClosures(c: inout c, id: iter)
-                self.scanExprClosures(c: inout c, id: rangeHi)
-                self.scanBlockClosures(c: inout c, id: body)
-            }
-            Stmt.Match(val scrut, val arms) => {
-                self.scanExprClosures(c: inout c, id: scrut)
-                mut val i: U64 = 0
-                while i < arms.len {
-                    self.scanBlockClosures(c: inout c, id: c.matchArmAt(arms: arms, index: i).body)
-                    i += 1
-                }
-            }
-            Stmt.Panic(val msg, offset: _) => { self.scanExprClosures(c: inout c, id: msg) }
-            Stmt.Give(val value) => { self.scanExprClosures(c: inout c, id: value) }
-            _ => {}
-        }
-    }
-
-    inout fn scanBlockClosures(c: inout Comp, id: U64) {
-        if id == 0U64 {
+        if !grounded {
+            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: invalid concrete closure signature")
             return
         }
-        mut val i: U64 = 0
-        while i < c.blockStmtCount(blkId: id) {
-            self.scanStmtClosures(c: inout c, id: c.blockStmtAt(blkId: id, index: i))
-            i += 1
+        mut val captures: Array[CaptureEntry] = []
+        mut val captureI: U64 = 0U64
+        while captureI < closure.captures.count() {
+            val capture = closure.captures[captureI]
+            val term: U64 = c.groundTermForBody(ref: capture.typeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            if term == 0U64 || term >= c.arena.typeCount() {
+                c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure capture is not grounded")
+                return
+            }
+            val type: TypeRef = c.arena.typeAt(index: term)
+            val boxed: Bool = match capture.mode {
+                SemanticClosureCaptureMode.ValueCopy => { give false }
+                SemanticClosureCaptureMode.CellBorrow => { give true }
+            }
+            captures.append(<CaptureEntry closureId=closure.exprId nameStart=capture.bindingTarget nameLen=0U64 tyStart=type.nameStart tyLen=type.nameLen isArray=false ty=term boxed=boxed />)
+            captureI += 1U64
         }
+        val functionTypeLlvm: LLVMTypeRef = self.closureLlvmFnTy(c: inout c, fnRef: functionType)
+        mut val name: Array[U8] = []
+        appendBytes(into: inout name, from: "__closure".bytes())
+        appendU64Dec(into: inout name, n: bodyId)
+        name.append(0U8)
+        val function: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(name), functionTypeLlvm)
+        self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
     }
 
-    // Declare every closure reachable from the frontend-closed executable body
-    // graph, then fixpoint over declared closures' own bodies (nested closures).
-    // `BodyInstance` is the source-of-truth here just as it is for ordinary
-    // function bodies: scanning every free declaration made a closure in an
-    // unused macro/value-parser helper executable merely because it shared the
-    // compiler module. Run before bodies so a reached closure literal can refer
-    // to its declared LLVM function.
+    // Only frontend-reachable lexical instances make their frozen closures
+    // executable. Unused declarations and abstract instances are not roots.
+    // Nested closures remain rejected by the frontend's current v1 boundary.
     inout fn collectClosures(c: inout Comp) {
-        // The synthetic global-initializer body is a finalization root too,
-        // but has no Func row.  Scan its statement roots explicitly.
-        mut val globalI: U64 = 0U64
-        while globalI < c.arena.globals.count() {
-            self.scanStmtClosures(c: inout c, id: c.arena.globals[globalI].letStmt)
-            globalI += 1U64
-        }
-        mut val bodyI: U64 = 0U64
-        while bodyI < c.monoWork.bodyInstances.count() {
-            val bodyId: U64 = c.monoWork.bodyInstances[bodyI]
-            if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() {
-                val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
-                if body.fnIdx < c.arena.functionCount() {
-                    self.scanBlockClosures(c: inout c, id: c.arena.functionAt(index: body.fnIdx).body)
+        mut val closureI: U64 = 0U64
+        while closureI < c.decls.semanticClosures.count() {
+            val closure: SemanticClosure = c.decls.semanticClosures[closureI]
+            if closure.ownerFnIdx == 18446744073709551615U64 {
+                self.declareClosure(c: inout c, semanticIndex: closureI, environment: <InstanceEnvironment />)
+            } else {
+                mut val bodyI: U64 = 0U64
+                while bodyI < c.monoWork.bodyInstances.count() {
+                    val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyInstances[bodyI] - 1U64)
+                    if c.semanticBodyOwner(fnIdx: body.fnIdx) == closure.ownerFnIdx {
+                        self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
+                    }
+                    bodyI += 1U64
                 }
             }
-            bodyI += 1U64
-        }
-        mut val seen: U64 = 0
-        while seen < self.cloIdx.count() {
-            val cid: U64 = self.cloIdx[seen]
-            match c.arena.exprs[cid] {
-                Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
-                    self.scanBlockClosures(c: inout c, id: body)
-                }
-                _ => {}
-            }
-            seen += 1
+            closureI += 1U64
         }
     }
 
-    // Emit each declared closure's body: env pointer is arg 0 (ignored for a
-    // non-capturing closure), the closure params follow at 1.., then the body.
-    inout fn emitClosures(c: inout Comp) {
-        mut val s: U64 = 0
-        while s < self.cloIdx.count() {
-            val cid: U64 = self.cloIdx[s]
-            val fv: LLVMValueRef = self.cloVal[s]
-            match c.arena.exprs[cid] {
-                Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
-                    self.curFn = fv
-                    self.curIsMain = false
-                    self.curRetVoid = !hasRet
-                    if hasRet {
-                        if c.isGenericInst(ref: retTy) {
-                            self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: retTy)
-                        } else {
-                            self.curRetTy = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
-                        }
-                    } else {
-                        self.curRetTy = self.voidty
-                    }
-                    self.curRetTyStart = retStart
-                    self.curRetTyLen = retLen
-                    self.curRetRef = retTy
-                    self.beginFnBody(fv: fv)
-                    self.nLocals = 0
-                    self.locStart = []
-                    self.locLen = []
-                    self.locPtr = []
-                    self.locTy = []
-                    self.locKind = []
-                    self.locStructIdx = []
-                    self.locIsArr = []
-                    self.locElemTy = []
-                    self.locElemKind = []
-                    self.locTypeRef = []
-                    self.locElemTypeRef = []
-                    self.locOwned = []
-                    self.locMoved = []
-                    self.locCellHome = []
-                    val savedBodyFn: U64 = c.cur.bodyFnIdx
-                    val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
-                    c.cur.bodyFnIdx = c.closureBodyKey(closureId: cid)
-                    c.cur.bodyEnvironment = <InstanceEnvironment />
-                    c.cur.bodyId = 0U64
-                    // module-level variables (spec/15) are visible inside closures too.
-                    self.seedGlobals(c: inout c)
-                    // bind captures from the env pointer (param 0): each capture loads
-                    // from its env slot into a fresh local, so the body's identifier
-                    // accesses resolve normally. (Immutable captures are by-value; a
-                    // boxed `mut val` capture binds the cell pointer as a Ref-like local.)
-                    val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: cid)
-                    if caps.count() > 0U64 {
-                        val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
-                        val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
-                        mut val ci: U64 = 0
-                        while ci < caps.count() {
-                            val cap: CaptureEntry = caps[ci]
-                            val slotTy: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: cap)
-                            val cv: LLVMValueRef = llvmLoad(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon()), anon())
-                            // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
-                            // the local directly to it (ty = the value type), so reads/writes
-                            // in the body go through the same cell as the enclosing scope.
-                            if cap.boxed {
-                                val valTy: LLVMTypeRef = self.captureValueTy(c: inout c, cap: cap)
-                                self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
-                                // the bound capture IS the shared cell (a borrow — the env owns
-                                // its count): mark it so a NESTED closure's env creation retains
-                                // the cell it re-captures, and flag it un-owned so no scope-exit
-                                // drop ever releases the env's count.
-                                self.setLocalCellHome()
-                                self.setLocalOwned(owned: false)
-                                ci += 1
-                            } else {
-                            val a: LLVMValueRef = self.entryAlloca(ty: slotTy)
-                            llvmStore(self.b, cv, a)
-                            mut val cRef: U64 = 0
-                            if cap.boxed {
-                                cRef = cap.ty
-                            } else {
-                                if c.isGenericInst(ref: cap.ty) {
-                                    cRef = cap.ty
-                                } else {
-                                    // declaration test (concreteEnumIdxByName), not the
-                                    // registered instances — registration is demand-driven, so
-                                    // a closure emitted before any construction of the enum
-                                    // would leave the capture ref-less (its release then skips
-                                    // the payload's deinit). Mirrors bindOneParam.
-                                    if c.concreteEnumIdxByName(start: cap.tyStart, len: cap.tyLen) < c.arena.enumCount() {
-                                        cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
-                                    }
-                                    // TOTAL-REF: a bare (non-generic) struct capture (`val p: Pt`
-                                    // used in a closure body) carries its TypeRef so exprTypeRef
-                                    // recovers it; formerly left 0 (recovered via struct-idx).
-                                    if cRef == 0U64 {
-                                        if self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen) < c.arena.structCount() {
-                                            cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
-                                        }
-                                    }
-                                }
-                            }
-                            mut val cElem: LLVMTypeRef = self.i64ty
-                            if cap.isArray {
-                                cElem = self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
-                            }
-                            val capSidx: U64 = self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen)
-                            // A struct-classed capture (String / user struct — capSidx
-                            // registered, typeRef carried) rides the by-value arg
-                            // convention: the UNGATED scope-exit drop releases it on every
-                            // return (emitDeinitCallValue's typeRef arm — the same drop
-                            // that balances a call site's shallow-retained struct arg).
-                            // The env holds only ONE count, so each activation must take
-                            // its own +1 here, or every call nets -1 on the captured heap
-                            // (second call = UAF). Array/reference-cell/Buffer captures are
-                            // true borrows of the env's value — no retain, and the binding
-                            // is flagged un-owned so the scope-exit drop skips it (the
-                            // ownership flag is the single truth; there is no position gate).
-                            mut val capOwned: Bool = false
-                            if !(cap.isArray) {
-                                if cRef != 0U64 && capSidx < c.arena.structCount() {
-                                    if !(c.isStrongRefInst(ref: cRef)) && !(c.isWeakRefLikeInst(ref: cRef)) {
-                                        if !(rangeEquals(bytes: c.arena.bytes, start: cap.tyStart, len: cap.tyLen, kw: "Buffer")) {
-                                            if c.arcNeedsRelease(ref: cRef) {
-                                                self.valueArc(c: inout c, v: cv, typeRef: cRef, retain: true)
-                                                capOwned = true
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: capSidx, isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
-                            self.setLocalOwned(owned: capOwned)
-                            ci += 1
-                            }
-                        }
-                    }
-                    mut val pi: U64 = 0
-                    while pi < params.count() {
-                        self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64, typeRef: c.groundTypeRef(ref: params[pi].ty))
-                        // a `move` param is owned (deinit'd here); by-value is a +0
-                        // borrow — mirrors the regular-fn binding. Without this a
-                        // String/struct-classed closure param rode the ungated
-                        // typeRef release on every return (-1 per call on the
-                        // caller's heap).
-                        self.setLocalOwned(owned: params[pi].isMove)
-                        pi += 1
-                    }
-                    // body locals are released at scope exit; params are borrows;
-                    // struct-classed captures hold this activation's +1 (bound above).
-                    self.curBodyMark = self.nLocals
-                    self.genLlvmBlock(c: inout c, id: body)
-                    if !(self.terminated) {
-                        // fall-through epilogue (mirrors the regular-fn one): release
-                        // the owned entries below the body mark — the per-activation
-                        // capture retains, and any `move` param — before returning.
-                        // Without this a void closure (no trailing `return`) leaked
-                        // one capture count per call.
-                        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
-                        if self.curRetVoid {
-                            LLVMBuildRetVoid(self.b)
-                        } else {
-                            LLVMBuildUnreachable(self.b)
-                        }
-                    }
-                    c.cur.bodyFnIdx = savedBodyFn
-                    c.cur.bodyEnvironment = savedBodyEnvironment
-                    c.cur.bodyId = 0U64
-                }
-                _ => {}
+    inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> MidLlvmPrepared {
+        val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
+        val built: MidBodyBuild = ensureParametricMidClosureBody(c: inout c, closure: fact)
+        match built.error {
+            MidBuildError.None => {}
+            _ => {
+                self.recordMidBuildError(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, error: built.error)
+                return <MidLlvmPrepared.None />
             }
-            s += 1
         }
+        val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: closure.bodyId)
+        match instantiated.error {
+            MidInstantiateError.None => {}
+            _ => {
+                self.recordMidInstantiate(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: instantiated.error)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
+        match accesses.error {
+            MidAccessError.None => {}
+            _ => {
+                self.recordMidAccess(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
+        val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: dropped)
+        match verification.error {
+            MidVerifyError.None => {}
+            _ => {
+                self.recordMidVerify(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: verification.error)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val preflight: MidLlvmPreflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped, abiParameterCount: fact.parameters.count())
+        match preflight {
+            MidLlvmPreflight.Ready => {}
+            _ => {
+                self.recordMidPreflight(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: preflight)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        return <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=fact.parameters.count() />
+    }
+
+    // Captures are borrowed from the environment for this activation. Mutable
+    // captures bind the shared cell, not a new value copy or a new ARC owner.
+    inout fn bindMidClosureCaptures(c: inout Comp, body: MidBodyNode, bodyId: U64) -> Bool {
+        val slot: U64 = self.closureSlot(bodyId: bodyId)
+        if slot >= self.closures.count() { return false }
+        val closure: LlvmClosure = self.closures[slot]
+        val parameterCount: U64 = c.decls.semanticClosures[closure.semanticIndex].parameters.count()
+        if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return false }
+        if closure.captures.count() == 0U64 { return true }
+        val environmentType: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: closure.captures)
+        val environment: LLVMValueRef = LLVMGetParam(self.curFn, 0U64)
+        mut val captureI: U64 = 0U64
+        while captureI < closure.captures.count() {
+            val capture: CaptureEntry = closure.captures[captureI]
+            val local: U64 = parameterCount + captureI
+            val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
+            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || !declaration.isBorrowed || declaration.isCaptureCell != capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return false }
+            val type: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: capture)
+            val value: LLVMValueRef = llvmLoad(self.b, type, LLVMBuildStructGEP2(self.b, environmentType, environment, captureI + 1U64, anon()), anon())
+            llvmStore(self.b, value, self.locPtr[local])
+            captureI += 1U64
+        }
+        return true
+    }
+
+    inout fn emitClosures(c: inout Comp) {
+        val savedBodyFn: U64 = c.cur.bodyFnIdx
+        val savedEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
+        val savedBodyId: U64 = c.cur.bodyId
+        mut val slot: U64 = 0U64
+        while slot < self.closures.count() {
+            val closure: LlvmClosure = self.closures[slot]
+            val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
+            val instance: BodyInstance = c.arena.bodyInstanceAt(index: closure.bodyId - 1U64)
+            c.cur.bodyFnIdx = instance.fnIdx
+            c.cur.bodyEnvironment = instance.environment
+            c.cur.bodyId = closure.bodyId
+            val signature: TypeRef = c.arena.typeAt(index: closure.functionTypeTerm)
+            self.curFn = closure.function
+            self.curIsMain = false
+            self.curRetVoid = !fact.hasReturn
+            self.curRetRef = signature.args[0U64]
+            val result: TypeRef = c.arena.typeAt(index: self.curRetRef)
+            self.curRetTyStart = result.nameStart
+            self.curRetTyLen = result.nameLen
+            self.curRetTy = self.voidty
+            if fact.hasReturn { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: self.curRetRef) }
+            val prepared: MidLlvmPrepared = self.prepareClosureMidBody(c: inout c, closure: closure)
+            match prepared {
+                MidLlvmPrepared.None => {
+                    c.errorAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: closure body could not be prepared as Mid IR")
+                }
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
+                    self.beginFnBody(fv: closure.function)
+                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterStart: 1U64, closureBodyId: closure.bodyId) {
+                        c.errorAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: prepared closure Mid body failed to emit")
+                    }
+                }
+            }
+            slot += 1U64
+        }
+        c.cur.bodyFnIdx = savedBodyFn
+        c.cur.bodyEnvironment = savedEnvironment
+        c.cur.bodyId = savedBodyId
     }
 }

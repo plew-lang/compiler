@@ -272,10 +272,10 @@ pub impl LlvmCtx {
                 // function plus its environment. A capturing closure heap-allocates an env
                 // struct and copies each captured value (or the shared cell pointer for a
                 // `mut val` capture) into it; a non-capturing one has a NULL env.
-                val slot: U64 = self.closureSlot(id: id)
-                if slot < self.cloIdx.count() {
+                val slot: U64 = self.closureSlot(bodyId: c.findBodyInstance(fnIdx: c.closureBodyKey(closureId: id), environment: c.cur.bodyEnvironment))
+                if slot < self.closures.count() {
                     mut val env: LLVMValueRef = LLVMConstNull(self.ptrty)
-                    val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
+                    val caps: Array[CaptureEntry] = self.closures[slot].captures
                     if caps.count() > 0U64 {
                         val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
                         env = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
@@ -288,7 +288,7 @@ pub impl LlvmCtx {
                         mut val tci: U64 = 0
                         while tci < caps.count() {
                             if caps[tci].boxed {
-                                val tli: U64 = self.findLocal(c: inout c, start: caps[tci].nameStart, len: caps[tci].nameLen)
+                                val tli: U64 = self.findLocalByDeclStart(declStart: caps[tci].nameStart)
                                 if tli < self.nLocals {
                                     if !(self.locCellHome[tli]) {
                                         thunkOk = false
@@ -307,7 +307,7 @@ pub impl LlvmCtx {
                         mut val ci: U64 = 0
                         while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
-                            val li: U64 = self.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
+                            val li: U64 = self.findLocalByDeclStart(declStart: cap.nameStart)
                             if li < self.nLocals {
                                 // a boxed (mut) capture stores the shared cell POINTER
                                 // (locPtr is the heap cell) and RETAINS it — the env co-owns
@@ -341,7 +341,7 @@ pub impl LlvmCtx {
                         }
                     }
                     mut val cv: LLVMValueRef = LLVMGetUndef(self.closureTy)
-                    cv = LLVMBuildInsertValue(self.b, cv, self.cloVal[slot], 0U64, anon())
+                    cv = LLVMBuildInsertValue(self.b, cv, self.closures[slot].function, 0U64, anon())
                     cv = LLVMBuildInsertValue(self.b, cv, env, 1U64, anon())
                     return cv
                 }

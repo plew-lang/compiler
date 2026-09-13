@@ -2155,7 +2155,7 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalMakeClosureSupported(c: inout Comp, body: MidBodyNode, value: MidRvalueNode) -> Bool {
-        if value.closureBodyKey == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || self.closureSlot(id: value.exprId) >= self.cloIdx.count() { return false }
+        if value.closureBodyKey == 0U64 || value.closureBodyId == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || self.closureSlot(bodyId: value.closureBodyId) >= self.closures.count() { return false }
         if value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return false }
         mut val index: U64 = 0U64
         while index < value.elements.len {
@@ -2176,7 +2176,7 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalEmitMakeClosure(c: inout Comp, body: MidBodyNode, value: MidRvalueNode) -> LLVMValueRef {
-        val slot: U64 = self.closureSlot(id: value.exprId)
+        val slot: U64 = self.closureSlot(bodyId: value.closureBodyId)
         mut val environment: LLVMValueRef = LLVMConstNull(self.ptrty)
         if value.elements.len > 0U64 {
             val captures: Array[CaptureEntry] = self.midCanonicalClosureCaptures(c: inout c, value: value)
@@ -2201,7 +2201,7 @@ pub impl LlvmCtx {
             }
         }
         mut val closure: LLVMValueRef = LLVMGetUndef(self.closureTy)
-        closure = LLVMBuildInsertValue(self.b, closure, self.cloVal[slot], 0U64, anon())
+        closure = LLVMBuildInsertValue(self.b, closure, self.closures[slot].function, 0U64, anon())
         return LLVMBuildInsertValue(self.b, closure, environment, 1U64, anon())
     }
 
@@ -4557,13 +4557,14 @@ impl LlvmCtx {
         return <MidLlvmPreflight.Ready />
     }
 
-    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64) -> Bool {
+    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64, closureBodyId: U64 = 0U64) -> Bool {
         val canonical: MidCanonicalBody = match prepared {
             MidLlvmPrepared.None => { return false }
             MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: _) => { give canonical }
         }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
         if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
+        if closureBodyId != 0U64 && !self.bindMidClosureCaptures(c: inout c, body: body, bodyId: closureBodyId) { return false }
         mut val blocks: Array[LLVMBasicBlockRef] = []
         mut val blockI: U64 = 0U64
         while blockI < body.blocks.len {

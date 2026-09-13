@@ -10,12 +10,12 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend, tracePhase, tracePhaseCount, tracePhaseProgress }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
 // frontend `part` or from reaching LLVM through ambient AST recovery.
-import ./Mid with { MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidInstantiateError, MidInstantiation, MidCanonicalInstantiation, MidAccessError, MidAccessElaboration, MidCanonicalAccessElaboration, buildParametricMidBody, buildParametricMidGlobalInit, instantiateMidBody, instantiateCanonicalMidBody, elaborateMidAccesses, elaborateCanonicalMidAccesses, elaborateMidDrops, elaborateCanonicalMidDrops, optimizeCanonicalMidReturns, verifyMidBody, verifyCanonicalMidBody }
+import ./Mid with { MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidInstantiateError, MidInstantiation, MidCanonicalInstantiation, MidAccessError, MidAccessElaboration, MidCanonicalAccessElaboration, buildParametricMidBody, buildParametricMidGlobalInit, ensureParametricMidClosureBody, instantiateMidBody, instantiateCanonicalMidBody, elaborateMidAccesses, elaborateCanonicalMidAccesses, elaborateMidDrops, elaborateCanonicalMidDrops, optimizeCanonicalMidReturns, verifyMidBody, verifyCanonicalMidBody }
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
@@ -116,6 +116,15 @@ pub impl LlvmTypeArgRange { factory }
 // name-span -> alloca pointer + element type; searched from the end so a
 // shadowing redeclaration wins). `terminated` tracks whether the current basic
 // block already has a terminator, so we never append after a ret/br.
+struct LlvmClosure {
+    pub val bodyId: U64
+    pub val semanticIndex: U64
+    pub val functionTypeTerm: U64
+    pub val function: LLVMValueRef
+    pub val captures: Array[CaptureEntry]
+}
+pub impl LlvmClosure { factory }
+
 struct LlvmCtx {
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich
@@ -320,12 +329,8 @@ struct LlvmCtx {
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
     pub mut val declTy: Array[LLVMTypeRef]
-    // lambda-lifted closures, cached by Closure-expr arena id (parallel arrays):
-    // the emitted `__closure<id>` LLVM function value and its function type (env
-    // pointer first param). A closure literal builds a {fn, env} value from these.
-    pub mut val cloIdx: Array[U64]
-    pub mut val cloVal: Array[LLVMValueRef]
-    pub mut val cloTy: Array[LLVMTypeRef]
+    // Concrete closure bodies and their ABI share the frontend BodyInstance key.
+    pub mut val closures: Array[LlvmClosure]
     // Legacy named-function-value thunks. Kept empty in v1: a named function declaration is
     // not a value, so first-class functions must be explicit closure literals.
     pub mut val thunkIdx: Array[U64]
@@ -800,18 +805,6 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
-    mut val out: Array[CaptureEntry] = []
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count() {
-        if c.monoWork.captures[i].closureId == cloId {
-            out.append(c.monoWork.captures[i])
-        }
-        i += 1
-    }
-    return out
-}
-
 // Whether the local named (start,len) is captured by some closure as a boxed
 // (`mut val`, shared-cell) capture — so its storage must be a heap cell that
 // outlives the declaring scope (Swift-style reference capture).
@@ -828,28 +821,7 @@ fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-// Whether the LLVM backend can lower closure `cloId` yet: a `mut val` (boxed,
-// shared-cell) capture isn't modeled, so such a closure is left undeclared and its
-// literal rejects loudly (a clean unsupported, not a miscompile).
-fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count() {
-        if c.monoWork.captures[i].closureId == cloId {
-            // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
-            // array/struct/generic-instance cell isn't modeled yet.
-            if c.monoWork.captures[i].boxed {
-                if c.monoWork.captures[i].isArray {
-                    return false
-                }
-                if c.isGenericInst(ref: c.monoWork.captures[i].ty) {
-                    return false
-                }
-            }
-        }
-        i += 1
-    }
-    return true
-}
+
 
 export fn emitLlvm(c: inout Comp) {
     tracePhase(c: inout c, label: "backend:emit:start")
@@ -893,7 +865,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)

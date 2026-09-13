@@ -3262,9 +3262,9 @@ pub impl Comp {
     // proof before Mid ownership/drop processing begins.
     inout fn finalizeCurrentBodyReturn(exprId: U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
-        if bodyId == 0U64 || self.cur.bodyFnIdx >= self.arena.functionCount() { return }
-        val f: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
-        val targetRef: U64 = self.groundTermForBody(ref: f.retTy, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if bodyId == 0U64 { return }
+        val targetTerm: U64 = self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx)
+        val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         mut val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         // A direct record aggregate in return position has one ABI authority:
         // the declared return TypeTerm.  Its parametric aggregate carrier owns
