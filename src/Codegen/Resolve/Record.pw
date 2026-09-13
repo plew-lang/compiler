@@ -1629,7 +1629,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
                     self.recordBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -1894,7 +1894,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
                     self.recordBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

@@ -675,6 +675,9 @@ pub impl Comp {
     }
 
     inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) {
+        // Parent chains and match payloads read the expression term during
+        // both Record walks, before call-template publication is enabled.
+        self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
         if !(self.cur.recordCallTemplates) { return }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
