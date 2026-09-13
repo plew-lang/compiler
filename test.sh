@@ -166,6 +166,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-call-result-types"
 fi
 
+# Inferred storage uses the frozen result, including scoped match payloads.
+if sh ./test-mid-local-types.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-local-types"
+fi
+
 # A construction retains its nominal owner beside unrelated lexical binders.
 if sh ./test-mid-nominal-construction.sh; then
     :

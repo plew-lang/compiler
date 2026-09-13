@@ -5696,6 +5696,21 @@ pub impl Comp {
         }
     }
 
+    // An executable body's inferred local consumes its initializer's frozen
+    // result. Reopening exprType after a match arm or generic callee has left
+    // scope loses lexical binders and can disagree with the storage operand.
+    // Annotation checking and the earlier declaration walk keep their own
+    // source-level inference phase; this reader does not repeat that phase.
+    inout fn scanLocalDeclarationType(tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> LetEff {
+        val bodyId: U64 = self.currentBodyInstanceId()
+        if bodyId == 0U64 || tyLen != 0U64 || tyIsArray {
+            return self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+        }
+        val ref: U64 = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: init, term: self.semanticExprTerm(exprId: init), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val info: TypeInfo = self.typeInfoOfRef(ref: ref)
+        return <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref />
+    }
+
     inout fn scanStmtInsts(stmtId: U64) {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
@@ -5712,7 +5727,7 @@ pub impl Comp {
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                val le: LetEff = self.scanLocalDeclarationType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 mut val shadowedBindingTarget: U64 = 0U64
                 val previous: U64 = self.localIndexByName(start: nameStart, len: nameLen)
                 if previous < self.cur.locals.count() {
