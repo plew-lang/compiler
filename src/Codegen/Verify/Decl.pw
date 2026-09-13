@@ -79,7 +79,6 @@ pub impl Comp {
         val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
         while fi < sourceFuncLimit {
-            val f: Func = self.arena.functionAt(index: fi)
             // Verify EVERY module's bodies, not just the entry module: a Plew program's
             // acceptance rules apply uniformly to imported code too (std, the compiler's
             // own import submodules, future package deps) — "develops as spoken" reaches
@@ -90,38 +89,45 @@ pub impl Comp {
             // operator witness `Add[U64]` in SipHasher said to be loaded only on import) is
             // moot — Core is force-loaded WITH its witnesses (see Frontend force-load), so a
             // no-import program resolves them fine. extern fns have no body to verify.
-            if !(f.isExtern) {
-                if f.typeParams.count() > 0U64 {
-                    // a generic template: its concrete instances are checked during the
-                    // C emitter's instance emission (with the substitution env); this
-                    // backend-independent pass covers non-generic bodies (where the
-                    // reject-test surface lives) without a substitution env.
-                } else {
-                if self.methodRecvIsTrait(f: f) {
-                    // a trait provided-method template — checked per conforming type
-                    // (its concrete copies are ordinary funcs and get verified).
-                } else {
-                    // async bodies are checked too: an `async fn f() -> I64` body's
-                    // `return n` yields the DECLARED type I64 (the Promise[I64] wrapping is
-                    // implicit), so the return-context check uses f.retStart as-is. `await`
-                    // expressions infer as unknown (0) and are left to the conservative
-                    // pass-through. (The retired C emitter used to be the only check here.)
-                    self.cur.checkFn = fi
-                    if self.tracePhases {
-                        eprint(text: "[trace-phase] verify:function index=")
-                        traceU64(n: fi)
-                        eprint(text: " offset=")
-                        traceU64(n: f.defOffset)
-                        eprint(text: "\n")
-                    }
-                    self.verifyFunc(f: f)
-                }
-                }
-            }
+            self.verifyFunctionDeclaration(fnIdx: fi)
             fi += 1
         }
         if self.tracePhases { eprint(text: "[trace-phase] verify:decl-shapes\n") }
         self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
+    }
+
+    // Verify one concrete lexical declaration. Generic and trait templates use
+    // checkGenericFunction under their authored abstract environment.
+    inout fn verifyFunctionDeclaration(fnIdx: U64) {
+        val f: Func = self.arena.functionAt(index: fnIdx)
+        if !(f.isExtern) {
+            if f.typeParams.count() > 0U64 {
+                // a generic template: its concrete instances are checked during the
+                // C emitter's instance emission (with the substitution env); this
+                // backend-independent pass covers non-generic bodies (where the
+                // reject-test surface lives) without a substitution env.
+            } else {
+            if self.methodRecvIsTrait(f: f) {
+                // a trait provided-method template — checked per conforming type
+                // (its concrete copies are ordinary funcs and get verified).
+            } else {
+                // async bodies are checked too: an `async fn f() -> I64` body's
+                // `return n` yields the DECLARED type I64 (the Promise[I64] wrapping is
+                // implicit), so the return-context check uses f.retStart as-is. `await`
+                // expressions infer as unknown (0) and are left to the conservative
+                // pass-through. (The retired C emitter used to be the only check here.)
+                self.cur.checkFn = fnIdx
+                if self.tracePhases {
+                    eprint(text: "[trace-phase] verify:function index=")
+                    traceU64(n: fnIdx)
+                    eprint(text: " offset=")
+                    traceU64(n: f.defOffset)
+                    eprint(text: "\n")
+                }
+                self.verifyFunc(f: f)
+            }
+            }
+        }
     }
 
     // The source-selection proof for both `value#Name` and `Type#Name`.
