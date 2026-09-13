@@ -1603,3 +1603,54 @@ pub impl I64 as TryFrom[String] {
         return <Result[I64, ParseError].Ok value=0I64 - acc />
     }
 }
+
+// Discrete ordered steps (spec/02). Exhaustion is an Optional result rather
+// than arithmetic overflow; every implementation accepts a U64 distance.
+export trait Step: Ord {
+    assoc fn stepsBetween(start: Self, end: Self) -> (lower: U64, exact: Optional[U64])
+    assoc fn stepForward(start: Self, count: U64) -> Optional[Self]
+    assoc fn stepBackward(start: Self, count: U64) -> Optional[Self]
+}
+
+// One cursor representation serves both range shapes. Bounds remain ordinary
+// values; only the cursor records whether the last value has been delivered.
+export struct RangeIter[T] {
+    mut val current: T
+    val end: T
+    val closed: Bool
+    mut val started: Bool
+    mut val exhausted: Bool
+}
+pub impl[T] RangeIter[T] as Iterator where T: Step {
+    type Item = T
+    inout fn next() -> Optional[T] {
+        if self.exhausted { return <Optional.None /> }
+        if self.started {
+            match T.stepForward(start: self.current, count: 1U64) {
+                Optional.Some(v: val next) => { self.current = next }
+                Optional.None => { self.exhausted = true return <Optional.None /> }
+            }
+        } else { self.started = true }
+        if self.closed {
+            if self.current > self.end { self.exhausted = true return <Optional.None /> }
+            if self.current == self.end { self.exhausted = true }
+        } else {
+            if self.current >= self.end { self.exhausted = true return <Optional.None /> }
+        }
+        return <Optional.Some v=self.current />
+    }
+}
+pub impl[T] HalfOpenRange[T] as Iterable where T: Step {
+    type Item = T
+    type Iter = RangeIter[T]
+    fn iterator() -> RangeIter[T] {
+        return <RangeIter current=self.start end=self.end closed=false started=false exhausted=false />
+    }
+}
+pub impl[T] ClosedRange[T] as Iterable where T: Step {
+    type Item = T
+    type Iter = RangeIter[T]
+    fn iterator() -> RangeIter[T] {
+        return <RangeIter current=self.start end=self.end closed=true started=false exhausted=false />
+    }
+}

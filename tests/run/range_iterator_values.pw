@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+fn main() {
+    val signed = -2I8 ..< 2I8
+    for value in signed { print(value) }
+    val maximum = 254U8 ..= 255U8
+    mut val iterator = maximum.iterator()
+    assert(iterator.next().unwrap() == 254U8)
+    assert(iterator.next().unwrap() == 255U8)
+    assert(!iterator.next().isSome())
+    assert(!iterator.next().isSome())
+    val singleton = 18446744073709551615U64 ..= 18446744073709551615U64
+    for value in singleton { print(value) }
+    val empty = 2I64 ..< -2I64
+    for value in empty { print(value) }
+    val closedEmpty = 2I64 ..= -2I64
+    for value in closedEmpty { print(value) }
+    val equal = 5U32 ..< 5U32
+    for value in equal { print(value) }
+    print("finished")
+}

@@ -136,9 +136,43 @@ fn implWrap(ty: String, pfx: String) {
     write(s: "WrapNeg(a: value) }\n}\n")
 }
 
+// Ordered integer ranks map signed and unsigned domains onto 0..=maximum.
+// Bounds are checked in U64 before arithmetic; Step exhaustion never wraps.
+fn stepValue(typeName: String, bits: String, isSigned: Bool) -> String {
+    if isSigned {
+        val wide = "bitCastI64(n: " + bits + ")"
+        if typeName == "I64" { return wide }
+        return "trunc" + typeName + "(n: " + wide + ")"
+    }
+    if typeName == "U64" { return bits }
+    return "trunc" + typeName + "(n: " + bits + ")"
+}
+
+fn stepImplementation(typeName: String, maximum: String, signBit: String, isSigned: Bool) {
+    val startBits = if isSigned { give "bitCastU64(n: start as I64)" } else { give "(start as U64)" }
+    val endBits = if isSigned { give "bitCastU64(n: end as I64)" } else { give "(end as U64)" }
+    write(s: "impl " + typeName + " as Step {\n")
+    write(s: "    assoc fn stepsBetween(start: " + typeName + ", end: " + typeName + ") -> (lower: U64, exact: Optional[U64]) {\n")
+    write(s: "        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }\n")
+    write(s: "        val startRank: U64 = (" + startBits + " & " + maximum + "U64) ^ " + signBit + "U64\n")
+    write(s: "        val endRank: U64 = (" + endBits + " & " + maximum + "U64) ^ " + signBit + "U64\n")
+    write(s: "        val distance: U64 = endRank - startRank\n")
+    write(s: "        return (lower: distance, exact: <Optional.Some v=distance />)\n    }\n")
+    write(s: "    assoc fn stepForward(start: " + typeName + ", count: U64) -> Optional[" + typeName + "] {\n")
+    write(s: "        val rank: U64 = (" + startBits + " & " + maximum + "U64) ^ " + signBit + "U64\n")
+    write(s: "        if count > " + maximum + "U64 - rank { return <Optional.None /> }\n")
+    write(s: "        return <Optional.Some v=" + stepValue(typeName: typeName, bits: "((rank + count) ^ " + signBit + "U64)", isSigned: isSigned) + " />\n    }\n")
+    write(s: "    assoc fn stepBackward(start: " + typeName + ", count: U64) -> Optional[" + typeName + "] {\n")
+    write(s: "        val rank: U64 = (" + startBits + " & " + maximum + "U64) ^ " + signBit + "U64\n")
+    write(s: "        if count > rank { return <Optional.None /> }\n")
+    write(s: "        return <Optional.Some v=" + stepValue(typeName: typeName, bits: "((rank - count) ^ " + signBit + "U64)", isSigned: isSigned) + " />\n    }\n}\n")
+}
+
 fn main() {
     val tys: Array[String] = ["I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64"]
     val pfx: Array[String] = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"]
+    val maxima: Array[String] = ["255", "65535", "4294967295", "18446744073709551615", "255", "65535", "4294967295", "18446744073709551615"]
+    val signBits: Array[String] = ["128", "32768", "2147483648", "9223372036854775808", "0", "0", "0", "0"]
     val signed: Array[Bool] = [true, true, true, true, false, false, false, false]
     val traits: Array[String] = ["Add", "Sub", "Mul", "Div", "Rem", "BitAnd", "BitOr", "BitXor", "Shl", "Shr"]
     val meths: Array[String] = ["add", "sub", "mul", "div", "rem", "bitand", "bitor", "bitxor", "shl", "shr"]
@@ -168,6 +202,7 @@ fn main() {
         implEq(ty: tys[ti], pfx: pfx[ti])
         implOrd(ty: tys[ti], pfx: pfx[ti])
         implWrap(ty: tys[ti], pfx: pfx[ti])
+        stepImplementation(typeName: tys[ti], maximum: maxima[ti], signBit: signBits[ti], isSigned: signed[ti])
         ti += 1
     }
     // float conformances (Add/Sub/Mul/Div/Neg/Eq/Ord).

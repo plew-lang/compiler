@@ -1,0 +1,41 @@
+import @Std/Io with { print }
+import @Std/Core with { Step, assert }
+
+fn boundaries[T](minimum: T, maximum: T, distance: U64) where T: Step {
+    assert(!T.stepForward(start: maximum, count: 1U64).isSome())
+    assert(!T.stepBackward(start: minimum, count: 1U64).isSome())
+    assert(T.stepForward(start: minimum, count: 0U64).unwrap() == minimum)
+    assert(T.stepBackward(start: maximum, count: 0U64).unwrap() == maximum)
+    assert(T.stepForward(start: minimum, count: distance).unwrap() == maximum)
+    assert(T.stepBackward(start: maximum, count: distance).unwrap() == minimum)
+    val total = T.stepsBetween(start: minimum, end: maximum)
+    assert(total.lower == distance)
+    assert(total.exact.unwrap() == distance)
+    val empty = T.stepsBetween(start: maximum, end: minimum)
+    assert(empty.lower == 0U64)
+    assert(empty.exact.unwrap() == 0U64)
+    val singleton = T.stepsBetween(start: minimum, end: minimum)
+    assert(singleton.lower == 0U64)
+    assert(singleton.exact.unwrap() == 0U64)
+}
+fn main() {
+    boundaries(minimum: -128I8, maximum: 127I8, distance: 255U64)
+    print("I8")
+    boundaries(minimum: -32768I16, maximum: 32767I16, distance: 65535U64)
+    print("I16")
+    boundaries(minimum: -2147483648I32, maximum: 2147483647I32, distance: 4294967295U64)
+    print("I32")
+    boundaries(minimum: -9223372036854775808I64, maximum: 9223372036854775807I64, distance: 18446744073709551615U64)
+    print("I64")
+    boundaries(minimum: 0U8, maximum: 255U8, distance: 255U64)
+    print("U8")
+    boundaries(minimum: 0U16, maximum: 65535U16, distance: 65535U64)
+    print("U16")
+    boundaries(minimum: 0U32, maximum: 4294967295U32, distance: 4294967295U64)
+    print("U32")
+    boundaries(minimum: 0U64, maximum: 18446744073709551615U64, distance: 18446744073709551615U64)
+    print("U64")
+    assert(I64.stepForward(start: -2I64, count: 3U64).unwrap() == 1I64)
+    assert(I64.stepBackward(start: 1I64, count: 3U64).unwrap() == -2I64)
+    assert(I64.stepsBetween(start: -2I64, end: 1I64).lower == 3U64)
+}

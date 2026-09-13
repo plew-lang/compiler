@@ -68,6 +68,25 @@ impl I8 as FixedWidthInteger {
     assoc fn wrappingMul(lhs~: I8, rhs~: I8) -> I8 { return i8WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: I8) -> I8 { return i8WrapNeg(a: value) }
 }
+impl I8 as Step {
+    assoc fn stepsBetween(start: I8, end: I8) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = (bitCastU64(n: start as I64) & 255U64) ^ 128U64
+        val endRank: U64 = (bitCastU64(n: end as I64) & 255U64) ^ 128U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: I8, count: U64) -> Optional[I8] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 255U64) ^ 128U64
+        if count > 255U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncI8(n: bitCastI64(n: ((rank + count) ^ 128U64))) />
+    }
+    assoc fn stepBackward(start: I8, count: U64) -> Optional[I8] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 255U64) ^ 128U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncI8(n: bitCastI64(n: ((rank - count) ^ 128U64))) />
+    }
+}
 impl I16 as Add[I16] {
     type Output = I16
     assoc fn add(lhs~: I16, rhs~: I16) -> I16 { return i16Add(a: lhs, b: rhs) }
@@ -131,6 +150,25 @@ impl I16 as FixedWidthInteger {
     assoc fn wrappingSub(lhs~: I16, rhs~: I16) -> I16 { return i16WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: I16, rhs~: I16) -> I16 { return i16WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: I16) -> I16 { return i16WrapNeg(a: value) }
+}
+impl I16 as Step {
+    assoc fn stepsBetween(start: I16, end: I16) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = (bitCastU64(n: start as I64) & 65535U64) ^ 32768U64
+        val endRank: U64 = (bitCastU64(n: end as I64) & 65535U64) ^ 32768U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: I16, count: U64) -> Optional[I16] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 65535U64) ^ 32768U64
+        if count > 65535U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncI16(n: bitCastI64(n: ((rank + count) ^ 32768U64))) />
+    }
+    assoc fn stepBackward(start: I16, count: U64) -> Optional[I16] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 65535U64) ^ 32768U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncI16(n: bitCastI64(n: ((rank - count) ^ 32768U64))) />
+    }
 }
 impl I32 as Add[I32] {
     type Output = I32
@@ -196,6 +234,25 @@ impl I32 as FixedWidthInteger {
     assoc fn wrappingMul(lhs~: I32, rhs~: I32) -> I32 { return i32WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: I32) -> I32 { return i32WrapNeg(a: value) }
 }
+impl I32 as Step {
+    assoc fn stepsBetween(start: I32, end: I32) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = (bitCastU64(n: start as I64) & 4294967295U64) ^ 2147483648U64
+        val endRank: U64 = (bitCastU64(n: end as I64) & 4294967295U64) ^ 2147483648U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: I32, count: U64) -> Optional[I32] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 4294967295U64) ^ 2147483648U64
+        if count > 4294967295U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncI32(n: bitCastI64(n: ((rank + count) ^ 2147483648U64))) />
+    }
+    assoc fn stepBackward(start: I32, count: U64) -> Optional[I32] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 4294967295U64) ^ 2147483648U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncI32(n: bitCastI64(n: ((rank - count) ^ 2147483648U64))) />
+    }
+}
 impl I64 as Add[I64] {
     type Output = I64
     assoc fn add(lhs~: I64, rhs~: I64) -> I64 { return i64Add(a: lhs, b: rhs) }
@@ -260,6 +317,25 @@ impl I64 as FixedWidthInteger {
     assoc fn wrappingMul(lhs~: I64, rhs~: I64) -> I64 { return i64WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: I64) -> I64 { return i64WrapNeg(a: value) }
 }
+impl I64 as Step {
+    assoc fn stepsBetween(start: I64, end: I64) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
+        val endRank: U64 = (bitCastU64(n: end as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: I64, count: U64) -> Optional[I64] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
+        if count > 18446744073709551615U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=bitCastI64(n: ((rank + count) ^ 9223372036854775808U64)) />
+    }
+    assoc fn stepBackward(start: I64, count: U64) -> Optional[I64] {
+        val rank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=bitCastI64(n: ((rank - count) ^ 9223372036854775808U64)) />
+    }
+}
 impl U8 as Add[U8] {
     type Output = U8
     assoc fn add(lhs~: U8, rhs~: U8) -> U8 { return u8Add(a: lhs, b: rhs) }
@@ -319,6 +395,25 @@ impl U8 as FixedWidthInteger {
     assoc fn wrappingSub(lhs~: U8, rhs~: U8) -> U8 { return u8WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U8, rhs~: U8) -> U8 { return u8WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: U8) -> U8 { return u8WrapNeg(a: value) }
+}
+impl U8 as Step {
+    assoc fn stepsBetween(start: U8, end: U8) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = ((start as U64) & 255U64) ^ 0U64
+        val endRank: U64 = ((end as U64) & 255U64) ^ 0U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: U8, count: U64) -> Optional[U8] {
+        val rank: U64 = ((start as U64) & 255U64) ^ 0U64
+        if count > 255U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncU8(n: ((rank + count) ^ 0U64)) />
+    }
+    assoc fn stepBackward(start: U8, count: U64) -> Optional[U8] {
+        val rank: U64 = ((start as U64) & 255U64) ^ 0U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncU8(n: ((rank - count) ^ 0U64)) />
+    }
 }
 impl U16 as Add[U16] {
     type Output = U16
@@ -380,6 +475,25 @@ impl U16 as FixedWidthInteger {
     assoc fn wrappingMul(lhs~: U16, rhs~: U16) -> U16 { return u16WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: U16) -> U16 { return u16WrapNeg(a: value) }
 }
+impl U16 as Step {
+    assoc fn stepsBetween(start: U16, end: U16) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = ((start as U64) & 65535U64) ^ 0U64
+        val endRank: U64 = ((end as U64) & 65535U64) ^ 0U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: U16, count: U64) -> Optional[U16] {
+        val rank: U64 = ((start as U64) & 65535U64) ^ 0U64
+        if count > 65535U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncU16(n: ((rank + count) ^ 0U64)) />
+    }
+    assoc fn stepBackward(start: U16, count: U64) -> Optional[U16] {
+        val rank: U64 = ((start as U64) & 65535U64) ^ 0U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncU16(n: ((rank - count) ^ 0U64)) />
+    }
+}
 impl U32 as Add[U32] {
     type Output = U32
     assoc fn add(lhs~: U32, rhs~: U32) -> U32 { return u32Add(a: lhs, b: rhs) }
@@ -440,6 +554,25 @@ impl U32 as FixedWidthInteger {
     assoc fn wrappingMul(lhs~: U32, rhs~: U32) -> U32 { return u32WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: U32) -> U32 { return u32WrapNeg(a: value) }
 }
+impl U32 as Step {
+    assoc fn stepsBetween(start: U32, end: U32) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = ((start as U64) & 4294967295U64) ^ 0U64
+        val endRank: U64 = ((end as U64) & 4294967295U64) ^ 0U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: U32, count: U64) -> Optional[U32] {
+        val rank: U64 = ((start as U64) & 4294967295U64) ^ 0U64
+        if count > 4294967295U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=truncU32(n: ((rank + count) ^ 0U64)) />
+    }
+    assoc fn stepBackward(start: U32, count: U64) -> Optional[U32] {
+        val rank: U64 = ((start as U64) & 4294967295U64) ^ 0U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=truncU32(n: ((rank - count) ^ 0U64)) />
+    }
+}
 impl U64 as Add[U64] {
     type Output = U64
     assoc fn add(lhs~: U64, rhs~: U64) -> U64 { return u64Add(a: lhs, b: rhs) }
@@ -499,6 +632,25 @@ impl U64 as FixedWidthInteger {
     assoc fn wrappingSub(lhs~: U64, rhs~: U64) -> U64 { return u64WrapSub(a: lhs, b: rhs) }
     assoc fn wrappingMul(lhs~: U64, rhs~: U64) -> U64 { return u64WrapMul(a: lhs, b: rhs) }
     assoc fn wrappingNeg(value~: U64) -> U64 { return u64WrapNeg(a: value) }
+}
+impl U64 as Step {
+    assoc fn stepsBetween(start: U64, end: U64) -> (lower: U64, exact: Optional[U64]) {
+        if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
+        val startRank: U64 = ((start as U64) & 18446744073709551615U64) ^ 0U64
+        val endRank: U64 = ((end as U64) & 18446744073709551615U64) ^ 0U64
+        val distance: U64 = endRank - startRank
+        return (lower: distance, exact: <Optional.Some v=distance />)
+    }
+    assoc fn stepForward(start: U64, count: U64) -> Optional[U64] {
+        val rank: U64 = ((start as U64) & 18446744073709551615U64) ^ 0U64
+        if count > 18446744073709551615U64 - rank { return <Optional.None /> }
+        return <Optional.Some v=((rank + count) ^ 0U64) />
+    }
+    assoc fn stepBackward(start: U64, count: U64) -> Optional[U64] {
+        val rank: U64 = ((start as U64) & 18446744073709551615U64) ^ 0U64
+        if count > rank { return <Optional.None /> }
+        return <Optional.Some v=((rank - count) ^ 0U64) />
+    }
 }
 impl F32 as Add[F32] {
     type Output = F32

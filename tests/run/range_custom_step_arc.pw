@@ -1,0 +1,38 @@
+import @Std/Io with { print }
+import @Std/Core with { Step, Eq, Ord, Ordering, assert }
+mut val advances: U64 = 0U64
+struct Position { pub val index: I64  pub val label: String }
+pub impl Position { factory }
+impl Position as Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.index == rhs.index }
+}
+impl Position as Ord {
+    assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering { return I64.compare(lhs.index, rhs.index) }
+}
+impl Position as Step {
+    assoc fn stepsBetween(start: Self, end: Self) -> (lower: U64, exact: Optional[U64]) {
+        return I64.stepsBetween(start: start.index, end: end.index)
+    }
+    assoc fn stepForward(start: Self, count: U64) -> Optional[Self] {
+        advances += 1U64
+        match I64.stepForward(start: start.index, count: count) {
+            Optional.Some(v: val index) => { return <Optional.Some v=<Position index=index label=start.label /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+    assoc fn stepBackward(start: Self, count: U64) -> Optional[Self] {
+        match I64.stepBackward(start: start.index, count: count) {
+            Optional.Some(v: val index) => { return <Optional.Some v=<Position index=index label=start.label /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+}
+fn main() {
+    val range = <ClosedRange start=<Position index=1I64 label="he" + "ap" /> end=<Position index=3I64 label="en" + "d" /> />
+    for value in range {
+        print(value.index)
+        print(value.label)
+    }
+    assert(advances == 2U64)
+    print("finished")
+}
