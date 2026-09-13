@@ -1,0 +1,63 @@
+// Both public syntax representations must preserve unary > cast > binary.
+// These are syntax-only inputs: identifiers and async calls need no type context.
+import @Plew/Syntax with { DeclId, ExprId, ExprAst, Lexer, P, SyntaxFile, SyntaxExprKind, lex, parseExprFrom, parseProgramSyntaxFile, syntaxBlock, syntaxBlockStmt, syntaxDecl, syntaxExpr, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+import @Std/Io with { print }
+
+fn directShape(file: SyntaxFile, id: ExprId) -> String {
+    val expression = syntaxExpr(file: file, id: id)
+    match expression.kind {
+        SyntaxExprKind.Cast => { return "cast(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Unary => { return "unary(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Try => { return "try(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Await => { return "await(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Move => { return "move(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Method => { return "method(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Index => { return "index(" + directShape(file: file, id: expression.child0) + ")" }
+        SyntaxExprKind.Binary => { return "binary(" + directShape(file: file, id: expression.child0) + "," + directShape(file: file, id: expression.child1) + ")" }
+        SyntaxExprKind.Ident => { return "name" }
+        _ => { return "unexpected" }
+    }
+}
+
+fn valueShape(expression: ExprAst) -> String {
+    match expression {
+        ExprAst.Cast(operand: val operand, ty: _, span: _) => { return "cast(" + valueShape(expression: operand) + ")" }
+        ExprAst.Unary(op: _, operand: val operand, span: _) => { return "unary(" + valueShape(expression: operand) + ")" }
+        ExprAst.Try(operand: val operand, span: _) => { return "try(" + valueShape(expression: operand) + ")" }
+        ExprAst.Await(operand: val operand, span: _) => { return "await(" + valueShape(expression: operand) + ")" }
+        ExprAst.Move(operand: val operand, isBorrow: _, span: _) => { return "move(" + valueShape(expression: operand) + ")" }
+        ExprAst.Method(recv: val receiver, name: _, nameSpan: _, args: _, span: _) => { return "method(" + valueShape(expression: receiver) + ")" }
+        ExprAst.Index(base: val base, index: _, span: _) => { return "index(" + valueShape(expression: base) + ")" }
+        ExprAst.Binary(op: _, lhs: val first, rhs: val second, span: _) => { return "binary(" + valueShape(expression: first) + "," + valueShape(expression: second) + ")" }
+        ExprAst.Ident(name: _, span: _) => { return "name" }
+        _ => { return "unexpected" }
+    }
+}
+
+fn check(source: String) {
+    val program = "fn main() { val value = " + source + " }\n"
+    mut val lexer = <Lexer bytes=program.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=program.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val root = syntaxFileTopLevel(file: file, index: 0U64)
+    val decl = syntaxDecl(file: file, id: <DeclId raw=syntaxTopItemPayload(file: file, item: root) />)
+    val block = syntaxBlock(file: file, id: decl.body)
+    val stmt = syntaxStmt(file: file, id: syntaxBlockStmt(file: file, block: block, index: 0U64))
+    print(directShape(file: file, id: stmt.child0))
+    print(valueShape(expression: parseExprFrom(source: source, start: 0U64)))
+}
+
+fn main() {
+    check(source: "-value as I64")
+    check(source: "!value as Bool")
+    check(source: "~value as U64")
+    check(source: "value as I32 as I64")
+    check(source: "-value.method()[index] as I64 + other as I64")
+    check(source: "try value.method() as I64")
+    check(source: "await value.method() as I64")
+    check(source: "move value as Wrapped")
+    check(source: "borrow value as Wrapped")
+    check(source: "(value as Wrapped).method()")
+    check(source: "-(value as I64)")
+}
