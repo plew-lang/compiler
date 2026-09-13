@@ -516,5 +516,19 @@ pub impl Comp {
                 }
             }
         }
+        // A direct unsuffixed numeric literal is materialized in the explicit
+        // cast context. Preserve that checked context for Record and Mid,
+        // just as annotated values and selected call parameters already do.
+        if targetNum {
+            match self.arena.exprs[operand] {
+                Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
+                    if !isBool && suffixLen == 0U64 {
+                        self.checkLitTi(id: operand, ti: <TypeInfo kind=0U64 nameStart=tyStart nameLen=tyLen />)
+                    }
+                }
+                _ => {}
+            }
+        }
+
     }
 }
