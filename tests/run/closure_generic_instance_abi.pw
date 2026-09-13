@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+fn selected[T](first: T, second: T) -> T {
+    val select: fn(first: T, second: T) -> T = fn(first: T, second: T) -> T { return second }
+    return select(first: first, second: second)
+}
+
+fn main() {
+    print(selected(first: 42I64, second: 99I64))
+    print(selected(first: 1.5F64, second: 2.5F64))
+}
