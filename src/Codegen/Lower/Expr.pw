@@ -341,9 +341,9 @@ pub impl Comp {
     // Range syntax is fixed sugar for ordinary aggregate construction. Keep
     // both endpoint expressions in source order and let the common Make
     // inference/checking pipeline determine their element type.
-    inout fn lowerSyntaxRange(expr: SyntaxExpr, ctxRef: U64 = 0U64) -> U64 {
+    inout fn lowerRangeConstruction(low: U64, high: U64, inclusive: Bool, span: Span, ctxRef: U64 = 0U64, elementRef: U64 = 0U64) -> U64 {
         mut val name: String = "HalfOpenRange"
-        if expr.flag0 { name = "ClosedRange" }
+        if inclusive { name = "ClosedRange" }
         val typeName: Bind = self.internBytes(s: name)
         val startName: Bind = self.internBytes(s: "start")
         val endName: Bind = self.internBytes(s: "end")
@@ -352,16 +352,23 @@ pub impl Comp {
             val context: TypeRef = self.arena.typeAt(index: ctxRef)
             if context.nameId == typeName.nameId && context.args.count() > 0U64 { typeRef = ctxRef }
         }
-        val low: U64 = self.lowerSyntaxExpr(id: expr.child0)
-        val high: U64 = self.lowerSyntaxExpr(id: expr.child1)
+        if elementRef != 0U64 {
+            typeRef = self.pushType(t: <TypeRef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId args=[elementRef] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        }
         val fields: Array[MakeField] = [
-            <MakeField nameStart=startName.nameStart nameLen=startName.nameLen value=low offset=expr.span.start />,
-            <MakeField nameStart=endName.nameStart nameLen=endName.nameLen value=high offset=expr.span.start />
+            <MakeField nameStart=startName.nameStart nameLen=startName.nameLen value=low offset=span.start />,
+            <MakeField nameStart=endName.nameStart nameLen=endName.nameLen value=high offset=span.start />
         ]
         val result: U64 = self.pushExpr(e: <Expr.Make typeStart=typeName.nameStart typeLen=typeName.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=typeRef fields=self.pushMakeFields(fields: fields) />)
-        self.arena.exprSpanStart[result] = expr.span.start
-        self.arena.exprSpanEnd[result] = expr.span.end
+        self.arena.exprSpanStart[result] = span.start
+        self.arena.exprSpanEnd[result] = span.end
         return result
+    }
+
+    inout fn lowerSyntaxRange(expr: SyntaxExpr, ctxRef: U64 = 0U64) -> U64 {
+        val low: U64 = self.lowerSyntaxExpr(id: expr.child0)
+        val high: U64 = self.lowerSyntaxExpr(id: expr.child1)
+        return self.lowerRangeConstruction(low: low, high: high, inclusive: expr.flag0, span: expr.span, ctxRef: ctxRef)
     }
 
     // Context-aware SyntaxFile lowering. This mirrors lowerExprWithCtx without

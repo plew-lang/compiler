@@ -1004,15 +1004,17 @@ pub impl Comp {
                 }
                 mut val vtStart: U64 = 0
                 mut val vtLen: U64 = 0
+                mut val elementRef: U64 = 0U64
                 if hasVarTy {
                     val vpt: PType = self.lowerType(t: varTy)
                     vtStart = vpt.start
                     vtLen = vpt.len
+                    elementRef = vpt.ref
                 }
-                val lo: U64 = self.lowerExpr(e: iter)
-                mut val hi: U64 = 0
+                mut val lo: U64 = self.lowerExpr(e: iter)
                 if isRange {
-                    hi = self.lowerExpr(e: rangeHi)
+                    val hi: U64 = self.lowerExpr(e: rangeHi)
+                    lo = self.lowerRangeConstruction(low: lo, high: hi, inclusive: inclusive, span: <Span start=exprAstSpan(e: iter).start end=exprAstSpan(e: rangeHi).end />, elementRef: elementRef)
                 }
                 val bd: U64 = self.lowerBlock(b: body)
                 mut val pStart: U64 = 0
@@ -1023,7 +1025,7 @@ pub impl Comp {
                     pLen = pb.nameLen
                 }
                 val bnds: BindRange = self.lowerBinds(binds: binds)
-                result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
+                result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=false inclusive=false iter=lo rangeHi=0U64 body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = self.lowerExpr(e: scrut)
@@ -1204,14 +1206,20 @@ pub impl Comp {
         }
         mut val varTyStart: U64 = 0U64
         mut val varTyLen: U64 = 0U64
+        mut val elementRef: U64 = 0U64
         if stmt.flag0 {
             val ty: PType = self.lowerSyntaxType(id: stmt.type0)
             varTyStart = ty.start
             varTyLen = ty.len
+            elementRef = ty.ref
         }
-        mut val rangeHi: U64 = 0U64
-        if stmt.flag1 { rangeHi = self.lowerSyntaxExpr(id: stmt.child1) }
-        return self.pushStmt(s: <Stmt.For varStart=stmt.name.start varLen=stmt.name.end - stmt.name.start varTyStart=varTyStart varTyLen=varTyLen isRange=stmt.flag1 inclusive=stmt.flag2 iter=self.lowerSyntaxExpr(id: stmt.child0) rangeHi=rangeHi body=self.lowerSyntaxBlock(id: stmt.block0) isStruct=stmt.flag3 patStart=stmt.typeName.start patLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
+        mut val iter: U64 = self.lowerSyntaxExpr(id: stmt.child0)
+        if stmt.flag1 {
+            val rangeHi: U64 = self.lowerSyntaxExpr(id: stmt.child1)
+            val rangeSpan: Span = <Span start=syntaxExpr(file: self.syntax, id: stmt.child0).span.start end=syntaxExpr(file: self.syntax, id: stmt.child1).span.end />
+            iter = self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan, elementRef: elementRef)
+        }
+        return self.pushStmt(s: <Stmt.For varStart=stmt.name.start varLen=stmt.name.end - stmt.name.start varTyStart=varTyStart varTyLen=varTyLen isRange=false inclusive=false iter=iter rangeHi=0U64 body=self.lowerSyntaxBlock(id: stmt.block0) isStruct=stmt.flag3 patStart=stmt.typeName.start patLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
     }
 
     inout fn lowerBlock(b: BlockAst) -> U64 {

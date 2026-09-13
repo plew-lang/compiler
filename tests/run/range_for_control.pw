@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+
+struct Bound { pub val value: I64 pub val label: String }
+pub impl Bound { factory }
+
+fn lower() -> Bound {
+    print("lower")
+    return <Bound value=-2I64 label="he" + "ap" />
+}
+fn upper() -> Bound {
+    print("upper")
+    return <Bound value=3I64 label="en" + "d" />
+}
+fn first() -> String {
+    val result = "he" + "ap"
+    for val value: I8 in -1 ..= 1 {
+        if value == 0I8 { return result }
+    }
+    return "missing"
+}
+fn main() {
+    mut val total: I64 = 0I64
+    for value in lower().value ..< upper().value {
+        if value == -1I64 { continue }
+        if value == 2I64 { break }
+        total += value
+    }
+    print(total)
+    print(first())
+    for value in 18446744073709551614U64 ..= 18446744073709551615U64 {
+        print(value)
+    }
+    for value in 3I64 ..= -1I64 { assert(false) }
+    for value in 2I8 ..< 2I8 { assert(false) }
+    val items: Array[I64] = [10, 20, 30]
+    mut val count: U64 = 0U64
+    for index in 0 ..< items.count() { count += 1U64 }
+    print(count)
+}
