@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# Loop patterns lower to ordinary owned elements and field bindings.
+if sh ./test-mid-for-destructure.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-for-destructure"
+fi
+
 # Raw external symbols and bundled runtime targets retain distinct identities.
 if sh ./test-mid-direct-extern.sh; then
     :

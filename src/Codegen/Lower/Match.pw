@@ -988,44 +988,12 @@ pub impl Comp {
                 result = self.pushStmt(s: <Stmt.While cond=cnd body=bd />)
             }
             StmtAst.For(val varName, varNameSpan: _, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, patTypeSpan: _, val binds, val span) => {
-                // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
-                // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
-                // body (the `__fe` local and bound names are interned; an AST synthetic
-                // `Ident` reads the source by span). The element's struct is tracked by the
-                // for-over-array path.
-                if patType == "__rec__" {
-                    val fe: Bind = self.internBytes(s: "__fe")
-                    val lo2: U64 = self.lowerExpr(e: iter)
-                    val inner: U64 = self.lowerBlock(b: body)
-                    // completeness check input (spec/03) — isElem: the site's type is
-                    // the loop SOURCE's element, not the source itself.
-                    self.decls.destructureSites.append(<DestructureSite initId=lo2 offset=span.start isElem=true binds=self.destructureSiteBinds(binds: binds) />)
-                    mut val bstmts: Array[U64] = []
-                    mut val bi: U64 = 0
-                    while bi < binds.count() {
-                        // a `label: _` discard covers the field without creating a local.
-                        if binds[bi].name.bytes().count() == 0U64 {
-                            bi += 1
-                            continue
-                        }
-                        // field name by SOURCE span (see lowerDestructureInto) — precise
-                        // typo diagnostics; only the bound local's name is interned.
-                        val nameB: Bind = self.internBytes(s: binds[bi].name)
-                        val recv: U64 = self.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
-                        val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=binds[bi].fieldStart nameLen=binds[bi].field.bytes().count() />)
-                        self.arena.exprSpanStart[recv] = binds[bi].span.start
-                        self.arena.exprSpanStart[fld] = binds[bi].span.start
-                        bstmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
-                        bi += 1
-                    }
-                    mut val ob: U64 = 0
-                    while ob < self.blockStmtCount(blkId: inner) {
-                        bstmts.append(self.blockStmtAt(blkId: inner, index: ob))
-                        ob += 1
-                    }
-                    val bd2: U64 = self.pushBlock(stmts: bstmts)
-                    result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=<BindRange start=0U64 len=0U64 /> />)
-                    return result
+                if isStruct || patType == "__rec__" {
+                    val source: U64 = self.lowerExpr(e: iter)
+                    val loopBody: U64 = self.lowerBlock(b: body)
+                    mut val pattern: Bind = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
+                    if patType != "__rec__" { pattern = self.internBytes(s: patType) }
+                    return self.lowerForDestructure(iter: source, body: loopBody, typeStart: pattern.nameStart, typeLen: pattern.nameLen, binds: self.destructureSiteBinds(binds: binds), offset: span.start)
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
@@ -1193,32 +1161,46 @@ pub impl Comp {
         }
     }
 
+    // Both syntax carriers erase record/struct loop patterns at the same
+    // boundary. The element owns its value for one iteration; ordinary field
+    // lets acquire their own copies and ordinary scope exits release them.
+    inout fn lowerForDestructure(iter: U64, body: U64, typeStart: U64, typeLen: U64, binds: BindRange, offset: U64) -> U64 {
+        self.cur.lowerTmpSeq += 1U64
+        val element: Bind = self.internTmpName(prefix: "__fe", n: self.cur.lowerTmpSeq)
+        self.decls.destructureSites.append(<DestructureSite initId=iter offset=offset isElem=true typeStart=typeStart typeLen=typeLen binds=binds />)
+        mut val statements: Array[U64] = []
+        mut val index: U64 = 0U64
+        while index < binds.len {
+            val binding: Bind = self.bindAt(binds: binds, index: index)
+            if binding.nameLen != 0U64 {
+                val receiver: U64 = self.pushExpr(e: <Expr.Ident start=element.nameStart len=element.nameLen />)
+                val field: U64 = self.pushExpr(e: <Expr.Field base=receiver nameStart=binding.fieldStart nameLen=binding.fieldLen />)
+                self.arena.exprSpanStart[receiver] = binding.offset
+                self.arena.exprSpanStart[field] = binding.offset
+                statements.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=binding.nameStart nameLen=binding.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+            }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.blockStmtCount(blkId: body) {
+            statements.append(self.blockStmtAt(blkId: body, index: index))
+            index += 1U64
+        }
+        val expanded: U64 = self.pushBlock(stmts: statements)
+        return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 isRange=false inclusive=false iter=iter rangeHi=0U64 body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+    }
+
     inout fn lowerSyntaxFor(stmt: SyntaxStmt) -> U64 {
-        if stmt.isRecordPattern {
-            val element: Bind = self.internBytes(s: "__fe")
-            val iter: U64 = self.lowerSyntaxExpr(id: stmt.child0)
+        if stmt.isRecordPattern || stmt.flag3 {
+            val source: U64 = self.lowerSyntaxExpr(id: stmt.child0)
             val body: U64 = self.lowerSyntaxBlock(id: stmt.block0)
-            self.decls.destructureSites.append(<DestructureSite initId=iter offset=stmt.span.start isElem=true binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
-            mut val stmts: Array[U64] = []
-            mut val i: U64 = 0U64
-            while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
-                val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxStmtBind(file: self.syntax, stmt: stmt, index: i))
-                if bind.name.end > bind.name.start {
-                    val recv: U64 = self.pushExpr(e: <Expr.Ident start=element.nameStart len=element.nameLen />)
-                    val field: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=bind.field.start nameLen=bind.field.end - bind.field.start />)
-                    self.arena.exprSpanStart[recv] = bind.span.start
-                    self.arena.exprSpanStart[field] = bind.span.start
-                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
-                }
-                i += 1U64
+            mut val typeStart: U64 = 0U64
+            mut val typeLen: U64 = 0U64
+            if !stmt.isRecordPattern {
+                typeStart = stmt.typeName.start
+                typeLen = stmt.typeName.end - stmt.typeName.start
             }
-            i = 0U64
-            while i < self.blockStmtCount(blkId: body) {
-                stmts.append(self.blockStmtAt(blkId: body, index: i))
-                i += 1U64
-            }
-            val expandedBody: U64 = self.pushBlock(stmts: stmts)
-            return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 isRange=false inclusive=false iter=iter rangeHi=0U64 body=expandedBody isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+            return self.lowerForDestructure(iter: source, body: body, typeStart: typeStart, typeLen: typeLen, binds: self.syntaxDestructureSiteBinds(stmt: stmt), offset: stmt.span.start)
         }
         mut val varTyStart: U64 = 0U64
         mut val varTyLen: U64 = 0U64

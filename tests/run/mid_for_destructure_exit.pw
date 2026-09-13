@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+
+struct Row { pub val text: String pub val number: I64 }
+pub impl Row { factory }
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+fn first[T](items: Array[Box[T]], fallback: T) -> T {
+    for Box { val value } in items { return value }
+    return fallback
+}
+
+fn visit() -> String {
+    val rows: Array[Row] = [<Row text="sk" + "ip" number=0I64 />, <Row text="u" + "se" number=1I64 />]
+    mut val result: String = ""
+    for Row { val text, val number } in rows {
+        if number == 0I64 { continue }
+        for Row { text: val nested, number: _ } in rows {
+            result = result + nested
+            break
+        }
+        result = result + text
+        break
+    }
+    return result
+}
+
+fn main() {
+    print(visit())
+    print(first(items: [<Box value="he" + "ap" />], fallback: "none"))
+    print(first(items: [<Box value=42I64 />], fallback: 0I64))
+}
