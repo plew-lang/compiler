@@ -7,7 +7,8 @@
 # does not exercise. Exits non-zero on the first mismatch.
 set -e
 ROOT=$(cd "$(dirname "$0")" && pwd)
-PLEWC="$ROOT/plewc"
+PLEWC="${PLEWC:-$ROOT/plewc}"
+case "$PLEWC" in /*) ;; *) PLEWC="$(pwd)/$PLEWC" ;; esac
 CC=${CC:-clang}
 [ -x "$PLEWC" ] || { echo "test-deps: $PLEWC missing — run ./bootstrap.sh" >&2; exit 1; }
 
@@ -16,9 +17,17 @@ export PLEW_CACHE="$WORK/cache"
 trap 'rm -rf "$WORK"' EXIT
 
 # Build the resolver binary (libc only, like any compiled program).
+echo "test-deps: build fresh resolver" >&2
 "$PLEWC" "$ROOT/resolve/_.pw" > "$WORK/resolve.ll"
 "$PLEWC" --runtime > "$WORK/rt.c"
 "$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/plew-resolve"
+# Exercise the unmodified CLI with the selected compiler and fresh resolver.
+# Its sibling lookup must not pick the repository binary or cached resolver.
+cp "$ROOT/plew" "$WORK/plew"
+ln -s "$PLEWC" "$WORK/plewc"
+ln -s "$ROOT/std" "$WORK/std"
+ln -s "$ROOT/resolve" "$WORK/resolve"
+echo "test-deps: resolver built; exercising dependency fixtures" >&2
 
 # Fixtures model unsigned upstream repositories.  Do not inherit a developer's
 # global signing policy: this test exercises resolver semantics, not GPG setup.
@@ -48,6 +57,18 @@ check() { # name expected actual
     if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: expected [$2] got [$3]"; fail=1; fi
 }
 
+check_run() {
+    case_name=$1; expected_output=$2; shift 2
+    execution_exit=0
+    actual_output=$("$@") || execution_exit=$?
+    if [ "$execution_exit" -ne 0 ]; then
+        echo "FAIL $case_name: command exited $execution_exit"
+        fail=1
+    else
+        check "$case_name" "$expected_output" "$actual_output"
+    fi
+}
+
 # --- consumer 1: direct git dep, version "1" -> latest 1.x = 1.2.0 ---
 A1="$WORK/app1"; mkdir -p "$A1"
 cat > "$A1/Plew.toml" <<EOF
@@ -60,7 +81,7 @@ printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn mai
 check "lock picks 1.2.0" "1.2.0" "$(grep -A2 '\[\[package\]\]' "$A1/Plew.lock" | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/')"
 "$PLEWC" "$A1/Main.pw" > "$WORK/a1.ll"
 "$CC" -w "$WORK/a1.ll" "$WORK/rt.c" -o "$WORK/a1"
-check "direct git dep runs" "42" "$("$WORK/a1")"
+check_run "direct git dep runs" "42" "$WORK/a1"
 
 # --- consumer 2: transitive git dep (app2 -> Mid -> Acme/Greet) ---
 A2="$WORK/app2"; mkdir -p "$A2"
@@ -74,7 +95,7 @@ printf 'import @Std/Io with { print }\nimport @Mid with { midVal }\nfn main() { 
 check "transitive lock has 2 pkgs" "2" "$(grep -c '\[\[package\]\]' "$A2/Plew.lock")"
 "$PLEWC" "$A2/Main.pw" > "$WORK/a2.ll"
 "$CC" -w "$WORK/a2.ll" "$WORK/rt.c" -o "$WORK/a2"
-check "transitive git dep runs" "43" "$("$WORK/a2")"
+check_run "transitive git dep runs" "43" "$WORK/a2"
 
 # --- the `plew` driver: explicit resolve + auto-resolve on a fresh consumer ---
 A3="$WORK/app3"; mkdir -p "$A3"
@@ -85,12 +106,12 @@ name = "app3"
 EOF
 printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A3/Main.pw"
 # explicit resolve (version "1.0" pins 1.0.x -> 1.0.0)
-"$ROOT/plew" resolve "$A3" >/dev/null 2>&1
+"$WORK/plew" resolve "$A3" >/dev/null 2>&1
 check "driver resolve pins 1.0.0" "1.0.0" "$(grep 'version = "' "$A3/Plew.lock" | head -1 | sed 's/.*"\(.*\)".*/\1/')"
-check "driver run after resolve" "42" "$("$ROOT/plew" run "$A3/Main.pw" 2>/dev/null)"
+check_run "driver run after resolve" "42" "$WORK/plew" run "$A3/Main.pw"
 # auto-resolve: remove the lock, a bare run must regenerate it and still work
 rm -f "$A3/Plew.lock"
-check "driver auto-resolves on run" "42" "$("$ROOT/plew" run "$A3/Main.pw" 2>/dev/null)"
+check_run "driver auto-resolves on run" "42" "$WORK/plew" run "$A3/Main.pw"
 check "auto-resolve wrote the lock" "1" "$([ -f "$A3/Plew.lock" ] && echo 1 || echo 0)"
 
 # --- multi-major coexistence: two versions of one lib in a single build ---
@@ -126,7 +147,7 @@ printf 'import @Std/Io with { print }\nimport @MidA with { va }\nimport @MidB wi
 check "lock holds both L2 versions" "2" "$(grep -c "git = \"$L2\"" "$A4/Plew.lock")"
 "$PLEWC" "$A4/Main.pw" > "$WORK/a4.ll"
 "$CC" -w "$WORK/a4.ll" "$WORK/rt.c" -o "$WORK/a4"
-check "coexisting versions each bind own export" "101" "$("$WORK/a4")"
+check_run "coexisting versions each bind own export" "101" "$WORK/a4"
 
 echo "----"
 if [ "$fail" = 0 ]; then echo "test-deps: all green"; else echo "test-deps: FAILURES"; exit 1; fi

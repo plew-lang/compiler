@@ -163,3 +163,12 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-preparation-') as directory:
         assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
         assert 'diagnostic:' in result.stdout, result
         print(f'PASS asan-preparation/{index}', flush=True)
+
+# Dependency CLI checks must not hide a failing command behind matching stdout.
+deps = Path(__file__).with_name('test-deps.sh').read_text()
+helpers = deps.split('fail=0\n', 1)[1].split('# --- consumer 1:', 1)[0]
+for code in (0, 7, 143):
+    script = 'fail=0\n' + helpers + '\ncheck_run fixture expected sh -c "printf expected; exit $1"\nexit "$fail"\n'
+    result = subprocess.run(['sh','-c',script,'sh',str(code)],capture_output=True,text=True)
+    assert result.returncode == (0 if code == 0 else 1), result
+    print(f'PASS deps-status/{code}', flush=True)
