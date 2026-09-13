@@ -954,7 +954,10 @@ pub impl Comp {
         if !(self.cur.recordCallTemplates) { return }
         val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
         if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return }
-        val scrutinee: TypeRef = self.arena.typeAt(index: scrutineeTerm)
+        // Patterns select the lexical declaration's shape, while the match
+        // fact retains the original value type for BodyInstance grounding.
+        val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: scrutineeTerm)
+        val scrutinee: TypeRef = self.arena.typeAt(index: layoutReceiver)
         val enumIndex: U64 = self.anyEnumIndex(nameStart: scrutinee.nameStart, nameLen: scrutinee.nameLen)
         if enumIndex >= self.arena.enumCount() { return }
         mut val selectedArms: Array[SemanticMatchArm] = []
@@ -980,7 +983,7 @@ pub impl Comp {
                             fieldIndex += 1U64
                         }
                         if fieldIndex >= fields.count() { return }
-                        val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: scrutineeTerm, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
+                        val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: layoutReceiver, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
                         if fieldTerm == 0U64 { return }
                         val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                         if fieldIndex >= fields.count() { return }
@@ -1108,9 +1111,10 @@ pub impl Comp {
         self.cur.recordingAccessWriteFacet = false
     }
 
-    // Field and Arrow share the same declaration-time selection. Arrow's
-    // receiver term is its pointee; Mid must not repeat this layout lookup.
-    inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) {
+    // Declaration layout selection is separate from the value's lexical type.
+    // Keep Self in operand/signature facts so each BodyInstance can substitute
+    // its nominal receiver, including an inherited newtype receiver.
+    inout fn lexicalLayoutReceiver(receiverTerm: U64) -> U64 {
         // A bare lexical Self selects the declaration's field layout. Keep
         // the parameter and expression type unchanged: inherited newtype
         // bodies must still substitute Self to the new nominal receiver.
@@ -1122,6 +1126,13 @@ pub impl Comp {
                 layoutReceiver = self.groundTermInEnvironment(ref: receiverTerm, params: [], values: [], selfRef: self.cur.selfRef, itemRef: 0U64)
             }
         }
+        return layoutReceiver
+    }
+
+    // Field and Arrow share the same declaration-time selection. Arrow's
+    // receiver term is its pointee; Mid must not repeat this layout lookup.
+    inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) {
+        val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: receiverTerm)
         val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
         val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen)
         if fieldTerm != 0U64 {
