@@ -6,6 +6,16 @@
 
 pub impl LlvmCtx {
 
+    // Even empty parameter and argument vectors have distinct nominal handle
+    // types. Keep this physical runtime-call ABI construction shared by the
+    // prepared Mid emitter and the remaining source emitter.
+    inout fn emitRuntimeCallWithoutArguments(c: inout Comp, name: String, resultType: LLVMTypeRef) -> LLVMValueRef {
+        val parameters: Array[LLVMTypeRef] = []
+        val values: Array[LLVMValueRef] = []
+        val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(parameters), 0U64, 0I32)
+        return LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: name, fnTy: signature), arrayCPtr(values), 0U64, anon())
+    }
+
     // C scalar/pointer ABI slice. Consume grounded types, never recover a
     // signature from the spelling at a call site. Narrow integers require
     // target ABI extension attributes; aggregates require C classification.

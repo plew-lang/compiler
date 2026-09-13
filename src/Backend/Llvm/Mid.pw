@@ -1184,9 +1184,7 @@ pub impl LlvmCtx {
                             LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_writeByte", fnTy: signature), arrayCPtr(values), 1U64, anon())
                         }
                         IoIntrinsic.ReadStdin => {
-                            mut val parameters: Array[LLVMTypeRef] = []
-                            val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 0U64, 0I32)
-                            val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_readStdin", fnTy: signature), arrayCPtr(parameters), 0U64, anon())
+                            val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_readStdin", resultType: self.stringLlvmTy(c: inout c))
                             llvmStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                         }
                         IoIntrinsic.ReadFile => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", retTy: self.stringLlvmTy(c: inout c), path: self.midEmitOperand(c: inout c, body: body, operand: args[0U64])), self.midLocalPtr(body: body, local: destination.local)) }
@@ -1201,9 +1199,7 @@ pub impl LlvmCtx {
                 RuntimeIntrinsic.Process(intrinsic: val process) => {
                     match process {
                         ProcessIntrinsic.ArgCount => {
-                            mut val p: Array[LLVMTypeRef] = []
-                            val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
-                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argCount", fnTy: ty), arrayCPtr(p), 0U64, anon())
+                            val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_argCount", resultType: self.i64ty)
                             llvmStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                         }
                         ProcessIntrinsic.ArgAt => {
@@ -1220,9 +1216,7 @@ pub impl LlvmCtx {
                             llvmStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                         }
                         ProcessIntrinsic.ExecCode => {
-                            mut val p: Array[LLVMTypeRef] = []
-                            val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
-                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_execCode", fnTy: ty), arrayCPtr(p), 0U64, anon())
+                            val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_execCode", resultType: self.i64ty)
                             llvmStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                         }
                         ProcessIntrinsic.Exit => {
@@ -3106,9 +3100,7 @@ pub impl LlvmCtx {
                                 LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_writeByte", fnTy: signature), arrayCPtr(values), 1U64, anon())
                             }
                             IoIntrinsic.ReadStdin => {
-                                mut val parameters: Array[LLVMTypeRef] = []
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 0U64, 0I32)
-                                val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_readStdin", fnTy: signature), arrayCPtr(parameters), 0U64, anon())
+                                val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_readStdin", resultType: self.stringLlvmTy(c: inout c))
                                 llvmStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
                             IoIntrinsic.ReadFile => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
@@ -3123,9 +3115,7 @@ pub impl LlvmCtx {
                     RuntimeIntrinsic.Process(intrinsic: val process) => {
                         match process {
                             ProcessIntrinsic.ArgCount => {
-                                mut val parameters: Array[LLVMTypeRef] = []
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 0U64, 0I32)
-                                llvmStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_argCount", fnTy: signature), arrayCPtr(parameters), 0U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                                llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_argCount", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
                             ProcessIntrinsic.ArgAt => {
                                 mut val parameters: Array[LLVMTypeRef] = []
@@ -3137,9 +3127,7 @@ pub impl LlvmCtx {
                             }
                             ProcessIntrinsic.ExecOut => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_execOut", retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
                             ProcessIntrinsic.ExecCode => {
-                                mut val parameters: Array[LLVMTypeRef] = []
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 0U64, 0I32)
-                                llvmStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_execCode", fnTy: signature), arrayCPtr(parameters), 0U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                                llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_execCode", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
                             ProcessIntrinsic.Exit => {
                                 mut val parameters: Array[LLVMTypeRef] = []
