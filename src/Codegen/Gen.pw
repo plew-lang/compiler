@@ -93,6 +93,9 @@ pub impl Comp {
             // (a type/trait implementing `Derive`), so all are run the same way.
             // directive arguments must set publicly-settable fields (enforce the
             // construction rule the post-checks pass skipped for this synthetic Make).
+            // The annotation names a source declaration before the trusted
+            // harness is synthesized. Apply ordinary import visibility here.
+            self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
             self.checkDirectiveArgsPublic(d: d)
             // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
             // annotated item's own source slice, with its original offset so the macro
