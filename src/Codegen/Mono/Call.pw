@@ -2784,6 +2784,24 @@ pub impl Comp {
         }
     }
 
+    // A value boundary consumes the same Record-time type source as Mid.
+    // A selected call owns a result dependency; its callee binder must not be
+    // substituted as though it belonged to the caller. Pending templates only
+    // record expected context for non-call expressions and own no call result.
+    inout fn groundRecordedValueTypeForBody(bodyId: U64, exprId: U64, term: U64, selfRef: U64, itemRef: U64) -> U64 {
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return 0U64 }
+        val body: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val template = self.callTemplateForSourceBody(fnIdx: body.fnIdx, exprId: exprId)
+        match template.kind {
+            CallTemplateKind.Pending => {
+                return self.groundTermForBody(ref: term, environment: body.environment, selfRef: selfRef, itemRef: itemRef)
+            }
+            _ => {
+                return self.groundSemanticTypeRecipeForBody(recipeId: template.resultTypeRecipe, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef)
+            }
+        }
+    }
+
     inout fn finalValueConversion(sourceRef: U64, targetRef: U64) -> ValueConversionProof {
         val conversion: ValueConversionProof = self.callArgumentConversion(sourceRef: sourceRef, targetRef: targetRef)
         self.finalizeConversionDependencies(conversion: conversion)
@@ -2792,7 +2810,7 @@ pub impl Comp {
 
     inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64, shadowedBindingTarget: U64 = 0U64) {
         if self.currentBodyInstanceId() == 0U64 { return }
-        val sourceRef: U64 = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val conversion: ValueConversionProof = self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef shadowedBindingTarget=shadowedBindingTarget conversion=self.freezeValueConversionProof(proof: conversion) />)
@@ -3134,7 +3152,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < aggregate.elements.count() {
             val element: SemanticAggregateElement = aggregate.elements[i]
-            val sourceRef: U64 = self.groundTermForBody(ref: element.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             val targetRef: U64 = self.groundTermForBody(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             targets.append(targetRef)
             conversions.append(self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
@@ -3246,7 +3264,7 @@ pub impl Comp {
         if bodyId == 0U64 || self.cur.bodyFnIdx >= self.arena.functionCount() { return }
         val f: Func = self.arena.functionAt(index: self.cur.bodyFnIdx)
         val targetRef: U64 = self.groundTermForBody(ref: f.retTy, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        mut val sourceRef: U64 = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         // A direct record aggregate in return position has one ABI authority:
         // the declared return TypeTerm.  Its parametric aggregate carrier owns
         // source evaluation order, while this finalization supplies the
@@ -3269,7 +3287,7 @@ pub impl Comp {
                     if element.fieldIndex >= target.recordFieldTerms.count() {
                         complete = false
                     } else {
-                        val source: U64 = self.groundTermForBody(ref: element.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        val source: U64 = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                         val fieldTarget: U64 = target.recordFieldTerms[element.fieldIndex]
                         targets.append(fieldTarget)
                         conversions.append(self.finalValueConversion(sourceRef: source, targetRef: fieldTarget))
