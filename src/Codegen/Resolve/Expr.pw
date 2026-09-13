@@ -1118,6 +1118,51 @@ pub impl Comp {
         self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
     }
 
+    // Select bidirectional construction context without recording its children.
+    // Callers can establish the instance before visiting declaration defaults;
+    // a written nominal specialization still owns its type arguments.
+    inout fn makeAcceptsExpectedTerm(exprId: U64, writtenTerm: U64, isEnum: Bool, fields: MakeFieldRange, expectedTerm: U64) -> Bool {
+        if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return false }
+        val expected = self.arena.typeTerms[expectedTerm]
+        mut val acceptsContext: Bool = false
+        // Structural record literals are bidirectional constructions.
+        // Their synthetic layout declaration is not the owner of a
+        // surrounding generic field's binders. Keep the expected
+        // record's labelled children as the semantic slot types.
+        if expected.isRecord && !isEnum && writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() && self.arena.typeTerms[writtenTerm].isRecord && fields.len == expected.recordFieldTerms.len {
+            acceptsContext = true
+            mut val fieldIndex: U64 = 0U64
+            while fieldIndex < fields.len {
+                val field = self.makeFieldAt(fields: fields, index: fieldIndex)
+                if self.fieldIndexOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen) >= expected.recordFieldTerms.len { acceptsContext = false }
+                fieldIndex += 1U64
+            }
+        }
+        if expected.hasDecl && expected.args.len > 0U64 && !expected.hasTopLevelView() {
+            if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() {
+                val written = self.arena.typeTerms[writtenTerm]
+                acceptsContext = written.args.len == 0U64 && written.hasDecl && written.declOffset == expected.declOffset && !written.hasTopLevelView()
+            } else if isEnum {
+                // An enum constructor without written arguments has
+                // no AST TypeRef. Its selected aggregate declaration
+                // supplies identity; do not recover it by head spelling.
+                val aggregateIndex = self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId)
+                if aggregateIndex < self.decls.semanticAggregates.count() {
+                    match self.decls.semanticAggregates[aggregateIndex].kind {
+                        SemanticAggregateKind.Enum(enumIdx: val enumIndex, variantIndex: _) => {
+                            if enumIndex < self.arena.enumCount() {
+                                val declaration = self.arena.enumAt(index: enumIndex)
+                                acceptsContext = declaration.defOffset == expected.declOffset && declaration.typeParams.count() == expected.args.len
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        return acceptsContext
+    }
+
     // Record the expected result at a semantic statement boundary.  It is not
     // a replacement expression type: an uninstantiated generic call still
     // owns its callee return TypeTerm.  Keeping the two facts distinct lets a
@@ -1135,43 +1180,7 @@ pub impl Comp {
         // reconstructs it from an element literal or method receiver query.
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
-                val expected = self.arena.typeTerms[expectedTerm]
-                mut val acceptsContext: Bool = false
-                // Structural record literals are bidirectional constructions.
-                // Their synthetic layout declaration is not the owner of a
-                // surrounding generic field's binders. Keep the expected
-                // record's labelled children as the semantic slot types.
-                if expected.isRecord && !isEnum && writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() && self.arena.typeTerms[writtenTerm].isRecord && fields.len == expected.recordFieldTerms.len {
-                    acceptsContext = true
-                    mut val fieldIndex: U64 = 0U64
-                    while fieldIndex < fields.len {
-                        val field = self.makeFieldAt(fields: fields, index: fieldIndex)
-                        if self.fieldIndexOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen) >= expected.recordFieldTerms.len { acceptsContext = false }
-                        fieldIndex += 1U64
-                    }
-                }
-                if expected.hasDecl && expected.args.len > 0U64 && !expected.hasTopLevelView() {
-                    if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() {
-                        val written = self.arena.typeTerms[writtenTerm]
-                        acceptsContext = written.args.len == 0U64 && written.hasDecl && written.declOffset == expected.declOffset && !written.hasTopLevelView()
-                    } else if isEnum {
-                        // An enum constructor without written arguments has
-                        // no AST TypeRef. Its selected aggregate declaration
-                        // supplies identity; do not recover it by head spelling.
-                        val aggregateIndex = self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId)
-                        if aggregateIndex < self.decls.semanticAggregates.count() {
-                            match self.decls.semanticAggregates[aggregateIndex].kind {
-                                SemanticAggregateKind.Enum(enumIdx: val enumIndex, variantIndex: _) => {
-                                    if enumIndex < self.arena.enumCount() {
-                                        val declaration = self.arena.enumAt(index: enumIndex)
-                                        acceptsContext = declaration.defOffset == expected.declOffset && declaration.typeParams.count() == expected.args.len
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
+                val acceptsContext: Bool = self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm)
                 if acceptsContext {
                         self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                         mut val fieldIndex: U64 = 0U64

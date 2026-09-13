@@ -1147,7 +1147,7 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64) {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) {
         // This full lexical semantic walk is observable only in phase tracing.
         // Reuse the existing transient work counter so normal compilation gains
         // neither stored state nor a second diagnostic traversal.
@@ -1514,16 +1514,29 @@ pub impl Comp {
                 self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                // First collect every field's semantic type in this lexical
-                // environment. Early global inference cannot resolve a local
-                // receiver's method result, and field order must not decide
-                // whether a sibling literal receives its inferred context.
+                // A declared slot is an input to construction, not a fact
+                // recovered after recording its children. Select only context
+                // compatible with the written declaration/type arguments.
+                mut val instance: U64 = ty
+                if self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: ty, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm) {
+                    instance = expectedTerm
+                }
                 mut val i: U64 = 0U64
                 while i < fields.len {
-                    self.recordExpr(exprId: self.makeFieldAt(fields: fields, index: i).value, chainHoleRef: chainHoleRef)
+                    val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+                    mut val fieldTerm: U64 = 0U64
+                    if instance != 0U64 {
+                        if isEnum {
+                            fieldTerm = self.typedIrRefOfInfo(ti: self.genericEnumFieldTypeInfo(instRef: instance, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                        } else {
+                            fieldTerm = self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                        }
+                    }
+                    self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
                     i += 1U64
                 }
-                mut val instance: U64 = ty
+                // Constructions without sufficient declared context infer
+                // from the collected field terms, independent of field order.
                 if !isEnum && !self.isGenericInst(ref: instance) {
                     val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
                     if inferred != 0U64 { instance = inferred }
@@ -1791,6 +1804,9 @@ pub impl Comp {
                 self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
             }
         }
+        if expectedTerm != 0U64 {
+            self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+        }
         // Record only after child terms and fallback literal adapters are
         // available. The template is the unique semantic input for operator
         // finalization; Mono must not reopen this Binary/Unary expression.
@@ -1813,24 +1829,21 @@ pub impl Comp {
     inout fn recordStmt(stmtId: U64) {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                self.recordExpr(exprId: init)
-                self.recordSemanticExprExpectedResult(exprId: init, expectedTerm: ty)
+                self.recordExpr(exprId: init, expectedTerm: ty)
                 self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
                 self.recordExpr(exprId: target)
-                self.recordExpr(exprId: value)
                 val expected: U64 = self.parametricExprTerm(exprId: target)
-                self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
+                self.recordExpr(exprId: value, expectedTerm: expected)
                 self.recordArrayLitCtx(exprId: value, ctxRef: expected)
             }
             Stmt.ExprStmt(val expr) => { self.recordExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
-                    self.recordExpr(exprId: value)
                     val expected: U64 = self.semanticBodyReturnTerm(fnIdx: self.cur.checkFn)
-                    self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
+                    self.recordExpr(exprId: value, expectedTerm: expected)
                     self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                 }
             }
