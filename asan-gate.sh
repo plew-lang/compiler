@@ -76,15 +76,15 @@ fail=0
 # an object → error).
 
 echo "== building instrumented plewc_asan =="
-"$PLEWC" --asan src/_.pw > "$TMP/pc.ll"
-"$OPT" -passes=asan -S "$TMP/pc.ll" -o "$TMP/pc.inst.ll" 2>/dev/null
+python3 ./trace-command.py "$TMP/build.err" -- "$PLEWC" --trace-phases --asan src/_.pw > "$TMP/pc.ll"
+python3 ./trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan -S "$TMP/pc.ll" -o "$TMP/pc.inst.ll"
 # std/prelude resolution is relative to the compiler binary's directory, so the
 # instrumented compiler must live in compiler/ (removed on exit).
-"$CLANG" -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
+python3 ./trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
 echo "== A. self-compile under ASan =="
-if ! ./plewc_asan src/_.pw > /dev/null 2>"$TMP/self.err"; then
+if ! python3 ./trace-command.py "$TMP/self.err" -- ./plewc_asan --trace-phases src/_.pw > /dev/null; then
     if grep -q "ERROR: AddressSanitizer" "$TMP/self.err"; then
         echo "  FAIL self-compile:"; grep -A3 "ERROR: AddressSanitizer" "$TMP/self.err" | head -8
     else
