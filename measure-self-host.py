@@ -45,7 +45,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     state = dict(schema='self-host-measure-v2', status='running', carrier=str(carrier),
                  carrier_sha256=digest(carrier), source=str(source), runs=runs,
-                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-w', '-O2', '<llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
+                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
                  llvm_config=config, llvm_version=subprocess.check_output([config, '--version'], text=True).strip(),
                  clang_version=subprocess.check_output([clang, '--version'], text=True).strip(),
                  generations=[], measurements=[])
@@ -102,7 +102,7 @@ def main():
             # progress and bound inactivity, rather than killing a progressing
             # optimized link after an arbitrary total wall time.
             subprocess.run([sys.executable, './trace-command.py', str(directory / 'link.log'), '--',
-                            clang, '-Xclang', '-fdebug-pass-manager', '-w', '-O2',
+                            clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2',
                             str(directory / 'compiler.ll'), str(directory / 'runtime.c'),
                             '-L' + libdir, '-lLLVM', '-o', str(successor)], check=True)
             (successor.parent / 'std').symlink_to(Path('std').absolute(), target_is_directory=True)
