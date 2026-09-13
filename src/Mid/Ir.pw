@@ -663,8 +663,10 @@ export struct MidLocalDecl {
     // A match payload borrow aliases a live scrutinee. It is a usable source
     // Place but never owns the representation stored in its local slot.
     pub val isBorrowed: Bool = false
-    // An inout parameter's Place is supplied directly by the caller ABI; it
-    // is not a value copied into a callee-owned local slot.
+    // A writable borrowed Place keeps the owner's value live across this
+    // body. For parameters it is supplied directly by the caller ABI; for a
+    // captured cell it is supplied by the closure environment. It allows
+    // replacement, but neither consuming the place nor releasing its owner.
     pub val isInout: Bool = false
     // A mutable lexical binding captured by a closure is represented by one
     // reference-counted cell. The binding target remains this local's stable

@@ -390,7 +390,8 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 if !canonicalMidWritablePhysicalPath(c: c, body: body, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 // A pointee drop is only the release half of a replacement,
                 // never disposal of a separately owned aggregate/root.
-                if canonicalMidPlaceHasDeref(c: c, place: place) {
+                val writableBorrow: Bool = place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isInout
+                if canonicalMidPlaceHasDeref(c: c, place: place) || writableBorrow {
                     if statementI + 1U64 >= block.statements.len { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                     val following = c.mid.statements[block.statements.start + statementI + 1U64]
                     if following.tag != 2U64 || !canonicalMidSamePlace(c: c, leftId: statement.destination, rightId: following.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
@@ -414,7 +415,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if statement.tag == 10U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() || place.local >= body.locals.len || !c.mid.locals[body.locals.start + place.local].isCaptureCell {
+                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() || place.local >= body.locals.len || (!c.mid.locals[body.locals.start + place.local].isCaptureCell || c.mid.locals[body.locals.start + place.local].isBorrowed || c.mid.locals[body.locals.start + place.local].isInout) {
                     return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local />
                 }
                 match states[place.local] {
@@ -425,7 +426,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
             if statement.tag == 4U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() || place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() || place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed || c.mid.locals[body.locals.start + place.local].isInout { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 if statement.flag >= body.locals.len || !c.mid.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
                 match states[place.local] {
                     MidOwnership.MaybeOwned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }

@@ -2399,8 +2399,8 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
     // Environment entries are available for the activation but owned by the
     // closure environment. Value captures are borrowed values; cell captures
     // are writable logical places backed by an environment-owned cell. The
-    // latter start logically live so overwrite emits the value Drop, while the
-    // borrowed marker prevents scope exit from releasing the environment cell.
+    // writable-borrow mode keeps their contents live for replacement and
+    // prevents both moves out and scope-exit release of the environment cell.
     mut val captureI: U64 = 0U64
     while captureI < closure.captures.count() {
         val capture = closure.captures[captureI]
@@ -2409,7 +2409,7 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
                 val captureLocal: U64 = addMidLocal(state: inout state, declarationTarget: capture.bindingTarget, typeTerm: capture.typeTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: true)
             }
             SemanticClosureCaptureMode.CellBorrow => {
-                val captureLocal: U64 = addMidLocal(state: inout state, declarationTarget: capture.bindingTarget, typeTerm: capture.typeTerm, isUnique: false, isParameter: false, ownsAtEntry: true, isBorrowed: true, isCaptureCell: true)
+                val captureLocal: U64 = addMidLocal(state: inout state, declarationTarget: capture.bindingTarget, typeTerm: capture.typeTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isInout: true, isCaptureCell: true)
             }
         }
         captureI += 1U64

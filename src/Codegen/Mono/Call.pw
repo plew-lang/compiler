@@ -1437,10 +1437,7 @@ pub impl Comp {
     // `from` factory from the two Result spellings.
     inout fn registerTryConversion(exprId: U64, operand: U64) {
         val operandRef: U64 = self.groundedTypeOf(id: operand)
-        mut val returnRef: U64 = 0U64
-        if self.cur.bodyFnIdx < self.arena.functionCount() {
-            returnRef = self.groundTypeRef(ref: self.arena.functionAt(index: self.cur.bodyFnIdx).retTy)
-        }
+        val returnRef: U64 = self.groundTermForBody(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
         val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
         if operandErr == 0U64 || returnErr == 0U64 || operandRef >= self.arena.typeCount() || returnRef >= self.arena.typeCount() { return }
@@ -4946,7 +4943,7 @@ pub impl Comp {
             frozenParameters.append(<SemanticClosureParameter bindingTarget=parameter.nameStart typeTerm=parameter.ty isInout=parameter.isInout isMove=parameter.isMove isBorrow=parameter.isBorrow />)
             parameterI += 1U64
         }
-        self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=ownerFnIdx exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
+        self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=self.semanticBodyOwner(fnIdx: ownerFnIdx) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
     }
 
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base

@@ -294,7 +294,7 @@ pub impl LlvmCtx {
             val capture: CaptureEntry = closure.captures[captureI]
             val local: U64 = parameterCount + captureI
             val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
-            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || !declaration.isBorrowed || declaration.isCaptureCell != capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return false }
+            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || declaration.isCaptureCell != capture.boxed || declaration.isInout != capture.boxed || declaration.isBorrowed == capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return false }
             val type: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: capture)
             val value: LLVMValueRef = llvmLoad(self.b, type, LLVMBuildStructGEP2(self.b, environmentType, environment, captureI + 1U64, anon()), anon())
             llvmStore(self.b, value, self.locPtr[local])
@@ -328,6 +328,15 @@ pub impl LlvmCtx {
             val prepared: MidLlvmPrepared = self.prepareClosureMidBody(c: inout c, closure: closure)
             match prepared {
                 MidLlvmPrepared.None => {
+                    if c.emitMidCoverage || c.traceCodegen {
+                        mut val diagnostic: U64 = 0U64
+                        while diagnostic < self.midCoverageBodyIds.count() {
+                            if self.midCoverageBodyIds[diagnostic] == closure.bodyId {
+                                self.emitMidCoverageRecord(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, key: self.midCoverageKeys[diagnostic])
+                            }
+                            diagnostic += 1U64
+                        }
+                    }
                     c.errorAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: closure body could not be prepared as Mid IR")
                 }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
