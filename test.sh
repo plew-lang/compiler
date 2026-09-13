@@ -180,6 +180,12 @@ else
     fail=$((fail + 1)); failed="$failed mid-deinit-receivers"
 fi
 
+if sh ./test-mid-provided-receivers.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-provided-receivers"
+fi
+
 # Unit results must remain distinct from missing call-result type facts.
 if sh ./test-mid-unit-call-results.sh; then
     :

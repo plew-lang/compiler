@@ -346,6 +346,12 @@ pub impl Comp {
         if !(f.hasRet) {
             return scalarInfo()
         }
+        // A projection such as Self.Output is not the receiver itself.
+        // Its result requires the selected path proof, just like a nested
+        // generic result requires substitution in the selected call context.
+        if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
+            if self.arena.typeAt(index: f.retTy).assocNameId != 0U64 { return scalarInfo() }
+        }
         if !(f.retIsArray) {
             if rangeEquals(bytes: self.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
                 return <TypeInfo kind=2 nameStart=tpStart nameLen=tpLen ref=0 />
