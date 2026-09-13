@@ -53,6 +53,11 @@ int main(int argc, char **argv) {
             assert len(state['measurements']) == 3, state
             assert len({r['compiler_sha256'] for r in state['measurements']}) == 1, state
             assert 'self_compile_median_seconds=' in summary
+            assert '-fdebug-pass-manager' in state['link_command'], state
+            for row in state['generations']:
+                if 'successor' in row:
+                    link_log = output / row['artifact'] / 'link.log'
+                    assert link_log.is_file() and 'Running pass:' in link_log.read_text(), link_log
         print('PASS', label, flush=True)
 
     compiler('stable', 'stable')
