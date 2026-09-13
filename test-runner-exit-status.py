@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix='plew-gen-status-') as directory:
 
 # Actual ASan run-status branch, without requiring a sanitizer installation.
 asan = Path(__file__).with_name('asan-gate.sh').read_text()
-worker = asan.split('    run_exit=0\n', 1)[1].split("\n' sh)", 1)[0]
+worker = asan.split('    run_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = '    run_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
     root = Path(directory)
@@ -129,3 +129,22 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
             assert result.returncode == 0, result
             assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
             print(f'PASS asan-status/{name}/stdin={stdin}', flush=True)
+
+# Compile corpus must reject only expected diagnostics, never crashes.
+asan = Path(__file__).with_name('asan-gate.sh').read_text()
+worker = asan.split('    compile_exit=0\n', 1)[1].split("\n' sh", 1)[0]
+worker = 'compile_exit=0\n' + worker
+with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
+    root = Path(directory)
+    compiler = root/'plewc_asan'
+    for reject in (False, True):
+        for code in (0, 1, 7, 143):
+            compiler.write_text(f'#!/bin/sh\necho diagnostic >&2\nexit {code}\n')
+            compiler.chmod(0o755)
+            path = 'tests/reject/fixture.pw' if reject else 'tests/run/fixture.pw'
+            result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh',path,str(root/'error')],
+                                    cwd=root,capture_output=True,text=True)
+            expected = code == (1 if reject else 0)
+            assert result.returncode == 0, result
+            assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
+            print(f'PASS asan-compile/reject={reject}/exit={code}', flush=True)

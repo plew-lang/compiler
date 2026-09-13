@@ -59,6 +59,16 @@ JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || 
 PLEW_LD="$("$LC" --ldflags)"
 export TMP RT OPT CLANG PLEW_LD PLEWC
 
+progress_results() {
+    phase=$1
+    completed=0
+    while IFS= read -r line; do
+        completed=$((completed + 1))
+        printf '%s\n' "$line"
+        printf 'asan: %s completed=%s %s\n' "$phase" "$completed" "$line" >&2
+    done
+}
+
 fail=0
 
 # Instrumentation note: the instrumented file must keep a .ll extension — clang
@@ -88,15 +98,27 @@ fi
 echo "== B. compile corpus under ASan =="
 b_results=$(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; err="$TMP/b_$(printf "%s" "$f" | tr "/" "_").err"
-    ./plewc_asan "$f" > /dev/null 2>"$err" || true
+    compile_exit=0
+    ./plewc_asan "$f" > /dev/null 2>"$err" || compile_exit=$?
+    expected_exit=0
+    case "$f" in tests/reject/*) expected_exit=1 ;; esac
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL compiling $f: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
+    elif [ "$compile_exit" -ne "$expected_exit" ]; then
+        echo "FAIL compiling $f: expected exit=$expected_exit, got=$compile_exit"
+    elif [ "$expected_exit" -eq 1 ] && [ ! -s "$err" ]; then
+        echo "FAIL compiling $f: missing rejection diagnostic"
+    else
+        echo "RAN $f"
     fi
-' sh)
+' sh | progress_results B)
 bfail=$(printf '%s' "$b_results" | grep -c '^FAIL' || true)
-if [ "$bfail" = 0 ]; then
-    echo "  clean ($(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | wc -l | tr -d ' ') files)"
+bn=$(printf '%s\n' "$b_results" | grep -c '^RAN' || true)
+bexpected=$(printf '%s\n' tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | wc -l | tr -d ' ')
+if [ "$bfail" = 0 ] && [ "$bn" = "$bexpected" ]; then
+    echo "  clean ($bn files)"
 else
+    echo "  completed $bn/$bexpected successful compilations"
     printf '%s\n' "$b_results" | sed 's/^/  /'
     fail=1
 fi
@@ -126,7 +148,7 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     else
         echo "RAN $name"
     fi
-' sh)
+' sh | progress_results C)
 cn=$(printf '%s' "$c_results" | grep -c '^RAN' || true)
 cfail=$(printf '%s' "$c_results" | grep -c '^FAIL' || true)
 # every run test with an .out MUST reach execution: a worker that bails on a
@@ -169,7 +191,7 @@ d_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     else
         echo "RAN $name"
     fi
-' sh)
+' sh | progress_results D)
 dn=$(printf '%s' "$d_results" | grep -c '^RAN' || true)
 dfail=$(printf '%s' "$d_results" | grep -c '^FAIL' || true)
 dexpected=0
