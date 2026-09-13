@@ -1,0 +1,4 @@
+trait Reader { fn read() -> I64 }
+impl Reader { fn doubled() -> I64 { return self.read() * 2I64 } }
+fn invalid[T]() -> I64 where T: Reader { return T.doubled() }
+fn main() {}

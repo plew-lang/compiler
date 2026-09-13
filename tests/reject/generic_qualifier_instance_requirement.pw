@@ -1,0 +1,3 @@
+trait Reader { fn read() -> I64 }
+fn invalid[T]() -> I64 where T: Reader { return T.read() }
+fn main() {}

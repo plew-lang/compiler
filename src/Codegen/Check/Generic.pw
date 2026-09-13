@@ -460,6 +460,31 @@ pub impl Comp {
                     self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
+                val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
+                if qualifier != 0U64 {
+                    val selected: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
+                    match selected {
+                        StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                            if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
+                                self.errorAt(offset: nameStart, msg: "a type qualifier can only call an associated function")
+                            }
+                            mut val index: U64 = 0U64
+                            while index < args.len {
+                                self.checkGenericTypeMatch(expectedRef: self.staticRequirementParamType(resolution: selected, args: args, argIdx: index), valueExpr: self.argAt(args: args, index: index).expr)
+                                index += 1U64
+                            }
+                        }
+                        StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
+                            if !self.arena.functionAt(index: declaration).isAssoc {
+                                self.errorAt(offset: nameStart, msg: "a type qualifier can only call an associated function")
+                            }
+                        }
+                        StaticMemberResolution.Missing => {
+                            self.errorAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                        }
+                    }
+                    return
+                }
                 val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
@@ -835,6 +860,14 @@ pub impl Comp {
                 if operatorResult != 0U64 {
                     inferred = operatorResult
                     inferredFromStaticOperator = true
+                }
+            }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
+                if qualifier != 0U64 {
+                    val selected: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val result: U64 = self.staticRequirementResultType(resolution: selected)
+                    if result != 0U64 { inferred = result }
                 }
             }
             _ => {}

@@ -133,7 +133,38 @@ pub impl Comp {
     // every other receiver contributes its closed declaration-time TypeTerm.
     // Keep the site kinds separate in CallTemplate, but not their value-source
     // algebra.
+    // A type parameter used as an associated-call qualifier is a lexical
+    // binder, not a value expression. Keep its term on the call receiver only.
+    inout fn typeParameterQualifierTerm(exprId: U64) -> U64 {
+        if self.cur.checkFn >= self.arena.functionCount() { return 0U64 }
+        match self.arena.exprs[exprId] {
+            Expr.Ident(val start, val len) => {
+                if !self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) { return 0U64 }
+                val nameId: U64 = intern(c: inout self, start: start, len: len)
+                val params: FuncBindRange = self.arena.functionAt(index: self.cur.checkFn).typeParams
+                mut val index: U64 = 0U64
+                while index < params.count() {
+                    val parameter: Bind = self.funcBindAt(binds: params, index: index)
+                    if parameter.nameId == nameId {
+                        return self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                    }
+                    index += 1U64
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    inout fn methodReceiverTerm(exprId: U64) -> U64 {
+        val valueTerm: U64 = self.parametricExprTerm(exprId: exprId)
+        if valueTerm != 0U64 { return valueTerm }
+        return self.typeParameterQualifierTerm(exprId: exprId)
+    }
+
     inout fn directReceiverTemplateForExpr(exprId: U64) -> CallTemplateReceiver {
+        val qualifier: U64 = self.typeParameterQualifierTerm(exprId: exprId)
+        if qualifier != 0U64 { return <CallTemplateReceiver.Term term=qualifier /> }
         return self.protocolReceiverTemplateForExpr(exprId: exprId)
     }
 
@@ -396,10 +427,16 @@ pub impl Comp {
     inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
         match staticResolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function")
+                }
                 self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.staticRequirementResultType(resolution: staticResolution))
             }
-            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
+                if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function")
+                }
                 self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
             }
             _ => {
@@ -1271,7 +1308,7 @@ pub impl Comp {
                     self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
-                val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv))
+                val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.methodReceiverTerm(exprId: recv))
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
                 // Verify publishes this cache through resolveWrittenMethod, so a
                 // selected entry already satisfies the synthetic requirement.

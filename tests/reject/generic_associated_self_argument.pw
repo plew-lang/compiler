@@ -1,0 +1,3 @@
+trait Echo { assoc fn echo(value: Self) -> Optional[Self] }
+fn invalid[T](value: T) -> Optional[T] where T: Echo { return T.echo(value: 42I64) }
+fn main() {}

@@ -484,6 +484,19 @@ pub impl Comp {
         return <StaticMemberResolution.Missing />
     }
 
+    // The selected trait owns Self independently of the caller's receiver.
+    // Substitute that binder along with positional arguments at every depth.
+    inout fn staticRequirementType(ref: U64, traitDef: TraitDef, receiverRef: U64, traitArgs: Array[U64]) -> U64 {
+        mut val params: Array[Bind] = self.copyTraitBinds(binds: traitDef.typeParams)
+        mut val values: Array[U64] = traitArgs
+        if traitDef.selfParamId != 0U64 {
+            val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+            params.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=selfName.nameId paramId=traitDef.selfParamId fieldStart=0U64 fieldLen=0U64 />)
+            values.append(receiverRef)
+        }
+        return self.groundTermInEnvironment(ref: ref, params: params, values: values, selfRef: receiverRef)
+    }
+
     // The parameter type of one requirement selected by `resolution`.
     // The trait's binders are substituted with the bound's positional instance
     // arguments before returning to the enclosing function's symbolic scope.
@@ -502,15 +515,8 @@ pub impl Comp {
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
-                        val savedParams: Array[Bind] = self.cur.typeParams
-                        val savedArgs: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
-                        self.cur.typeArgs = bound.constraint.key.positionalArgs
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
-                        val out: U64 = self.groundTypeRef(ref: param.ty)
-                        self.cur.typeParams = savedParams
-                        self.cur.typeArgs = savedArgs
-                        return out
+                        return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: bound.paramTy, traitArgs: bound.constraint.key.positionalArgs)
                     }
                     StaticConformanceProof.AssumedSupertraitPath(boundIdx: val boundIdx, traits: _) => {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traitCount() { return 0U64 }
@@ -522,7 +528,7 @@ pub impl Comp {
                         // Supertrait declarations are currently bare names in
                         // the grammar, so their member signature has no
                         // inherited positional argument substitution.
-                        return self.funcParamAt(params: req.params, index: paramIdx).ty
+                        return self.staticRequirementType(ref: self.funcParamAt(params: req.params, index: paramIdx).ty, traitDef: traitDef, receiverRef: self.decls.funcBounds[boundIdx].paramTy, traitArgs: [])
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
@@ -530,15 +536,8 @@ pub impl Comp {
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
-                        val savedParams: Array[Bind] = self.cur.typeParams
-                        val savedArgs: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
-                        self.cur.typeArgs = traitArgs
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
-                        val out: U64 = self.groundTypeRef(ref: param.ty)
-                        self.cur.typeParams = savedParams
-                        self.cur.typeArgs = savedArgs
-                        return out
+                        return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: proofReceiver, traitArgs: traitArgs)
                     }
                     _ => { return 0U64 }
                 }
@@ -611,7 +610,7 @@ pub impl Comp {
         // This is a declaration-time proof query, not a body-instance read.
         // Ground only the selected trait instance's binders; consulting Cursor
         // here let an unrelated temporary receiver reinterpret abstract Self.
-        val grounded: U64 = self.groundTermInEnvironment(ref: req.retTy, params: self.copyTraitBinds(binds: traitDef.typeParams), values: traitArgs)
+        val grounded: U64 = self.staticRequirementType(ref: req.retTy, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)
         return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
     }
 

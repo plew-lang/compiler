@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -1595,6 +1595,25 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     // its frozen read receiver now and let instantiation apply the selected
     // borrow passing. Inout/move static receivers remain intentionally closed
     // until they have an equally explicit source-access representation.
+    // A proof-selected associated requirement has a type receiver for
+    // instantiation, but no runtime receiver to evaluate or borrow.
+    match template.kind {
+        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: _) => {
+            match resolution {
+                StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                    if traitIdx < c.decls.traitCount() {
+                        val requirements = c.decls.traitAt(index: traitIdx).reqs
+                        if reqIdx < requirements.count() && c.traitReqAt(reqs: requirements, index: reqIdx).isAssoc { return <MidReceiverBuild /> }
+                    }
+                }
+                StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
+                    if declaration < c.arena.functionCount() && c.arena.functionAt(index: declaration).isAssoc { return <MidReceiverBuild /> }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
     val directInout: Bool = callee < c.arena.functionCount() && c.arena.functionAt(index: callee).hasRecv && c.arena.functionAt(index: callee).selfInout
     if callee >= c.arena.functionCount() {
         match template.kind {

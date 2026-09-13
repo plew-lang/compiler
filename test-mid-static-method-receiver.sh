@@ -13,3 +13,11 @@ if grep -E 'name=print category=' "$directory/coverage" >&2; then
     exit 1
 fi
 echo "PASS $source(mid)" >&2
+
+for name in generic_supertrait_comparison generic_associated_self; do
+    "$PLEWC" --require-mid "tests/run/$name.pw" >"$directory/input.ll" 2>"$directory/coverage" || {
+        cat "$directory/coverage" >&2
+        exit 1
+    }
+    echo "PASS $name(static requirement receiver)" >&2
+done

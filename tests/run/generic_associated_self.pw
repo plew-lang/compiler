@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+trait Echo { assoc fn echo(value: Self) -> Optional[Self] }
+struct Number { pub val value: I64 }
+struct Text { pub val value: String }
+pub impl Number { factory }
+pub impl Text { factory }
+impl Number as Echo {
+    assoc fn echo(value: Self) -> Optional[Self] { return <Optional.Some v=value /> }
+}
+impl Text as Echo {
+    assoc fn echo(value: Self) -> Optional[Self] { return <Optional.Some v=value /> }
+}
+fn echo[T](value: T) -> Optional[T] where T: Echo { return T.echo(value: value) }
+fn main() {
+    val number = echo(value: <Number value=42I64 />).unwrap()
+    val text = echo(value: <Text value="he" + "ap" />).unwrap()
+    print(number.value)
+    print(text.value)
+}
