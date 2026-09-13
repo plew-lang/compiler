@@ -4487,7 +4487,28 @@ impl LlvmCtx {
             while statementI < block.statements.len {
                 val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
                 if statement.tag == 1U64 || statement.tag == 9U64 {
-                    if statement.destination == 0U64 || statement.destination > c.mid.places.count() || !self.midCanonicalInitialRvalueSupported(c: inout c, body: body, rvalueId: statement.value) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    if statement.destination == 0U64 || statement.destination > c.mid.places.count() || !self.midCanonicalInitialRvalueSupported(c: inout c, body: body, rvalueId: statement.value) {
+                        if c.traceCodegen && statement.value != 0U64 && statement.value <= c.mid.rvalues.count() {
+                            val rejected = c.mid.rvalues[statement.value - 1U64]
+                            eprint(text: "[trace-codegen] Mid rvalue-reject fn=")
+                            eprintU64(n: body.sourceFunction)
+                            eprint(text: " tag=")
+                            eprintU64(n: rejected.tag)
+                            eprint(text: " result=")
+                            eprintU64(n: rejected.resultTerm)
+                            mut val element: U64 = 0U64
+                            while rejected.tag >= 3U64 && rejected.tag <= 5U64 && element < rejected.elements.len {
+                                val entry = c.mid.aggregateElements[rejected.elements.start + element]
+                                eprint(text: " element-target=")
+                                eprintU64(n: entry.targetTerm)
+                                eprint(text: " operand-type=")
+                                eprintU64(n: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: entry.operand))
+                                element += 1U64
+                            }
+                            eprint(text: "\n")
+                        }
+                        return <MidLlvmPreflight.UnsupportedRvalue />
+                    }
                     if statement.tag == 9U64 {
                         val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                         if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len || !c.mid.locals[body.locals.start + destination.local].isCaptureCell { return <MidLlvmPreflight.AssignmentProjection /> }

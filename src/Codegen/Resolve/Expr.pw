@@ -1116,6 +1116,19 @@ pub impl Comp {
                         self.recordSemanticAggregate(exprId: exprId)
                 }
             }
+            // A declared slot supplies the integer width before aggregate
+            // recording, regardless of whether an enclosing Let visits it.
+            // Reuse the literal checker so publishing a type never bypasses
+            // range validation; explicit suffixes and Bool own their types.
+            Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
+                if !isBool && suffixLen == 0U64 {
+                    val expected: TypeRef = self.arena.typeAt(index: expectedTerm)
+                    if self.isIntType(start: expected.nameStart, len: expected.nameLen) {
+                        self.checkLitCtx(id: exprId, eKind: 1U64, eBits: self.intBits(start: expected.nameStart, len: expected.nameLen), eSgn: self.intSigned(start: expected.nameStart, len: expected.nameLen))
+                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    }
+                }
+            }
             // A suffix owns its type. An unsuffixed float is bidirectional in
             // the same way as an unsuffixed integer, but unlike integers the
             // old literal-context carrier has no float width. Publish the
