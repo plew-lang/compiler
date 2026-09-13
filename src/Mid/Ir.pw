@@ -491,6 +491,10 @@ export enum MidRvalue {
     // carries only Record-selected TypeTerms; instantiation grounds and closes
     // it into Cast before verification/backend lowering.
     CastBoundary(exprId: U64, sourceTerm: U64, targetTerm: U64, operand: MidOperand)
+    // An explicit outer static view changes type provenance, not layout.
+    // Instantiate proves the underlying types equal before closing this into
+    // IdentityRetag; LLVM never receives an unchecked view operation.
+    ViewBoundary(operand: MidOperand, targetTerm: U64)
     Cast(operand: MidOperand, kind: MidCastKind, targetTerm: U64)
     // Read an enum tag from an already-evaluated place.  The enum declaration
     // slot comes from SemanticMatch; this is a read-only layout operation and
@@ -874,6 +878,9 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         MidRvalue.CastBoundary(exprId: val exprId, sourceTerm: val sourceTerm, targetTerm: val targetTerm, operand: val operand) => {
             arena.rvalues.append(<MidRvalueNode tag=7U64 operand=midFreezeOperand(arena: inout arena, operand: operand) exprId=exprId sourceTerm=sourceTerm targetTerm=targetTerm />)
         }
+        MidRvalue.ViewBoundary(operand: val operand, targetTerm: val targetTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=23U64 operand=midFreezeOperand(arena: inout arena, operand: operand) targetTerm=targetTerm />)
+        }
         MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
             match kind {
                 MidCastKind.IntegerWiden(sourceSigned: val sourceSigned) => {
@@ -1123,6 +1130,7 @@ fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool
         return node.resultTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand)
     }
     if node.tag == 21U64 || node.tag == 22U64 { return midCanonicalPlaceIsWellFormed(arena: arena, place: node.place) && (node.tag == 22U64 || node.resultTerm != 0U64) }
+    if node.tag == 23U64 { return node.targetTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) }
     if node.tag == 20U64 { return node.targetTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) }
     if node.tag == 19U64 {
         if node.closureBodyKey == 0U64 || node.resultTerm == 0U64 || !midRangeFits(range: node.elements, count: arena.closureCaptures.count()) { return false }

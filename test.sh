@@ -173,6 +173,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-local-types"
 fi
 
+# Static view values must retain their type facet through Mid.
+if sh ./test-mid-value-views.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-value-views"
+fi
+
 # A construction retains its nominal owner beside unrelated lexical binders.
 if sh ./test-mid-nominal-construction.sh; then
     :

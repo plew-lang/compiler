@@ -261,6 +261,32 @@ fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: Body
     return c.mid.rvalues.count()
 }
 
+// Removing outer facets must not erase views inside generic arguments or
+// change nominal identity. This check is separate from conversion selection.
+fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
+    if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.tyRefIsGround(ref: sourceTerm) || !c.tyRefIsGround(ref: targetTerm) { return false }
+    val source: U64 = c.typeRefWithoutOuterViews(ref: sourceTerm)
+    val target: U64 = c.typeRefWithoutOuterViews(ref: targetTerm)
+    return c.typeRefEq(a: source, b: target)
+}
+
+fn instantiateCanonicalViewBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef)
+    val target: U64 = c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if operand == 0U64 || operand > c.mid.operands.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+        return 0U64
+    }
+    val mode: U64 = c.mid.operands[operand - 1U64].tag
+    if mode == 3U64 || mode == 4U64 || mode == 8U64 || !midViewTypesMatch(c: inout c, sourceTerm: canonicalMidOperandTypeRef(c: c, operandId: operand), targetTerm: target) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+        return 0U64
+    }
+    c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=target />)
+    return c.mid.rvalues.count()
+}
+
 fn instantiateCanonicalCastBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val sourceNode = c.mid.rvalues[rvalueId - 1U64]
@@ -506,6 +532,7 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
         4U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         5U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         6U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        23U64 => { return instantiateCanonicalViewBoundary(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef, error: inout error) }
         7U64 => { return instantiateCanonicalCastBoundary(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef, error: inout error) }
         8U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
         9U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
@@ -685,6 +712,7 @@ fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
             if c.conversionProofIsIdentity(id: value.conversion) { return 0U64 }
             return midConversionTargetRef(c: c, conversion: value.conversion)
         }
+        23U64 => { return value.targetTerm }
         7U64 => { return value.targetTerm }
         8U64 => { return value.targetTerm }
         9U64 => { return value.targetTerm }
@@ -1504,6 +1532,22 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
             return <MidRvalue.Use operand=operand />
         }
+        MidRvalue.ViewBoundary(operand: val rawOperand, targetTerm: val targetTerm) => {
+            match rawOperand {
+                MidOperand.Borrow(place: _, capability: _) => { error = <MidInstantiateError.InvalidCastResolution />
+                    return <MidRvalue.Use operand=rawOperand /> }
+                MidOperand.Access(candidate: _) => { error = <MidInstantiateError.InvalidCastResolution />
+                    return <MidRvalue.Use operand=rawOperand /> }
+                _ => {}
+            }
+            val operand: MidOperand = instantiateMidOperand(c: inout c, bodyId: bodyId, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val target: U64 = c.groundTermForBody(ref: targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            if !midViewTypesMatch(c: inout c, sourceTerm: midOperandTypeRef(operand: operand), targetTerm: target) {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+                return <MidRvalue.Use operand=operand />
+            }
+            return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=target />
+        }
         MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
             return <MidRvalue.Cast operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: operand, environment: environment, itemRef: itemRef) kind=kind targetTerm=targetTerm />
         }
@@ -1751,6 +1795,7 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
             if c.conversionProofIsIdentity(id: conversion) { return 0U64 }
             return midConversionTargetRef(c: c, conversion: conversion)
         }
+        MidRvalue.ViewBoundary(operand: _, targetTerm: val targetTerm) => { return targetTerm }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: val targetTerm, operand: _) => { return targetTerm }
         MidRvalue.Cast(operand: _, kind: _, targetTerm: val targetTerm) => { return targetTerm }
         MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }

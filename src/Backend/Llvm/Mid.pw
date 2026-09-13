@@ -532,6 +532,7 @@ pub impl LlvmCtx {
             }
             // A boundary is only valid before body-instance instantiation.
             // LLVM must not classify a source `as` expression itself.
+            MidRvalue.ViewBoundary(operand: _, targetTerm: _) => { return false }
             MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return false }
             MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
                 return targetTerm != 0U64 && targetTerm < c.arena.typeCount() && self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
@@ -986,6 +987,7 @@ pub impl LlvmCtx {
                                     _ => { return <MidLlvmPreflight.ConversionOperand /> }
                                 }
                             }
+                            MidRvalue.ViewBoundary(operand: _, targetTerm: _) => { return <MidLlvmPreflight.UnsupportedRvalue /> }
                             MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return <MidLlvmPreflight.UnsupportedRvalue /> }
                             MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => {
                                 match operand {
@@ -2236,7 +2238,7 @@ pub impl LlvmCtx {
             if proof.tag == 3U64 || proof.tag == 4U64 { return operand.tag == 1U64 }
             return operand.tag == 1U64 || operand.tag == 2U64
         }
-        if value.tag == 7U64 { return false }
+        if value.tag == 7U64 || value.tag == 23U64 { return false }
         if value.tag >= 8U64 && value.tag <= 10U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.typeCount() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
         if value.tag >= 11U64 && value.tag <= 15U64 {
             if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() { return false }
@@ -2737,6 +2739,7 @@ pub impl LlvmCtx {
                         val value: LLVMValueRef = self.midEmitValueConversion(c: inout c, body: body, operand: operand, conversion: c.thawValueConversionProof(id: conversion))
                         llvmStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
+                    MidRvalue.ViewBoundary(operand: _, targetTerm: _) => { panic "uninstantiated Mid view reached LLVM" }
                     MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => {
                         // Preflight rejects this form. Keep an unreachable-safe
                         // store shape for bootstrap enum exhaustiveness.

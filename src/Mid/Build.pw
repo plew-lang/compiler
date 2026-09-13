@@ -1246,6 +1246,32 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
+        Expr.ExtView(recv: val sourceExpr, source: _, strip: _) => {
+            // A value temporary is not the source's writable place. Capability
+            // views require place lowering and must not borrow this copy.
+            if allowAccessMarker {
+                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
+            }
+            // Source-set resolution is already frozen by Record. Preserve the
+            // operand's copy/move mode and use the ordinary temporary lifetime.
+            val sourceTerm: U64 = c.semanticExprTerm(exprId: sourceExpr)
+            val targetTerm: U64 = c.semanticExprTerm(exprId: exprId)
+            if sourceTerm == 0U64 || targetTerm == 0U64 {
+                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
+            }
+            val source: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: sourceTerm, allowAccessMarker: false)
+            match source.error { MidBuildError.None => {} _ => { return source } }
+            match source.operand {
+                MidOperand.Borrow(place: _, capability: _) => { return <MidOperandBuild operand=source.operand error=<MidBuildError.UnsupportedCallTemplate /> /> }
+                _ => {}
+            }
+            val ownsUnique: Bool = midTermIsUnique(c: inout c, term: targetTerm)
+            val local: U64 = addMidTemporary(state: inout state, typeTerm: targetTerm, isUnique: ownsUnique)
+            val destination: MidPlace = <MidPlace local=local typeTerm=targetTerm />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ViewBoundary operand=source.operand targetTerm=targetTerm /> />)
+            if ownsUnique { return <MidOperandBuild operand=<MidOperand.Move place=destination /> /> }
+            return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
+        }
         Expr.Cast(operand: val sourceExpr, tyStart: _, tyLen: _, ty: val targetTerm) => {
             // The cast's type facts were recorded before Mid construction.
             // Builder uses Expr.Cast only as syntax navigation to its operand;

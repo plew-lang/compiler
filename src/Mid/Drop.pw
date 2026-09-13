@@ -1125,6 +1125,7 @@ fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
             }
         }
         MidRvalue.Convert(operand: val operand, conversion: _) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.ViewBoundary(operand: val operand, targetTerm: _) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: _) => {}
@@ -1415,6 +1416,7 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                         }
                     }
         MidRvalue.Convert(operand: val operand, conversion: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+        MidRvalue.ViewBoundary(operand: val operand, targetTerm: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
         MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
                     MidRvalue.EnumTag(place: _, enumIndex: _, matchSource: _, resultTerm: _) => {}
@@ -1629,6 +1631,10 @@ fn midAppendMovedFlagClears(value: MidRvalue, originalCount: U64, needsFlag: Arr
             if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
         }
         MidRvalue.Convert(operand: val operand, conversion: _) => {
+            val moved: U64 = midOperandMovedRoot(operand: operand)
+            if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
+        }
+        MidRvalue.ViewBoundary(operand: val operand, targetTerm: _) => {
             val moved: U64 = midOperandMovedRoot(operand: operand)
             if moved < originalCount && needsFlag[moved] { statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />) }
         }

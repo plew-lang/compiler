@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+struct Text { pub mut val value: String }
+pub impl Text { factory }
+extension Readable {
+    pub impl Text {
+        fn content() -> String { return self.value }
+    }
+}
+fn viewed(text: Text) -> Text#Readable { return text#Readable }
+fn main() {
+    mut val original = <Text value="held" + " value" />
+    val selected = viewed(text: original)
+    original.value = "changed"
+    print(selected.content())
+    val plain = selected#!Readable
+    print(plain.value)
+    print(original.value)
+}
