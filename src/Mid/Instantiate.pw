@@ -153,6 +153,22 @@ fn instantiateCanonicalStorageBoundary(c: inout Comp, rvalueId: U64, environment
     val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef)
     val target: U64 = c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if operand == 0U64 || !c.typeRefEq(a: target, b: resolution.targetTypeRef) || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: resolution.sourceTypeRef) || c.conversionProofIsMissing(id: resolution.conversion) {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid storage mismatch stmt=")
+            eprintU64(n: source.sourceStmt)
+            eprint(text: " target=")
+            c.traceMonoTypeHead(ref: target)
+            eprint(text: " recorded-target=")
+            c.traceMonoTypeHead(ref: resolution.targetTypeRef)
+            eprint(text: " operand=")
+            c.traceMonoTypeHead(ref: canonicalMidOperandTypeRef(c: c, operandId: operand))
+            eprint(text: " recorded-source=")
+            c.traceMonoTypeHead(ref: resolution.sourceTypeRef)
+            eprint(text: " missing-proof=")
+            if c.conversionProofIsMissing(id: resolution.conversion) { eprint(text: "yes") }
+            else { eprint(text: "no") }
+            eprint(text: "\n")
+        }
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
         return 0U64
     }
