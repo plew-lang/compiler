@@ -1,0 +1,2 @@
+newtype Byte = U8
+fn main() { val value = 256 as Byte }

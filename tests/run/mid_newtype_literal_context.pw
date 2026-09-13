@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+
+newtype Byte = U8
+newtype SignedByte = I8
+newtype Word = U64
+newtype SignedWord = I64
+newtype Ratio = F32
+newtype Scale = F64
+newtype WrappedByte = Byte
+
+fn main() {
+    val byte = 255 as Byte
+    val signed = -128 as SignedByte
+    val word = 18446744073709551615 as Word
+    val minimum = -9223372036854775808 as SignedWord
+    val ratio = 1.5 as Ratio
+    val scale = 2.5 as Scale
+    val integerRatio = 7 as Ratio
+    val wrapped = (9 as Byte) as WrappedByte
+    val suffixed = -127I8 as SignedByte
+    print(byte as U8)
+    print(signed as I8)
+    print(word as U64)
+    print(minimum as I64)
+    print(ratio as F32)
+    print(scale as F64)
+    print(integerRatio as F32)
+    print((wrapped as Byte) as U8)
+    print(suffixed as I8)
+}

@@ -1,0 +1,2 @@
+newtype Word = U64
+fn main() { val value = -1 as Word }
