@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+struct Holder[T] { pub val pair: (a: T, b: T) }
+pub impl[T] Holder[T] { factory }
+fn pair[T](a: T, b: T) -> Holder[T] {
+    return <Holder[T] pair=(b: b, a: a) />
+}
+fn word(value: String) -> String {
+    print(value)
+    return value
+}
+fn main() {
+    val numbers = <Holder[I32] pair=(b: 4, a: 3) />
+    print(numbers.pair.a)
+    print(numbers.pair.b)
+    val words = <Holder[String] pair=(b: word(value: "se" + "cond"), a: word(value: "fi" + "rst")) />
+    val copy = words
+    print(copy.pair.a)
+    print(words.pair.b)
+    val generic = pair(a: "he" + "ap", b: "va" + "lue")
+    print(generic.pair.a)
+    print(generic.pair.b)
+}

@@ -1,0 +1,5 @@
+struct Holder[T] { pub val pair: (a: T, b: T) }
+pub impl[T] Holder[T] { factory }
+fn main() {
+    val holder = <Holder[I8] pair=(b: 0, a: 128) />
+}

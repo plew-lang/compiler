@@ -73,7 +73,9 @@ pub impl Comp {
             // place (which would double-deinit: the source and the new owner).
             self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
-            if self.isGenericEnumInst(ref: ty) {
+            if ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeAt(index: ty).isRecord {
+                ft = self.typeInfoOfRef(ref: self.fieldTypeRefOfReceiver(receiverRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
+            } else if self.isGenericEnumInst(ref: ty) {
                 ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             } else {
                 if self.isGenericInst(ref: ty) {

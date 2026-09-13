@@ -1137,6 +1137,19 @@ pub impl Comp {
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
                 val expected = self.arena.typeTerms[expectedTerm]
                 mut val acceptsContext: Bool = false
+                // Structural record literals are bidirectional constructions.
+                // Their synthetic layout declaration is not the owner of a
+                // surrounding generic field's binders. Keep the expected
+                // record's labelled children as the semantic slot types.
+                if expected.isRecord && !isEnum && writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() && self.arena.typeTerms[writtenTerm].isRecord && fields.len == expected.recordFieldTerms.len {
+                    acceptsContext = true
+                    mut val fieldIndex: U64 = 0U64
+                    while fieldIndex < fields.len {
+                        val field = self.makeFieldAt(fields: fields, index: fieldIndex)
+                        if self.fieldIndexOfReceiver(receiverRef: expectedTerm, fieldStart: field.nameStart, fieldLen: field.nameLen) >= expected.recordFieldTerms.len { acceptsContext = false }
+                        fieldIndex += 1U64
+                    }
+                }
                 if expected.hasDecl && expected.args.len > 0U64 && !expected.hasTopLevelView() {
                     if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() {
                         val written = self.arena.typeTerms[writtenTerm]
