@@ -743,19 +743,6 @@ fn midDirectArrayIndexExpr(c: Comp, exprId: U64) -> U64 {
     }
 }
 
-fn midDirectArrayIndexPlace(c: inout Comp, state: inout MidBuildState, exprId: U64) -> U64 {
-    val placeExpr: U64 = midDirectArrayIndexExpr(c: c, exprId: exprId)
-    if placeExpr >= c.arena.exprs.count() { return placeExpr }
-    // Keep the stateful part separate: materializing an arbitrary index may
-    // emit a prior Mid call/temporary, and must happen exactly once.
-    match c.arena.exprs[placeExpr] {
-        Expr.Index(base: _, index: _) => {
-            return placeExpr
-        }
-        _ => { return c.arena.exprs.count() }
-    }
-}
-
 // These forms have already been parsed and typed; Mid never retries their
 // resolution.  The reason says which *Mid operation* is still absent, rather
 // than collapsing every non-scalar expression into one un-actionable bucket.
@@ -1212,13 +1199,9 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
     }
     val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
-    val directPlaceExpr: U64 = midDirectArrayIndexPlace(c: inout c, state: inout state, exprId: exprId)
+    val directPlaceExpr: U64 = midDirectArrayIndexExpr(c: c, exprId: exprId)
     if !allowAccessMarker && directPlaceExpr < c.arena.exprs.count() {
-        val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
-        if !lookup.found {
-            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IndexPlace /> /> />
-        }
-        return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+        return materializeMidIndexValue(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
     }
     if candidate < c.decls.accessCandidateCount() {
         if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
@@ -1302,11 +1285,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return materializeMidTry(c: inout c, state: inout state, exprId: exprId, operandExpr: operandExpr, resultTerm: typeTerm)
         }
         Expr.Index(base: _, index: _) => {
-            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
-            if !lookup.found {
-                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IndexPlace /> /> />
-            }
-            return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+            return materializeMidIndexValue(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             if exprId >= c.arena.semanticExprTypes.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
@@ -1350,6 +1329,33 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
         }
         _ => { return midOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm) }
+    }
+}
+
+// A read projection may be rooted in a value producer, including a call
+// followed by fields. Reuse ordinary value materialization so the root is
+// evaluated before the key and its existing evaluation scope owns the value
+// until the projection's uses finish. This does not grant inout capability to
+// a temporary or change the separate get-modify-set access contract.
+fn materializeMidIndexValue(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
+    match c.arena.exprs[exprId] {
+        Expr.Index(base: val base, index: val index) => {
+            val baseValue: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: c.semanticExprTerm(exprId: base), allowAccessMarker: false)
+            match baseValue.error { MidBuildError.None => {} _ => { return baseValue } }
+            match baseValue.operand {
+                MidOperand.Copy(place: val place) => {
+                    val indexTerm: U64 = c.semanticExprTerm(exprId: index)
+                    if indexTerm == 0U64 { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.MissingSemanticType /> /> }
+                    val evaluated: MidIndexLocalBuild = midIndexLocalForSourceExpr(c: inout c, state: inout state, exprId: index, typeTerm: indexTerm)
+                    match evaluated.error { MidBuildError.None => {} _ => { return <MidOperandBuild operand=baseValue.operand error=evaluated.error /> } }
+                    mut val projections: Array[MidProjection] = place.projections
+                    projections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
+                    return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=typeTerm /> /> />
+                }
+                _ => { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IndexPlace /> /> /> }
+            }
+        }
+        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> /> }
     }
 }
 

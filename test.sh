@@ -199,6 +199,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-inout-receiver"
 fi
 
+# Indexing a temporary's field keeps its owner in the ordinary Mid scope.
+if sh ./test-mid-index-rvalue-field.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-index-rvalue-field"
+fi
+
 # A free call receiving an `inout` struct field must retain that precise
 # writable place through Mid's call terminator, including from return position.
 if sh ./test-mid-inout-field-argument.sh; then

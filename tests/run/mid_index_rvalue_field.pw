@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+struct Items {
+    pub val values: Array[String]
+}
+pub impl Items { factory }
+
+fn items() -> Items {
+    print(10I64)
+    return <Items values=["kept"] />
+}
+
+fn key() -> U64 {
+    print(20I64)
+    return 0U64
+}
+
+// Evaluate the temporary owner before the key, once each. The returned
+// element remains owned after the Items temporary and its Array are dropped.
+fn read() -> String {
+    return items().values[key()]
+}
+
+fn main() {
+    val value = read()
+    print(value)
+}
