@@ -2745,6 +2745,9 @@ export enum CallTemplateKind {
 // operations that are not calls.
 export struct CallTemplate {
     pub val siteKey: CallSiteKey = <CallSiteKey />
+    // Record publishes the result dependency once. Mid consumes it under the
+    // selected BodyInstance rather than grounding a callee binder as a caller term.
+    pub val resultTypeRecipe: U64 = 0U64
     pub val kind: CallTemplateKind = <CallTemplateKind.Pending />
     pub val expectedResultTerm: U64 = 0U64
     // The Direct selection's parametric receiver type is a Record fact.

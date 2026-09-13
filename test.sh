@@ -153,6 +153,13 @@ else
     fail=$((fail + 1)); failed="$failed call-template-scalar-storage"
 fi
 
+# Call results consume the type of their frozen semantic call site.
+if sh ./test-mid-call-result-types.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-call-result-types"
+fi
+
 # Unit results must remain distinct from missing call-result type facts.
 if sh ./test-mid-unit-call-results.sh; then
     :

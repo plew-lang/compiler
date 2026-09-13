@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+struct Contents[T] {
+    pub mut val values: Array[T]
+}
+pub impl[T] Contents[T] { factory }
+
+fn empty[T](items: Array[T] = []) -> Array[T] {
+    return items
+}
+
+fn exercise() {
+    mut val numbers: Contents[I64] = <Contents values=empty() />
+    mut val words: Contents[String] = <Contents values=empty() />
+    numbers.values.append(42I64)
+    words.values.append("heap" + "-value")
+    print(numbers.values[0U64])
+    print(words.values[0U64])
+}
+
+fn main() { exercise() }

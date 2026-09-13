@@ -817,7 +817,7 @@ fn midCallValueForSite(c: Comp, state: MidBuildState, siteKey: CallSiteKey) -> M
 fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U64, siteKey: CallSiteKey) -> MidOperandBuild {
     val prior: MidCallValueLookup = midCallValueForSite(c: c, state: state, siteKey: siteKey)
     if prior.found {
-        if midTermIsUnique(c: inout c, term: prior.place.typeTerm) { return <MidOperandBuild operand=<MidOperand.Move place=prior.place /> /> }
+        if state.locals[prior.place.local].isUnique { return <MidOperandBuild operand=<MidOperand.Move place=prior.place /> /> }
         return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> />
     }
     val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
@@ -825,9 +825,10 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
     }
     val term: U64 = c.semanticExprTerm(exprId: exprId)
-    if term == 0U64 && !c.callTemplateReturnsUnit(template: template) {
+    val returnsUnit: Bool = c.callTemplateReturnsUnit(template: template)
+    if !returnsUnit && template.resultTypeRecipe == 0U64 {
         if c.traceCodegen {
-            eprint(text: "[trace-codegen] Mid call result term missing expr=")
+            eprint(text: "[trace-codegen] Mid call result recipe missing expr=")
             eprintU64(n: exprId)
             eprint(text: " offset=")
             eprintU64(n: c.exprOffset(id: exprId))
@@ -838,8 +839,12 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> />
     }
     val ownsUnique: Bool = midTermIsUnique(c: inout c, term: term)
-    val local: U64 = addMidTemporary(state: inout state, typeTerm: term, isUnique: ownsUnique)
-    val place: MidPlace = <MidPlace local=local typeTerm=term />
+    // Unit has a complete declaration-time type (the zero TypeTerm). Every
+    // value result depends on the frozen call descriptor, including ground
+    // source types; do not substitute the callee binder in the caller environment.
+    val recipe: U64 = if returnsUnit { give 0U64 } else { give template.resultTypeRecipe }
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: 0U64, isUnique: ownsUnique, typeRecipe: recipe)
+    val place: MidPlace = <MidPlace local=local typeTerm=0U64 typeRecipe=recipe />
     val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
     match built { MidBuildError.None => {} _ => { return <MidOperandBuild operand=<MidOperand.Copy place=place /> error=built /> } }
     state.callValues.append(<MidCallValue siteKey=siteKey place=place />)

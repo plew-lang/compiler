@@ -73,7 +73,7 @@ pub impl Comp {
                 self.cur.recordCallTemplates = previousRecording
                 match completed {
                     Optional.Some(v: val args) => {
-                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=self.publishCallTemplateArguments(args: args) calleeTypeArgs=self.publishCallTemplateTypeArgs(args: typeArgValues) proofId=proofId /> />)
+                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=self.publishCallTemplateArguments(args: args) calleeTypeArgs=self.publishCallTemplateTypeArgs(args: typeArgValues) proofId=proofId /> />)
                         return true
                     }
                     Optional.None => { return false }
