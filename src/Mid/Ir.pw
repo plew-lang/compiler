@@ -513,6 +513,8 @@ export enum MidRvalue {
     // rvalues navigate to FinalTryResolution rather than SemanticMatch.
     // The complete Result value has a stable owned home while either edge is
     // active, so extracting either payload is an ordinary value-semantic copy.
+    ForTag(place: MidPlace, stmtId: U64, resultTerm: U64)
+    ForPayloadCopy(place: MidPlace, stmtId: U64)
     TryTag(place: MidPlace, exprId: U64, resultTerm: U64)
     TryPayloadCopy(place: MidPlace, exprId: U64, variantIndex: U64, resultTerm: U64)
     // Re-pack the selected Err payload into the enclosing function's Result
@@ -543,6 +545,7 @@ export enum MidCallTarget {
     Resolved(resolution: U64)
     // Frozen `targetError.from(sourceError:)` selected for one `try` site.
     // Instantiation replaces this with Resolved using FinalTryResolution.
+    ForProtocol(stmtId: U64, slot: U64)
     TryConversion(exprId: U64)
 }
 
@@ -616,6 +619,7 @@ export enum MidTerminator {
     // Result's concrete tag slot is a per-BodyInstance frontend fact. Keeping
     // this distinct from Switch prevents the builder from guessing `Ok == 0`.
     // Instantiation validates FinalTryResolution then emits an ordinary Switch.
+    ForBranch(discriminant: MidOperand, stmtId: U64, someTarget: U64, noneTarget: U64)
     TryBranch(discriminant: MidOperand, exprId: U64, okTarget: U64, errTarget: U64)
     Call(callee: MidCallTarget, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace, target: U64)
     // Normalized builder form for a call.  Unlike the legacy Call draft, its
@@ -894,6 +898,12 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
             arena.rvalues.append(<MidRvalueNode tag=15U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceTag=midFreezeMatchSourceTag(matchSource: matchSource) sourceStmt=midFreezeMatchSourceId(matchSource: matchSource) resultTerm=resultTerm />)
         }
+        MidRvalue.ForTag(place: val place, stmtId: val stmtId, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=21U64 place=midFreezePlace(arena: inout arena, place: place) sourceStmt=stmtId resultTerm=resultTerm />)
+        }
+        MidRvalue.ForPayloadCopy(place: val place, stmtId: val stmtId) => {
+            arena.rvalues.append(<MidRvalueNode tag=22U64 place=midFreezePlace(arena: inout arena, place: place) sourceStmt=stmtId />)
+        }
         MidRvalue.TryTag(place: val place, exprId: val exprId, resultTerm: val resultTerm) => {
             arena.rvalues.append(<MidRvalueNode tag=16U64 place=midFreezePlace(arena: inout arena, place: place) exprId=exprId resultTerm=resultTerm />)
         }
@@ -920,6 +930,7 @@ fn midFreezeCallTarget(arena: inout MidCanonicalArena, target: MidCallTarget) ->
     match target {
         MidCallTarget.Template(site: val site) => { arena.callTargets.append(<MidCallTargetNode tag=1U64 ownerFnIdx=site.ownerFnIdx originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />) }
         MidCallTarget.Resolved(resolution: val resolution) => { arena.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />) }
+        MidCallTarget.ForProtocol(stmtId: val stmtId, slot: val slot) => { arena.callTargets.append(<MidCallTargetNode tag=4U64 exprId=stmtId slot=slot />) }
         MidCallTarget.TryConversion(exprId: val exprId) => { arena.callTargets.append(<MidCallTargetNode tag=3U64 exprId=exprId />) }
     }
     return arena.callTargets.count()
@@ -962,6 +973,9 @@ fn midFreezeTerminator(arena: inout MidCanonicalArena, callArgumentProjections: 
                 i = i + 1U64
             }
             arena.terminators.append(<MidTerminatorNode tag=3U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) cases=<MidRange start=start len=values.count() /> otherwise=otherwise />)
+        }
+        MidTerminator.ForBranch(discriminant: val discriminant, stmtId: val stmtId, someTarget: val someTarget, noneTarget: val noneTarget) => {
+            arena.terminators.append(<MidTerminatorNode tag=12U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) exprId=stmtId target=someTarget otherwise=noneTarget />)
         }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: val exprId, okTarget: val okTarget, errTarget: val errTarget) => {
             arena.terminators.append(<MidTerminatorNode tag=11U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) exprId=exprId target=okTarget otherwise=errTarget />)
@@ -1104,6 +1118,7 @@ fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool
     if node.tag == 18U64 {
         return node.resultTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand)
     }
+    if node.tag == 21U64 || node.tag == 22U64 { return midCanonicalPlaceIsWellFormed(arena: arena, place: node.place) && (node.tag == 22U64 || node.resultTerm != 0U64) }
     if node.tag == 20U64 { return node.targetTerm != 0U64 && midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) }
     if node.tag == 19U64 {
         if node.closureBodyKey == 0U64 || node.resultTerm == 0U64 || !midRangeFits(range: node.elements, count: arena.closureCaptures.count()) { return false }
@@ -1156,7 +1171,7 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
         if terminator.callTarget != 0U64 && terminator.callTarget > arena.callTargets.count() { return false }
         if terminator.callReceiver != 0U64 && terminator.callReceiver > arena.callReceivers.count() { return false }
         if terminator.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: terminator.destination) { return false }
-        if terminator.tag == 11U64 {
+        if terminator.tag == 11U64 || terminator.tag == 12U64 {
             if !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.discriminant) || terminator.target >= node.blocks.len || terminator.otherwise >= node.blocks.len { return false }
         } else if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }
         blockI = blockI + 1U64

@@ -1132,7 +1132,9 @@ fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
+        MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => {}
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {}
+        MidRvalue.ForPayloadCopy(place: _, stmtId: _) => {}
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {}
         MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { midConsumeOperand(states: inout states, operand: error) }
         MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
@@ -1231,6 +1233,7 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
         MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
             midConsumeOperand(states: inout out, operand: discriminant)
         }
+        MidTerminator.ForBranch(discriminant: val discriminant, stmtId: _, someTarget: _, noneTarget: _) => { midConsumeOperand(states: inout out, operand: discriminant) }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: _, errTarget: _) => { midConsumeOperand(states: inout out, operand: discriminant) }
         MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
             midConsumeReceiver(states: inout out, receiver: receiver)
@@ -1274,6 +1277,7 @@ export fn midSuccessors(term: MidTerminator) -> Array[U64] {
             out.append(otherwise)
             return out
         }
+        MidTerminator.ForBranch(discriminant: _, stmtId: _, someTarget: val someTarget, noneTarget: val noneTarget) => { return [someTarget, noneTarget] }
         MidTerminator.TryBranch(discriminant: _, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => { return [okTarget, errTarget] }
         MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
         MidTerminator.NormalizedCall(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
@@ -1418,7 +1422,9 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                     MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => {}
+                    MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => {}
                     MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {}
+                    MidRvalue.ForPayloadCopy(place: _, stmtId: _) => {}
                     MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => {}
                     MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { midMakeOperandUnavailable(states: inout out, operand: error) }
                     MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
@@ -1487,6 +1493,7 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
         MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
             midMakeOperandUnavailable(states: inout out, operand: discriminant)
         }
+        MidTerminator.ForBranch(discriminant: val discriminant, stmtId: _, someTarget: _, noneTarget: _) => { midMakeOperandUnavailable(states: inout out, operand: discriminant) }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: _, errTarget: _) => { midMakeOperandUnavailable(states: inout out, operand: discriminant) }
         MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
             match receiver { MidCallReceiver.Value(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } _ => {} }

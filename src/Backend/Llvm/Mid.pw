@@ -580,7 +580,9 @@ pub impl LlvmCtx {
             // These rows are introduced by the in-progress `try` lowering.
             // Keep the legacy draft preflight fail-closed until the canonical
             // emitter owns their ARC copy/repack operations.
+            MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => { return false }
             MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return false }
+            MidRvalue.ForPayloadCopy(place: _, stmtId: _) => { return false }
             MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return false }
             MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: _) => { return false }
             MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: _) => { return false }
@@ -2799,6 +2801,8 @@ pub impl LlvmCtx {
                     // `try` is emitted through canonical Mid only.  The draft
                     // emitter deliberately remains fail-closed until that
                     // representation is removed.
+                    MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => { LLVMBuildUnreachable(self.b) }
+                    MidRvalue.ForPayloadCopy(place: _, stmtId: _) => { LLVMBuildUnreachable(self.b) }
                     MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => {
                         LLVMBuildUnreachable(self.b)
                     }
@@ -4193,7 +4197,7 @@ pub impl LlvmCtx {
             else if rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand) }
             if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag >= 11U64 && rvalue.tag <= 17U64 { value = self.midCanonicalEmitEnumLayoutRvalue(c: inout c, body: body, value: rvalue) }
-            if rvalue.tag == 17U64 && c.arcNeedsRelease(ref: rvalue.resultTerm) { self.valueArc(c: inout c, v: value, typeRef: rvalue.resultTerm, retain: true) }
+            if (rvalue.tag == 12U64 || rvalue.tag == 14U64 || rvalue.tag == 17U64) && c.arcNeedsRelease(ref: rvalue.resultTerm) { self.valueArc(c: inout c, v: value, typeRef: rvalue.resultTerm, retain: true) }
             if rvalue.tag == 18U64 { value = self.midCanonicalEmitTryErrResult(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
             if rvalue.tag == 9U64 {

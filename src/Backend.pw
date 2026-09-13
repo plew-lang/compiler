@@ -1239,26 +1239,13 @@ fn arrayOrBufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
 }
 
 fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
-    if f.tyIsArray {
-        if f.ty != 0U64 {
-            val t: TypeRef = c.arena.typeAt(index: f.ty)
-            if t.args.count() > 0U64 {
-                return t.args[0]
-            }
-        }
-        return 0U64
-    }
-    if f.ty != 0U64 {
-        if c.cur.typeParams.count() > 0U64 {
-            val g: U64 = c.groundTypeRef(ref: f.ty)
-            val gt: TypeRef = c.arena.typeAt(index: g)
-            if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-                if gt.args.count() > 0U64 {
-                    return gt.args[0]
-                }
-            }
-        }
-    }
+    // A syntactic Array[T] field still belongs to its owner's instance.
+    // Classifying the declaration's bare T would skip element destruction.
+    val grounded: U64 = c.arcFieldTy(f: f)
+    if grounded == 0U64 || grounded >= c.arena.typeCount() { return 0U64 }
+    val fieldType: TypeRef = c.arena.typeAt(index: grounded)
+    if fieldType.args.count() != 1U64 { return 0U64 }
+    if f.tyIsArray || rangeEquals(bytes: c.arena.bytes, start: fieldType.nameStart, len: fieldType.nameLen, kw: "Array") { return fieldType.args[0U64] }
     return 0U64
 }
 

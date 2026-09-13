@@ -5,7 +5,7 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
@@ -359,6 +359,23 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
 // match: Result's two selected payloads and the enclosing Result return are
 // all named by one FinalTryResolution. This helper only validates/transports
 // that fact; it never reopens Result/Ok/Err source spelling.
+fn instantiateCanonicalForRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    val index: U64 = c.finalForIndex(bodyId: bodyId, stmtId: source.sourceStmt)
+    if index >= c.arena.finalFors.count() { error = <MidInstantiateError.MissingFinalResolution />
+            return 0U64 }
+    val fact: FinalForResolution = c.arena.finalFors[index]
+    val place: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, itemRef: itemRef)
+    if place == 0U64 || !c.typeRefEq(a: c.mid.places[place - 1U64].typeTerm, b: fact.nextTypeRef) { error = <MidInstantiateError.InvalidFinalResolution />
+            return 0U64 }
+    if source.tag == 21U64 {
+        c.mid.rvalues.append(<MidRvalueNode tag=11U64 place=place enumIndex=fact.optionalEnumIndex resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+    } else {
+        c.mid.rvalues.append(<MidRvalueNode tag=12U64 place=place enumIndex=fact.optionalEnumIndex variantIndex=fact.someVariantIndex fieldIndex=0U64 resultTerm=fact.itemTypeRef />)
+    }
+    return c.mid.rvalues.count()
+}
+
 fn instantiateCanonicalTryRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
@@ -479,6 +496,8 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
         16U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         17U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         18U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        21U64 => { return instantiateCanonicalForRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
+        22U64 => { return instantiateCanonicalForRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         19U64 => { return instantiateCanonicalMakeClosure(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error) }
         _ => { return 0U64 }
     }
@@ -564,6 +583,12 @@ fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, err
     if targetId == 0U64 || targetId > c.mid.callTargets.count() { return 0U64 }
     val source: MidCallTargetNode = c.mid.callTargets[targetId - 1U64]
     match source.tag {
+        4U64 => {
+            val resolution: U64 = canonicalForCallResolution(c: c, bodyId: bodyId, stmtId: source.exprId, slot: source.slot)
+            if resolution == 0U64 { error = <MidInstantiateError.MissingFinalResolution />
+            return 0U64 }
+            c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution - 1U64 />)
+        }
         2U64 => { c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=source.resolution />) }
         1U64 => {
             val site: CallSiteKey = <CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=source.slot />
@@ -690,10 +715,20 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
     return <MidRange start=localStart len=localCount />
 }
 
+fn canonicalForCallResolution(c: Comp, bodyId: U64, stmtId: U64, slot: U64) -> U64 {
+    val index: U64 = c.finalForIndex(bodyId: bodyId, stmtId: stmtId)
+    if index >= c.arena.finalFors.count() { return 0U64 }
+    val fact: FinalForResolution = c.arena.finalFors[index]
+    if slot == 1U64 && fact.iteratorResolution < c.finalCalleeCount() { return fact.iteratorResolution + 1U64 }
+    if slot == 2U64 && fact.nextResolution < c.finalCalleeCount() { return fact.nextResolution + 1U64 }
+    return 0U64
+}
+
 fn canonicalCallResolution(c: Comp, terminator: MidTerminatorNode, bodyId: U64) -> U64 {
     if terminator.callTarget == 0U64 || terminator.callTarget > c.mid.callTargets.count() { return 0U64 }
     val target: MidCallTargetNode = c.mid.callTargets[terminator.callTarget - 1U64]
     match target.tag {
+        4U64 => { return canonicalForCallResolution(c: c, bodyId: bodyId, stmtId: target.exprId, slot: target.slot) }
         2U64 => {
             if target.resolution >= c.arena.finalCallees.count() { return 0U64 }
             return target.resolution + 1U64
@@ -827,6 +862,22 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
             }
             c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=term.cases.len /> otherwise=canonicalRemapTarget(targets: targets, target: term.otherwise) />)
         }
+        12U64 => {
+            val forIndex: U64 = c.finalForIndex(bodyId: bodyId, stmtId: term.exprId)
+            if forIndex >= c.arena.finalFors.count() {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
+                return false
+            }
+            val fact: FinalForResolution = c.arena.finalFors[forIndex]
+            val discriminant: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.discriminant, environment: environment, itemRef: itemRef)
+            if discriminant == 0U64 {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                return false
+            }
+            val caseStart: U64 = c.mid.switchCases.count()
+            c.mid.switchCases.append(<MidSwitchCase value=bitCastI64(n: fact.someVariantIndex) target=canonicalRemapTarget(targets: targets, target: term.target) />)
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=discriminant cases=<MidRange start=caseStart len=1U64 /> otherwise=canonicalRemapTarget(targets: targets, target: term.otherwise) />)
+        }
         11U64 => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: term.exprId)
             if tryIndex >= c.arena.finalTries.count() {
@@ -866,6 +917,23 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
     // assignment and continuation rather than inventing a fake intrinsic.
     if term.callTarget != 0U64 && term.callTarget <= c.mid.callTargets.count() {
         val rawTarget: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if rawTarget.tag == 4U64 && rawTarget.slot == 1U64 {
+            val index: U64 = c.finalForIndex(bodyId: bodyId, stmtId: rawTarget.exprId)
+            if index >= c.arena.finalFors.count() { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingFinalResolution /> /> }
+            val fact: FinalForResolution = c.arena.finalFors[index]
+            if fact.identityIterator {
+                if term.args.len != 0U64 || term.callReceiver == 0U64 || term.callReceiver > c.mid.callReceivers.count() { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if receiver.tag != 2U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
+                val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: receiver.operand, environment: environment, itemRef: itemRef)
+                val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: term.destination, environment: environment, itemRef: itemRef)
+                if operand == 0U64 || destination == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: fact.iteratorTypeRef) || !c.typeRefEq(a: c.mid.places[destination - 1U64].typeTerm, b: fact.iteratorTypeRef) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
+                c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=operand />)
+                c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=c.mid.rvalues.count() />)
+                c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
+                return <MidCanonicalCallMaterialization sourceStatementCount=1U64 sourceTerminator=c.mid.terminators.count() />
+            }
+        }
         if rawTarget.tag == 3U64 {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: rawTarget.exprId)
             if tryIndex >= c.arena.finalTries.count() { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingTryResolution /> /> }
@@ -1455,6 +1523,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                 _ => { return checked }
             }
         }
+        MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => { error = <MidInstantiateError.InvalidFinalResolution />
+            return value }
+        MidRvalue.ForPayloadCopy(place: _, stmtId: _) => { error = <MidInstantiateError.InvalidFinalResolution />
+            return value }
         MidRvalue.TryTag(place: val place, exprId: val exprId, resultTerm: val resultTerm) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
@@ -1540,6 +1612,7 @@ fn instantiateMidCallTarget(c: Comp, target: MidCallTarget, bodyId: U64) -> MidC
             if resolution >= c.finalCalleeCount() { return <MidCallTarget.Template site=site /> }
             return <MidCallTarget.Resolved resolution=resolution />
         }
+        MidCallTarget.ForProtocol(stmtId: val stmtId, slot: val slot) => { return <MidCallTarget.ForProtocol stmtId=stmtId slot=slot /> }
         MidCallTarget.TryConversion(exprId: val exprId) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { return <MidCallTarget.TryConversion exprId=exprId /> }
@@ -1557,6 +1630,7 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
             return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: discriminant, environment: environment, itemRef: itemRef) values=values targets=targets otherwise=otherwise />
         }
+        MidTerminator.ForBranch(discriminant: val discriminant, stmtId: val stmtId, someTarget: val someTarget, noneTarget: val noneTarget) => { return <MidTerminator.ForBranch discriminant=discriminant stmtId=stmtId someTarget=someTarget noneTarget=noneTarget /> }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: val exprId, okTarget: val okTarget, errTarget: val errTarget) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { return <MidTerminator.TryBranch discriminant=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: discriminant, environment: environment, itemRef: itemRef) exprId=exprId okTarget=okTarget errTarget=errTarget /> }
@@ -1640,6 +1714,8 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.ForTag(place: _, stmtId: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.ForPayloadCopy(place: _, stmtId: _) => { return 0U64 }
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.TryErrResult(exprId: _, resultTerm: val resultTerm, error: _) => { return resultTerm }
@@ -1719,6 +1795,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
             MidTerminator.Call(callee: val callee, receiver: val receiver, args: val rawArgs, destination: val destination, target: val target) => {
                 match callee {
                     MidCallTarget.Template(site: _) => { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingCallResolution /> } }
+                    MidCallTarget.ForProtocol(stmtId: _, slot: _) => { error = <MidInstantiateError.InvalidFinalResolution /> }
                     MidCallTarget.TryConversion(exprId: _) => { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
                     MidCallTarget.Resolved(resolution: val resolution) => {
                         if resolution >= c.arena.finalCallees.count() {

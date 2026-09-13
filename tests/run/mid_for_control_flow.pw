@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+fn choose(values: Array[String]) -> String {
+    for val value in values {
+        if value == "skip" { continue }
+        return value
+    }
+    return "empty"
+}
+
+fn nested() -> I64 {
+    mut val total: I64 = 0I64
+    for val outer in [1I64, 2I64, 3I64] {
+        for val inner in [0I64, 1I64, 2I64, 3I64] {
+            if inner == 0I64 { continue }
+            if inner == 3I64 { break }
+            total = total + outer * inner
+        }
+    }
+    return total
+}
+
+fn main() {
+    print(choose(values: ["skip", "found", "later"]))
+    print(choose(values: []))
+    print(nested())
+}

@@ -249,6 +249,12 @@ else
     fail=$((fail + 1)); failed="$failed mid-unique-aggregate"
 fi
 
+if sh ./test-mid-for.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-for"
+fi
+
 # Global places are declaration-target addresses, not legacy seeded locals.
 # Keep reads, mutable replacement, and global initializer provenance on the
 # Mid migration gate once every consumer can interpret that root directly.

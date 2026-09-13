@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -268,9 +268,9 @@ export fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false) -> U64 {
+export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -278,9 +278,9 @@ export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTe
 // Temporaries normally hold copyable evaluation results. A temporary that is
 // the owner of a unique aggregate must retain that fact too: it can only leave
 // the evaluation as Move, and drop elaboration must account for the transfer.
-fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false) -> U64 {
+fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
     return local
 }
 
@@ -538,6 +538,9 @@ fn midBlockHasIncoming(state: MidBuildState, target: U64) -> Bool {
                     if edges[edgeIndex] == target { return true }
                     edgeIndex += 1U64
                 }
+            }
+            MidTerminator.ForBranch(discriminant: _, stmtId: _, someTarget: val someTarget, noneTarget: val noneTarget) => {
+                if someTarget == target || noneTarget == target { return true }
             }
             MidTerminator.TryBranch(discriminant: _, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => {
                 if okTarget == target || errTarget == target { return true }
@@ -1883,7 +1886,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
             Stmt.While(cond: _, body: _) => {
                 result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
             }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = <MidBuildError.UnsupportedFor /> }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = buildMidFor(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Match(scrut: _, arms: _) => { result = buildMidMatch(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Panic(msg: val message, offset: _) => {
                 val messageTerm: U64 = c.semanticExprTerm(exprId: message)
@@ -2187,9 +2190,8 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
 // remains a lexical source block, so its existing ScopeExit is emitted before
 // the backedge and drop elaboration can treat every iteration uniformly.
 //
-// `break` and `continue` need an explicit stack of lexical loop targets so
-// they can emit every intervening ScopeExit; they remain separate unsupported
-// statement forms until that full source-exit rule is introduced.
+// `break` and `continue` use the lexical loop-target stack to emit every
+// intervening ScopeExit before branching.
 export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
@@ -2223,6 +2225,75 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
             if !midBlockHasIncoming(state: state, target: exitTarget) {
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
             }
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
+// The iterator lives across visits; Optional and Item live for one visit.
+// Both false-next and break converge after iteration cleanup, while continue
+// returns to the next call without releasing the iterator itself.
+export fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    match c.arena.stmts[stmtId] {
+        Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, isRange: val isRange, inclusive: _, iter: val iter, rangeHi: _, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
+            if isRange || isStruct { return <MidBuildError.UnsupportedFor /> }
+            mut val recipe: ForTypeRecipe = <ForTypeRecipe />
+            mut val index: U64 = 0U64
+            while index < c.decls.forTypeRecipes.count() {
+                if c.decls.forTypeRecipes[index].stmtId == stmtId { recipe = c.decls.forTypeRecipes[index]
+                    index = c.decls.forTypeRecipes.count() } else { index += 1U64 }
+            }
+            if recipe.iteratorRecipe == 0U64 || recipe.nextRecipe == 0U64 || recipe.itemRecipe == 0U64 { return <MidBuildError.MissingSemanticType /> }
+            val loopScope: U64 = midOpenScope(state: inout state)
+            val iterator: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: 0U64, typeRecipe: recipe.iteratorRecipe) typeTerm=0U64 typeRecipe=recipe.iteratorRecipe />
+            val evaluation: U64 = midOpenScope(state: inout state)
+            val input: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: iter, typeTerm: c.semanticExprTerm(exprId: iter), allowAccessMarker: false)
+            match input.error { MidBuildError.None => {} _ => { return input.error } }
+            if !midCurrentBlockIsOpen(state: state) { midCloseScope(state: inout state, scope: evaluation)
+                midCloseScope(state: inout state, scope: loopScope)
+                return <MidBuildError.None /> }
+            val afterIterator: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.ForProtocol stmtId=stmtId slot=1U64 /> receiver=<MidCallReceiver.Value operand=input.operand /> args=[] destination=iterator target=afterIterator />)
+            state.currentBlock = afterIterator
+            midFinishEvaluationScope(state: inout state, scope: evaluation)
+            state.callValues = []
+            state.aggregateValues = []
+            val header: U64 = midNewBlock(state: inout state)
+            val exit: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=header />)
+            state.currentBlock = header
+            val iteration: U64 = midOpenScope(state: inout state)
+            val next: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: 0U64, typeRecipe: recipe.nextRecipe) typeTerm=0U64 typeRecipe=recipe.nextRecipe />
+            val afterNext: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.ForProtocol stmtId=stmtId slot=2U64 /> receiver=<MidCallReceiver.Value operand=<MidOperand.Copy place=iterator /> /> args=[] destination=next target=afterNext />)
+            state.currentBlock = afterNext
+            val tagName: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
+            val tagTerm: U64 = c.simpleTypeRef(nameStart: tagName.nameStart, nameLen: tagName.nameLen)
+            val tag: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: tagTerm) typeTerm=tagTerm />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tag value=<MidRvalue.ForTag place=next stmtId=stmtId resultTerm=tagTerm /> />)
+            val some: U64 = midNewBlock(state: inout state)
+            val none: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.ForBranch discriminant=<MidOperand.Copy place=tag /> stmtId=stmtId someTarget=some noneTarget=none />)
+            state.currentBlock = some
+            val local: U64 = addMidLocal(state: inout state, declarationTarget: varStart, typeTerm: 0U64, isUnique: false, isParameter: false, ownsAtEntry: false, typeRecipe: recipe.itemRecipe)
+            val item: MidPlace = <MidPlace local=local typeTerm=0U64 typeRecipe=recipe.itemRecipe />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=item value=<MidRvalue.ForPayloadCopy place=next stmtId=stmtId /> />)
+            state.pushLoopTarget(breakTarget: exit, continueTarget: header, enclosingScope: loopScope)
+            val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: body)
+            state.popLoopTarget()
+            match result { MidBuildError.None => {} _ => { return result } }
+            if midCurrentBlockIsOpen(state: state) {
+                midEmitScopeExit(state: inout state, scope: iteration)
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=header />)
+            }
+            state.currentBlock = none
+            midEmitScopeExit(state: inout state, scope: iteration)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=exit />)
+            midCloseScope(state: inout state, scope: iteration)
+            state.currentBlock = exit
+            midEmitScopeExit(state: inout state, scope: loopScope)
+            midCloseScope(state: inout state, scope: loopScope)
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }

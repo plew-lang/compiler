@@ -538,7 +538,9 @@ fn midVerifyConsumeRvalue(body: MidBody, states: inout Array[MidOwnership], valu
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, matchSource: _, resultTerm: _) => { return <MidVerification /> }
+        MidRvalue.ForTag(place: _, stmtId: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryTag(place: _, exprId: _, resultTerm: _) => { return <MidVerification /> }
+        MidRvalue.ForPayloadCopy(place: _, stmtId: _) => { return <MidVerification /> }
         MidRvalue.TryPayloadCopy(place: _, exprId: _, variantIndex: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.TryErrResult(exprId: _, resultTerm: _, error: val error) => { return midVerifyConsumeOperand(body: body, states: inout states, operand: error, block: block) }
         MidRvalue.MakeClosure(exprId: _, bodyKey: _, functionTypeTerm: _, captures: val captures) => {
@@ -838,6 +840,11 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     ti += 1U64
                 }
                 if !(midTargetIsValid(body: body, target: otherwise)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+            }
+            MidTerminator.ForBranch(discriminant: val discriminant, stmtId: _, someTarget: val someTarget, noneTarget: val noneTarget) => {
+                val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: discriminant, block: bi)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+                if !(midTargetIsValid(body: body, target: someTarget)) || !(midTargetIsValid(body: body, target: noneTarget)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => {
                 val result: MidVerification = midVerifyConsumeOperand(body: body, states: inout states, operand: discriminant, block: bi)

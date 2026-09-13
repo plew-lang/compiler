@@ -2625,6 +2625,8 @@ pub impl SemanticTypeRecipe { factory }
 // identity where one is needed. This is not a Local field because Record and
 // every BodyInstance scan construct independent local scopes.
 export struct ForTypeRecipe {
+    pub val iteratorRecipe: U64 = 0U64
+    pub val nextRecipe: U64 = 0U64
     pub val stmtId: U64 = 0U64
     pub val itemRecipe: U64 = 0U64
 }
