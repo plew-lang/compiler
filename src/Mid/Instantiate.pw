@@ -339,13 +339,13 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
         return 0U64
     }
     val scrutineeType: U64 = instantiateMidType(c: inout c, typeTerm: sourcePlace.typeTerm, typeRecipe: sourcePlace.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef)
-    if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: source.enumIndex, scrutineeTypeRef: scrutineeType)) {
+    if !(midFinalMatchShapeMatches(c: inout c, matchIndex: matchIndex, enumIndex: source.enumIndex, scrutineeTypeRef: scrutineeType)) {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
         return 0U64
     }
     val resultTerm: U64 = c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if source.tag != 11U64 {
-        if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: source.variantIndex, bindTarget: source.bindTarget, fieldIndex: source.fieldIndex, fieldTypeRef: resultTerm)) {
+        if !(midFinalMatchPayloadMatches(c: inout c, matchIndex: matchIndex, variantIndex: source.variantIndex, bindTarget: source.bindTarget, fieldIndex: source.fieldIndex, fieldTypeRef: resultTerm)) {
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
             return 0U64
         }
@@ -1468,7 +1468,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: inout c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
@@ -1480,9 +1480,9 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: inout c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
-                } else if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
+                } else if !(midFinalMatchPayloadMatches(c: inout c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
@@ -1494,9 +1494,9 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             if matchIndex >= c.arena.finalMatches.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
             } else {
-                if !(midFinalMatchShapeMatches(c: c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
+                if !(midFinalMatchShapeMatches(c: inout c, matchIndex: matchIndex, enumIndex: enumIndex, scrutineeTypeRef: instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef))) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
-                } else if !(midFinalMatchPayloadMatches(c: c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
+                } else if !(midFinalMatchPayloadMatches(c: inout c, matchIndex: matchIndex, variantIndex: variantIndex, bindTarget: bindTarget, fieldIndex: fieldIndex, fieldTypeRef: groundedResult)) {
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
