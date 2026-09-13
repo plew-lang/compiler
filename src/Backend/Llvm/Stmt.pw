@@ -655,27 +655,29 @@ pub impl LlvmCtx {
                                 if bsi < c.arena.structCount() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
                                     if fidx < c.arena.structAt(index: bsi).fields.count() {
-                                        val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
-                                        if LLVMIsNull(baseTy) == 0I32 {
-                                            val fld: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
-                                            val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
-                                            val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
-                                            // route through the single store choke point. (The
-                                            // enumeration this replaces stored a generic-instance
-                                            // value RAW — no old-value release, no place-RHS
-                                            // retain: `arr[i].r = otherRef` leaked the old cell
-                                            // and double-freed the shared one.)
-                                            val g2: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: self.exprTypeRef(c: inout c, id: fbase))
-                                            mut val pty2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
-                                            if g2 != 0U64 {
-                                                pty2 = self.llvmTypeOfRef(c: inout c, ref: g2)
+                                        match self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi) {
+                                            Optional.Some(v: val baseTy) => {
+                                                val fld: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
+                                                val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
+                                                val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
+                                                // route through the single store choke point. (The
+                                                // enumeration this replaces stored a generic-instance
+                                                // value RAW — no old-value release, no place-RHS
+                                                // retain: `arr[i].r = otherRef` leaked the old cell
+                                                // and double-freed the shared one.)
+                                                val g2: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: self.exprTypeRef(c: inout c, id: fbase))
+                                                mut val pty2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                                if g2 != 0U64 {
+                                                    pty2 = self.llvmTypeOfRef(c: inout c, ref: g2)
+                                                }
+                                                self.storeToPlace(c: inout c, placePtr: gep, placeTy: pty2, typeRef: g2, valueExpr: value, destroyOld: true, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen))
+                                                handled = true
                                             }
-                                            self.storeToPlace(c: inout c, placePtr: gep, placeTy: pty2, typeRef: g2, valueExpr: value, destroyOld: true, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen))
-                                            handled = true
+                                            Optional.None => {}
                                         }
                                     }
                                 }
-                                if !(handled) {
+                                if !handled {
                                     c.errorAt(offset: c.exprOffset(id: target), msg: "LLVM backend: nested place assignment not yet supported")
                                 }
                             }

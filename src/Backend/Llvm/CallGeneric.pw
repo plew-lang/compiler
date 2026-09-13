@@ -67,26 +67,24 @@ pub impl LlvmCtx {
         return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
     }
 
-    // The address of an addressable place (a struct local), for `inout` self. Falls
-    // back to a fresh alloca holding the value for a non-place receiver.
     // The LLVM struct type of a struct-valued expression `structExpr` (def `sidx`):
     // its generic instance type if it carries one, else the registered non-generic
-    // type. LLVMConstNull(ptr) if neither (so the caller can fall back / error).
-    inout fn structLlvmTyOfExpr(c: inout Comp, structExpr: U64, sidx: U64) -> LLVMTypeRef {
+    // type. Absence is a Plew Optional, never an LLVM value used as a type handle.
+    inout fn structLlvmTyOfExpr(c: inout Comp, structExpr: U64, sidx: U64) -> Optional[LLVMTypeRef] {
         val ref: U64 = self.exprTypeRef(c: inout c, id: structExpr)
         if ref != 0U64 {
             if c.isGenericInst(ref: ref) {
                 val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
                 if gs < self.genStructRefs.count() {
-                    return self.genStructTys[gs]
+                    return <Optional.Some v=self.genStructTys[gs] />
                 }
             }
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structAt(index: sidx).nameStart, len: c.arena.structAt(index: sidx).nameLen)
         if reg < self.genStructRefs.count() {
-            return self.genStructTys[reg]
+            return <Optional.Some v=self.genStructTys[reg] />
         }
-        return LLVMConstNull(self.ptrty)
+        return <Optional.None />
     }
 
     // Resolve an addressable PLACE expression.  The recursion carries both the
