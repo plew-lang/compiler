@@ -1,0 +1,7 @@
+// The annotation name must be visible in this input file (spec/15,16).
+// Loading the built-in provider does not import its name here.
+// No construction or generated-member call can mask this visibility check.
+@[Eq]
+struct Item { pub val value: I64 }
+
+fn main() { }
