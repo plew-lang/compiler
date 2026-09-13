@@ -370,6 +370,11 @@ if sh ./test-mid-record-construction.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-record-construction"
 fi
+if sh ./test-mid-field-defaults.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-field-defaults"
+fi
 
 # Global places are declaration-target addresses, not legacy seeded locals.
 # Keep reads, mutable replacement, and global initializer provenance on the

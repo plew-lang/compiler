@@ -13,6 +13,8 @@ struct Store[T] {
 }
 pub impl[T] Store[T] { factory }
 
+fn emptyStore[T]() -> Store[T] { return <Store /> }
+
 fn main() {
     mut val numbers: Store[I64] = <Store />
     mut val words: Store[String] = <Store />
@@ -24,5 +26,12 @@ fn main() {
     print(empty.inner.values.count())
     print(numbers.label)
     print(words.label)
+    print(evaluations)
+    numbers = <Store />
+    val returned: Store[String] = emptyStore()
+    val custom: Store[String] = <Store label="written" />
+    print(numbers.inner.values.count())
+    print(returned.inner.values.count())
+    print(custom.label)
     print(evaluations)
 }
