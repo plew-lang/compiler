@@ -166,6 +166,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-call-result-types"
 fi
 
+# A construction retains its nominal owner beside unrelated lexical binders.
+if sh ./test-mid-nominal-construction.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-nominal-construction"
+fi
+
 # Unit results must remain distinct from missing call-result type facts.
 if sh ./test-mid-unit-call-results.sh; then
     :
