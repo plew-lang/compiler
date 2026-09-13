@@ -2094,6 +2094,7 @@ pub impl Comp {
                     CallTarget.RuntimeIntrinsic(intrinsic: val other) => {
                         match intrinsic {
                             RuntimeIntrinsic.HashSeed => { match other { RuntimeIntrinsic.HashSeed => { return true } _ => {} } }
+                            RuntimeIntrinsic.EntropyU64 => { match other { RuntimeIntrinsic.EntropyU64 => { return true } _ => {} } }
                             RuntimeIntrinsic.StrongCellNew => { match other { RuntimeIntrinsic.StrongCellNew => { return true } _ => {} } }
                             RuntimeIntrinsic.Io(intrinsic: val left) => {
                                 match other {

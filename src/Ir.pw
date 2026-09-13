@@ -1539,6 +1539,7 @@ export enum BufferIntrinsic {
 
 export enum RuntimeIntrinsic {
     HashSeed
+    EntropyU64
     StrongCellNew
     Io(intrinsic: IoIntrinsic)
     Process(intrinsic: ProcessIntrinsic)
@@ -2957,6 +2958,8 @@ export struct Modules {
     // The bundled Std Ffi floor. It is import-scoped like Io; its module
     // identity is only used to classify the compiler-provided ABI declarations.
     pub mut val ffiModule: U64 = 4000000000U64
+    // Entropy is owned by the explicitly imported bundled Random module.
+    pub mut val randomModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 

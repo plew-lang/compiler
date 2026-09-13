@@ -1,0 +1,14 @@
+// An ordinary extern with the same spelling has its own symbol and ABI.
+// Loading Std.Random must not turn this declaration into OS entropy.
+import @Std/Io with { print }
+import @Std/Random with { Random }
+
+extern(plewIntrinsic) {
+    fn entropyU64() -> U64
+}
+
+fn main() {
+    val random: Random = Random.withSeed(1U64)
+    print(random.state)
+    print(entropyU64())
+}

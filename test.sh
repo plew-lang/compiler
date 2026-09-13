@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# OS entropy has a declaration-owned closed runtime target.
+if sh ./test-mid-entropy.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-entropy"
+fi
+
 # Self field layout is selected without rewriting its nominal parameter type.
 if sh ./test-mid-self-fields.sh; then
     :

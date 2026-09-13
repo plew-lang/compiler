@@ -1233,6 +1233,9 @@ export fn runFrontend(c: inout Comp) {
         mut val ffiPath: Array[U8] = []
         appendBytes(into: inout ffiPath, from: stdRoot)
         appendBytes(into: inout ffiPath, from: "Ffi.pw".bytes())
+        mut val randomPath: Array[U8] = []
+        appendBytes(into: inout randomPath, from: stdRoot)
+        appendBytes(into: inout randomPath, from: "Random.pw".bytes())
         if genMode {
             // The synthesized derive-runner calls `write` even when the target file
             // does not import @Std/Io itself.  Load the real bundled declaration in
@@ -1315,6 +1318,19 @@ export fn runFrontend(c: inout Comp) {
                 }
                 if pathMatchesFfi {
                     c.modules.ffiModule = moduleId
+                }
+            }
+            if path.count() == randomPath.count() {
+                mut val pathMatchesRandom: Bool = true
+                mut val pathIndex: U64 = 0U64
+                while pathIndex < path.count() {
+                    if path[pathIndex] != randomPath[pathIndex] {
+                        pathMatchesRandom = false
+                    }
+                    pathIndex += 1U64
+                }
+                if pathMatchesRandom {
+                    c.modules.randomModule = moduleId
                 }
             }
             mut val hasPkgRoot: Bool = false

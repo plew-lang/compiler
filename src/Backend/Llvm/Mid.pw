@@ -740,6 +740,7 @@ pub impl LlvmCtx {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
                         RuntimeIntrinsic.HashSeed => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                        RuntimeIntrinsic.EntropyU64 => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                         RuntimeIntrinsic.StrongCellNew => { return <MidCallPreflight.Target /> }
                         RuntimeIntrinsic.Process(intrinsic: val process) => {
                             match process {
@@ -1174,6 +1175,7 @@ pub impl LlvmCtx {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
             match intrinsic {
                 RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midLocalPtr(body: body, local: destination.local)) return true }
+                RuntimeIntrinsic.EntropyU64 => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_random_u64", resultType: self.i64ty), self.midLocalPtr(body: body, local: destination.local)) return true }
                 RuntimeIntrinsic.StrongCellNew => { return false }
                 RuntimeIntrinsic.Io(intrinsic: val io) => {
                     match io {
@@ -3051,6 +3053,7 @@ pub impl LlvmCtx {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
                     RuntimeIntrinsic.HashSeed => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                    RuntimeIntrinsic.EntropyU64 => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                     RuntimeIntrinsic.Process(intrinsic: val process) => {
                         match process {
                             ProcessIntrinsic.ArgCount => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
@@ -3094,6 +3097,7 @@ pub impl LlvmCtx {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
                     RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) return true }
+                    RuntimeIntrinsic.EntropyU64 => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_random_u64", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) return true }
                     RuntimeIntrinsic.Io(intrinsic: val io) => {
                         match io {
                             IoIntrinsic.Write => { self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", value: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) }
