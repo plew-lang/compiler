@@ -2147,23 +2147,12 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-payload")
                         return <MidBuildError.UnsupportedMatch />
                     }
-                    // Every non-consuming payload binding aliases the matched
-                    // enum for the arm's lexical lifetime.  This is not an
-                    // ARC classification: the parametric body may contain T,
-                    // whose ARC representation is known only after grounding.
-                    // A later MidOperand.Copy is the sole value boundary and
-                    // obtains the grounded ARC share when one is needed.
-                    // Scalars follow the same representation at zero ARC cost.
-                    val isBorrowed: Bool = true
-                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
+                    // Pattern bindings are independent values. The original
+                    // enum can be overwritten while the arm still uses them.
+                    // Borrow elision requires a separate owner-lifetime proof.
+                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
-                    if isBorrowed {
-                        if payload.isBoxed {
-                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedBorrow place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
-                        } else {
-                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
-                        }
-                    } else if payload.isBoxed {
+                    if payload.isBoxed {
                         midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedCopy place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
                     } else {
                         midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)

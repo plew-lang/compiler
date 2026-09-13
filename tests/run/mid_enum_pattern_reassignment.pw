@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+enum Payload {
+    Empty
+    Data(text: String, values: Array[I64])
+}
+
+fn main() {
+    mut val source: Payload = <Payload.Data text="old" + "text" values=[11I64, 22I64] />
+    match source {
+        Payload.Data(val text, val values) => {
+            source = <Payload.Data text="new" + "text" values=[33I64, 44I64] />
+            print(text)
+            print(values[0U64])
+        }
+        Payload.Empty => {}
+    }
+}
