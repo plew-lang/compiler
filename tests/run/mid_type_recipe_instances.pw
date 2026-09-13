@@ -1,0 +1,47 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
+import /Mid with { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidScope, MidOperand, MidPlace, MidInstantiateError, instantiateCanonicalMidBody }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val firstName = compiler.internBytes(s: "First")
+    val secondName = compiler.internBytes(s: "Second")
+    val optionalName = compiler.internBytes(s: "Optional")
+    val firstType = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen args=[] />)
+    val secondType = compiler.pushType(t: <TypeRef nameStart=secondName.nameStart nameLen=secondName.nameLen args=[] />)
+    val firstOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen args=[firstType] />)
+    val secondOptional = compiler.pushType(t: <TypeRef nameStart=optionalName.nameStart nameLen=optionalName.nameLen args=[secondType] />)
+    val firstBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=firstType />)
+    val secondBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=secondType />)
+    compiler.cur.bodyId = firstBody
+    val site = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 2U64)
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional)
+    compiler.cur.bodyId = secondBody
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: secondType, resultTypeRef: secondOptional)
+    // Navigation is deliberately unrelated to the stored semantic call site.
+    compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=site />)
+    compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=4U64 input=1U64 />)
+    val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=2U64 sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.ReturnValue value=<MidOperand.Copy place=<MidPlace local=0U64 projections=[] typeTerm=0U64 typeRecipe=2U64 /> /> /> />] />)
+    val sourceLocal = compiler.mid.bodies[source.body - 1U64].locals.start
+    // Cursor points at the other instance during each instantiation.
+    val first = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: firstBody)
+    match first.error { MidInstantiateError.None => {} _ => { panic "first instance failed" } }
+    compiler.cur.bodyId = firstBody
+    val second = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: secondBody)
+    match second.error { MidInstantiateError.None => {} _ => { panic "second instance failed" } }
+    val block = compiler.mid.blocks[compiler.mid.bodies[first.body.body - 1U64].blocks.start]
+    val terminator = compiler.mid.terminators[block.terminator - 1U64]
+    val operand = compiler.mid.operands[terminator.value - 1U64]
+    if compiler.mid.places[operand.place - 1U64].typeTerm != firstType || compiler.mid.places[operand.place - 1U64].typeRecipe != 0U64 { panic "place recipe not grounded" }
+    val firstLocal = compiler.mid.bodies[first.body.body - 1U64].locals.start
+    val secondLocal = compiler.mid.bodies[second.body.body - 1U64].locals.start
+    if compiler.mid.locals[firstLocal].typeTerm != firstType || compiler.mid.locals[secondLocal].typeTerm != secondType { panic "instance result identity lost" }
+    if compiler.mid.locals[firstLocal].typeRecipe != 0U64 || compiler.mid.locals[secondLocal].typeRecipe != 0U64 { panic "ground result retained recipe" }
+    if compiler.mid.locals[sourceLocal].typeTerm != 0U64 || compiler.mid.locals[sourceLocal].typeRecipe != 2U64 { panic "source recipe mutated" }
+    val missingBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    val missing = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: missingBody)
+    match missing.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "missing dependency accepted" } }
+    write(s: "mid-type-recipe-instances-ok\n")
+}

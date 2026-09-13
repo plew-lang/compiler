@@ -209,38 +209,43 @@ pub impl Comp {
     }
 
     // Resolve a deferred semantic type source under the active BodyInstance.
-    // The result is always an ordinary ground TypeTerm; recipes never cross
-    // the frontend/backend freeze boundary.
+    // The result is always an ordinary ground TypeTerm. Parametric Mid may
+    // retain recipes until explicit BodyInstance instantiation.
     inout fn groundSemanticTypeRecipe(recipeId: U64) -> U64 {
-        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return 0U64 }
-        val recipe: SemanticTypeRecipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
-        if recipe.kind == 1U64 {
-            return self.groundTermForBody(ref: recipe.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        return self.groundSemanticTypeRecipeForBody(recipeId: recipeId, bodyId: self.currentBodyInstanceId(), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+    }
+
+    // Semantic recipes can cross the Mid boundary without inheriting the
+    // caller's Cursor. Call dependencies are keyed by the explicit body and
+    // recorded semantic site, including statement-owned protocol sites.
+    inout fn groundSemanticTypeRecipeForBody(recipeId: U64, bodyId: U64, selfRef: U64, itemRef: U64) -> U64 {
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return 0U64 }
+        val kind: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].kind
+        if kind == 1U64 {
+            return self.groundTermForBody(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].term, environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef)
         }
-        if recipe.kind == 2U64 {
-            if recipe.siteIsStmt {
-                return self.bodyCalleeResultRef(exprId: recipe.exprId, siteIsStmt: true, slot: recipe.callSite.slot)
-            }
-            return self.bodyCalleeResultForTemplateDependency(exprId: recipe.exprId, siteKey: recipe.callSite)
+        if kind == 2U64 {
+            val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: self.arena.semanticTypeRecipes[recipeId - 1U64].callSite)
+            if index < self.finalCalleeCount() { return self.arena.finalCallees[index].resultTypeRef }
+            return 0U64
         }
-        if recipe.kind == 3U64 {
-            val receiver: U64 = self.groundSemanticTypeRecipe(recipeId: recipe.input)
+        val input: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].input
+        if kind == 3U64 {
+            val receiver: U64 = self.groundSemanticTypeRecipeForBody(recipeId: input, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef)
+            if receiver == 0U64 { return 0U64 }
             mut val args: Array[U64] = []
             mut val i: U64 = 0U64
-            while i < recipe.traitArgs.count() {
-                args.append(self.groundTermForBody(ref: recipe.traitArgs[i], environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+            while i < self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs.count() {
+                args.append(self.groundTermForBody(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs[i], environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef))
                 i += 1U64
             }
-            return self.assocBindingFor(baseRef: receiver, traitId: recipe.traitId, traitOwner: recipe.traitOwner, traitArgs: args, assocId: recipe.assocId)
+            return self.assocBindingFor(baseRef: receiver, traitId: self.arena.semanticTypeRecipes[recipeId - 1U64].traitId, traitOwner: self.arena.semanticTypeRecipes[recipeId - 1U64].traitOwner, traitArgs: args, assocId: self.arena.semanticTypeRecipes[recipeId - 1U64].assocId)
         }
-        if recipe.kind == 4U64 {
-            val optional: U64 = self.groundSemanticTypeRecipe(recipeId: recipe.input)
+        if kind == 4U64 {
+            val optional: U64 = self.groundSemanticTypeRecipeForBody(recipeId: input, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef)
             if optional == 0U64 || optional >= self.arena.typeCount() { return 0U64 }
             val t: TypeRef = self.arena.typeAt(index: optional)
-            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Optional") && t.args.count() == 1U64 {
-                return t.args[0]
-            }
-            return 0U64
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Optional") && t.args.count() == 1U64 { return t.args[0U64] }
         }
         return 0U64
     }

@@ -68,7 +68,17 @@ fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
     }
 }
 
-fn instantiateCanonicalPlace(c: inout Comp, placeId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+// Deferred type sources never share the TypeTerm numeric domain. A missing
+// recipe is an instantiation failure, not a Unit type or an ABI inference hint.
+fn instantiateMidType(c: inout Comp, typeTerm: U64, typeRecipe: U64, bodyId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+    if typeRecipe != 0U64 {
+        if typeTerm != 0U64 { return 0U64 }
+        return c.groundSemanticTypeRecipeForBody(recipeId: typeRecipe, bodyId: bodyId, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    }
+    return c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+}
+
+fn instantiateCanonicalPlace(c: inout Comp, bodyId: U64, placeId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
     if placeId == 0U64 || placeId > c.mid.places.count() { return 0U64 }
     val source: MidPlaceNode = c.mid.places[placeId - 1U64]
     val projectionStart: U64 = c.mid.projections.count()
@@ -78,17 +88,17 @@ fn instantiateCanonicalPlace(c: inout Comp, placeId: U64, environment: BodyInsta
         c.mid.projections.append(<MidProjectionNode isBoxed=projection.isBoxed tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         i = i + 1U64
     }
-    c.mid.places.append(<MidPlaceNode rootTag=source.rootTag local=source.local globalTarget=source.globalTarget globalMutable=source.globalMutable projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+    c.mid.places.append(<MidPlaceNode rootTag=source.rootTag local=source.local globalTarget=source.globalTarget globalMutable=source.globalMutable projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=instantiateMidType(c: inout c, typeTerm: source.typeTerm, typeRecipe: source.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef) />)
     return c.mid.places.count()
 }
 
-fn instantiateCanonicalOperand(c: inout Comp, operandId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
     if operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
     mut val place: U64 = 0U64
-    if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) }
+    if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, itemRef: itemRef) }
     mut val accessPlace: U64 = 0U64
-    if source.accessPlace != 0U64 { accessPlace = instantiateCanonicalPlace(c: inout c, placeId: source.accessPlace, environment: environment, itemRef: itemRef) }
+    if source.accessPlace != 0U64 { accessPlace = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.accessPlace, environment: environment, itemRef: itemRef) }
     c.mid.operands.append(<MidOperandNode tag=source.tag place=place accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=c.groundTermForBody(ref: source.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) accessCandidate=source.accessCandidate />)
     return c.mid.operands.count()
 }
@@ -97,24 +107,24 @@ fn instantiateCanonicalOperand(c: inout Comp, operandId: U64, environment: BodyI
 // their row. Return/aggregate/cast and enum-match boundaries are deliberately
 // handled below their own frontend-proof readers rather than being treated as
 // this case.
-fn instantiateCanonicalClosedRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+fn instantiateCanonicalClosedRvalue(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
     match source.tag {
         1U64 => {
-            c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) />)
+            c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) />)
         }
         6U64 => {
-            c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) conversion=source.conversion />)
+            c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) conversion=source.conversion />)
         }
         8U64 => {
-            c.mid.rvalues.append(<MidRvalueNode tag=8U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+            c.mid.rvalues.append(<MidRvalueNode tag=8U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         }
         9U64 => {
-            c.mid.rvalues.append(<MidRvalueNode tag=9U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+            c.mid.rvalues.append(<MidRvalueNode tag=9U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         }
         10U64 => {
-            c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+            c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         }
         _ => { return 0U64 }
     }
@@ -140,7 +150,7 @@ fn instantiateCanonicalStorageBoundary(c: inout Comp, rvalueId: U64, environment
         return 0U64
     }
     val resolution: FinalStorageResolution = c.arena.finalStorages[index]
-    val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef)
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef)
     val target: U64 = c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if operand == 0U64 || !c.typeRefEq(a: target, b: resolution.targetTypeRef) || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: resolution.sourceTypeRef) || c.conversionProofIsMissing(id: resolution.conversion) {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
@@ -166,7 +176,7 @@ fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment:
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
     if source.tag != 2U64 { return 0U64 }
-    val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef)
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef)
     val resolutionIndex: U64 = c.finalReturnIndex(bodyId: bodyId, exprId: source.exprId)
     if resolutionIndex >= c.arena.finalReturns.count() {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingReturnResolution /> }
@@ -217,7 +227,7 @@ fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: Body
     mut val i: U64 = 0U64
     while i < source.elements.len {
         val element = c.mid.aggregateElements[source.elements.start + i]
-        val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: element.operand, environment: environment, itemRef: itemRef)
+        val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: element.operand, environment: environment, itemRef: itemRef)
         val targetTerm: U64 = resolution.elementTargetRefs[i]
         val conversion: U64 = c.freezeValueConversionProof(proof: resolution.elementConversions[i])
         if operand == 0U64 || targetTerm == 0U64 || conversion == 0U64 {
@@ -235,11 +245,11 @@ fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: Body
     return c.mid.rvalues.count()
 }
 
-fn instantiateCanonicalCastBoundary(c: inout Comp, rvalueId: U64, environment: BodyInstance, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+fn instantiateCanonicalCastBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val sourceNode = c.mid.rvalues[rvalueId - 1U64]
     if sourceNode.tag != 7U64 { return 0U64 }
-    val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: sourceNode.operand, environment: environment, itemRef: itemRef)
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: sourceNode.operand, environment: environment, itemRef: itemRef)
     val sourceRef: U64 = c.groundTermForBody(ref: sourceNode.sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     val targetRef: U64 = c.groundTermForBody(ref: sourceNode.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if operand == 0U64 || sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef >= c.arena.typeCount() || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: sourceRef)) {
@@ -340,7 +350,7 @@ fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment
             return 0U64
         }
     }
-    val place: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef)
+    val place: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, itemRef: itemRef)
     c.mid.rvalues.append(<MidRvalueNode tag=source.tag place=place enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceTag=source.sourceTag sourceStmt=source.sourceStmt resultTerm=resultTerm />)
     return c.mid.rvalues.count()
 }
@@ -365,7 +375,7 @@ fn instantiateCanonicalTryRvalue(c: inout Comp, rvalueId: U64, environment: Body
         }
     }
     if source.tag == 16U64 {
-        c.mid.rvalues.append(<MidRvalueNode tag=16U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) exprId=source.exprId enumIndex=fact.resultEnumIndex resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        c.mid.rvalues.append(<MidRvalueNode tag=16U64 place=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, itemRef: itemRef) exprId=source.exprId enumIndex=fact.resultEnumIndex resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
         return c.mid.rvalues.count()
     }
     if source.tag == 17U64 {
@@ -382,11 +392,11 @@ fn instantiateCanonicalTryRvalue(c: inout Comp, rvalueId: U64, environment: Body
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidTryResolution /> }
             return 0U64
         }
-        c.mid.rvalues.append(<MidRvalueNode tag=17U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) exprId=source.exprId enumIndex=fact.resultEnumIndex variantIndex=variant resultTerm=payloadRef />)
+        c.mid.rvalues.append(<MidRvalueNode tag=17U64 place=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, itemRef: itemRef) exprId=source.exprId enumIndex=fact.resultEnumIndex variantIndex=variant resultTerm=payloadRef />)
         return c.mid.rvalues.count()
     }
     if source.tag == 18U64 {
-        val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef)
+        val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef)
         if operand == 0U64 || !(c.typeRefEq(a: c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef), b: fact.returnResultTypeRef)) || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: fact.targetErrorTypeRef)) {
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidTryResolution /> }
             return 0U64
@@ -401,7 +411,7 @@ fn instantiateCanonicalTryRvalue(c: inout Comp, rvalueId: U64, environment: Body
 // the closure Expr or the backend's local stack.  The parametric row stores
 // the exact capture operands selected by Build; this pass only grounds their
 // terms and proves that the row still agrees with the immutable fact.
-fn instantiateCanonicalMakeClosure(c: inout Comp, rvalueId: U64, environment: BodyInstance, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if source.tag != 19U64 {
@@ -434,7 +444,7 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, rvalueId: U64, environment: Bo
             SemanticClosureCaptureMode.ValueCopy => { expectedMode = 1U64 }
             SemanticClosureCaptureMode.CellBorrow => { expectedMode = 2U64 }
         }
-        val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: raw.operand, environment: environment, itemRef: itemRef)
+        val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: raw.operand, environment: environment, itemRef: itemRef)
         if raw.bindingTarget != expected.bindingTarget || raw.mode != expectedMode || expectedType == 0U64 || operand == 0U64 || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: expectedType)) {
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
             return 0U64
@@ -450,17 +460,17 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val tag: U64 = c.mid.rvalues[rvalueId - 1U64].tag
     match tag {
-        1U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        1U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
         20U64 => { return instantiateCanonicalStorageBoundary(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         2U64 => { return instantiateCanonicalReturnBoundary(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         3U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         4U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         5U64 => { return instantiateCanonicalAggregate(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
-        6U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
-        7U64 => { return instantiateCanonicalCastBoundary(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef, error: inout error) }
-        8U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
-        9U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
-        10U64 => { return instantiateCanonicalClosedRvalue(c: inout c, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        6U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        7U64 => { return instantiateCanonicalCastBoundary(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef, error: inout error) }
+        8U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        9U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
+        10U64 => { return instantiateCanonicalClosedRvalue(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, itemRef: itemRef) }
         11U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         12U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         13U64 => { return instantiateCanonicalEnumMatchRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
@@ -469,7 +479,7 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
         16U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         17U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         18U64 => { return instantiateCanonicalTryRvalue(c: inout c, rvalueId: rvalueId, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
-        19U64 => { return instantiateCanonicalMakeClosure(c: inout c, rvalueId: rvalueId, environment: environment, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error) }
+        19U64 => { return instantiateCanonicalMakeClosure(c: inout c, bodyId: bodyId, rvalueId: rvalueId, environment: environment, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error) }
         _ => { return 0U64 }
     }
 }
@@ -479,22 +489,22 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRan
     val source = c.mid.statements[statementId - 1U64]
     match source.tag {
         1U64 => {
-            val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef)
+            val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef)
             val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
             if destination == 0U64 || value == 0U64 { return false }
             c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=value />)
         }
         9U64 => {
-            val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef)
+            val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef)
             val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
             if destination == 0U64 || value == 0U64 { return false }
             c.mid.statements.append(<MidStatementNode tag=9U64 destination=destination value=value />)
         }
-        2U64 => { c.mid.statements.append(<MidStatementNode tag=2U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, placeId: source.source, environment: environment, itemRef: itemRef) />) }
-        8U64 => { c.mid.statements.append(<MidStatementNode tag=8U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, placeId: source.source, environment: environment, itemRef: itemRef) />) }
-        3U64 => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
-        10U64 => { c.mid.statements.append(<MidStatementNode tag=10U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
-        4U64 => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=instantiateCanonicalPlace(c: inout c, placeId: source.destination, environment: environment, itemRef: itemRef) flag=source.flag />) }
+        2U64 => { c.mid.statements.append(<MidStatementNode tag=2U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.source, environment: environment, itemRef: itemRef) />) }
+        8U64 => { c.mid.statements.append(<MidStatementNode tag=8U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.source, environment: environment, itemRef: itemRef) />) }
+        3U64 => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
+        10U64 => { c.mid.statements.append(<MidStatementNode tag=10U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
+        4U64 => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) flag=source.flag />) }
         5U64 => { c.mid.statements.append(<MidStatementNode tag=5U64 flag=source.flag isSet=source.isSet />) }
         6U64 => { c.mid.statements.append(<MidStatementNode tag=6U64 scope=source.scope />) }
         11U64 => {
@@ -524,7 +534,7 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRan
 // Call is intentionally excluded until its selected passing/conversion proof
 // is emitted with its continuation cleanup. Every other terminator has a
 // closed scalar payload and can be grounded without a draft reconstruction.
-fn instantiateCanonicalNonCallTerminator(c: inout Comp, terminatorId: U64, environment: BodyInstance, itemRef: U64) -> Bool {
+fn instantiateCanonicalNonCallTerminator(c: inout Comp, bodyId: U64, terminatorId: U64, environment: BodyInstance, itemRef: U64) -> Bool {
     if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return false }
     val source = c.mid.terminators[terminatorId - 1U64]
     match source.tag {
@@ -537,11 +547,11 @@ fn instantiateCanonicalNonCallTerminator(c: inout Comp, terminatorId: U64, envir
                 c.mid.switchCases.append(c.mid.switchCases[source.cases.start + i])
                 i = i + 1U64
             }
-            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, operandId: source.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=source.cases.len /> otherwise=source.otherwise />)
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=source.cases.len /> otherwise=source.otherwise />)
         }
         5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
-        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, operandId: source.value, environment: environment, itemRef: itemRef) />) }
-        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, operandId: source.value, environment: environment, itemRef: itemRef) />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.value, environment: environment, itemRef: itemRef) />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.value, environment: environment, itemRef: itemRef) />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
         10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=source.state resume=source.resume />) }
@@ -582,12 +592,12 @@ fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, err
     return c.mid.callTargets.count()
 }
 
-fn instantiateCanonicalCallReceiver(c: inout Comp, receiverId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+fn instantiateCanonicalCallReceiver(c: inout Comp, bodyId: U64, receiverId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
     if receiverId == 0U64 || receiverId > c.mid.callReceivers.count() { return 0U64 }
     val source: MidCallReceiverNode = c.mid.callReceivers[receiverId - 1U64]
     match source.tag {
         1U64 => { c.mid.callReceivers.append(<MidCallReceiverNode tag=1U64 />) }
-        2U64 => { c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) />) }
+        2U64 => { c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, itemRef: itemRef) />) }
         _ => { return 0U64 }
     }
     return c.mid.callReceivers.count()
@@ -626,7 +636,7 @@ fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
 // Local declarations are rows too: append their final ground type only after
 // the body rewrite has seen resolution boundaries. This preserves append-only
 // canonical storage instead of mutating an already-published local row.
-fn appendCanonicalInstantiatedLocals(c: inout Comp, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance, itemRef: U64) -> MidRange {
+fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout MidInstantiateError, source: MidBodyNode, blockStart: U64, blockLen: U64, environment: BodyInstance, itemRef: U64) -> MidRange {
     val localStart: U64 = c.mid.locals.count()
     mut val localCount: U64 = source.locals.len
     mut val blockI: U64 = 0U64
@@ -649,9 +659,13 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, source: MidBodyNode, blockSt
         mut val typeTerm: U64 = 0U64
         if localI < source.locals.len {
             sourceLocal = c.mid.locals[source.locals.start + localI]
-            typeTerm = c.groundTermForBody(ref: sourceLocal.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            typeTerm = instantiateMidType(c: inout c, typeTerm: sourceLocal.typeTerm, typeRecipe: sourceLocal.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef)
+            if sourceLocal.typeRecipe != 0U64 && typeTerm == 0U64 {
+                error = <MidInstantiateError.InvalidLocalResultType />
+                return <MidRange start=localStart len=0U64 />
+            }
         }
-        if !sourceLocal.isParameter && sourceLocal.sourceNameStart == 0U64 {
+        if sourceLocal.typeRecipe == 0U64 && !sourceLocal.isParameter && sourceLocal.sourceNameStart == 0U64 {
             blockI = 0U64
             while blockI < blockLen {
                 val block: MidBlockNode = c.mid.blocks[blockStart + blockI]
@@ -811,7 +825,7 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
                 c.mid.switchCases.append(<MidSwitchCase value=item.value target=canonicalRemapTarget(targets: targets, target: item.target) />)
                 caseI = caseI + 1U64
             }
-            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, operandId: term.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=term.cases.len /> otherwise=canonicalRemapTarget(targets: targets, target: term.otherwise) />)
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=term.cases.len /> otherwise=canonicalRemapTarget(targets: targets, target: term.otherwise) />)
         }
         11U64 => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: term.exprId)
@@ -820,7 +834,7 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
                 return false
             }
             val fact: FinalTryResolution = c.arena.finalTries[tryIndex]
-            val discriminant: U64 = instantiateCanonicalOperand(c: inout c, operandId: term.discriminant, environment: environment, itemRef: itemRef)
+            val discriminant: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.discriminant, environment: environment, itemRef: itemRef)
             if discriminant == 0U64 {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidTryResolution /> }
                 return false
@@ -830,8 +844,8 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
             c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=discriminant cases=<MidRange start=caseStart len=1U64 /> otherwise=canonicalRemapTarget(targets: targets, target: term.otherwise) />)
         }
         5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
-        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, operandId: term.value, environment: environment, itemRef: itemRef) />) }
-        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, operandId: term.value, environment: environment, itemRef: itemRef) />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.value, environment: environment, itemRef: itemRef) />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.value, environment: environment, itemRef: itemRef) />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
         10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalRemapTarget(targets: targets, target: term.resume) />) }
@@ -858,8 +872,8 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
             val fact: FinalTryResolution = c.arena.finalTries[tryIndex]
             if !fact.hasErrorConversion {
                 if term.args.len != 1U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidTryResolution /> /> }
-                val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start], environment: environment, itemRef: itemRef)
-                val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
+                val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: c.mid.callArguments[term.args.start], environment: environment, itemRef: itemRef)
+                val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: term.destination, environment: environment, itemRef: itemRef)
                 if operand == 0U64 || destination == 0U64 || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: fact.targetErrorTypeRef)) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidTryResolution /> /> }
                 c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=operand />)
                 c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=c.mid.rvalues.count() />)
@@ -893,7 +907,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
     mut val targetError: MidInstantiateError = <MidInstantiateError.None />
     val callTarget: U64 = instantiateCanonicalCallTarget(c: inout c, targetId: term.callTarget, bodyId: bodyId, error: inout targetError)
     if callTarget == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.MissingCallResolution /> /> }
-    val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
+    val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, bodyId: bodyId, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
     val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing, locals: locals)
     if receiver == 0U64 {
         if c.traceCodegen {
@@ -920,7 +934,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
         if !midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing) {
             return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
         }
-        mut val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, itemRef: itemRef)
+        mut val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, itemRef: itemRef)
         if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
         if !c.conversionProofIsIdentity(id: conversion) {
             match passing {
@@ -990,7 +1004,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
         c.mid.callArguments.append(operand)
         argumentI = argumentI + 1U64
     }
-    val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
+    val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: term.destination, environment: environment, itemRef: itemRef)
     if destination == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.InvalidFinalResolution /> /> }
     val sourceStatementCount: U64 = c.mid.statements.count() - conversionStatementStart
     if cleanupPlaces.count() > 0U64 {
@@ -1064,7 +1078,8 @@ export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bod
         }
         blockI = blockI + 1U64
     }
-    val locals: MidRange = appendCanonicalInstantiatedLocals(c: inout c, source: source, blockStart: blockStart, blockLen: outputBlockLen, environment: environment, itemRef: itemRef)
+    val locals: MidRange = appendCanonicalInstantiatedLocals(c: inout c, bodyId: bodyId, error: inout error, source: source, blockStart: blockStart, blockLen: outputBlockLen, environment: environment, itemRef: itemRef)
+    if midInstantiateHasError(error: error) { return <MidCanonicalInstantiation error=error /> }
     c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=locals scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=outputBlockLen /> entry=canonicalRemapTarget(targets: targets, target: source.entry) />)
     return <MidCanonicalInstantiation body=<MidCanonicalBody body=c.mid.bodies.count() /> error=error />
 }
@@ -1185,21 +1200,21 @@ fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environmen
     }
 }
 
-fn instantiateMidPlace(c: inout Comp, place: MidPlace, environment: BodyInstance, itemRef: U64) -> MidPlace {
+fn instantiateMidPlace(c: inout Comp, bodyId: U64, place: MidPlace, environment: BodyInstance, itemRef: U64) -> MidPlace {
     mut val projections: Array[MidProjection] = []
     mut val i: U64 = 0U64
     while i < place.projections.count() {
         projections.append(instantiateMidProjection(c: inout c, projection: place.projections[i], environment: environment, itemRef: itemRef))
         i += 1U64
     }
-    return <MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+    return <MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=instantiateMidType(c: inout c, typeTerm: place.typeTerm, typeRecipe: place.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef) />
 }
 
-fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyInstance, itemRef: U64) -> MidOperand {
+fn instantiateMidOperand(c: inout Comp, bodyId: U64, operand: MidOperand, environment: BodyInstance, itemRef: U64) -> MidOperand {
     match operand {
-        MidOperand.Copy(place: val place) => { return <MidOperand.Copy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
-        MidOperand.Move(place: val place) => { return <MidOperand.Move place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
-        MidOperand.Borrow(place: val place, capability: val capability) => { return <MidOperand.Borrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) capability=capability /> }
+        MidOperand.Copy(place: val place) => { return <MidOperand.Copy place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) /> }
+        MidOperand.Move(place: val place) => { return <MidOperand.Move place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) /> }
+        MidOperand.Borrow(place: val place, capability: val capability) => { return <MidOperand.Borrow place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) capability=capability /> }
         MidOperand.Constant(value: val value) => {
             match value {
                 MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val typeTerm) => {
@@ -1219,9 +1234,9 @@ fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyIn
 
 fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> MidRvalue {
     match value {
-        MidRvalue.Use(operand: val operand) => { return <MidRvalue.Use operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) /> }
+        MidRvalue.Use(operand: val operand) => { return <MidRvalue.Use operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: operand, environment: environment, itemRef: itemRef) /> }
         MidRvalue.StorageBoundary(stmtId: val stmtId, targetTerm: val targetTerm, operand: val rawOperand) => {
-            val operand: MidOperand = instantiateMidOperand(c: inout c, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val operand: MidOperand = instantiateMidOperand(c: inout c, bodyId: bodyId, operand: rawOperand, environment: environment, itemRef: itemRef)
             val index: U64 = c.finalStorageIndex(bodyId: bodyId, stmtId: stmtId)
             if index >= c.arena.finalStorages.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
@@ -1246,7 +1261,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             return <MidRvalue.Convert operand=operand conversion=resolution.conversion />
         }
         MidRvalue.ReturnBoundary(exprId: val exprId, targetTerm: val targetTerm, operand: val rawOperand) => {
-            val operand: MidOperand = instantiateMidOperand(c: inout c, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val operand: MidOperand = instantiateMidOperand(c: inout c, bodyId: bodyId, operand: rawOperand, environment: environment, itemRef: itemRef)
             val resolutionIndex: U64 = c.finalReturnIndex(bodyId: bodyId, exprId: exprId)
             if resolutionIndex >= c.arena.finalReturns.count() {
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingReturnResolution /> }
@@ -1309,7 +1324,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             mut val i: U64 = 0U64
             while i < elements.count() {
                 val element: MidAggregateElement = elements[i]
-                val operand: MidOperand = instantiateMidOperand(c: inout c, operand: element.operand, environment: environment, itemRef: itemRef)
+                val operand: MidOperand = instantiateMidOperand(c: inout c, bodyId: bodyId, operand: element.operand, environment: environment, itemRef: itemRef)
                 mut val targetTerm: U64 = 0U64
                 mut val conversion: U64 = 0U64
                 if hasResolution {
@@ -1335,10 +1350,10 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             return <MidRvalue.Aggregate exprId=exprId kind=kind resultTerm=resultRef fieldCount=fieldCount elements=instantiated />
         }
         MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
-            return <MidRvalue.Convert operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) conversion=conversion />
+            return <MidRvalue.Convert operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: operand, environment: environment, itemRef: itemRef) conversion=conversion />
         }
         MidRvalue.CastBoundary(exprId: _, sourceTerm: val sourceTerm, targetTerm: val targetTerm, operand: val rawOperand) => {
-            val operand: MidOperand = instantiateMidOperand(c: inout c, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val operand: MidOperand = instantiateMidOperand(c: inout c, bodyId: bodyId, operand: rawOperand, environment: environment, itemRef: itemRef)
             val sourceRef: U64 = c.groundTermForBody(ref: sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
             val targetRef: U64 = c.groundTermForBody(ref: targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
             if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef >= c.arena.typeCount() || !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: sourceRef)) {
@@ -1378,7 +1393,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             return <MidRvalue.Use operand=operand />
         }
         MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
-            return <MidRvalue.Cast operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) kind=kind targetTerm=targetTerm />
+            return <MidRvalue.Cast operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: operand, environment: environment, itemRef: itemRef) kind=kind targetTerm=targetTerm />
         }
         MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, matchSource: val matchSource, resultTerm: val resultTerm) => {
             val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
@@ -1389,7 +1404,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumTag place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex matchSource=matchSource resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+            return <MidRvalue.EnumTag place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex matchSource=matchSource resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
         MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
             val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
@@ -1403,7 +1418,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
+            return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
         }
         MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, matchSource: val matchSource, resultTerm: val resultTerm) => {
             val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, matchSource: matchSource)
@@ -1417,7 +1432,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                 }
             }
-            return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
+            return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget matchSource=matchSource resultTerm=groundedResult />
         }
         // Boxed payload reads have identical declaration identity and logical
         // type requirements. Delegate their grounding/validation to the
@@ -1443,24 +1458,24 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
         MidRvalue.TryTag(place: val place, exprId: val exprId, resultTerm: val resultTerm) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
-            return <MidRvalue.TryTag place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) exprId=exprId resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+            return <MidRvalue.TryTag place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) exprId=exprId resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
         MidRvalue.TryPayloadCopy(place: val place, exprId: val exprId, variantIndex: val variantIndex, resultTerm: val resultTerm) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
-            return <MidRvalue.TryPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) exprId=exprId variantIndex=variantIndex resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+            return <MidRvalue.TryPayloadCopy place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) exprId=exprId variantIndex=variantIndex resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }
         MidRvalue.TryErrResult(exprId: val exprId, resultTerm: val resultTerm, error: val errorOperand) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
             if tryIndex >= c.arena.finalTries.count() { if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingTryResolution /> } }
-            return <MidRvalue.TryErrResult exprId=exprId resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) error=instantiateMidOperand(c: inout c, operand: errorOperand, environment: environment, itemRef: itemRef) />
+            return <MidRvalue.TryErrResult exprId=exprId resultTerm=c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) error=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: errorOperand, environment: environment, itemRef: itemRef) />
         }
         MidRvalue.MakeClosure(exprId: val exprId, bodyKey: val bodyKey, functionTypeTerm: val functionTypeTerm, captures: val captures) => {
             mut val grounded: Array[MidClosureCapture] = []
             mut val i: U64 = 0U64
             while i < captures.count() {
                 val capture = captures[i]
-                grounded.append(<MidClosureCapture bindingTarget=capture.bindingTarget typeTerm=c.groundTermForBody(ref: capture.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) mode=capture.mode operand=instantiateMidOperand(c: inout c, operand: capture.operand, environment: environment, itemRef: itemRef) />)
+                grounded.append(<MidClosureCapture bindingTarget=capture.bindingTarget typeTerm=c.groundTermForBody(ref: capture.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) mode=capture.mode operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: capture.operand, environment: environment, itemRef: itemRef) />)
                 i += 1U64
             }
             return <MidRvalue.MakeClosure exprId=exprId bodyKey=bodyKey functionTypeTerm=c.groundTermForBody(ref: functionTypeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) captures=grounded />
@@ -1468,30 +1483,30 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
     }
 }
 
-fn instantiateMidCallReceiver(c: inout Comp, receiver: MidCallReceiver, environment: BodyInstance, itemRef: U64) -> MidCallReceiver {
+fn instantiateMidCallReceiver(c: inout Comp, bodyId: U64, receiver: MidCallReceiver, environment: BodyInstance, itemRef: U64) -> MidCallReceiver {
     match receiver {
         MidCallReceiver.None => { return <MidCallReceiver.None /> }
-        MidCallReceiver.Value(operand: val operand) => { return <MidCallReceiver.Value operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) /> }
+        MidCallReceiver.Value(operand: val operand) => { return <MidCallReceiver.Value operand=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: operand, environment: environment, itemRef: itemRef) /> }
     }
 }
 
 fn instantiateMidStatement(c: inout Comp, statement: MidStatement, locals: Array[MidLocalDecl], environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> MidStatement {
     match statement {
         MidStatement.Assign(destination: val destination, value: val value) => {
-            return <MidStatement.Assign destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) />
+            return <MidStatement.Assign destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) />
         }
         MidStatement.InitializeCaptureCell(destination: val destination, value: val value) => {
-            return <MidStatement.InitializeCaptureCell destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) />
+            return <MidStatement.InitializeCaptureCell destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) />
         }
         MidStatement.Overwrite(destination: val destination, source: val source) => {
-            return <MidStatement.Overwrite destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, place: source, environment: environment, itemRef: itemRef) />
+            return <MidStatement.Overwrite destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, bodyId: bodyId, place: source, environment: environment, itemRef: itemRef) />
         }
         MidStatement.InitializeGlobal(destination: val destination, source: val source) => {
-            return <MidStatement.InitializeGlobal destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, place: source, environment: environment, itemRef: itemRef) />
+            return <MidStatement.InitializeGlobal destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, bodyId: bodyId, place: source, environment: environment, itemRef: itemRef) />
         }
-        MidStatement.Drop(place: val place) => { return <MidStatement.Drop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
-        MidStatement.ReleaseCaptureCell(place: val place) => { return <MidStatement.ReleaseCaptureCell place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
-        MidStatement.ConditionalDrop(place: val place, flag: val flag) => { return <MidStatement.ConditionalDrop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) flag=flag /> }
+        MidStatement.Drop(place: val place) => { return <MidStatement.Drop place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) /> }
+        MidStatement.ReleaseCaptureCell(place: val place) => { return <MidStatement.ReleaseCaptureCell place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) /> }
+        MidStatement.ConditionalDrop(place: val place, flag: val flag) => { return <MidStatement.ConditionalDrop place=instantiateMidPlace(c: inout c, bodyId: bodyId, place: place, environment: environment, itemRef: itemRef) flag=flag /> }
         MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { return <MidStatement.SetDropFlag local=local isSet=isSet /> }
         MidStatement.ScopeExit(scope: val scope) => { return <MidStatement.ScopeExit scope=scope /> }
         MidStatement.StorageCommit(stmtId: val stmtId) => {
@@ -1540,33 +1555,33 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         MidTerminator.Open => { return <MidTerminator.Open /> }
         MidTerminator.Goto(target: val target) => { return <MidTerminator.Goto target=target /> }
         MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
-            return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, operand: discriminant, environment: environment, itemRef: itemRef) values=values targets=targets otherwise=otherwise />
+            return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: discriminant, environment: environment, itemRef: itemRef) values=values targets=targets otherwise=otherwise />
         }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: val exprId, okTarget: val okTarget, errTarget: val errTarget) => {
             val tryIndex: U64 = c.finalTryIndex(bodyId: bodyId, exprId: exprId)
-            if tryIndex >= c.arena.finalTries.count() { return <MidTerminator.TryBranch discriminant=instantiateMidOperand(c: inout c, operand: discriminant, environment: environment, itemRef: itemRef) exprId=exprId okTarget=okTarget errTarget=errTarget /> }
+            if tryIndex >= c.arena.finalTries.count() { return <MidTerminator.TryBranch discriminant=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: discriminant, environment: environment, itemRef: itemRef) exprId=exprId okTarget=okTarget errTarget=errTarget /> }
             val fact: FinalTryResolution = c.arena.finalTries[tryIndex]
-            return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, operand: discriminant, environment: environment, itemRef: itemRef) values=[bitCastI64(n: fact.okVariantIndex)] targets=[okTarget] otherwise=errTarget />
+            return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: discriminant, environment: environment, itemRef: itemRef) values=[bitCastI64(n: fact.okVariantIndex)] targets=[okTarget] otherwise=errTarget />
         }
         MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
             mut val instantiatedArgs: Array[MidOperand] = []
             mut val i: U64 = 0U64
             while i < args.count() {
-                instantiatedArgs.append(instantiateMidOperand(c: inout c, operand: args[i], environment: environment, itemRef: itemRef))
+                instantiatedArgs.append(instantiateMidOperand(c: inout c, bodyId: bodyId, operand: args[i], environment: environment, itemRef: itemRef))
                 i += 1U64
             }
-            return <MidTerminator.Call callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, receiver: receiver, environment: environment, itemRef: itemRef) args=instantiatedArgs destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
+            return <MidTerminator.Call callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, bodyId: bodyId, receiver: receiver, environment: environment, itemRef: itemRef) args=instantiatedArgs destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) target=target />
         }
         // NormalizedCall is consumed directly by the canonical freeze path.
         // Preserve its scalar argument rows here solely so the deprecated
         // draft instantiation API remains structurally total; its caller
         // rejects this form before any legacy backend can observe it.
         MidTerminator.NormalizedCall(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
-            return <MidTerminator.NormalizedCall callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, receiver: receiver, environment: environment, itemRef: itemRef) args=args destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
+            return <MidTerminator.NormalizedCall callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, bodyId: bodyId, receiver: receiver, environment: environment, itemRef: itemRef) args=args destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) target=target />
         }
         MidTerminator.Return => { return <MidTerminator.Return /> }
-        MidTerminator.ReturnValue(value: val value) => { return <MidTerminator.ReturnValue value=instantiateMidOperand(c: inout c, operand: value, environment: environment, itemRef: itemRef) /> }
-        MidTerminator.Panic(message: val message) => { return <MidTerminator.Panic message=instantiateMidOperand(c: inout c, operand: message, environment: environment, itemRef: itemRef) /> }
+        MidTerminator.ReturnValue(value: val value) => { return <MidTerminator.ReturnValue value=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: value, environment: environment, itemRef: itemRef) /> }
+        MidTerminator.Panic(message: val message) => { return <MidTerminator.Panic message=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: message, environment: environment, itemRef: itemRef) /> }
         MidTerminator.Unreachable => { return <MidTerminator.Unreachable /> }
         MidTerminator.Abort => { return <MidTerminator.Abort /> }
         MidTerminator.Suspend(state: val state, resume: val resume) => { return <MidTerminator.Suspend state=state resume=resume /> }
@@ -1653,7 +1668,11 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
     mut val localI: U64 = 0U64
     while localI < body.locals.count() {
         val local: MidLocalDecl = body.locals[localI]
-        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
+        val localType: U64 = instantiateMidType(c: inout c, typeTerm: local.typeTerm, typeRecipe: local.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef)
+        if local.typeRecipe != 0U64 && localType == 0U64 {
+            return <MidInstantiation body=body error=<MidInstantiateError.InvalidLocalResultType /> />
+        }
+        locals.append(<MidLocalDecl typeTerm=localType sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
         localI += 1U64
     }
     mut val blocks: Array[MidBlock] = []

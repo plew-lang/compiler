@@ -168,7 +168,7 @@ fn midNormalizedCallPlace(state: inout MidBuildState, place: MidPlace, tag: U64,
         state.callArgumentProjections.append(place.projections[i])
         i = i + 1U64
     }
-    return <MidCallArgument tag=tag rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=start len=place.projections.count() /> capability=capability typeTerm=place.typeTerm />
+    return <MidCallArgument tag=tag rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=start len=place.projections.count() /> capability=capability typeTerm=place.typeTerm typeRecipe=place.typeRecipe />
 }
 
 // Normalize every argument shape at the call boundary.  This is intentionally
@@ -328,7 +328,7 @@ export fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: 
     // root place. An expression slot can legitimately be absent for a Lower
     // synthesized node; letting that transient slot overwrite the local type
     // would make a typed place lose its storage ABI on the Mid boundary.
-    return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=state.locals[local.local].typeTerm /> />
+    return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=state.locals[local.local].typeTerm typeRecipe=state.locals[local.local].typeRecipe /> />
 }
 
 // Build the place shape from source syntax only after the frontend recorded

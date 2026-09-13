@@ -45,6 +45,9 @@ export struct MidPlaceNode {
     pub val globalMutable: Bool = false
     pub val projections: MidRange = <MidRange start=0U64 len=0U64 />
     pub val typeTerm: U64 = 0U64
+    // Parametric-only source; instantiation consumes it under a BodyInstance.
+    // Mutually exclusive with typeTerm.
+    pub val typeRecipe: U64 = 0U64
 }
 pub impl MidPlaceNode { factory }
 
@@ -339,6 +342,9 @@ export struct MidPlace {
     // TypeRef. A zero value is allowed only for compiler-generated unit/control
     // places.
     pub val typeTerm: U64 = 0U64
+    // Parametric-only source; instantiation consumes it under a BodyInstance.
+    // Mutually exclusive with typeTerm.
+    pub val typeRecipe: U64 = 0U64
 }
 pub impl MidPlace { factory }
 
@@ -417,6 +423,9 @@ export struct MidCallArgument {
     pub val stringStart: U64 = 0U64
     pub val stringLen: U64 = 0U64
     pub val typeTerm: U64 = 0U64
+    // Parametric-only source; instantiation consumes it under a BodyInstance.
+    // Mutually exclusive with typeTerm.
+    pub val typeRecipe: U64 = 0U64
     pub val accessCandidate: U64 = 0U64
 }
 pub impl MidCallArgument { factory }
@@ -639,6 +648,9 @@ export struct MidLocalDecl {
     // Parametric TypeTerm; instantiateMidBody replaces it with a ground TypeRef
     // without re-resolving source spelling.
     pub val typeTerm: U64
+    // Parametric-only source; instantiation consumes it under a BodyInstance.
+    // Mutually exclusive with typeTerm.
+    pub val typeRecipe: U64 = 0U64
     pub val sourceScope: U64
     pub val isUnique: Bool
     pub val isParameter: Bool
@@ -730,7 +742,7 @@ fn midFreezeNormalizedCallArgument(arena: inout MidCanonicalArena, projections: 
             midFreezeProjection(arena: inout arena, projection: projections[argument.projections.start + projectionI])
             projectionI = projectionI + 1U64
         }
-        arena.places.append(<MidPlaceNode rootTag=argument.rootTag local=argument.local globalTarget=argument.globalTarget globalMutable=argument.globalMutable projections=<MidRange start=projectionStart len=argument.projections.len /> typeTerm=argument.typeTerm />)
+        arena.places.append(<MidPlaceNode rootTag=argument.rootTag local=argument.local globalTarget=argument.globalTarget globalMutable=argument.globalMutable projections=<MidRange start=projectionStart len=argument.projections.len /> typeTerm=argument.typeTerm typeRecipe=argument.typeRecipe />)
         val place: U64 = arena.places.count()
         arena.operands.append(<MidOperandNode tag=argument.tag place=place capability=argument.capability />)
         return arena.operands.count()
@@ -757,7 +769,7 @@ fn midFreezePlace(arena: inout MidCanonicalArena, place: MidPlace) -> U64 {
         midFreezeProjection(arena: inout arena, projection: place.projections[projectionI])
         projectionI = projectionI + 1U64
     }
-    arena.places.append(<MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=projectionStart len=place.projections.count() /> typeTerm=place.typeTerm />)
+    arena.places.append(<MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=projectionStart len=place.projections.count() /> typeTerm=place.typeTerm typeRecipe=place.typeRecipe />)
     return arena.places.count()
 }
 
