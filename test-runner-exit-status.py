@@ -80,3 +80,28 @@ chmod +x "$output"
         assert result.returncode == 0, result
         assert result.stdout == ('1 0' if expected_pass else '0 1'), result
         print(f'PASS gen/{name}', flush=True)
+
+# Exercise the actual generation compile/reject guards with controlled exits.
+with tempfile.TemporaryDirectory(prefix='plew-gen-status-') as directory:
+    root = Path(directory)
+    compiler = root / 'compiler'
+    source = Path(__file__).with_name('test-gen.sh').read_text()
+    blocks = {
+        'harness': source.split('    # 1. harness IR\n', 1)[1].split('    # 2+3.', 1)[0],
+        'app': source.split('    # 4. build the app (auto-parts App.gen.pw)\n', 1)[1].split('    if ! clang', 1)[0],
+        'reject': source.split('    status=0\n    "$PLEWC" --gen', 1)[1].split('\ndone', 1)[0],
+    }
+    blocks['reject'] = '    status=0\n    "$PLEWC" --gen' + blocks['reject']
+    for phase, block in blocks.items():
+        for code in (0, 1, 7, 143):
+            compiler.write_text(f'#!/bin/sh\necho diagnostic >&2\nexit {code}\n')
+            compiler.chmod(0o755)
+            script = ('work=$1; PLEWC=$2; name=fixture; fail=0; failed=""; rpass=0\n'
+                      'for iteration in once; do\n' + block +
+                      '\ndone\nprintf "%s %s" "$fail" "$rpass"\n')
+            result = subprocess.run(['sh', '-c', script, 'sh', str(root), str(compiler)],
+                                    capture_output=True, text=True)
+            accepted = code == (1 if phase == 'reject' else 0)
+            expected = ('0 1' if phase == 'reject' else '0 0') if accepted else '1 0'
+            assert result.returncode == 0 and result.stdout == expected, (phase, code, result)
+            print(f'PASS gen-status/{phase}/{code}', flush=True)
