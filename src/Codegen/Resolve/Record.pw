@@ -1148,7 +1148,7 @@ pub impl Comp {
                 }
                 val localIdx: U64 = self.localIndexByName(start: start, len: len)
                 if localIdx < self.cur.locals.count() {
-                    val local: Local = self.cur.locals[localIdx]
+                    val local: Local = self.typedLocal(index: localIdx)
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
                     }
@@ -1962,7 +1962,7 @@ pub impl Comp {
         self.cur.recordCallTemplates = recordCallTemplates
         self.cur.checkFn = self.arena.functionCount()
         mut val gvi: U64 = 0
-        while gvi < self.arena.globals.count() {
+        while !self.genMode && gvi < self.arena.globals.count() {
             self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }

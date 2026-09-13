@@ -630,8 +630,8 @@ pub impl Comp {
                 mut val i: U64 = self.cur.locals.count()
                 while i > 0 {
                     i -= 1
-                    val lo: Local = self.cur.locals[i]
-                    if lo.nameId == qLocal {
+                    if self.cur.locals[i].nameId == qLocal {
+                        val lo: Local = self.typedLocal(index: i)
                         // an array local stays kind 3 (element by name) even though
                         // `Array[E]` is now a genInst struct — all the array-special
                         // codegen (index/for/.count()/methods/value-semantics) keys off

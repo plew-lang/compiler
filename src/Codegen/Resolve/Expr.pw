@@ -289,7 +289,13 @@ pub impl Comp {
     // Readiness belongs to the lexical owner, not to a specialization or to
     // a global phase toggle. Provided copies consume their source's templates.
     inout fn callTemplatesClosedForBody(fnIdx: U64) -> Bool {
-        if fnIdx >= self.arena.functionCount() { return self.globalCallTemplatesClosed }
+        if fnIdx >= self.arena.functionCount() {
+            if self.globalCallTemplatesClosed { return true }
+            match self.cur.globalInitializerTarget {
+                Optional.Some(v: val target) => { return self.globalInitializerPrepared(target: target) }
+                Optional.None => { return false }
+            }
+        }
         val owner = self.semanticBodyOwner(fnIdx: fnIdx)
         return owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner]
     }
@@ -322,7 +328,7 @@ pub impl Comp {
     // Mono normalizes its synthetic global body key to the same value.
     inout fn callTemplateOwner(fnIdx: U64) -> U64 {
         if fnIdx < self.arena.functionCount() { return fnIdx }
-        return self.arena.functionCount()
+        return 18446744073709551615U64
     }
 
     // A conferred callable executes an authored body under its own proof.

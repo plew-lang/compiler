@@ -4680,7 +4680,7 @@ pub impl Comp {
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         mut val gi: U64 = 0U64
-        while gi < self.arena.globals.count() {
+        while !self.genMode && gi < self.arena.globals.count() {
             tracePhaseProgress(c: inout self, label: "finalize-callables:global", count: gi, stride: 16U64)
             self.scanStmtInsts(stmtId: self.arena.globals[gi].letStmt)
             gi += 1U64
@@ -4718,6 +4718,7 @@ pub impl Comp {
         // finalized call or proof below.  Mixing the two made every method on
         // every discovered type executable and reintroduced imported macro
         // parser bodies through their incidental collection-time layouts.
+        mut val globalI: U64 = 0U64
         mut val bodyI: U64 = 0U64
         // Scanning a body can append its selected callee body. This one worklist
         // reaches a fixed point without a second `(Func,args)` queue, so a
@@ -4726,10 +4727,19 @@ pub impl Comp {
         mut val aggregateI: U64 = 0U64
         mut val callI: U64 = 0U64
         mut val destructionTypes: DestructionTypeVisits = <DestructionTypeVisits />
-        while bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
+        while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
             if bodyI < self.monoWork.bodyInstances.count() {
                 self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
                 bodyI += 1U64
+            }
+            if globalI < self.selectedGlobalTargets.count() {
+                val target: U64 = self.selectedGlobalTargets[globalI]
+                self.prepareGlobalInitializer(target: target)
+                self.enterGlobalInitializer(target: target)
+                val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+                self.scanStmtInsts(stmtId: self.arena.globals[index].letStmt)
+                self.cur.globalInitializerTarget = <Optional.None />
+                globalI += 1U64
             }
             // Destructors can call ordinary functions and construct further
             // values. Both queues must close together, before the freeze.
@@ -4741,6 +4751,10 @@ pub impl Comp {
                 self.enqueueFinalDestruction(typeRef: self.arena.finalCallees[callI].resultTypeRef, visited: inout destructionTypes)
                 callI += 1U64
             }
+        }
+        if self.genMode {
+            self.retainSelectedGlobals()
+            self.globalCallTemplatesClosed = true
         }
         self.verifyFinalCallResolutions()
         self.freezeFinalAccesses()
@@ -5280,6 +5294,7 @@ pub impl Comp {
         }
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
+                self.selectReferencedGlobal(exprId: exprId)
                 // capture detection: inside a closure, an identifier that resolves to
                 // a local below the closure's entry mark is an enclosing capture.
                 if self.cur.inClosure {
@@ -5530,6 +5545,7 @@ pub impl Comp {
     // here, while still scanning an index key as an ordinary value expression.
     inout fn scanPlaceInsts(exprId: U64) {
         match self.arena.exprs[exprId] {
+            Expr.Ident(start: _, len: _) => { self.selectReferencedGlobal(exprId: exprId) }
             Expr.Field(val base, nameStart: _, nameLen: _) => {
                 self.scanPlaceInsts(exprId: base)
             }

@@ -85,8 +85,12 @@ pub impl Comp {
                         visible = self.globalVisibleFrom(useMod: useMod, gMod: gMod, nameStart: nameStart, nameLen: nameLen)
                     }
                     if visible {
-                        val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                        if self.genMode && tyLen == 0U64 && !tyIsArray {
+                            self.cur.locals.append(<Local globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=false ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
+                        } else {
+                            val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                            self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                        }
                     }
                 }
                 _ => {}

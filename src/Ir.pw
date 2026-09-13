@@ -285,6 +285,7 @@ export struct CaptureEntry {
 }
 
 export struct Local {
+    pub val globalTypePending: Bool = false
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set when the local is pushed (addLocalCn); 0 sentinel.
@@ -3120,6 +3121,7 @@ export struct Cursor {
     pub mut val bodyItemRef: U64 = 0
     // The body currently being scanned/emitted. Together with
     // `bodyEnvironment` it identifies an Arena.finalCallees entry.
+    pub mut val globalInitializerTarget: Optional[U64] = <Optional.None />
     pub mut val bodyFnIdx: U64 = 18446744073709551615U64
     // 1-based Arena.bodyInstances identity for the active semantic body.
     // It is set whenever a body context is entered and lets final-callee lookup

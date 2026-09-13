@@ -1,0 +1,31 @@
+// Unused inferred globals must not force application-only generated members.
+// Application-only helpers may depend on output that does not exist during gen.
+// Macro helpers in the same file must still be compiled and executed.
+import @Plew/Syntax with { Derive, TopItemAst }
+import @Std/Io with { write }
+
+fn generatedImplementation() -> String {
+    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+}
+
+struct Tag { }
+pub impl Tag as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
+        return generatedImplementation()
+    }
+}
+
+@[Tag]
+struct Widget { }
+
+// Deliberately not reachable from either entry point. It still belongs to the
+// application and must pass ordinary checking after generation.
+fn applicationOnly() -> String {
+    return Widget.widgetTag()
+}
+
+fn main() {
+    write(s: "tagged!\n")
+}
+
+val applicationText = Widget.widgetTag()

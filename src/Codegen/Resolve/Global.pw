@@ -1,7 +1,126 @@
 // Part of name/type resolution (root: _.pw): global-init dependency
 // ordering and import-alias / factory-construction rewriting.
 
+import ../../Ir with { InstanceEnvironment }
+
 pub impl Comp {
+    fn globalInitializerPrepared(target: U64) -> Bool {
+        mut val index: U64 = 0U64
+        while index < self.preparedGlobalTargets.count() {
+            if self.preparedGlobalTargets[index] == target { return true }
+            index += 1U64
+        }
+        return false
+    }
+
+    inout fn selectReferencedGlobal(exprId: U64) {
+        if !self.genMode { return }
+        match self.recordedGlobalAddress(exprId: exprId) {
+            Optional.Some(v: val address) => {
+                mut val index: U64 = 0U64
+                while index < self.selectedGlobalTargets.count() {
+                    if self.selectedGlobalTargets[index] == address.declarationTarget { return }
+                    index += 1U64
+                }
+                self.selectedGlobalTargets.append(address.declarationTarget)
+            }
+            Optional.None => {}
+        }
+    }
+
+    // Name lookup installs declarations without evaluating their type queries.
+    // Only a value-type consumer forces an unannotated global's initializer.
+    inout fn typedLocal(index: U64) -> Local {
+        val local: Local = self.cur.locals[index]
+        if !local.globalTypePending { return local }
+        val globalIndex: U64 = self.globalIndexForDeclarationTarget(target: local.nameStart)
+        if globalIndex >= self.arena.globals.count() {
+            self.errorAt(offset: local.nameStart, msg: "internal error: pending global type has no declaration")
+            return local
+        }
+        mut val resolving: U64 = 0U64
+        while resolving < self.resolvingGlobalTypes.count() {
+            if self.resolvingGlobalTypes[resolving] == local.nameStart {
+                self.errorAt(offset: local.nameStart, msg: "cyclic global type inference")
+                return local
+            }
+            resolving += 1U64
+        }
+        val saved = self.cur
+        val priorQueries = self.resolvingGlobalTypes
+        self.resolvingGlobalTypes.append(local.nameStart)
+        self.enterGlobalInitializer(target: local.nameStart)
+        mut val result: Local = local
+        match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                val inferred = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                result = <Local nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
+            }
+            _ => {}
+        }
+        self.resolvingGlobalTypes = priorQueries
+        self.cur = saved
+        self.cur.locals.set(i: index, value: result)
+        return result
+    }
+
+    inout fn enterGlobalInitializer(target: U64) {
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.extId = 0U64
+        self.cur.recvInstRef = 0U64
+        self.clearSelfItemEnv()
+        self.cur.typeParams = []
+        self.cur.typeArgs = []
+        self.cur.checkFn = 18446744073709551615U64
+        self.cur.recordCallTemplates = false
+        self.cur.retVoid = true
+        self.cur.retStart = 0U64
+        self.cur.retLen = 0U64
+        self.cur.retIsArray = false
+        self.cur.retTy = 0U64
+        self.cur.branchBase = 0U64
+        self.cur.verifyMovedIdx = []
+        self.enterBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
+        self.cur.globalInitializerTarget = <Optional.Some v=target />
+        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+        val init: U64 = self.globalInitExpr(g: self.arena.globals[index])
+        self.seedGlobalLocals(useMod: self.moduleOf(offset: self.exprOffset(id: init)))
+    }
+
+    inout fn prepareGlobalInitializer(target: U64) {
+        if self.globalInitializerPrepared(target: target) { return }
+        val saved = self.cur
+        self.enterGlobalInitializer(target: target)
+        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+        val stmt: U64 = self.arena.globals[index].letStmt
+        self.recordStmt(stmtId: stmt)
+        self.enterGlobalInitializer(target: target)
+        self.verifyStmt(stmtId: stmt)
+        self.enterGlobalInitializer(target: target)
+        self.cur.recordCallTemplates = true
+        self.recordStmt(stmtId: stmt)
+        self.cur.recordCallTemplates = false
+        if self.completeRecordedDefaultCalls() != 0U64 {
+            self.errorAt(offset: target, msg: "internal error: global default argument plans are incomplete")
+        }
+        self.preparedGlobalTargets.append(target)
+        self.cur = saved
+    }
+
+    inout fn retainSelectedGlobals() {
+        mut val selected: Array[Global] = []
+        mut val index: U64 = 0U64
+        while index < self.arena.globals.count() {
+            val global: Global = self.arena.globals[index]
+            if self.globalInitializerPrepared(target: global.nameStart) { selected.append(global) }
+            index += 1U64
+        }
+        self.arena.globals = selected
+    }
+
     // Map a frozen global declaration identity to the current storage row.
     // Dependency ordering may reorder `arena.globals`, so callers must never
     // persist or reconstruct this row index as their semantic identity.

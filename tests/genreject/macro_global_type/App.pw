@@ -1,0 +1,35 @@
+// A referenced initializer must receive normal type verification.
+// The macro uses an inferred global whose initializer calls a same-file helper.
+// Generation must retain this dependency while excluding application-only globals.
+import @Plew/Syntax with { Derive, TopItemAst }
+import @Std/Io with { write }
+
+val generatedText: String = 42I64
+
+fn generatedImplementation() -> String {
+    return generatedText
+}
+
+fn initialGeneratedText() -> String {
+    return "impl Widget { assoc fn widgetTag() -> String { return \"tagged!\\n\" } }\n"
+}
+
+struct Tag { }
+pub impl Tag as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
+        return generatedImplementation()
+    }
+}
+
+@[Tag]
+struct Widget { }
+
+// Deliberately not reachable from either entry point. It still belongs to the
+// application and must pass ordinary checking after generation.
+fn applicationOnly() -> String {
+    return Widget.widgetTag()
+}
+
+fn main() {
+    write(s: "tagged!\n")
+}

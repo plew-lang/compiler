@@ -59,7 +59,7 @@ pub impl Comp {
         self.cur.verifyMovedIdx = []
         self.checkTypeViewSources()
         mut val gvi: U64 = 0
-        while gvi < self.arena.globals.count() {
+        while !self.genMode && gvi < self.arena.globals.count() {
             if self.tracePhases {
                 eprint(text: "[trace-phase] verify:global index=")
                 traceU64(n: gvi)
