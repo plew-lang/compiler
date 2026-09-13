@@ -38,7 +38,7 @@ def main():
         sources = set()
         for pattern in ("tests/run/*.pw", "tests/panic/*.pw",
                         "tests/part/*/Main.pw", "tests/part/Main.pw",
-                        "src/_.pw", "tools/*.pw"):
+                        "src/_.pw", "resolve/_.pw", "tools/*.pw"):
             sources.update(str(p) for p in root.glob(pattern) if p.is_file())
         cases = [(source, []) for source in sorted(sources)]
         # Match test-gen.sh: prepare generated parts before observing the app.
