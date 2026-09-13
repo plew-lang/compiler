@@ -2319,9 +2319,14 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
     val f: Func = c.arena.functionAt(index: fnIdx)
+    // Provided copies retain a placement receiver pattern for dispatch, while
+    // their shared body refers to the lexical declaration's Self binder.
+    // The instance environment grounds that binder to the selected receiver.
+    val lexicalFunction: Func = c.lexicalFunction(f: f)
+    val receiverTerm: U64 = lexicalFunction.recvTy
     // All receivers, including synthetic methods, require a frontend-resolved
     // TypeTerm. The zero sentinel is never a scalar or a spelling-based type.
-    if f.hasRecv && f.recvTy == 0U64 {
+    if f.hasRecv && receiverTerm == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=fnIdx />
@@ -2331,7 +2336,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // place supplied by the caller, not a copied value or a special LLVM
         // side channel.  `midPrepareLocals` binds this declaration directly to
         // ABI parameter zero when `isInout` is true.
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
