@@ -1,0 +1,18 @@
+// Macro dependencies are executable Plew, even when their input is only AST.
+import @Plew/Syntax with { Derive, TopItemAst }
+
+fn generatedImplementation() -> String {
+    return 1I64
+}
+
+struct Invalid { }
+pub impl Invalid as Derive {
+    assoc fn derive(input: TopItemAst) -> String {
+        return generatedImplementation()
+    }
+}
+
+@[Invalid]
+struct Item { }
+
+fn main() { }

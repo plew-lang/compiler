@@ -24,7 +24,7 @@
 // exprs, and any node this walk cannot scope (they surface in the Task-#3
 // shadow and are closed there).
 
-import ../../Ir with { MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
+import ../../Ir with { InstanceEnvironment, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
 pub impl Comp {
 
@@ -1914,13 +1914,36 @@ pub impl Comp {
         }
     }
 
+    // Demand preparation preserves the same lexical phases as the eager
+    // frontend. Specialization may consume this owner only after completion.
+    inout fn prepareLexicalBody(fnIdx: U64) {
+        val owner = self.semanticBodyOwner(fnIdx: fnIdx)
+        if self.callTemplatesClosedForBody(fnIdx: owner) { return }
+        val saved = self.cur
+        self.cur.bodyFnIdx = owner
+        self.cur.bodyEnvironment = <InstanceEnvironment />
+        self.cur.bodyId = 0U64
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
+        self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
+        self.checkGenericFunction(fnIdx: owner)
+        self.verifyFunctionDeclaration(fnIdx: owner)
+        self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
+        self.cur.recordCallTemplates = false
+        if self.completeRecordedDefaultCalls() != 0U64 {
+            self.errorAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans")
+        }
+        self.closeCallTemplatesForBody(fnIdx: owner)
+        self.cur = saved
+    }
+
     // Record every function body's parametric types. Skips: externs / requirement
     // signatures (body 0 is the no-body sentinel), and provided-method COPIES
     // (srcTraitId != 0) — a copy SHARES the trait template's body, so recording it
     // would overwrite the template's `Self` forms with one conformer's concrete
     // types and corrupt every other conformer. The template's recording (Self/T
     // parametric) serves all of them via groundTypeRef at read.
-    inout fn recordParametricTypes(recordCallTemplates: Bool = false) {
+    inout fn recordParametricTypes(recordCallTemplates: Bool = false, includeBodies: Bool = true) {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // global initializers first (`val nums: Array[I64] = [...]` at module level):
@@ -1953,7 +1976,7 @@ pub impl Comp {
         // before the walk so each authored body is recorded exactly once.
         val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
-        while fi < sourceFuncLimit {
+        while includeBodies && fi < sourceFuncLimit {
             self.recordParametricFunction(fnIdx: fi, recordCallTemplates: recordCallTemplates)
             fi += 1
         }

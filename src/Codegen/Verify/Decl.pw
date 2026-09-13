@@ -38,7 +38,7 @@ pub impl Comp {
         return count
     }
 
-    inout fn verifyProgram() {
+    inout fn verifyProgram(includeBodies: Bool = true) {
         // global initializers first: module-level `val g = …` is program code too, and
         // the acceptance rules (literal context/range, array-element consistency,
         // unique-copy, generic arity) reach it exactly like a function body. Without
@@ -78,7 +78,7 @@ pub impl Comp {
         // instantiation/emission boundary, so snapshot the authored frontier.
         val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
-        while fi < sourceFuncLimit {
+        while includeBodies && fi < sourceFuncLimit {
             // Verify EVERY module's bodies, not just the entry module: a Plew program's
             // acceptance rules apply uniformly to imported code too (std, the compiler's
             // own import submodules, future package deps) — "develops as spoken" reaches

@@ -4216,6 +4216,7 @@ pub impl Comp {
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
         val instance: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if self.genMode { self.prepareLexicalBody(fnIdx: instance.fnIdx) }
         if !self.callTemplatesClosedForBody(fnIdx: instance.fnIdx) {
             self.errorAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: body finalization requires closed lexical call templates")
             return
@@ -4706,7 +4707,7 @@ pub impl Comp {
                 if self.genMode && isEntry && fi != self.genMainIdx {
                     isEntry = false
                 }
-                if isEntry || f.isAsync {
+                if isEntry || (f.isAsync && !self.genMode) {
                     self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64)
                 }
             }

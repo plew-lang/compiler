@@ -1036,7 +1036,7 @@ fn recordSemanticExpressionTypes(c: inout Comp) {
     }
     tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.traceExprInstScans = 0U64
-    c.recordParametricTypes()
+    c.recordParametricTypes(includeBodies: !c.genMode)
     tracePhaseCount(c: inout c, label: "semantic-expression-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "semantic-expression-record:done")
 }
@@ -1691,7 +1691,7 @@ export fn runFrontend(c: inout Comp) {
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
     tracePhase(c: inout c, label: "generic-body-check:start")
-    c.checkGenericBodies()
+    if !c.genMode { c.checkGenericBodies() }
     tracePhase(c: inout c, label: "generic-body-check:done")
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
@@ -1703,7 +1703,7 @@ export fn runFrontend(c: inout Comp) {
     // emission works. Runs AFTER the typed-AST cache so the operator-witness /
     // visibility checks see recovered expression types.
     tracePhase(c: inout c, label: "verify:start")
-    c.verifyProgram()
+    c.verifyProgram(includeBodies: !c.genMode)
     tracePhase(c: inout c, label: "verify:done")
     tracePhase(c: inout c, label: "default-generators:start")
     c.prepareDefaultArgumentGenerators()
@@ -1714,7 +1714,7 @@ export fn runFrontend(c: inout Comp) {
     // lexical walk only; the early walk never publishes a provisional callee.
     tracePhase(c: inout c, label: "call-template-record:start")
     c.traceExprInstScans = 0U64
-    c.recordParametricTypes(recordCallTemplates: true)
+    c.recordParametricTypes(recordCallTemplates: true, includeBodies: !c.genMode)
     tracePhaseCount(c: inout c, label: "call-template-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "call-template-record:done")
     tracePhase(c: inout c, label: "default-call-completion:start")
@@ -1723,7 +1723,11 @@ export fn runFrontend(c: inout Comp) {
         c.errorAt(offset: 0U64, msg: "internal error: default argument plans are incomplete")
     }
     tracePhase(c: inout c, label: "default-call-completion:done")
-    c.closeProgramCallTemplates()
+    if c.genMode {
+        c.globalCallTemplatesClosed = true
+    } else {
+        c.closeProgramCallTemplates()
+    }
     // Close the per-instance final-callable table only after verification and
     // typed-IR recording are available.  This semantic worklist is independent
     // of LLVM's lazy declaration queues: all backend call emission consumes the
