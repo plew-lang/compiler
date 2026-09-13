@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# Reference cell control preserves borrowed inputs and owned results.
+if sh ./test-mid-cell-control.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-cell-control"
+fi
+
 # OS entropy has a declaration-owned closed runtime target.
 if sh ./test-mid-entropy.sh; then
     :

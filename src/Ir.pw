@@ -1541,6 +1541,10 @@ export enum RuntimeIntrinsic {
     HashSeed
     EntropyU64
     StrongCellNew
+    StrongCellWeak
+    StrongCellCopy
+    WeakCellAlive
+    WeakCellLock
     Io(intrinsic: IoIntrinsic)
     Process(intrinsic: ProcessIntrinsic)
     CoreString(intrinsic: CoreStringIntrinsic)

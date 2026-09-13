@@ -56,6 +56,10 @@ pub impl Comp {
             return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.HashSeed /> />
         }
         if owner == self.modules.coreModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefWeak") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellWeak /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefAsRef") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellCopy /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakAlive") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableAlive") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.WeakCellAlive /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakLock") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableLock") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.WeakCellLock /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
             mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
             if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) {
@@ -110,6 +114,10 @@ pub impl Comp {
             return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.HashSeed /> />
         }
         if owner == self.modules.coreModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefWeak") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellWeak /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefAsRef") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellCopy /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakAlive") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableAlive") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.WeakCellAlive /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakLock") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableLock") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.WeakCellLock /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
             mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
             if self.classifyCoreStringIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout coreString) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.CoreString intrinsic=coreString /> /> }

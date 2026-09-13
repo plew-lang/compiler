@@ -666,8 +666,8 @@ export extern(plewIntrinsic) {
 
 // Reference control-block intrinsics (spec/03): weak downgrade, mutable->read-only
 // capability narrowing, alive-test, and strong-lock. Lowered by the compiler to the
-// two-counter cell ops (strong = the header rc, weak = the unused count slot); the wrapper
-// methods below are intercepted at the call site, so these bodies are never emitted.
+// two-counter cell ops (strong = the header rc, weak = the unused count slot).
+// The ordinary wrapper bodies below pass through Mid with these closed runtime calls.
 extern(plewIntrinsic) {
     // allocate a fresh strong read-only reference cell whose pointee owns `value`.
     fn refNew[T](value: move T) -> StrongRefCell[T]
