@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+enum Packet[T] { Empty Value(value: T) }
+extension Inspect {
+    pub impl[T] Packet[T] {
+        fn copies() -> Array[T] {
+            match self {
+                Packet.Empty => { return [] }
+                Packet.Value(value: val value) => { return [value, value] }
+            }
+        }
+    }
+}
+
+fn main() {
+    val number: Packet[I64] = <Packet.Value value=42I64 />
+    val text: Packet[String] = <Packet.Value value="he" + "ap" />
+    val numbers: Array[I64] = number#Inspect.copies()
+    val words: Array[String] = text#Inspect.copies()
+    val empty: Packet[String] = <Packet.Empty />
+    print(numbers[0U64])
+    print(numbers[1U64])
+    print(words[0U64])
+    print(words[1U64])
+    print(empty#Inspect.copies().count())
+}

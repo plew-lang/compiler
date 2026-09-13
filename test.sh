@@ -375,6 +375,11 @@ if sh ./test-mid-self-layout.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-self-layout"
 fi
+if sh ./test-mid-body-receiver.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-body-receiver"
+fi
 if sh ./test-mid-field-defaults.sh; then
     :
 else
