@@ -1964,6 +1964,21 @@ pub impl Comp {
         self.popLocals(mark: mark)
     }
 
+    inout fn recordBodyReceiverTerm(fnIdx: U64, term: U64) {
+        while self.decls.semanticBodyReceiverTerms.count() <= fnIdx {
+            self.decls.semanticBodyReceiverTerms.append(0U64)
+        }
+        self.decls.semanticBodyReceiverTerms.set(i: fnIdx, value: term)
+    }
+
+    // A provided copy consumes its source body's receiver fact. Its placement
+    // pattern and a grounded ABI receiver are not replacements for this term.
+    inout fn semanticBodyReceiverTerm(fnIdx: U64) -> U64 {
+        val owner: U64 = self.semanticBodyOwner(fnIdx: fnIdx)
+        if owner >= self.decls.semanticBodyReceiverTerms.count() { return 0U64 }
+        return self.decls.semanticBodyReceiverTerms[owner]
+    }
+
     // Record one lexical declaration using the same contract as the eager walk.
     // Selection/order belongs to the caller; generated provided copies share
     // their source declaration's semantic rows and are never recorded twice.
@@ -1986,6 +2001,9 @@ pub impl Comp {
             self.cur.selfInout = f.selfInout
             self.cur.recvInstRef = 0
             self.cur.selfRef = self.parametricSelfRef(f: f)
+            if recordCallTemplates && f.hasRecv {
+                self.recordBodyReceiverTerm(fnIdx: fnIdx, term: self.cur.selfRef)
+            }
             self.cur.itemRef = self.abstractProvidedItemRef(f: f)
             // This is a declaration-time walk: generic binders are in
             // lexical scope but have no concrete arguments. Keeping the

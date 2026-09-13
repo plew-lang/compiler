@@ -2364,11 +2364,11 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
     val f: Func = c.arena.functionAt(index: fnIdx)
-    // Provided copies retain a placement receiver pattern for dispatch, while
-    // their shared body refers to the lexical declaration's Self binder.
-    // The instance environment grounds that binder to the selected receiver.
-    val lexicalFunction: Func = c.lexicalFunction(f: f)
-    val receiverTerm: U64 = lexicalFunction.recvTy
+    // Record owns the lexical body receiver, including extension views.
+    // Func.recvTy selects the declaration/dispatch namespace and can differ
+    // from the type of self inside that body. Provided copies share the
+    // original body's fact; BodyInstance supplies their substitutions later.
+    val receiverTerm: U64 = c.semanticBodyReceiverTerm(fnIdx: fnIdx)
     // All receivers, including synthetic methods, require a frontend-resolved
     // TypeTerm. The zero sentinel is never a scalar or a spelling-based type.
     if f.hasRecv && receiverTerm == 0U64 {

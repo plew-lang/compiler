@@ -2877,6 +2877,10 @@ export struct Decls {
     pub mut val semanticClosures: Array[SemanticClosure] = []
     pub mut val semanticClosureIndexSlots: Array[U64] = []
     // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
+    // Declaration-body receiver terms produced by Record, indexed by owner.
+    // These retain lexical views; Func.recvTy is the dispatch namespace and
+    // BodySignature holds the later grounded ABI. Zero is no recorded receiver.
+    pub mut val semanticBodyReceiverTerms: Array[U64] = []
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val callTemplates: Array[CallTemplate] = []
