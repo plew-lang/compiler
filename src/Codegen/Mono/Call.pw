@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1475,6 +1475,34 @@ pub impl Comp {
             if conversionResolution >= self.arena.finalCallees.count() { return }
         }
         self.putFinalTry(fact: <FinalTryResolution bodyId=self.currentBodyInstanceId() exprId=exprId operandResultTypeRef=operandRef returnResultTypeRef=returnRef resultEnumIndex=enumIndex okVariantIndex=okVariant errVariantIndex=errVariant okPayloadTypeRef=operandResult.args[0U64] sourceErrorTypeRef=operandErr targetErrorTypeRef=returnErr hasErrorConversion=hasConversion errorConversionResolution=conversionResolution />)
+    }
+
+    // All spelling/layout selection belongs to frontend finalization. Mid
+    // consumes this fact after iterator and next have published their results.
+    inout fn freezeForResolution(stmtId: U64, itemRef: U64) -> Bool {
+        val iteratorIndex: U64 = self.bodyCalleeIndex(exprId: stmtId, siteIsStmt: true, slot: 1U64)
+        val nextIndex: U64 = self.bodyCalleeIndex(exprId: stmtId, siteIsStmt: true, slot: 2U64)
+        if iteratorIndex >= self.finalCalleeCount() || nextIndex >= self.finalCalleeCount() || itemRef == 0U64 { return false }
+        val iteratorRef: U64 = self.arena.finalCallees[iteratorIndex].resultTypeRef
+        val nextRef: U64 = self.arena.finalCallees[nextIndex].resultTypeRef
+        if iteratorRef == 0U64 || nextRef == 0U64 || nextRef >= self.arena.typeCount() { return false }
+        if !self.typeRefEq(a: iteratorRef, b: self.arena.finalCallees[nextIndex].recvTypeRef) { return false }
+        val optional: TypeRef = self.arena.typeAt(index: nextRef)
+        if !rangeEquals(bytes: self.arena.bytes, start: optional.nameStart, len: optional.nameLen, kw: "Optional") || optional.args.count() != 1U64 { return false }
+        if !self.typeRefEq(a: optional.args[0U64], b: itemRef) { return false }
+        val enumIndex: U64 = self.genericEnumIndex(nameStart: optional.nameStart, nameLen: optional.nameLen)
+        if enumIndex >= self.arena.enumCount() { return false }
+        val someName: Bind = self.kwSpan(kw: "Some", kwLen: 4U64)
+        val noneName: Bind = self.kwSpan(kw: "None", kwLen: 4U64)
+        val some: U64 = self.variantIndex(enumStart: optional.nameStart, enumLen: optional.nameLen, variantStart: someName.nameStart, variantLen: someName.nameLen)
+        val none: U64 = self.variantIndex(enumStart: optional.nameStart, enumLen: optional.nameLen, variantStart: noneName.nameStart, variantLen: noneName.nameLen)
+        val declaration: EnumDef = self.arena.enumAt(index: enumIndex)
+        if some >= declaration.variants.count() || none >= declaration.variants.count() || some == none { return false }
+        if declaration.variants[some].fields.count() != 1U64 || declaration.variants[none].fields.count() != 0U64 { return false }
+        val identity: Bool = self.arena.finalCallees[iteratorIndex].callee >= self.arena.functionCount()
+        if identity && !self.typeRefEq(a: iteratorRef, b: self.arena.finalCallees[iteratorIndex].recvTypeRef) { return false }
+        self.putFinalFor(fact: <FinalForResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId iteratorResolution=iteratorIndex nextResolution=nextIndex identityIterator=identity iteratorTypeRef=iteratorRef nextTypeRef=nextRef itemTypeRef=itemRef optionalEnumIndex=enumIndex someVariantIndex=some noneVariantIndex=none />)
+        return true
     }
 
     // Ground one explicitly-recorded call argument. This is intentionally
@@ -3032,6 +3060,65 @@ pub impl Comp {
         self.arena.finalTryIndexSlots.set(i: slot, value: self.arena.finalTries.count())
     }
 
+    inout fn rebuildFinalForIndex(capacity: U64) {
+        self.arena.finalForIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.arena.finalForIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.arena.finalFors.count() {
+            val fact: FinalForResolution = self.arena.finalFors[entry]
+            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+            while self.arena.finalForIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.arena.finalForIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalForIndex(nextCount: U64) {
+        if self.arena.finalForIndexSlots.count() == 0U64 {
+            self.rebuildFinalForIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.arena.finalForIndexSlots.count() * 7U64 {
+            self.rebuildFinalForIndex(capacity: self.arena.finalForIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Returns the table-count sentinel when the active body has no frozen
+    // iteration fact for this source statement.
+    fn finalForIndex(bodyId: U64, stmtId: U64) -> U64 {
+        val capacity: U64 = self.arena.finalForIndexSlots.count()
+        if capacity == 0U64 { return self.arena.finalFors.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
+        while self.arena.finalForIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.arena.finalForIndexSlots[slot] - 1U64
+            val fact: FinalForResolution = self.arena.finalFors[entry]
+            if fact.bodyId == bodyId && fact.stmtId == stmtId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.arena.finalFors.count()
+    }
+
+    inout fn putFinalFor(fact: FinalForResolution) {
+        val prior: U64 = self.finalForIndex(bodyId: fact.bodyId, stmtId: fact.stmtId)
+        if prior < self.arena.finalFors.count() {
+            self.arena.finalFors.set(i: prior, value: fact)
+            return
+        }
+        self.ensureFinalForIndex(nextCount: self.arena.finalFors.count() + 1U64)
+        self.arena.finalFors.append(fact)
+        val capacity: U64 = self.arena.finalForIndexSlots.count()
+        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+        while self.arena.finalForIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.arena.finalForIndexSlots.set(i: slot, value: self.arena.finalFors.count())
+    }
+
     // Freeze one aggregate only after its children have been finalized in the
     // active BodyInstance. The Record carrier supplies the source tree and
     // physical slots; this pass supplies the one concrete substitution and
@@ -4566,6 +4653,8 @@ pub impl Comp {
         self.arena.finalReturnIndexSlots = []
         self.arena.finalTries = []
         self.arena.finalTryIndexSlots = []
+        self.arena.finalFors = []
+        self.arena.finalForIndexSlots = []
         self.monoWork.bodyInstances = []
         // `collectFnInsts` is provisional layout discovery. Its source-shaped
         // instances are not executable identities and must not cross this
@@ -5692,7 +5781,7 @@ pub impl Comp {
                         // slots so LLVM consumes the same source type rather than
                         // recovering it from the expression tree.
                         val none: U64 = self.arena.functionCount()
-                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef />)
+                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=initialRef />)
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
                         val noArgs: Array[Arg] = []
                         val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
@@ -5727,6 +5816,9 @@ pub impl Comp {
                         // Provisional collection has no Record contract yet.
                         // Its selections are discarded before backend emission.
                         semanticItem = self.iterableItemTerm(iterExpr: iter, iterTerm: iteratorRef)
+                    }
+                    if useProtocolTemplate && !self.freezeForResolution(stmtId: stmtId, itemRef: semanticItem) {
+                        self.errorAt(offset: self.exprOffset(id: iter), msg: "internal diagnostic: final for iteration layout was not recorded")
                     }
                     if semanticItem != 0U64 {
                         val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)

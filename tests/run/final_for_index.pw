@@ -1,0 +1,36 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { FinalForResolution }
+
+fn fact(bodyId: U64, stmtId: U64, item: U64) -> FinalForResolution {
+    return <FinalForResolution bodyId=bodyId stmtId=stmtId iteratorResolution=0U64 nextResolution=1U64 identityIterator=true iteratorTypeRef=2U64 nextTypeRef=3U64 itemTypeRef=item optionalEnumIndex=0U64 someVariantIndex=1U64 noneVariantIndex=0U64 />
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    if compiler.finalForIndex(bodyId: 1U64, stmtId: 0U64) != compiler.arena.finalFors.count() { panic "empty must miss" }
+    mut val site: U64 = 0U64
+    while site < 300U64 {
+        compiler.putFinalFor(fact: fact(bodyId: 1U64, stmtId: site, item: site + 10U64))
+        compiler.putFinalFor(fact: fact(bodyId: 2U64, stmtId: site, item: site + 1000U64))
+        site += 1U64
+    }
+    site = 0U64
+    while site < 300U64 {
+        val first = compiler.finalForIndex(bodyId: 1U64, stmtId: site)
+        val second = compiler.finalForIndex(bodyId: 2U64, stmtId: site)
+        if first >= compiler.arena.finalFors.count() || second >= compiler.arena.finalFors.count() { panic "growth lost site" }
+        if compiler.arena.finalFors[first].itemTypeRef != site + 10U64 || compiler.arena.finalFors[second].itemTypeRef != site + 1000U64 { panic "body identity lost" }
+        site += 1U64
+    }
+    mut val snapshot = compiler
+    compiler.putFinalFor(fact: fact(bodyId: 1U64, stmtId: 42U64, item: 9000U64))
+    val updated = compiler.finalForIndex(bodyId: 1U64, stmtId: 42U64)
+    if compiler.arena.finalFors.count() != 600U64 || compiler.arena.finalFors[updated].itemTypeRef != 9000U64 { panic "replacement duplicated fact" }
+    val original = snapshot.finalForIndex(bodyId: 1U64, stmtId: 42U64)
+    if snapshot.arena.finalFors[original].itemTypeRef != 52U64 { panic "copy shared mutation" }
+    snapshot.putFinalFor(fact: fact(bodyId: 18446744073709551615U64, stmtId: 18446744073709551615U64, item: 7U64))
+    if snapshot.finalForIndex(bodyId: 18446744073709551615U64, stmtId: 18446744073709551615U64) >= snapshot.arena.finalFors.count() { panic "full width identity lost" }
+    if compiler.finalForIndex(bodyId: 18446744073709551615U64, stmtId: 18446744073709551615U64) != compiler.arena.finalFors.count() { panic "copy insertion leaked" }
+    write(s: "final-for-index-ok\n")
+}

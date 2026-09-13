@@ -1863,6 +1863,24 @@ export struct FinalTryResolution {
 }
 pub impl FinalTryResolution { factory }
 
+// Frozen non-range iteration layout. Calls remain in the shared final-call
+// table; the control-flow consumer receives their selected identities and the
+// Optional decomposition instead of reopening names or assuming tag numbers.
+export struct FinalForResolution {
+    pub val bodyId: U64
+    pub val stmtId: U64
+    pub val iteratorResolution: U64
+    pub val nextResolution: U64
+    pub val identityIterator: Bool
+    pub val iteratorTypeRef: U64
+    pub val nextTypeRef: U64
+    pub val itemTypeRef: U64
+    pub val optionalEnumIndex: U64
+    pub val someVariantIndex: U64
+    pub val noneVariantIndex: U64
+}
+pub impl FinalForResolution { factory }
+
 // Frontend-owned input to final call construction.  It intentionally carries
 // semantic facts selected at the source/implicit/control-flow boundary rather
 // than asking the finalizer to reopen a shared AST node. `resultHintRef` is the
@@ -2367,6 +2385,8 @@ export struct Arena {
     // From details from source names.
     pub mut val finalTries: Array[FinalTryResolution] = []
     pub mut val finalTryIndexSlots: Array[U64] = []
+    pub mut val finalFors: Array[FinalForResolution] = []
+    pub mut val finalForIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
     pub mut val finalExprCallee: Array[CachedCallee] = []
