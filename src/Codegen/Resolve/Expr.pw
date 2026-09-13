@@ -289,11 +289,11 @@ pub impl Comp {
     // Readiness belongs to the lexical owner, not to a specialization or to
     // a global phase toggle. Provided copies consume their source's templates.
     inout fn callTemplatesClosedForBody(fnIdx: U64) -> Bool {
-        if self.cur.inClosure && fnIdx == self.closureBodyKey(closureId: self.cur.closureId) {
-            return self.cur.closureCallTemplatesClosed
-        }
         if fnIdx >= self.arena.functionCount() {
             if self.globalCallTemplatesClosed { return true }
+            if self.cur.inClosure && fnIdx == self.closureBodyKey(closureId: self.cur.closureId) {
+                return self.cur.closureCallTemplatesClosed
+            }
             match self.cur.globalInitializerTarget {
                 Optional.Some(v: val target) => { return self.globalInitializerPrepared(target: target) }
                 Optional.None => { return false }
