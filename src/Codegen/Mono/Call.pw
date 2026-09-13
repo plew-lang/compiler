@@ -5585,16 +5585,11 @@ pub impl Comp {
                 self.registerChainSiteInsts(exprId: exprId)
                 self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Expression exprId=exprId />)
                 self.scanExprInsts(exprId: scrut)
-                mut val scrutTi: TypeInfo = self.typeOf(id: scrut)
-                val groundedScrut: U64 = self.groundedTypeOf(id: scrut)
-                if groundedScrut != 0U64 {
-                    scrutTi = self.typeInfoOfRef(ref: groundedScrut)
-                }
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddFinalMatchArmBinds(a: a, scrutTi: scrutTi, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
+                    self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -5682,7 +5677,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn scanAddFinalMatchArmBinds(a: MatchArm, scrutTi: TypeInfo, matchSource: MatchSource, armIndex: U64) {
+    inout fn scanAddFinalMatchArmBinds(a: MatchArm, matchSource: MatchSource, armIndex: U64) {
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -5997,26 +5992,11 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
                 self.finalizeCurrentBodyMatch(matchSource: <MatchSource.Statement stmtId=stmtId />)
-                // Match-arm bindings are typed from the concrete scrutinee
-                // instance.  `typeOf` is AST-global and loses `Optional[I64]`
-                // for a local loop item; use the body-local/grounded recovery
-                // just as Expr.MatchExpr does above.
-                mut val scrutTi: TypeInfo = self.exprType(id: scrut)
-                // A match scrutinee is often a local introduced by `for` or a
-                // prior arm.  Its exact instance lives in the body-local
-                // environment; AST-global type recovery is only the fallback.
-                mut val groundedScrut: U64 = self.groundedBodyReceiverRef(exprId: scrut)
-                if groundedScrut == 0U64 {
-                    groundedScrut = self.groundedTypeOf(id: scrut)
-                }
-                if groundedScrut != 0U64 {
-                    scrutTi = self.typeInfoOfRef(ref: groundedScrut)
-                }
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddFinalMatchArmBinds(a: a, scrutTi: scrutTi, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
+                    self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
