@@ -1866,6 +1866,54 @@ pub impl Comp {
         self.popLocals(mark: mark)
     }
 
+    // Record one lexical declaration using the same contract as the eager walk.
+    // Selection/order belongs to the caller; generated provided copies share
+    // their source declaration's semantic rows and are never recorded twice.
+    inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) {
+        self.cur.recordCallTemplates = recordCallTemplates
+        val f: Func = self.arena.functionAt(index: fnIdx)
+        // A trait-provided body is copied per conformance, but its lexical
+        // source body owns one shared CallTemplate set.  Skipping every
+        // `srcTraitId` body left operators in provided methods without the
+        // semantic template that Mono is required to consume.  Record the
+        // source declaration once and skip only generated provided copies.
+        if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
+            tracePhaseProgress(c: inout self, label: "semantic-expression-record:body", count: fnIdx, stride: 64U64)
+            self.cur.locals = []
+            self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+            self.cur.hasRecv = f.hasRecv
+            self.cur.recvStart = f.recvStart
+            self.cur.recvLen = f.recvLen
+            self.cur.extId = f.extId
+            self.cur.selfInout = f.selfInout
+            self.cur.recvInstRef = 0
+            self.cur.selfRef = self.parametricSelfRef(f: f)
+            self.cur.itemRef = self.abstractProvidedItemRef(f: f)
+            // This is a declaration-time walk: generic binders are in
+            // lexical scope but have no concrete arguments. Keeping the
+            // Func's ParamIds here lets `value: Optional[Box[T]]` record
+            // its complete parametric term. Omitting them made the record
+            // miss the base of a `?.` chain, after which Mono had to read
+            // an incidental concrete `typeOf` result and froze T to the
+            // first instantiated body.
+            self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
+            self.cur.typeArgs = []
+            self.cur.checkFn = fnIdx
+            mut val pi: U64 = 0
+            while pi < f.params.count() {
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                // After preparation the generator is the sole Record
+                // owner of this expression and of its lexical locals.
+                if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
+                    self.recordExpr(exprId: p.defaultExpr)
+                }
+                pi += 1
+            }
+            self.recordBlock(blkId: f.body)
+        }
+    }
+
     // Record every function body's parametric types. Skips: externs / requirement
     // signatures (body 0 is the no-body sentinel), and provided-method COPIES
     // (srcTraitId != 0) — a copy SHARES the trait template's body, so recording it
@@ -1906,47 +1954,7 @@ pub impl Comp {
         val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
         while fi < sourceFuncLimit {
-            val f: Func = self.arena.functionAt(index: fi)
-            // A trait-provided body is copied per conformance, but its lexical
-            // source body owns one shared CallTemplate set.  Skipping every
-            // `srcTraitId` body left operators in provided methods without the
-            // semantic template that Mono is required to consume.  Record the
-            // source declaration once and skip only generated provided copies.
-            if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
-                tracePhaseProgress(c: inout self, label: "semantic-expression-record:body", count: fi, stride: 64U64)
-                self.cur.locals = []
-                self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
-                self.cur.hasRecv = f.hasRecv
-                self.cur.recvStart = f.recvStart
-                self.cur.recvLen = f.recvLen
-                self.cur.extId = f.extId
-                self.cur.selfInout = f.selfInout
-                self.cur.recvInstRef = 0
-                self.cur.selfRef = self.parametricSelfRef(f: f)
-                self.cur.itemRef = self.abstractProvidedItemRef(f: f)
-                // This is a declaration-time walk: generic binders are in
-                // lexical scope but have no concrete arguments. Keeping the
-                // Func's ParamIds here lets `value: Optional[Box[T]]` record
-                // its complete parametric term. Omitting them made the record
-                // miss the base of a `?.` chain, after which Mono had to read
-                // an incidental concrete `typeOf` result and froze T to the
-                // first instantiated body.
-                self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
-                self.cur.typeArgs = noArgs
-                self.cur.checkFn = fi
-                mut val pi: U64 = 0
-                while pi < f.params.count() {
-                    val p: Param = self.funcParamAt(params: f.params, index: pi)
-                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-                    // After preparation the generator is the sole Record
-                    // owner of this expression and of its lexical locals.
-                    if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
-                        self.recordExpr(exprId: p.defaultExpr)
-                    }
-                    pi += 1
-                }
-                self.recordBlock(blkId: f.body)
-            }
+            self.recordParametricFunction(fnIdx: fi, recordCallTemplates: recordCallTemplates)
             fi += 1
         }
         self.cur.locals = []
