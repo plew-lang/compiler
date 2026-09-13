@@ -182,6 +182,14 @@ else
     fail=$((fail + 1)); failed="$failed mid-direct-call-without-receiver"
 fi
 
+# Read-only receivers accept constants under the same operand contract as
+# ordinary borrowed arguments, without granting a writable or movable place.
+if sh ./test-mid-borrow-constant-receiver.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-borrow-constant-receiver"
+fi
+
 # An `inout self` call must carry the writable receiver place through
 # canonical Mid, not fall back to the AST emitter because its ABI is by
 # pointer.
