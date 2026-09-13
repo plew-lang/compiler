@@ -1,3 +1,4 @@
+import @Std/Core with { Eq }
 // `@[Eq]` on a payload-less enum, through the real derive pipeline (`plew gen`
 // synthesizes `Paren.eq` — a tag match — into App.gen.pw). This is the pure-witness
 // replacement for the backend's old ad-hoc enum tag-compare: `==`/`!=` on a

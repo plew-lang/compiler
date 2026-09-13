@@ -1,3 +1,4 @@
+import @Std/Core with { Eq }
 // `@[Eq]` on a struct, exercised through the real derive pipeline (`plew gen`
 // synthesizes `Point.eq` into App.gen.pw). The derived witness makes `==`/`!=`
 // work AND registers the conformance, so `Point` satisfies a `where T: Eq`
@@ -6,6 +7,8 @@ import @Std/Io with { print }
 
 @[Eq]
 struct Point { pub val x: I64  pub val y: I64 }
+
+pub impl Point { factory }
 
 fn same[T](a: T, b: T) -> Bool where T: Eq { return a == b }
 fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }

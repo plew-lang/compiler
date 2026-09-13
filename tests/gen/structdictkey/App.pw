@@ -1,3 +1,5 @@
+import @Std/Core with { Eq }
+import @Std/Hash with { Hash }
 // A user struct with `@[Hash]`/`@[Eq]` derives used as a Dictionary KEY (spec/02,16).
 // Exercises the full 2-phase derive flow end to end: `plew gen` generates
 // `Pair.hash`/`Pair.eq` into App.gen.pw (auto-parted on the real compile), and the

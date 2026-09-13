@@ -1,3 +1,4 @@
+import @Std/Core with { Eq }
 import @Std/Io with { write }
 import @Plew/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
 
