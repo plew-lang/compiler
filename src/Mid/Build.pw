@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -1306,7 +1306,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
             val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
-            val lowered: MidBuildError = buildMidEnumMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, sourceArms: arms, hasGiveDestination: true, giveDestination: resultPlace, traceId: exprId)
+            val lowered: MidBuildError = buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, sourceArms: arms, hasGiveDestination: true, giveDestination: resultPlace, traceId: exprId)
             match lowered {
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
@@ -1998,7 +1998,35 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
     eprint(text: "\n")
 }
 
-fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, sourceArms: MatchArmRange, hasGiveDestination: Bool, giveDestination: MidPlace, traceId: U64) -> MidBuildError {
+// A struct pattern is irrefutable. Bind the first arm in the current CFG;
+// field reads are explicit borrows and ordinary Copy operands acquire shares.
+fn buildMidStructPattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, sourceArms: MatchArmRange, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
+    if semantic.arms.count() == 0U64 || sourceArms.len == 0U64 { return <MidBuildError.UnsupportedMatch /> }
+    val bindingMark: U64 = state.bindings.count()
+    val armScope: U64 = midOpenScope(state: inout state)
+    val arm: SemanticMatchArm = semantic.arms[0U64]
+    mut val payloadIndex: U64 = 0U64
+    while payloadIndex < arm.payloads.count() {
+        val payload: SemanticMatchPayload = arm.payloads[payloadIndex]
+        val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: payload.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: true, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
+        mut val projections: Array[MidProjection] = scrutinee.projections
+        projections.append(<MidProjection.Field index=payload.fieldIndex typeTerm=payload.fieldTerm isBoxed=payload.isBoxed />)
+        val field: MidPlace = <MidPlace rootTag=scrutinee.rootTag local=scrutinee.local globalTarget=scrutinee.globalTarget globalMutable=scrutinee.globalMutable projections=projections typeTerm=payload.fieldTerm />
+        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=payload.fieldTerm /> value=<MidRvalue.Use operand=<MidOperand.Borrow place=field capability=<MidBorrowCapability.Read /> /> /> />)
+        payloadIndex += 1U64
+    }
+    val result: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: c.matchArmAt(arms: sourceArms, index: 0U64).body, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+    if midCurrentBlockIsOpen(state: state) {
+        midEmitScopeExit(state: inout state, scope: armScope)
+        if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
+    }
+    midCloseScope(state: inout state, scope: armScope)
+    state.bindings.truncate(count: bindingMark)
+    if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+    return result
+}
+
+fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, sourceArms: MatchArmRange, hasGiveDestination: Bool, giveDestination: MidPlace, traceId: U64) -> MidBuildError {
             val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource)
             if semanticIndex >= c.decls.semanticMatches.count() {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "missing-semantic-match")
@@ -2050,12 +2078,19 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "scrutinee-not-place")
                 return <MidBuildError.UnsupportedMatch />
             }
+            mut val enumIndex: U64 = 0U64
+            match semantic.kind {
+                SemanticMatchKind.Enum(enumIndex: val selected) => { enumIndex = selected }
+                SemanticMatchKind.Struct(layoutTerm: _) => {
+                    return buildMidStructPattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+                }
+            }
             val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
             val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
             if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)
             val tagPlace: MidPlace = <MidPlace local=tagLocal typeTerm=tagTerm />
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tagPlace value=<MidRvalue.EnumTag place=scrutinee.place enumIndex=semantic.enumIndex matchSource=matchSource resultTerm=tagTerm /> />)
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tagPlace value=<MidRvalue.EnumTag place=scrutinee.place enumIndex=enumIndex matchSource=matchSource resultTerm=tagTerm /> />)
             val joinTarget: U64 = midNewBlock(state: inout state)
             val mismatchTarget: U64 = midNewBlock(state: inout state)
             mut val armTargets: Array[U64] = []
@@ -2123,14 +2158,14 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if isBorrowed {
                         if payload.isBoxed {
-                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
+                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedBorrow place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
                         } else {
-                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
+                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
                         }
                     } else if payload.isBoxed {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedCopy place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
                     } else {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget matchSource=matchSource resultTerm=payload.fieldTerm /> />)
                     }
                     payloadIndex += 1U64
                 }
@@ -2162,7 +2197,7 @@ fn buildMidEnumMatch(c: inout Comp, state: inout MidBuildState, matchSource: Mat
 export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
-        Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidEnumMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, sourceArms: arms, hasGiveDestination: false, giveDestination: <MidPlace local=0U64 typeTerm=0U64 />, traceId: stmtId) }
+        Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, sourceArms: arms, hasGiveDestination: false, giveDestination: <MidPlace local=0U64 typeTerm=0U64 />, traceId: stmtId) }
         _ => { return <MidBuildError.InvalidStatement /> }
     }
 }

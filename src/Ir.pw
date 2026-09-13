@@ -487,21 +487,21 @@ export enum MatchSource {
 // One selected payload projection in an enum-match arm.  `bindTarget` is the
 // declaration identity that Record/Verify gives the arm local; the physical
 // field slot and its parametric TypeTerm are frozen beside it so Mid never
-// maps a field spelling back onto an enum declaration.
+// maps a field spelling back onto an aggregate declaration.
 export struct SemanticMatchPayload {
     pub val bindTarget: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val fieldTerm: U64 = 0U64
     // Physical recursive-field storage selected while recording the pattern.
     // The bound value remains the logical fieldTerm; Mid dereferences this
-    // cell before binding it and never re-queries the enum declaration.
+    // cell before binding it and never re-queries the declaration.
     pub val isBoxed: Bool
 }
 pub impl SemanticMatchPayload { factory }
 
-// One arm in a parametric enum-match descriptor. A wildcard has
-// `hasVariant=false`; its payload list is necessarily empty. Variant indices
-// are declaration slots, not source names.
+// One arm in a parametric pattern descriptor. Only enum variant arms have
+// hasVariant=true. Struct arms carry field bindings without a variant;
+// wildcard arms have no payloads. Indices are declaration slots, not names.
 export struct SemanticMatchArm {
     pub val hasVariant: Bool = false
     pub val variantIndex: U64 = 0U64
@@ -509,15 +509,20 @@ export struct SemanticMatchArm {
 }
 pub impl SemanticMatchArm { factory }
 
-// The frozen frontend meaning of one statement enum match. The AST statement
-// id remains only a body-navigation anchor: identity is `(ownerFnIdx, stmtId)`.
-// `scrutineeTerm` is parametric in a generic body and is grounded exactly once
-// into FinalMatchResolution for the concrete BodyInstance.
+// Pattern shape is selected by the frontend, not rediscovered by Mid.
+export enum SemanticMatchKind {
+    Enum(enumIndex: U64)
+    Struct(layoutTerm: U64)
+}
+
+// Frozen frontend meaning of a match, keyed by owner and source anchor.
+// Parametric terms are grounded by ordinary Mid place instantiation; enum
+// payload operations also consume a FinalMatchResolution for the BodyInstance.
 export struct SemanticMatch {
     pub val ownerFnIdx: U64 = 0U64
     pub val matchSource: MatchSource
     pub val scrutineeTerm: U64 = 0U64
-    pub val enumIndex: U64 = 0U64
+    pub val kind: SemanticMatchKind
     pub val arms: Array[SemanticMatchArm] = []
 }
 pub impl SemanticMatch { factory }
