@@ -2096,6 +2096,7 @@ pub impl Comp {
                 match b {
                     CallTarget.RuntimeIntrinsic(intrinsic: val other) => {
                         match intrinsic {
+                            RuntimeIntrinsic.HashSeed => { match other { RuntimeIntrinsic.HashSeed => { return true } _ => {} } }
                             RuntimeIntrinsic.StrongCellNew => { match other { RuntimeIntrinsic.StrongCellNew => { return true } _ => {} } }
                             RuntimeIntrinsic.Io(intrinsic: val left) => {
                                 match other {

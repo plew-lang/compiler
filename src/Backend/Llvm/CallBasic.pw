@@ -329,6 +329,7 @@ pub impl LlvmCtx {
             match c.arena.finalCallees[resolution].target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
+                        RuntimeIntrinsic.HashSeed => { return self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty) }
                         RuntimeIntrinsic.StrongCellNew => { return self.genLlvmRefNew(c: inout c, valueExpr: c.argAt(args: args, index: 0U64).expr) }
                         RuntimeIntrinsic.Io(intrinsic: val io) => { return self.genIoRuntimeIntrinsic(c: inout c, intrinsic: io, args: args) }
                         RuntimeIntrinsic.Process(intrinsic: val process) => { return self.genProcessRuntimeIntrinsic(c: inout c, intrinsic: process, args: args) }
@@ -450,16 +451,6 @@ pub impl LlvmCtx {
             mut val ptys: Array[LLVMTypeRef] = []
             val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_random_u64", fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
-        }
-        // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
-        // a lazily-initialized random value (stable for the process), so SipHash is keyed
-        // unpredictably across runs (DoS resistance) while staying consistent within a run.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
-            mut val ptys: Array[LLVMTypeRef] = []
-            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_dict_seed", fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }

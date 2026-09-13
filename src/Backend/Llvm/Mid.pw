@@ -738,6 +738,7 @@ pub impl LlvmCtx {
             match selected.target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
+                        RuntimeIntrinsic.HashSeed => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                         RuntimeIntrinsic.StrongCellNew => { return <MidCallPreflight.Target /> }
                         RuntimeIntrinsic.Process(intrinsic: val process) => {
                             match process {
@@ -1170,6 +1171,7 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
             match intrinsic {
+                RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midLocalPtr(body: body, local: destination.local)) return true }
                 RuntimeIntrinsic.StrongCellNew => { return false }
                 RuntimeIntrinsic.Io(intrinsic: val io) => {
                     match io {
@@ -3031,7 +3033,7 @@ pub impl LlvmCtx {
         return operand.tag == 5U64 || operand.tag == 6U64 || operand.tag == 7U64
     }
 
-    inout fn midCanonicalRuntimeProcessIoPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+    inout fn midCanonicalRuntimeSystemPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
         if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
@@ -3045,6 +3047,7 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
+                    RuntimeIntrinsic.HashSeed => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                     RuntimeIntrinsic.Process(intrinsic: val process) => {
                         match process {
                             ProcessIntrinsic.ArgCount => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
@@ -3078,8 +3081,8 @@ pub impl LlvmCtx {
         return <MidCallPreflight.None />
     }
 
-    inout fn midCanonicalEmitRuntimeProcessIoCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
-        match self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+    inout fn midCanonicalEmitRuntimeSystemCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalRuntimeSystemPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
         val selected: CallResolution = c.arena.finalCallees[target.resolution]
@@ -3087,6 +3090,7 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
+                    RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) return true }
                     RuntimeIntrinsic.Io(intrinsic: val io) => {
                         match io {
                             IoIntrinsic.Write => { self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", value: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))) }
@@ -3891,7 +3895,7 @@ pub impl LlvmCtx {
         val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
         match direct {
             MidCallPreflight.Target => {
-                val processIo: MidCallPreflight = self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId)
+                val processIo: MidCallPreflight = self.midCanonicalRuntimeSystemPreflight(c: inout c, body: body, terminatorId: terminatorId)
                 match processIo {
                     MidCallPreflight.Target => {
                         val coreStringFfi: MidCallPreflight = self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId)
@@ -3925,8 +3929,8 @@ pub impl LlvmCtx {
         match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
             MidCallPreflight.None => { return self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {
-                match self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) {
-                    MidCallPreflight.None => { return self.midCanonicalEmitRuntimeProcessIoCall(c: inout c, body: body, terminatorId: terminatorId) }
+                match self.midCanonicalRuntimeSystemPreflight(c: inout c, body: body, terminatorId: terminatorId) {
+                    MidCallPreflight.None => { return self.midCanonicalEmitRuntimeSystemCall(c: inout c, body: body, terminatorId: terminatorId) }
                     MidCallPreflight.Target => {
                         match self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId) {
                             MidCallPreflight.None => { return self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId) }

@@ -1,0 +1,14 @@
+import @Std/Hash with { SipHasher, Hasher }
+import @Std/Io with { print }
+
+// An ordinary declaration with the same spelling is not a runtime intrinsic.
+fn __dictSeed() -> U64 { return 17U64 }
+
+fn main() {
+    mut val first = SipHasher.new()
+    mut val second = SipHasher.new()
+    first.writeU64(n: 42U64)
+    second.writeU64(n: 42U64)
+    print(first.finish() == second.finish())
+    print(__dictSeed())
+}

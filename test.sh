@@ -154,6 +154,12 @@ else
 fi
 
 # Call results consume the type of their frozen semantic call site.
+if sh ./test-mid-hash-seed.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-hash-seed"
+fi
+
 if sh ./test-mid-call-result-types.sh; then
     :
 else

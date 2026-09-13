@@ -1219,6 +1219,7 @@ export fn runFrontend(c: inout Comp) {
             val hps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: hashPath)
             loaded.append(<Bind nameStart=hps nameLen=hashPath.count() fieldStart=nextModuleId fieldLen=hashPath.count() />)
+            c.modules.hashModule = nextModuleId
             nextModuleId = nextModuleId + 1
         }
         // Remember the bundled Io path. It is not force-loaded: the loader

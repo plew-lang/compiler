@@ -1538,6 +1538,7 @@ export enum BufferIntrinsic {
 }
 
 export enum RuntimeIntrinsic {
+    HashSeed
     StrongCellNew
     Io(intrinsic: IoIntrinsic)
     Process(intrinsic: ProcessIntrinsic)
@@ -2937,6 +2938,8 @@ export struct Modules {
     // sugar is specified in terms of these declarations, not whichever trait
     // named `Eq`/`Add` happened to be visible at a later checker site.
     pub mut val coreModule: U64 = 4000000000U64
+    // Bundled Hash owns the process-stable hashing seed intrinsic.
+    pub mut val hashModule: U64 = 4000000000U64
     // The bundled Std Io module. It is loaded for runtime ABI declaration
     // identity only; its ordinary free functions remain non-ambient.
     pub mut val ioModule: U64 = 4000000000U64

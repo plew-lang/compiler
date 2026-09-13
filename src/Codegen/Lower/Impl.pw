@@ -49,6 +49,9 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
         }
+        if owner == self.modules.hashModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
+            return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.HashSeed /> />
+        }
         if owner == self.modules.coreModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
             mut val coreString: CoreStringIntrinsic = <CoreStringIntrinsic.FromBytesUnchecked />
@@ -96,6 +99,9 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cFree") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CFree /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.StringFromCString /> /> /> }
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.ArrayCPtr /> /> /> }
+        }
+        if owner == self.modules.hashModule && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
+            return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.HashSeed /> />
         }
         if owner == self.modules.coreModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.StrongCellNew /> /> }
