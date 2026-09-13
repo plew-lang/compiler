@@ -48,7 +48,7 @@ with log_path.open('wb') as log:
                 if phase:
                     last_phase = line
                 if (not phase and not llvm) or time.monotonic() - last_report >= 10:
-                    print(f'[trace-command events={events_seen}] {line.decode(errors="replace")}', file=sys.stderr, flush=True)
+                    print(f'[trace-command log={log_path} events={events_seen}] {line.decode(errors="replace")}', file=sys.stderr, flush=True)
                     last_report = time.monotonic()
     if pending:
         print(pending.decode(errors='replace'), file=sys.stderr, flush=True)

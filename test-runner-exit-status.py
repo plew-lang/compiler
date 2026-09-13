@@ -136,10 +136,11 @@ worker = asan.split('    compile_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = 'compile_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
     root = Path(directory)
+    (root/'trace-command.py').write_bytes(Path(__file__).with_name('trace-command.py').read_bytes())
     compiler = root/'plewc_asan'
     for reject in (False, True):
         for code in (0, 1, 7, 143):
-            compiler.write_text(f'#!/bin/sh\necho diagnostic >&2\nexit {code}\n')
+            compiler.write_text(f'#!/bin/sh\necho "plewc: error: diagnostic" >&2\nexit {code}\n')
             compiler.chmod(0o755)
             path = 'tests/reject/fixture.pw' if reject else 'tests/run/fixture.pw'
             result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh',path,str(root/'error')],
@@ -148,6 +149,14 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
             assert result.returncode == 0, result
             assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
             print(f'PASS asan-compile/reject={reject}/exit={code}', flush=True)
+
+    compiler.write_text('#!/bin/sh\necho "[trace-phase] fixture:start" >&2\nexit 1\n')
+    compiler.chmod(0o755)
+    result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/reject/fixture.pw',str(root/'error')],
+                            cwd=root,capture_output=True,text=True)
+    assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
+    assert 'missing rejection diagnostic' in result.stdout, result
+    print('PASS asan-compile/trace-is-not-diagnostic', flush=True)
 
 # Every preparation failure must produce a result instead of disappearing.
 asan = Path(__file__).with_name('asan-gate.sh').read_text()

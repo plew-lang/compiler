@@ -80,7 +80,9 @@ python3 ./trace-command.py "$TMP/build.err" -- "$PLEWC" --trace-phases --asan sr
 python3 ./trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan -S "$TMP/pc.ll" -o "$TMP/pc.inst.ll"
 # std/prelude resolution is relative to the compiler binary's directory, so the
 # instrumented compiler must live in compiler/ (removed on exit).
-python3 ./trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
+# Keep ASan instrumentation and frame pointers, with the standard -O1 level
+# so the whole compile corpus can exercise a practical instrumented compiler.
+python3 ./trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
 echo "== A. self-compile under ASan =="
@@ -99,14 +101,14 @@ echo "== B. compile corpus under ASan =="
 b_results=$(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; err="$TMP/b_$(printf "%s" "$f" | tr "/" "_").err"
     compile_exit=0
-    ./plewc_asan "$f" > /dev/null 2>"$err" || compile_exit=$?
+    python3 ./trace-command.py "$err" -- ./plewc_asan --trace-phases "$f" > /dev/null || compile_exit=$?
     expected_exit=0
     case "$f" in tests/reject/*) expected_exit=1 ;; esac
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL compiling $f: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     elif [ "$compile_exit" -ne "$expected_exit" ]; then
         echo "FAIL compiling $f: expected exit=$expected_exit, got=$compile_exit"
-    elif [ "$expected_exit" -eq 1 ] && [ ! -s "$err" ]; then
+    elif [ "$expected_exit" -eq 1 ] && ! grep -q "^plewc: error:" "$err"; then
         echo "FAIL compiling $f: missing rejection diagnostic"
     else
         echo "RAN $f"
