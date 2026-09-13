@@ -1999,7 +1999,8 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
 }
 
 // A struct pattern is irrefutable. Bind the first arm in the current CFG;
-// field reads are explicit borrows and ordinary Copy operands acquire shares.
+// Bound fields are independent values: the original aggregate may be
+// overwritten inside the arm. Ordinary Copy/Drop owns those snapshots.
 fn buildMidStructPattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, sourceArms: MatchArmRange, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
     if semantic.arms.count() == 0U64 || sourceArms.len == 0U64 { return <MidBuildError.UnsupportedMatch /> }
     val bindingMark: U64 = state.bindings.count()
@@ -2008,11 +2009,11 @@ fn buildMidStructPattern(c: inout Comp, state: inout MidBuildState, semantic: Se
     mut val payloadIndex: U64 = 0U64
     while payloadIndex < arm.payloads.count() {
         val payload: SemanticMatchPayload = arm.payloads[payloadIndex]
-        val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: payload.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: true, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
+        val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: payload.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: payload.bindTarget))
         mut val projections: Array[MidProjection] = scrutinee.projections
         projections.append(<MidProjection.Field index=payload.fieldIndex typeTerm=payload.fieldTerm isBoxed=payload.isBoxed />)
         val field: MidPlace = <MidPlace rootTag=scrutinee.rootTag local=scrutinee.local globalTarget=scrutinee.globalTarget globalMutable=scrutinee.globalMutable projections=projections typeTerm=payload.fieldTerm />
-        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=payload.fieldTerm /> value=<MidRvalue.Use operand=<MidOperand.Borrow place=field capability=<MidBorrowCapability.Read /> /> /> />)
+        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=payload.fieldTerm /> value=<MidRvalue.Use operand=<MidOperand.Copy place=field /> /> />)
         payloadIndex += 1U64
     }
     val result: MidBuildError = buildMidBlockInto(c: inout c, state: inout state, blockId: c.matchArmAt(arms: sourceArms, index: 0U64).body, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)

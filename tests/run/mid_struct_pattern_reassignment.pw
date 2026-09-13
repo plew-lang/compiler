@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+struct Bundle {
+    pub val text: String
+    pub val values: Array[I64]
+}
+pub impl Bundle { factory }
+
+fn main() {
+    mut val source: Bundle = <Bundle text="old" + "text" values=[11I64, 22I64] />
+    match source {
+        Bundle { val text, val values } => {
+            source = <Bundle text="new" + "text" values=[33I64, 44I64] />
+            print(text)
+            print(values[0U64])
+        }
+    }
+    print(source.text)
+    print(source.values[0U64])
+}
