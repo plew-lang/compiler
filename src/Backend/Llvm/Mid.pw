@@ -4486,8 +4486,13 @@ impl LlvmCtx {
                                 val entry = c.mid.aggregateElements[rejected.elements.start + element]
                                 eprint(text: " element-target=")
                                 eprintU64(n: entry.targetTerm)
+                                eprint(text: ":")
+                                c.traceMonoTypeHead(ref: entry.targetTerm)
                                 eprint(text: " operand-type=")
-                                eprintU64(n: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: entry.operand))
+                                val operandType: U64 = self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: entry.operand)
+                                eprintU64(n: operandType)
+                                eprint(text: ":")
+                                c.traceMonoTypeHead(ref: operandType)
                                 element += 1U64
                             }
                             eprint(text: "\n")
