@@ -122,7 +122,8 @@ export struct Comp {
     // may inspect syntax only to find reachable generic bodies.  Once Record
     // finishes its verified second walk, all written calls must instead be
     // finalized from those templates; a miss is then an internal error.
-    pub mut val callTemplatesClosed: Bool = false
+    pub mut val closedCallTemplateBodies: Array[Bool] = []
+    pub mut val globalCallTemplatesClosed: Bool = false
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -1722,7 +1723,7 @@ export fn runFrontend(c: inout Comp) {
         c.errorAt(offset: 0U64, msg: "internal error: default argument plans are incomplete")
     }
     tracePhase(c: inout c, label: "default-call-completion:done")
-    c.callTemplatesClosed = true
+    c.closeProgramCallTemplates()
     // Close the per-instance final-callable table only after verification and
     // typed-IR recording are available.  This semantic worklist is independent
     // of LLVM's lazy declaration queues: all backend call emission consumes the

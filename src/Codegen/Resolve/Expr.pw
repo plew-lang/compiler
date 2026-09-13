@@ -286,6 +286,37 @@ pub impl Comp {
         return 0U64
     }
 
+    // Readiness belongs to the lexical owner, not to a specialization or to
+    // a global phase toggle. Provided copies consume their source's templates.
+    inout fn callTemplatesClosedForBody(fnIdx: U64) -> Bool {
+        if fnIdx >= self.arena.functionCount() { return self.globalCallTemplatesClosed }
+        val owner = self.semanticBodyOwner(fnIdx: fnIdx)
+        return owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner]
+    }
+
+    inout fn closeCallTemplatesForBody(fnIdx: U64) {
+        if fnIdx >= self.arena.functionCount() {
+            self.globalCallTemplatesClosed = true
+            return
+        }
+        val owner = self.semanticBodyOwner(fnIdx: fnIdx)
+        while self.closedCallTemplateBodies.count() <= owner {
+            self.closedCallTemplateBodies.append(false)
+        }
+        self.closedCallTemplateBodies.set(i: owner, value: true)
+    }
+
+    // Ordinary compilation completes the entire source frontier before Mono.
+    // There is deliberately no operation that reopens a completed owner.
+    inout fn closeProgramCallTemplates() {
+        mut val index: U64 = 0U64
+        while index < self.arena.functionCount() {
+            self.closeCallTemplatesForBody(fnIdx: index)
+            index += 1U64
+        }
+        self.globalCallTemplatesClosed = true
+    }
+
     // A source declaration body is the stable owner of a parametric call
     // template.  Globals use the one sentinel immediately after Func indices;
     // Mono normalizes its synthetic global body key to the same value.

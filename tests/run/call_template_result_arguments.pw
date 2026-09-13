@@ -128,13 +128,15 @@ fn main() {
     if c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) && c.decls.callTemplates.count() == completedCount && args.len == 0U64 { write(s: "completed-plan-idempotent\n") }
     c.cur.bodyFnIdx = 0U64
     if c.callArgumentRangeForCurrentBody(exprId: expression, authored: args).len == 0U64 { write(s: "pre-record-authored-navigation\n") }
-    c.callTemplatesClosed = true
-    val navigation = c.callArgumentRangeForCurrentBody(exprId: expression, authored: args)
-    if navigation.len == 1U64 {
-        val generated = c.argAt(args: navigation, index: 0U64).expr
+    // The consumer sees a closed snapshot; later producer checks keep their
+    // independent, still-open compiler state. Never reopen a published body.
+    mut val consumer = c
+    consumer.closeCallTemplatesForBody(fnIdx: 0U64)
+    val navigation = consumer.callArgumentRangeForCurrentBody(exprId: expression, authored: args)
+    if navigation.len == 1U64 && consumer.callTemplatesClosedForBody(fnIdx: 0U64) && !consumer.callTemplatesClosedForBody(fnIdx: 1U64) && !c.callTemplatesClosedForBody(fnIdx: 0U64) {
+        val generated = consumer.argAt(args: navigation, index: 0U64).expr
         if generated != defaultExpr && c.typeRefEq(a: c.semanticExprTerm(exprId: generated), b: expectedTerm) { write(s: "consumer-default-navigation\n") }
     }
-    c.callTemplatesClosed = false
     c.cur.checkFn = 0U64
     c.cur.recordCallTemplates = true
     val unresolved = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)

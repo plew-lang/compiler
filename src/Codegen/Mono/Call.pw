@@ -1554,7 +1554,7 @@ pub impl Comp {
     // from the declaration's default Expr. Before Record, and for non-call
     // templates handled by other paths, retain the existing authored range.
     inout fn callArgumentRangeForCurrentBody(exprId: U64, authored: ArgRange) -> ArgRange {
-        if self.callTemplatesClosed {
+        if self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx) {
             match self.callTemplateForCurrentBody(exprId: exprId).kind {
                 CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return self.templateArgumentRange(arguments: args) }
                 CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return self.templateArgumentRange(arguments: args) }
@@ -4023,7 +4023,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        if self.callTemplatesClosed {
+        if self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx) {
             // Instance discovery precedes Record and may inspect the syntax to
             // enqueue reachable generic bodies.  It does not publish a call
             // descriptor.  After Record closes templates, however, reopening
@@ -4216,6 +4216,10 @@ pub impl Comp {
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
         val instance: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if !self.callTemplatesClosedForBody(fnIdx: instance.fnIdx) {
+            self.errorAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: body finalization requires closed lexical call templates")
+            return
+        }
         val f: Func = self.arena.functionAt(index: instance.fnIdx)
         if self.tracePhases {
             self.traceFinalBodyScans += 1U64
