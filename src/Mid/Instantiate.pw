@@ -457,14 +457,15 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         return 0U64
     }
     val closure: SemanticClosure = c.decls.semanticClosures[closureIndex]
-    val functionType: U64 = c.groundTermForBody(ref: closure.functionTypeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
-    if closure.bodyKey != source.closureBodyKey || source.elements.len != closure.captures.count() || functionType == 0U64 || !(c.typeRefEq(a: functionType, b: c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
-        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
-        return 0U64
-    }
     val closureBodyId = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment.environment)
     if closureBodyId == 0U64 {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
+        return 0U64
+    }
+    val signature = c.arena.closureSignature(bodyId: closureBodyId)
+    val functionType: U64 = signature.functionTypeTerm
+    if closure.bodyKey != source.closureBodyKey || source.elements.len != closure.captures.count() || signature.captures.count() != closure.captures.count() || functionType == 0U64 || !(c.typeRefEq(a: functionType, b: c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
         return 0U64
     }
     val captureStart: U64 = c.mid.closureCaptures.count()
@@ -475,8 +476,8 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
             return 0U64
         }
         val raw: MidClosureCaptureNode = c.mid.closureCaptures[source.elements.start + captureI]
-        val expected = closure.captures[captureI]
-        val expectedType: U64 = c.groundTermForBody(ref: expected.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        val expected = signature.captures[captureI]
+        val expectedType: U64 = expected.typeTerm
         mut val expectedMode: U64 = 0U64
         match expected.mode {
             SemanticClosureCaptureMode.ValueCopy => { expectedMode = 1U64 }
