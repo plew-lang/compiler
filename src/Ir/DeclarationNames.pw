@@ -149,6 +149,11 @@ pub impl Arena {
         }
         self.newtypes.append(declaration)
     }
+    fn newtypeUnderlyingByOffset(offset: U64) -> U64 {
+        val entry = self.newtypesByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return 0U64 }
+        return self.newtypes[entry - 1U64].underRef
+    }
     fn newtypeNameByOffset(offset: U64) -> Optional[DeclarationName] {
         val entry = self.newtypesByOffset.getOr(key: offset, fallback: 0U64)
         if entry == 0U64 { return <Optional.None /> }

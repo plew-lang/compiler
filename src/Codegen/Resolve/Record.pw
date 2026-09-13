@@ -1072,11 +1072,12 @@ pub impl Comp {
     // Field and Arrow share the same declaration-time selection. Arrow's
     // receiver term is its pointee; Mid must not repeat this layout lookup.
     inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) {
-        val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
+        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: receiverTerm)
+        val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen)
         if fieldTerm != 0U64 {
             self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
-            val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
-            val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
+            val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen)
+            val receiver: TypeRef = self.arena.typeAt(index: storageRef)
             mut val isBoxed: Bool = false
             mut val fieldCount: U64 = receiver.recordFieldTerms.count()
             if !receiver.isRecord {

@@ -195,12 +195,31 @@ pub impl Comp {
         return scalarInfo()
     }
 
+    // Newtypes inherit their underlying field layout without losing their
+    // nominal value type. Follow declaration identity, never a same-spelled
+    // type from another module. The declaration count bounds malformed cycles.
+    inout fn fieldStorageTypeRef(receiverRef: U64) -> U64 {
+        mut val current: U64 = receiverRef
+        mut val depth: U64 = 0U64
+        while current != 0U64 && current < self.arena.typeCount() {
+            val term = self.arena.typeAt(index: current)
+            if !term.hasDecl { return current }
+            val underlying = self.arena.newtypeUnderlyingByOffset(offset: term.declOffset)
+            if underlying == 0U64 { return current }
+            if depth >= self.arena.newtypeCount() { return 0U64 }
+            current = underlying
+            depth += 1U64
+        }
+        return 0U64
+    }
+
     // Exact semantic field term. Unlike the legacy projection above, this is
     // suitable for a later field selection: `Holder[I32].pair.a` retains the
     // already-grounded record term instead of re-reading its declaration `T`.
     inout fn fieldTypeRefOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return 0U64 }
-        val t: TypeRef = self.arena.typeAt(index: receiverRef)
+        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: receiverRef)
+        if storageRef == 0U64 || storageRef >= self.arena.typeCount() { return 0U64 }
+        val t: TypeRef = self.arena.typeAt(index: storageRef)
         // Record selection is a direct TypeTerm child query.  In particular,
         // `(index: U64, value: E).value` retains `E` without reopening the
         // synthetic layout StructDef or parsing its canonical name.
@@ -221,7 +240,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < fields.count() {
             val fd: FieldDef = fields[i]
-            if fd.nameId == qField { return self.groundUnderInst(instRef: receiverRef, tyRef: fd.ty) }
+            if fd.nameId == qField { return self.groundUnderInst(instRef: storageRef, tyRef: fd.ty) }
             i += 1U64
         }
         return 0U64
@@ -233,8 +252,9 @@ pub impl Comp {
     // the source field is valid. Records use their canonical semantic label
     // order; nominal structs use the declaration's physical field order.
     inout fn fieldIndexOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return 0U64 }
-        val t: TypeRef = self.arena.typeAt(index: receiverRef)
+        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: receiverRef)
+        if storageRef == 0U64 || storageRef >= self.arena.typeCount() { return 0U64 }
+        val t: TypeRef = self.arena.typeAt(index: storageRef)
         if t.isRecord {
             val label: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
             mut val index: U64 = 0U64

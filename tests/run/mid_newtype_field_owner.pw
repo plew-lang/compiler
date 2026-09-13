@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, NewtypeDef }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val textName = compiler.internBytes(s: "String")
+    val aliasName = compiler.internBytes(s: "Alias")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val text = compiler.simpleTypeRef(nameStart: textName.nameStart, nameLen: textName.nameLen)
+    val first = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] hasDecl=true declOffset=10U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] hasDecl=true declOffset=20U64 />)
+    val chained = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] hasDecl=true declOffset=30U64 />)
+    val nameId = compiler.arena.typeAt(index: first).nameId
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=aliasName.nameStart nameLen=aliasName.nameLen nameId=nameId underStart=integerName.nameStart underLen=integerName.nameLen underRef=integer defOffset=10U64 />)
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=aliasName.nameStart nameLen=aliasName.nameLen nameId=nameId underStart=textName.nameStart underLen=textName.nameLen underRef=text defOffset=20U64 />)
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=aliasName.nameStart nameLen=aliasName.nameLen nameId=nameId underStart=aliasName.nameStart underLen=aliasName.nameLen underRef=second defOffset=30U64 />)
+    assert(compiler.fieldStorageTypeRef(receiverRef: first) == integer)
+    assert(compiler.fieldStorageTypeRef(receiverRef: second) == text)
+    assert(compiler.fieldStorageTypeRef(receiverRef: chained) == text)
+    assert(compiler.fieldStorageTypeRef(receiverRef: integer) == integer)
+    assert(compiler.arena.typeAt(index: first).declOffset == 10U64)
+    assert(compiler.arena.typeAt(index: second).declOffset == 20U64)
+    assert(compiler.arena.newtypeUnderlyingByOffset(offset: 999U64) == 0U64)
+    print("ok")
+}
