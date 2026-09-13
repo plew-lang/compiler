@@ -370,6 +370,11 @@ if sh ./test-mid-record-construction.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-record-construction"
 fi
+if sh ./test-mid-self-layout.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-self-layout"
+fi
 if sh ./test-mid-field-defaults.sh; then
     :
 else

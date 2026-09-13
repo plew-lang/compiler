@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+enum Envelope[T] { Empty Value(value: T) }
+pub impl[T] Envelope[T] {
+    fn copyValues(other: Self) -> Array[T] {
+        match other {
+            Envelope.Empty => { return [] }
+            Envelope.Value(value: val value) => { return [value, value] }
+        }
+    }
+}
+
+fn main() {
+    val number: Envelope[I64] = <Envelope.Value value=42I64 />
+    val text: Envelope[String] = <Envelope.Value value="he" + "ap" />
+    val numbers: Array[I64] = number.copyValues(other: number)
+    val words: Array[String] = text.copyValues(other: text)
+    val empty: Envelope[String] = <Envelope.Empty />
+    print(numbers[0U64])
+    print(numbers[1U64])
+    print(words[0U64])
+    print(words[1U64])
+    print(empty.copyValues(other: empty).count())
+}
