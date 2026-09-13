@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -4946,6 +4946,43 @@ pub impl Comp {
         self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=self.semanticBodyOwner(fnIdx: ownerFnIdx) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
     }
 
+    // Finalization freezes the closure ABI under the same lexical instance
+    // as its return/call descriptors. Abstract scans do not publish an ABI.
+    inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64) {
+        val index = self.semanticClosureIndex(ownerFnIdx: ownerFnIdx, exprId: closureId)
+        if index >= self.decls.semanticClosures.count() { return }
+        val closure = self.decls.semanticClosures[index]
+        val environment = self.cur.bodyEnvironment
+        val functionType = self.groundTermForBody(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if functionType == 0U64 || functionType >= self.arena.typeCount() { return }
+        val signature = self.arena.typeAt(index: functionType)
+        if signature.args.count() != closure.parameters.count() + 1U64 { return }
+        mut val parameters: Array[U64] = []
+        mut val typeI: U64 = 0U64
+        while typeI < signature.args.count() {
+            val type = signature.args[typeI]
+            if typeI != 0U64 || closure.hasReturn {
+                if type == 0U64 || !self.tyRefIsGround(ref: type) { return }
+            }
+            if typeI != 0U64 { parameters.append(type) }
+            typeI += 1U64
+        }
+        mut val captures: Array[SemanticClosureCapture] = []
+        mut val captureI: U64 = 0U64
+        while captureI < closure.captures.count() {
+            val capture = closure.captures[captureI]
+            val type = self.groundTermForBody(ref: capture.typeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            if type == 0U64 || !self.tyRefIsGround(ref: type) { return }
+            captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget typeTerm=type mode=capture.mode />)
+            captureI += 1U64
+        }
+        self.arena.setClosureSignature(bodyId: self.currentBodyInstanceId(), parameters: parameters, result: signature.args[0U64], closure: <ClosureSignature functionTypeTerm=functionType captures=captures />)
+        typeI = 0U64
+        while typeI < signature.args.count() { self.scanType(ref: signature.args[typeI]) typeI += 1U64 }
+        captureI = 0U64
+        while captureI < captures.count() { self.scanType(ref: captures[captureI].typeTerm) captureI += 1U64 }
+    }
+
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
     // spine) with a reference to the match-bound value `__chainVal`, anchored at the
     // `?.member` source token. `cont` is `hole.b.c` -> `__chainVal.b.c`.
@@ -5369,6 +5406,7 @@ pub impl Comp {
                 }
                 self.scanBlockInsts(blkId: body)
                 self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
+                self.finalizeClosureSignature(ownerFnIdx: savedBodyFn, closureId: exprId)
                 self.popLocals(mark: enclMark)
                 self.cur.closureCallTemplatesClosed = savedClosureReadiness
                 self.cur.closureId = savedId

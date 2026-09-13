@@ -163,31 +163,17 @@ pub impl LlvmCtx {
             return
         }
         if self.closureSlot(bodyId: bodyId) < self.closures.count() { return }
-        val functionType: U64 = c.groundTermForBody(ref: closure.functionTypeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-        if functionType == 0U64 || functionType >= c.arena.typeCount() {
-            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure signature is not grounded")
-            return
-        }
-        val signature: TypeRef = c.arena.typeAt(index: functionType)
-        mut val grounded: Bool = signature.args.count() == closure.parameters.count() + 1U64
-        mut val termI: U64 = 0U64
-        while termI < signature.args.count() {
-            // Zero is the existing Unit result representation, not a missing
-            // argument type. Value parameters must always be nonzero and ground.
-            if termI != 0U64 || closure.hasReturn {
-                if signature.args[termI] == 0U64 || !c.tyRefIsGround(ref: signature.args[termI]) { grounded = false }
-            }
-            termI += 1U64
-        }
-        if !grounded {
-            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: invalid concrete closure signature")
+        val frozen = c.arena.closureSignature(bodyId: bodyId)
+        val functionType: U64 = frozen.functionTypeTerm
+        if functionType == 0U64 || functionType >= c.arena.typeCount() || frozen.captures.count() != closure.captures.count() {
+            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature")
             return
         }
         mut val captures: Array[CaptureEntry] = []
         mut val captureI: U64 = 0U64
-        while captureI < closure.captures.count() {
-            val capture = closure.captures[captureI]
-            val term: U64 = c.groundTermForBody(ref: capture.typeTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+        while captureI < frozen.captures.count() {
+            val capture = frozen.captures[captureI]
+            val term: U64 = capture.typeTerm
             if term == 0U64 || term >= c.arena.typeCount() {
                 c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure capture is not grounded")
                 return

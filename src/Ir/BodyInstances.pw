@@ -28,6 +28,21 @@ pub impl Arena {
         self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters resultType=result />
     }
 
+    fn closureSignature(bodyId: U64) -> ClosureSignature {
+        val signature = self.bodySignature(bodyId: bodyId)
+        if signature.closureSignatureId == 0U64 { return <ClosureSignature /> }
+        return self.closureSignatures[signature.closureSignatureId - 1U64]
+    }
+
+    inout fn setClosureSignature(bodyId: U64, parameters: Array[U64], result: U64, closure: ClosureSignature) {
+        mut val index = self.bodySignatures[bodyId - 1U64].closureSignatureId
+        if index == 0U64 {
+            self.closureSignatures.append(closure)
+            index = self.closureSignatures.count()
+        } else { self.closureSignatures[index - 1U64] = closure }
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters resultType=result closureSignatureId=index />
+    }
+
     fn firstBodyInstanceForFunction(functionIndex: U64) -> U64 {
         return self.bodyFunctionHeads.getOr(key: functionIndex, fallback: 0U64)
     }
