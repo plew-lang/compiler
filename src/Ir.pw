@@ -484,7 +484,7 @@ export enum MatchSource {
     Expression(exprId: U64)
 }
 
-// One selected payload projection in an enum-match arm.  `bindTarget` is the
+// One selected field projection in a match arm.  `bindTarget` is the
 // declaration identity that Record/Verify gives the arm local; the physical
 // field slot and its parametric TypeTerm are frozen beside it so Mid never
 // maps a field spelling back onto an aggregate declaration.
@@ -1810,7 +1810,8 @@ export struct FinalMatchResolution {
     pub val bodyId: U64 = 0U64
     pub val matchSource: MatchSource
     pub val scrutineeTypeRef: U64 = 0U64
-    pub val enumIndex: U64 = 0U64
+    // Same shape as the parametric fact; every term here is grounded.
+    pub val kind: SemanticMatchKind
     // Immutable range in Arena.finalMatchArms; see FinalMatchArmResolution.
     pub val armStart: U64 = 0U64
     pub val armCount: U64 = 0U64

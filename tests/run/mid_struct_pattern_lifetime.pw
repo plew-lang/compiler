@@ -1,0 +1,45 @@
+import @Std/Io with { print }
+
+struct Package[T] {
+    pub val value: T
+    pub val spare: String
+}
+pub impl Package { factory }
+
+fn package(counter: inout I64) -> Package[String] {
+    counter += 1I64
+    return <Package[String] value="he" + "ap" spare="sp" + "are" />
+}
+
+fn copies[T](package: Package[T]) -> Array[T] {
+    match package {
+        Package { val value, spare: _ } => { return [value, value] }
+    }
+}
+
+fn reader(package: Package[String]) -> fn() -> String {
+    match package {
+        Package { val value, spare: _ } => {
+            return fn() -> String { return value }
+        }
+    }
+}
+
+fn main() {
+    mut val counter: I64 = 0I64
+    val words: Array[String] = match package(counter: inout counter) {
+        Package { value: val text, val spare } => { give [text, spare] }
+    }
+    print(counter)
+    print(words[0U64])
+    print(words[1U64])
+    val doubled: Array[String] = copies(package: package(counter: inout counter))
+    print(doubled[0U64])
+    print(doubled[1U64])
+    val numbers: Array[I64] = copies(package: <Package[I64] value=42I64 spare="discard" />)
+    print(numbers[0U64])
+    print(numbers[1U64])
+    val read: fn() -> String = reader(package: package(counter: inout counter))
+    print(read())
+    print(counter)
+}

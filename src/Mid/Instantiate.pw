@@ -5,7 +5,7 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, SemanticMatchKind, ValueConversionProof, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
@@ -344,7 +344,10 @@ fn canonicalMatchSource(sourceTag: U64, sourceId: U64) -> MatchSource {
 fn midFinalMatchShapeMatches(c: inout Comp, matchIndex: U64, enumIndex: U64, scrutineeTypeRef: U64) -> Bool {
     if matchIndex >= c.arena.finalMatches.count() { return false }
     val resolution: FinalMatchResolution = c.arena.finalMatches[matchIndex]
-    return resolution.enumIndex == enumIndex && c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeTypeRef)
+    match resolution.kind {
+        SemanticMatchKind.Enum(enumIndex: val selected) => { return selected == enumIndex && c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeTypeRef) }
+        SemanticMatchKind.Struct(layoutTerm: _) => { return false }
+    }
 }
 
 fn midFinalMatchPayloadMatches(c: inout Comp, matchIndex: U64, variantIndex: U64, bindTarget: U64, fieldIndex: U64, fieldTypeRef: U64) -> Bool {

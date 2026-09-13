@@ -3238,12 +3238,14 @@ pub impl Comp {
         val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, matchSource: matchSource)
         if sourceIndex >= self.decls.semanticMatches.count() { return }
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
-        // Struct patterns lower to ordinary field places and borrowed values;
-        // their projections are grounded by the normal place instantiator.
-        mut val enumIndex: U64 = 0U64
+        mut val kind: SemanticMatchKind = source.kind
         match source.kind {
-            SemanticMatchKind.Enum(enumIndex: val selected) => { enumIndex = selected }
-            SemanticMatchKind.Struct(layoutTerm: _) => { return }
+            SemanticMatchKind.Enum(enumIndex: _) => {}
+            SemanticMatchKind.Struct(layoutTerm: val term) => {
+                val layout = self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                if layout == 0U64 { return }
+                kind = <SemanticMatchKind.Struct layoutTerm=layout />
+            }
         }
         val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         if scrutineeTypeRef == 0U64 { return }
@@ -3263,7 +3265,7 @@ pub impl Comp {
             self.arena.finalMatchArms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloadStart=payloadStart payloadCount=self.arena.finalMatchPayloads.count() - payloadStart />)
             armIndex += 1U64
         }
-        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef enumIndex=enumIndex armStart=armStart armCount=self.arena.finalMatchArms.count() - armStart />)
+        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef kind=kind armStart=armStart armCount=self.arena.finalMatchArms.count() - armStart />)
     }
 
     // A return is a source-level value boundary just like a call argument. The
@@ -5681,13 +5683,6 @@ pub impl Comp {
     }
 
     inout fn scanAddFinalMatchArmBinds(a: MatchArm, scrutTi: TypeInfo, matchSource: MatchSource, armIndex: U64) {
-        // a struct-destructure arm `S { val x }`: bind each field from the scrutinee
-        // struct (mirrors codegen's addForStructBinds), so a generic call on a bound
-        // field (`print(items.count())`) recovers its type.
-        if a.isStruct {
-            self.addForStructBinds(et: scrutTi, binds: a.binds)
-            return
-        }
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -5700,7 +5695,7 @@ pub impl Comp {
             // Do not silently fall back to source spelling and invent a
             // potentially wrong payload type.
             if payloadRef == 0U64 {
-                self.errorAt(offset: bd.nameStart, msg: "internal error: finalized enum-match payload was not recorded")
+                self.errorAt(offset: bd.nameStart, msg: "internal error: finalized match binding was not recorded")
             } else {
                 val bti: TypeInfo = self.typeInfoOfRef(ref: payloadRef)
                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: payloadRef, isInout: false, isMut: false, owned: false)
