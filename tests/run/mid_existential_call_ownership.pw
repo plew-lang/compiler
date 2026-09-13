@@ -1,0 +1,39 @@
+import @Std/Io with { print }
+
+// Final existential signatures must preserve associated arguments/results,
+// CoW receiver mutation, re-erased Self results and inout argument addresses.
+trait Ledger {
+    type Entry
+    inout fn replace(value: Entry) -> Entry
+    fn snapshot() -> Self
+    fn label() -> Entry
+    fn add(total: inout I64)
+}
+struct Text { pub mut val value: String }
+pub impl Text { factory }
+pub impl Text as Ledger {
+    type Entry = String
+    inout fn replace(value: String) -> String {
+        val previous = self.value
+        self.value = value
+        return previous
+    }
+    fn snapshot() -> Self { return self }
+    fn label() -> String { return self.value }
+    fn add(total: inout I64) { total += 7I64 }
+}
+fn fresh() -> any Ledger[Entry=String] { return <Text value="temporary" /> }
+fn exercise() {
+    val original: any Ledger[Entry=String] = <Text value="first" />
+    mut val changed = original
+    print(changed.replace(value: "second"))
+    print(original.label())
+    print(changed.label())
+    val snapshot = changed.snapshot()
+    print(snapshot.label())
+    mut val total = 3I64
+    changed.add(total: inout total)
+    print(total)
+    print(fresh().label())
+}
+fn main() { exercise() }

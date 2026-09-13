@@ -2004,7 +2004,7 @@ pub impl Comp {
                 mut val index: U64 = 0U64
                 while index < requirement.params.count() {
                     val parameter: Param = self.funcParamAt(params: requirement.params, index: index)
-                    parameterTypes.append(self.groundTermInEnvironment(ref: parameter.ty, params: parameters, values: values, selfRef: selection.receiverRef))
+                    parameterTypes.append(self.groundTraitRequirementType(ref: parameter.ty, traitIdx: traitIndex, receiverRef: selection.receiverRef, params: parameters, args: values))
                     if parameter.isInout { passings.append(<CallArgumentPassing.Inout />) }
                     else if parameter.isMove { passings.append(<CallArgumentPassing.Move />) }
                     else { passings.append(<CallArgumentPassing.Borrow />) }
@@ -3662,7 +3662,14 @@ pub impl Comp {
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
-                val resultRef: U64 = self.anyMemberRetInfo(anyRef: receiverRef, req: req).ref
+                mut val parameters: Array[Bind] = []
+                mut val values: Array[U64] = []
+                if !self.anyBindingEnv(anyRef: receiverRef, traitIdx: traitIdx, outParams: inout parameters, outArgs: inout values) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: incomplete dynamic requirement result environment")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
+                }
+                mut val resultRef: U64 = 0U64
+                if req.hasRet { resultRef = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: receiverRef, params: parameters, args: values) }
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
             }
         }
