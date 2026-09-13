@@ -22,6 +22,7 @@ command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
 PLEWC="${PLEWC:-./plewc}"
+export PLEWC
 [ -x "$PLEWC" ] || { echo "run ./bootstrap.sh first" >&2; exit 1; }
 
 mkdir -p tmp
@@ -103,6 +104,10 @@ for app in tests/genreject/*/App.pw; do
         fail=$((fail + 1)); failed="$failed genreject/$name(exit:$status)"
     fi
 done
+
+if ! sh ./test-gen-input-ast.sh; then
+    fail=$((fail + 1)); failed="$failed gen-input-ast"
+fi
 
 echo "----"
 echo "llvm-gen: pass=$pass  reject=$rpass  skip=0  fail=$fail"
