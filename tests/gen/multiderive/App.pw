@@ -42,6 +42,8 @@ struct Thing {
     pub val v: I64
 }
 
+pub impl Thing { factory }
+
 fn main() {
     write(s: Thing.fromA())
     write(s: "\n")

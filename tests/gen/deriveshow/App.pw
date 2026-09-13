@@ -39,6 +39,8 @@ struct Point {
     pub val y: I64
 }
 
+pub impl Point { factory }
+
 fn main() {
     val p: Point = <Point x=1 y=2 />
     write(s: p.show())

@@ -10,6 +10,8 @@ struct Tagged {
     pub val times: I64
 }
 
+pub impl Tagged { factory }
+
 pub impl Tagged as ParameterizedDerive {
     fn derive(input: TopItemAst) -> String {
         match input {

@@ -15,6 +15,8 @@ struct Point {
     pub val y: U64
 }
 
+pub impl Point { factory }
+
 fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
 
 fn main() {
