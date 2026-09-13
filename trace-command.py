@@ -42,12 +42,13 @@ with log_path.open('wb') as log:
                 line, pending = pending.split(b'\n', 1)
                 phase = line.startswith(b'[trace-phase]')
                 llvm = line.startswith((b'Running pass:', b'Running analysis:', b'Invalidating analysis:')) or (line.startswith(b'[') and b" Executing Pass '" in line)
+                llvm_detail = line.startswith(b'Clearing all analysis results for:') or (line.startswith(b'[') and any(marker in line for marker in (b" Freeing Pass '", b" Made Modification '")))
                 if llvm or (phase and line != last_phase):
                     last_progress = time.monotonic()
                     events_seen += 1
                 if phase:
                     last_phase = line
-                if (not phase and not llvm) or time.monotonic() - last_report >= 10:
+                if (not phase and not llvm and not llvm_detail) or time.monotonic() - last_report >= 10:
                     print(f'[trace-command log={log_path} events={events_seen}] {line.decode(errors="replace")}', file=sys.stderr, flush=True)
                     last_report = time.monotonic()
     if pending:
