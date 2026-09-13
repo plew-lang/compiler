@@ -92,25 +92,23 @@ pub impl LlvmCtx {
     // reconstruct that layout from the child expression: a generic instance such
     // as `Store[SyntaxNewtype].inner` has a different LLVM type from `Inner[T]` in
     // the shared body AST.
-    inout fn placeStrict(c: inout Comp, id: U64) -> LlvmPlace {
-        val none: LlvmPlace = <LlvmPlace ptr=LLVMConstNull(self.ptrty) pointeeTy=LLVMConstNull(self.ptrty) typeRef=0U64 structIdx=c.arena.structCount() />
+    inout fn placeStrict(c: inout Comp, id: U64) -> Optional[LlvmPlace] {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
-                    return <LlvmPlace ptr=self.locPtr[li] pointeeTy=self.locTy[li] typeRef=self.locTypeRef[li] structIdx=self.locStructIdx[li] />
+                    return <Optional.Some v=<LlvmPlace ptr=self.locPtr[li] pointeeTy=self.locTy[li] typeRef=self.locTypeRef[li] structIdx=self.locStructIdx[li] /> />
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
-                if LLVMIsNull(basePlace.ptr) == 0I32 {
+                if Optional.Some(v: val basePlace) = self.placeStrict(c: inout c, id: base) {
                     val bsi: U64 = basePlace.structIdx
                     if bsi < c.arena.structCount() {
                         val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                         if fidx < c.arena.structAt(index: bsi).fields.count() {
                             val fld: FieldDef = c.arena.structFieldAt(structIndex: bsi, fieldIndex: fidx)
                             val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: basePlace.typeRef)
-                            return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, basePlace.pointeeTy, basePlace.ptr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(basePlace.pointeeTy, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
+                            return <Optional.Some v=<LlvmPlace ptr=LLVMBuildStructGEP2(self.b, basePlace.pointeeTy, basePlace.ptr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(basePlace.pointeeTy, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) /> />
                         }
                     }
                 }
@@ -127,8 +125,7 @@ pub impl LlvmCtx {
                     // place pointer and load the array value from it — the one cell
                     // evaluation (which also arms the cell pin below).
                     if c.placeHasDeref(id: base) {
-                        val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
-                        if LLVMIsNull(basePlace.ptr) == 0I32 {
+                        if Optional.Some(v: val basePlace) = self.placeStrict(c: inout c, id: base) {
                             arr = llvmLoad(self.b, basePlace.pointeeTy, basePlace.ptr, anon())
                             loaded = true
                         }
@@ -141,7 +138,7 @@ pub impl LlvmCtx {
                     val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
                     self.emitBoundsCheck(c: inout c, idx: idx, count: count)
                     val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: base)
-                    return <LlvmPlace ptr=self.arrElemPtr(elemTy: elemTy, data: data, idx: idx) pointeeTy=elemTy typeRef=elemRef structIdx=self.structIdxOfRef(c: inout c, ref: elemRef) />
+                    return <Optional.Some v=<LlvmPlace ptr=self.arrElemPtr(elemTy: elemTy, data: data, idx: idx) pointeeTy=elemTy typeRef=elemRef structIdx=self.structIdxOfRef(c: inout c, ref: elemRef) /> />
                 }
             }
             Expr.Deref(val base) => {
@@ -159,7 +156,7 @@ pub impl LlvmCtx {
                     val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                     val pointeeRef: U64 = c.arena.typeAt(index: refTy).args[0U64]
-                    return <LlvmPlace ptr=cellPtr pointeeTy=self.refPointeeTy(c: inout c, refTy: refTy) typeRef=pointeeRef structIdx=self.structIdxOfRef(c: inout c, ref: pointeeRef) />
+                    return <Optional.Some v=<LlvmPlace ptr=cellPtr pointeeTy=self.refPointeeTy(c: inout c, refTy: refTy) typeRef=pointeeRef structIdx=self.structIdxOfRef(c: inout c, ref: pointeeRef) /> />
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -182,18 +179,21 @@ pub impl LlvmCtx {
                         val fld: FieldDef = c.arena.structFieldAt(structIndex: psidx, fieldIndex: fidx)
                         val pref: U64 = c.arena.typeAt(index: refTy).args[0U64]
                         val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
-                        return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
+                        return <Optional.Some v=<LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) /> />
                     }
                 }
             }
             _ => {}
         }
-        return none
+        return <Optional.None />
     }
 
     // Compatibility projection while write paths migrate to `LlvmPlace`.
     inout fn placePtrStrict(c: inout Comp, id: U64) -> LLVMValueRef {
-        return self.placeStrict(c: inout c, id: id).ptr
+        match self.placeStrict(c: inout c, id: id) {
+            Optional.Some(v: val place) => { return place.ptr }
+            Optional.None => { return LLVMConstNull(self.ptrty) }
+        }
     }
 
     inout fn placePtrOf(c: inout Comp, id: U64) -> LLVMValueRef {
