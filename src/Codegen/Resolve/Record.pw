@@ -1698,7 +1698,8 @@ pub impl Comp {
                 self.recordIndexCall(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
-                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                val operandContext: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: ty)
+                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 // `as Target` is an explicit source-level type boundary; Lower
                 // has resolved Target into `ty`, so this is not an inference
                 // query. Recording it directly preserves a generic/view term

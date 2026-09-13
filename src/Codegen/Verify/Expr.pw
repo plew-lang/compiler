@@ -318,8 +318,8 @@ pub impl Comp {
                     i += 1
                 }
             }
-            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
-                self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen)
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: val targetTerm) => {
+                self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen, targetTerm: targetTerm)
                 self.verifyExpr(id: operand)
             }
             Expr.Binary(val op, val lhs, val rhs) => {

@@ -271,6 +271,36 @@ pub impl Comp {
         }
     }
 
+    // Only a direct polymorphic literal takes its type from an explicit cast.
+    // A newtype boundary supplies its declared immediate underlying type;
+    // following further wrappers would invent additional implicit casts.
+    inout fn castLiteralContextTerm(operand: U64, targetTerm: U64) -> U64 {
+        if targetTerm == 0U64 || targetTerm >= self.arena.typeCount() { return 0U64 }
+        mut val isFloat: Bool = false
+        match self.arena.exprs[operand] {
+            Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
+                if isBool || suffixLen != 0U64 { return 0U64 }
+            }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => {
+                if suffixLen != 0U64 { return 0U64 }
+                isFloat = true
+            }
+            _ => { return 0U64 }
+        }
+        mut val contextTerm: U64 = targetTerm
+        val target = self.arena.typeAt(index: targetTerm)
+        if target.hasDecl {
+            val underlying = self.arena.newtypeUnderlyingByOffset(offset: target.declOffset)
+            if underlying != 0U64 { contextTerm = underlying }
+        }
+        if contextTerm >= self.arena.typeCount() { return 0U64 }
+        val context = self.arena.typeAt(index: contextTerm)
+        if context.paramId != 0U64 || context.assocNameId != 0U64 { return 0U64 }
+        if self.isFloatType(start: context.nameStart, len: context.nameLen) { return contextTerm }
+        if !isFloat && self.isIntType(start: context.nameStart, len: context.nameLen) { return contextTerm }
+        return 0U64
+    }
+
     inout fn semanticExprTerm(exprId: U64) -> U64 {
         if exprId < self.arena.semanticExprTypes.count() {
             val entry: SemanticExprType = self.arena.semanticExprTypes[exprId]

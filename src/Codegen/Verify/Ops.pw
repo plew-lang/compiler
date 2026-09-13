@@ -476,7 +476,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn verifyCastLossless(operand: U64, tyStart: U64, tyLen: U64) {
+    inout fn verifyCastLossless(operand: U64, tyStart: U64, tyLen: U64, targetTerm: U64) {
         // Bool is not a numeric type, so `as` (the lossless numeric / newtype-retag
         // conversion, spec/12) can't bridge Bool and a numeric type in either direction
         // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
@@ -519,15 +519,9 @@ pub impl Comp {
         // A direct unsuffixed numeric literal is materialized in the explicit
         // cast context. Preserve that checked context for Record and Mid,
         // just as annotated values and selected call parameters already do.
-        if targetNum {
-            match self.arena.exprs[operand] {
-                Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
-                    if !isBool && suffixLen == 0U64 {
-                        self.checkLitTi(id: operand, ti: <TypeInfo kind=0I64 nameStart=tyStart nameLen=tyLen ref=0U64 />)
-                    }
-                }
-                _ => {}
-            }
+        val contextTerm: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: targetTerm)
+        if contextTerm != 0U64 {
+            self.checkLitTi(id: operand, ti: self.typeInfoOfRef(ref: contextTerm))
         }
     }
 }
