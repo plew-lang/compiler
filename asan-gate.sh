@@ -40,7 +40,7 @@ LIB="$LLVM/lib/libLLVM.dylib"
 for tool in "$OPT" "$CLANG" "$LC"; do
     [ -x "$tool" ] || { echo "asan-gate: missing $tool (set LLVM_PREFIX)" >&2; exit 1; }
 done
-PLEWC=./plewc
+PLEWC="${PLEWC:-./plewc}"
 [ -x "$PLEWC" ] || { echo "asan-gate: run ./bootstrap.sh first" >&2; exit 1; }
 
 TMP=/tmp/plew_asan
@@ -57,7 +57,7 @@ export ASAN_OPTIONS=detect_leaks=0:abort_on_error=0
 # line each, aggregated after the barrier. Exported for the worker shells:
 JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}"
 PLEW_LD="$("$LC" --ldflags)"
-export TMP RT OPT CLANG PLEW_LD
+export TMP RT OPT CLANG PLEW_LD PLEWC
 
 fail=0
 
@@ -106,13 +106,14 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/run/$name.out" ] || exit 0
     ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
-    ./plewc --asan "$f" > "$ll" 2>/dev/null || exit 0
+    "$PLEWC" --asan "$f" > "$ll" 2>/dev/null || exit 0
     extra_c=""; [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
     "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
     "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || exit 0
+    run_exit=0
     infile="tests/run/$name.in"
-    if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" < "$infile" > /dev/null 2>"$err" || true
-    else ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" > /dev/null 2>"$err" || true; fi
+    if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
+    else ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" > /dev/null 2>"$err" || run_exit=$?; fi
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     elif grep -q "LeakSanitizer: detected memory leaks" "$err"; then
@@ -120,6 +121,8 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     elif grep -q "detect_leaks is not supported" "$err"; then
         # LSan unavailable would silently void the leak level of this gate.
         echo "FAIL running $name: LeakSanitizer unavailable on this platform/toolchain"
+    elif [ "$run_exit" -ne 0 ]; then
+        echo "FAIL running $name: exit=$run_exit"
     else
         echo "RAN $name"
     fi
@@ -152,7 +155,7 @@ d_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/panic/$name.panic" ] || exit 0
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
-    ./plewc --asan "$f" > "$ll" 2>/dev/null || exit 0
+    "$PLEWC" --asan "$f" > "$ll" 2>/dev/null || exit 0
     "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
     "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>/dev/null || exit 0
     want=$(cat "tests/panic/$name.panic")

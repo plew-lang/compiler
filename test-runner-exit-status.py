@@ -105,3 +105,27 @@ with tempfile.TemporaryDirectory(prefix='plew-gen-status-') as directory:
             expected = ('0 1' if phase == 'reject' else '0 0') if accepted else '1 0'
             assert result.returncode == 0 and result.stdout == expected, (phase, code, result)
             print(f'PASS gen-status/{phase}/{code}', flush=True)
+
+# Actual ASan run-status branch, without requiring a sanitizer installation.
+asan = Path(__file__).with_name('asan-gate.sh').read_text()
+worker = asan.split('    run_exit=0\n', 1)[1].split("\n' sh)", 1)[0]
+worker = '    run_exit=0\n' + worker
+with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
+    root = Path(directory)
+    (root/'tests/run').mkdir(parents=True)
+    binary = root/'app'
+    for name, body, expected_pass in cases:
+        for stdin in (False, True):
+            infile = root/'tests/run/fixture.in'
+            if stdin: infile.write_text('input\n')
+            elif infile.exists(): infile.unlink()
+            binary.write_text('#!/bin/sh\n' + ('read value\n' if stdin else '') + body + '\n')
+            binary.chmod(0o755)
+            script = 'name=fixture; bin=$1; err=$2\n' + worker
+            result = subprocess.run(['sh','-c',script,'sh',str(binary),str(root/'error')],
+                                    cwd=root,capture_output=True,text=True)
+            # This gate checks memory/exit status; golden comparison is test.sh's job.
+            expected = name in ('normal', 'mismatch')
+            assert result.returncode == 0, result
+            assert result.stdout.startswith('RAN ' if expected else 'FAIL '), result
+            print(f'PASS asan-status/{name}/stdin={stdin}', flush=True)
