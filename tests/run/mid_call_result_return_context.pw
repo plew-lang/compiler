@@ -1,0 +1,14 @@
+import @Std/Core with { Buffer }
+import @Std/Io with { print }
+
+fn numbers() -> Buffer[I64] { return Buffer.new() }
+fn words() -> Buffer[String] { return Buffer.new() }
+
+fn main() {
+    mut val integers = numbers()
+    mut val strings = words()
+    integers.append(42I64)
+    strings.append("heap" + "-value")
+    print(integers[0U64])
+    print(strings[0U64])
+}

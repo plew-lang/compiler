@@ -1811,30 +1811,9 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 return <MidBuildError.None />
             }
             val term: U64 = c.semanticExprTerm(exprId: value)
-            // A call used as the return value is not an operand: it owns a
-            // continuation block. Materialize its result directly in the ABI
-            // return place, then perform the same lexical cleanup and transfer
-            // as a simple returned local. This keeps call-as-value control flow
-            // explicit and lets later instance-specific access elaboration
-            // splice its writeback before the continuation.
-            if midExprIsCall(c: c, exprId: value) {
-                if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
-                // The callee result is not yet this function's ABI result.
-                // Materialize it in its own selected source-type place, then
-                // cross the enclosing return boundary explicitly.  Writing a
-                // concrete callee result directly into an `any P` return place
-                // would erase the required FinalReturnResolution conversion.
-                val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
-                val callDestination: MidPlace = <MidPlace local=resultLocal typeTerm=term />
-                val callResult: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: callDestination)
-                match callResult { MidBuildError.None => {} _ => { return callResult } }
-                val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=state.returnTypeTerm />
-                val resultOperand: MidOperand = midReturnOperand(c: inout c, operand: <MidOperand.Copy place=callDestination />, typeTerm: term)
-                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=state.returnTypeTerm operand=resultOperand /> />)
-                midEmitAllScopeExits(state: inout state)
-                midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
-                return <MidBuildError.None />
-            }
+            // Every source value, including a call with its continuation,
+            // uses the same temporary/type-recipe builder before crossing the
+            // enclosing function's return conversion boundary.
             val operand: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
             match operand.error { MidBuildError.None => {} _ => { return operand.error } }
             // Copy retains into the ABI result place and Move transfers there;
