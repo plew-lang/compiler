@@ -503,6 +503,22 @@ fn instantiateCanonicalRvalue(c: inout Comp, rvalueId: U64, environment: BodyIns
     }
 }
 
+// Diagnostic identity only: no syntax or type recovery participates in the
+// failed instantiation. Preserve the input node so the producer can be traced.
+fn traceMidInstantiationRvalue(c: Comp, sourceFunction: U64, rvalueId: U64) {
+    if !c.traceCodegen || rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return }
+    val value = c.mid.rvalues[rvalueId - 1U64]
+    eprint(text: "[trace-codegen] Mid failed rvalue fn=")
+    eprintU64(n: sourceFunction)
+    eprint(text: " tag=")
+    eprintU64(n: value.tag)
+    eprint(text: " expr=")
+    eprintU64(n: value.exprId)
+    eprint(text: " stmt=")
+    eprintU64(n: value.sourceStmt)
+    eprint(text: "\n")
+}
+
 fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRange, environment: BodyInstance, bodyId: U64, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
     if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
     val source = c.mid.statements[statementId - 1U64]
@@ -510,13 +526,19 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRan
         1U64 => {
             val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef)
             val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
-            if destination == 0U64 || value == 0U64 { return false }
+            if destination == 0U64 || value == 0U64 {
+                traceMidInstantiationRvalue(c: c, sourceFunction: sourceFunction, rvalueId: source.value)
+                return false
+            }
             c.mid.statements.append(<MidStatementNode tag=1U64 destination=destination value=value />)
         }
         9U64 => {
             val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef)
             val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
-            if destination == 0U64 || value == 0U64 { return false }
+            if destination == 0U64 || value == 0U64 {
+                traceMidInstantiationRvalue(c: c, sourceFunction: sourceFunction, rvalueId: source.value)
+                return false
+            }
             c.mid.statements.append(<MidStatementNode tag=9U64 destination=destination value=value />)
         }
         2U64 => { c.mid.statements.append(<MidStatementNode tag=2U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) source=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.source, environment: environment, itemRef: itemRef) />) }
