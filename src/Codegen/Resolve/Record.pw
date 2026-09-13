@@ -1072,7 +1072,18 @@ pub impl Comp {
     // Field and Arrow share the same declaration-time selection. Arrow's
     // receiver term is its pointee; Mid must not repeat this layout lookup.
     inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) {
-        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: receiverTerm)
+        // A bare lexical Self selects the declaration's field layout. Keep
+        // the parameter and expression type unchanged: inherited newtype
+        // bodies must still substitute Self to the new nominal receiver.
+        // In particular, do not rewrite Self inside Array[Self] or records.
+        mut val layoutReceiver: U64 = receiverTerm
+        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+            val term = self.arena.typeAt(index: receiverTerm)
+            if !term.isRecord && !term.isAny && term.args.count() == 0U64 && term.assocNameId == 0U64 {
+                layoutReceiver = self.groundTermInEnvironment(ref: receiverTerm, params: [], values: [], selfRef: self.cur.selfRef, itemRef: 0U64)
+            }
+        }
+        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
         val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen)
         if fieldTerm != 0U64 {
             self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)

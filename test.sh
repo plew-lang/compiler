@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# Self field layout is selected without rewriting its nominal parameter type.
+if sh ./test-mid-self-fields.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-self-fields"
+fi
+
 # A construction retains its nominal owner beside unrelated lexical binders.
 if sh ./test-mid-nominal-construction.sh; then
     :
