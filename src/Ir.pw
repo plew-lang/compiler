@@ -1054,6 +1054,8 @@ export struct TraitOwner {
     pub val nameLen: U64
     pub val nameId: U64
     pub val arity: U64
+    pub val selfParamId: U64 = 0U64
+    pub val assocTypes: Array[Bind] = []
 }
 pub impl TraitOwner { factory }
 

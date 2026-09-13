@@ -277,13 +277,22 @@ pub impl Comp {
     // name a declaration imported from a module which is discovered later in
     // the loader worklist; owner resolution must never depend on that order.
     inout fn predeclareTrait(t: TraitAst) {
-        self.predeclareTraitIdentity(nameStart: t.nameSpan.start, nameLen: t.nameSpan.end - t.nameSpan.start, arity: t.typeParams.count())
+        mut val associated: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < t.assocTypes.count() {
+            associated.append(self.internBytes(s: t.assocTypes[i]))
+            i += 1U64
+        }
+        self.predeclareTraitIdentity(nameStart: t.nameSpan.start, nameLen: t.nameSpan.end - t.nameSpan.start, arity: t.typeParams.count(), associated: associated)
     }
 
     // The sole semantic mutation for trait predeclaration.  AST and SyntaxFile
     // inputs decode to source identity/arity and then converge here.
-    inout fn predeclareTraitIdentity(nameStart: U64, nameLen: U64, arity: U64) {
-        self.decls.registerTraitOwner(<TraitOwner sourceModule=self.moduleOf(offset: nameStart) nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
+    inout fn predeclareTraitIdentity(nameStart: U64, nameLen: U64, arity: U64, associated: Array[Bind] = []) {
+        if self.decls.traitOwnerIndex(offset: nameStart) < self.decls.traitOwnerCount() { return }
+        val selfParamId = self.nextParamId
+        self.nextParamId += 1U64
+        self.decls.registerTraitOwner(<TraitOwner sourceModule=self.moduleOf(offset: nameStart) nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity selfParamId=selfParamId assocTypes=associated />)
     }
 
     inout fn predeclareTraitItem(item: TopItemAst) {
@@ -302,7 +311,14 @@ pub impl Comp {
                 val traitId: TraitId = <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />
                 val trait: SyntaxTrait = syntaxTrait(file: self.syntax, id: traitId)
                 val nameLen: U64 = trait.name.end - trait.name.start
-                self.predeclareTraitIdentity(nameStart: trait.name.start, nameLen: nameLen, arity: syntaxTraitTypeParamCount(file: self.syntax, trait: trait))
+                mut val associated: Array[Bind] = []
+                mut val i: U64 = 0U64
+                while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: trait) {
+                    val span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: trait, index: i)
+                    associated.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start />)
+                    i += 1U64
+                }
+                self.predeclareTraitIdentity(nameStart: trait.name.start, nameLen: nameLen, arity: syntaxTraitTypeParamCount(file: self.syntax, trait: trait), associated: associated)
             }
             SyntaxTopItemKind.Export => {
                 self.predeclareSyntaxTraitItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
@@ -394,16 +410,11 @@ pub impl Comp {
     // Reconstruct the implicit lexical `Self` binder of one completed trait.
     // The source spelling is shared, but identity is declaration-owned.
     inout fn appendTraitSelfBinder(scope: inout Array[Bind], owner: U64) {
-        mut val ti: U64 = 0U64
-        while ti < self.decls.traitCount() {
-            val td: TraitDef = self.decls.traitAt(index: ti)
-            if td.nameStart == owner && td.selfParamId != 0U64 {
-                val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
-                scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=td.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
-                return
-            }
-            ti += 1U64
-        }
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index >= self.decls.traitOwnerCount() { return }
+        val declaration = self.decls.traitOwnerAt(index: index)
+        val selfName = self.kwSpan(kw: "Self", kwLen: 4U64)
+        scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=declaration.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
     }
 
     inout fn lowerSyntaxMemberTypeParams(member: SyntaxMember) -> Array[Bind] {
@@ -484,6 +495,10 @@ pub impl Comp {
             typeParams.append(ownParams[i])
             i += 1U64
         }
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        self.lowerAssociatedOwner = recvTraitOwner
+        self.lowerAssociatedArgs = recvTraitArgs
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
         val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
@@ -542,6 +557,8 @@ pub impl Comp {
                 val realN: Bind = <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
                 witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                self.lowerAssociatedOwner = savedAssociatedOwner
+                self.lowerAssociatedArgs = savedAssociatedArgs
                 self.cur.typeParams = savedTP
                 self.lowerWhereSyntaxTypes = savedWT
                 self.lowerWhereSyntaxTraits = savedWTr
@@ -568,6 +585,8 @@ pub impl Comp {
         self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=syntaxTypeArgCount(file: self.syntax, ty: syntaxType(file: self.syntax, id: im.recvType)) provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />)
         self.appendSyntaxMemberBounds(fnIdx: fnIdx, member: m)
         self.appendSyntaxImplBounds(fnIdx: fnIdx, im: im)
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
         self.lowerWhereSyntaxTraits = savedWTr
@@ -612,6 +631,10 @@ pub impl Comp {
         // `Iterator.map` whose signature names `Item` — a binder, not a module type. (`typeParams`
         // above, stored on the Func for codegen, stays impl ++ method; assoc types aren't generic
         // substitution params, only skip-scope.)
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        self.lowerAssociatedOwner = recvTraitOwner
+        self.lowerAssociatedArgs = recvTraitArgs
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeAst] = self.lowerWhereTypes
         val savedWTr: Array[String] = self.lowerWhereTraits
@@ -678,6 +701,8 @@ pub impl Comp {
                 val realN: Bind = self.internBytes(s: m.viaName)
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
                 witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                self.lowerAssociatedOwner = savedAssociatedOwner
+                self.lowerAssociatedArgs = savedAssociatedArgs
                 self.cur.typeParams = savedTP
                 self.lowerWhereTypes = savedWT
                 self.lowerWhereTraits = savedWTr
@@ -709,6 +734,8 @@ pub impl Comp {
         self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraits = savedWTr
@@ -1045,8 +1072,7 @@ pub impl Comp {
         }
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable)
         val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
-        val selfParamId: U64 = self.nextParamId
-        self.nextParamId += 1U64
+        val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart)).selfParamId
         val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
@@ -1100,8 +1126,7 @@ pub impl Comp {
         }
         val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags)
         val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
-        val selfParamId: U64 = self.nextParamId
-        self.nextParamId += 1U64
+        val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start)).selfParamId
         val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scope: Array[Bind] = []

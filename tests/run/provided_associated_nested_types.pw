@@ -1,0 +1,40 @@
+// The selected B[Element] -> A path binds Output=Element.  This prevents a
+// source-only lookup from passing: path substitution must carry B's instance
+// argument into A's associated output and the provided body.
+import @Std/Io with { print }
+
+trait B[Element] { fn base() -> Element }
+trait A {
+    type Output
+    fn value() -> Output
+}
+
+pub impl A {
+    fn echo(value: Output) -> Output { return value }
+    fn pass() -> Output {
+        val values: Array[Output] = [self.value()]
+        return self.echo(value: values[0])
+    }
+}
+
+extension E {
+    pub impl[Element] B[Element] as A {
+        type Output = Element
+        fn value() -> Element { return self.base() }
+    }
+}
+
+struct S {}
+pub impl S { factory }
+pub impl S as B[I64] {
+    fn base() -> I64 { return 8I64 }
+}
+
+fn pass[T](value: T) -> T#E#A.Output where T: B[I64] {
+    return value#E.pass()
+}
+
+fn main() {
+    val result: I64 = pass(value: <S />)
+    print(result)
+}

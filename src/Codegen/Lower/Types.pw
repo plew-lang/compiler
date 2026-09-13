@@ -2,6 +2,28 @@
 // synthesis, and argument / field / dict-literal lowering.
 
 pub impl Comp {
+    // Bare associated names are lexical declarations, not nominal type names.
+    // Explicit method binders win before this lookup; the owner was selected
+    // at the impl boundary and is independent of source declaration order.
+    inout fn lowerLexicalAssociatedType(nameStart: U64, nameLen: U64, paramId: U64) -> U64 {
+        if self.lowerAssociatedOwner == 0U64 || paramId != 0U64 { return 0U64 }
+        val index = self.decls.traitOwnerIndex(offset: self.lowerAssociatedOwner)
+        if index >= self.decls.traitOwnerCount() { return 0U64 }
+        val owner = self.decls.traitOwnerAt(index: index)
+        val nameId = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0U64
+        while i < owner.assocTypes.count() {
+            val member = owner.assocTypes[i]
+            if member.nameId == nameId {
+                val selfName = self.kwSpan(kw: "Self", kwLen: 4U64)
+                val receiver = self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                return self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=self.lowerAssociatedArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId projectionReceiver=receiver hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
 
     // Register an Array element type name for later monomorphization (deduped by the
     // element name span, which is mangled for compound elements). fieldStart carries
@@ -441,7 +463,15 @@ pub impl Comp {
             }
             tpi += 1
         }
-        mut val projectionReceiver: U64 = 0U64
+        if args.count() == 0U64 && assocNameId == 0U64 && !t.isAny {
+            val associated = self.lowerLexicalAssociatedType(nameStart: nm.nameStart, nameLen: nm.nameLen, paramId: paramId)
+            if associated != 0U64 {
+                val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
+                val resolved = self.arena.typeAt(index: viewed)
+                return <PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed />
+            }
+        }
+        mut val projectionReceiver: U64 = 0
         if assocNameId != 0U64 {
             projectionReceiver = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
         }
@@ -600,7 +630,15 @@ pub impl Comp {
             }
             tpi += 1U64
         }
-        mut val projectionReceiver: U64 = 0U64
+        if args.count() == 0U64 && assocNameId == 0U64 && !t.isAny {
+            val associated = self.lowerLexicalAssociatedType(nameStart: name.nameStart, nameLen: name.nameLen, paramId: paramId)
+            if associated != 0U64 {
+                val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
+                val resolved = self.arena.typeAt(index: viewed)
+                return <PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed />
+            }
+        }
+        mut val projectionReceiver: U64 = 0
         if assocNameId != 0U64 {
             projectionReceiver = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
         }
