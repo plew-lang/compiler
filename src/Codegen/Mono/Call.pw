@@ -1599,31 +1599,28 @@ pub impl Comp {
     // Same selector as check-time binary dispatch, but the RHS arrives through
     // the template instead of an Expr.  The untyped flag retains literal
     // adaptation without letting finalization reopen literal syntax.
-    inout fn findBinTraitWitnessForRef(typeStart: U64, typeLen: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> U64 {
-        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        mut val rhsId: U64 = 0U64
-        if rhsRef < self.arena.typeCount() {
-            val rhs: TypeRef = self.arena.typeAt(index: rhsRef)
-            rhsId = intern(c: inout self, start: rhs.nameStart, len: rhs.nameLen)
-        }
-        mut val firstMatch: U64 = self.arena.functionCount()
-        mut val intMatch: U64 = self.arena.functionCount()
-        mut val i: U64 = 0U64
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.isAssoc && f.recvId == qType && rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                if firstMatch == self.arena.functionCount() { firstMatch = i }
-                if f.params.count() >= 2U64 {
-                    val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
-                    if rhsId != 0U64 && rhs.tyNameId == rhsId { return i }
-                    if rhsUntyped && intMatch == self.arena.functionCount() && self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
-                        intMatch = i
+    inout fn findBinTraitWitnessForRef(receiverRef: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> U64 {
+        mut val firstMatch = self.arena.functionCount()
+        mut val intMatch = self.arena.functionCount()
+        mut val index: U64 = 0U64
+        while index < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: index)
+            if function.isAssoc && function.params.count() >= 2U64 && rangeEquals(bytes: self.arena.bytes, start: function.nameStart, len: function.nameLen, kw: name) {
+                val witness = self.methodReceiverEnvironment(f: function, instRef: receiverRef)
+                if witness.conformIdx != 0U64 {
+                    val parameter = self.funcParamAt(params: function.params, index: 1U64)
+                    val rhs = self.groundWitnessTypeTerm(ref: parameter.ty, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)
+                    if rhsRef != 0U64 && self.typeRefEq(a: rhs, b: rhsRef) { return index }
+                    if rhsUntyped {
+                        if firstMatch == self.arena.functionCount() { firstMatch = index }
+                        val rhsType = self.arena.typeAt(index: rhs)
+                        if intMatch == self.arena.functionCount() && self.isIntType(start: rhsType.nameStart, len: rhsType.nameLen) { intMatch = index }
                     }
                 }
             }
-            i += 1U64
+            index += 1U64
         }
-        if rhsUntyped && intMatch < self.arena.functionCount() { return intMatch }
+        if intMatch < self.arena.functionCount() { return intMatch }
         return firstMatch
     }
 
@@ -1687,7 +1684,7 @@ pub impl Comp {
                 else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
                 if method.bytes().count() > 0U64 {
                     val rhsUntyped: Bool = operandRefs[1] == 0U64
-                    callee = self.findBinTraitWitnessForRef(typeStart: receiver.nameStart, typeLen: receiver.nameLen, name: method, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped)
+                    callee = self.findBinTraitWitnessForRef(receiverRef: selectedReceiverRef, name: method, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped)
                 }
             }
         }

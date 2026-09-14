@@ -20,8 +20,12 @@ pub impl Comp {
         if requiredResult != 0U64 { return self.typeInfoOfRef(ref: requiredResult) }
         val callee: U64 = self.unaryOperatorCallee(receiverRef: receiver, op: op)
         if callee < self.arena.functionCount() {
-            val result: U64 = self.arena.functionAt(index: callee).retTy
-            if result != 0U64 { return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: receiver, tyRef: result)) }
+            val function = self.arena.functionAt(index: callee)
+            val result = function.retTy
+            if result != 0U64 {
+                val witness = self.methodReceiverEnvironment(f: function, instRef: receiver)
+                return self.typeInfoOfRef(ref: self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness))
+            }
         }
         return <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />
     }
@@ -79,9 +83,11 @@ pub impl Comp {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.traitId == trN.nameId {
                 if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                    if self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=ab.subjectArgs />, typeParams: <PatternBindInput.Conformance range=ab.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=ab.traitArgs />, typeRef: leftRef, traitArgs: <PatternTypeInput.Values values=requestedArgs />) {
+                    val witness = self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=ab.subjectArgs />, typeParams: <PatternBindInput.Conformance range=ab.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=ab.traitArgs />, typeRef: leftRef, traitArgs: <PatternTypeInput.Values values=requestedArgs />)
+                    if witness.conformIdx != 0U64 {
                         if ab.ty != 0U64 && ab.ty < self.arena.typeCount() {
-                            return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: ab.ty))
+                            val output = self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness)
+                            return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: output))
                         }
                         return self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray))
                     }

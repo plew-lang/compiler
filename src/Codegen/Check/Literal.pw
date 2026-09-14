@@ -312,9 +312,13 @@ pub impl Comp {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                         if f.params.count() >= 2 {
                             val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
-                            if self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
-                                if !(u64ArrayHas(a: seen, v: rhs.tyNameId)) {
-                                    seen.append(rhs.tyNameId)
+                            val witness = self.methodReceiverEnvironment(f: f, instRef: f.recvTy)
+                            val parameter = self.groundWitnessTypeTerm(ref: rhs.ty, params: <PatternBindInput.Function range=f.typeParams />, matchResult: witness)
+                            val parameterType = self.arena.typeAt(index: parameter)
+                            if self.isIntType(start: parameterType.nameStart, len: parameterType.nameLen) {
+                                val parameterId = intern(c: inout self, start: parameterType.nameStart, len: parameterType.nameLen)
+                                if !(u64ArrayHas(a: seen, v: parameterId)) {
+                                    seen.append(parameterId)
                                 }
                             }
                         }
@@ -345,7 +349,10 @@ pub impl Comp {
                 val f: Func = self.arena.functionAt(index: fi)
                 if f.params.count() >= 2 {
                     val rhsParam: Param = self.funcParamAt(params: f.params, index: 1U64)
-                    val pit: IntTy = self.spanIntTy(start: rhsParam.tyStart, len: rhsParam.tyLen)
+                    val witness = self.methodReceiverEnvironment(f: f, instRef: self.operatorTypeRef(t: lt))
+                    val parameter = self.groundWitnessTypeTerm(ref: rhsParam.ty, params: <PatternBindInput.Function range=f.typeParams />, matchResult: witness)
+                    val parameterInfo = self.typeInfoOfRef(ref: parameter)
+                    val pit: IntTy = self.spanIntTy(start: parameterInfo.nameStart, len: parameterInfo.nameLen)
                     if pit.known {
                         self.checkLitCtx(id: rhs, eKind: 1, eBits: pit.bits, eSgn: pit.sgn)
                     } else {
