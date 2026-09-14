@@ -2827,9 +2827,16 @@ pub impl Comp {
                 }
                 self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof members=members />)
                 self.enqueueFinalDestruction(typeRef: sourceRef)
+                self.enqueueFinalDestruction(typeRef: targetRef)
             }
-            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { self.finalizeConversionDependencies(conversion: element) }
-            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
+            ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
+                self.enqueueFinalDestruction(typeRef: sourceRef)
+                self.enqueueFinalDestruction(typeRef: targetRef)
+                self.finalizeConversionDependencies(conversion: element)
+            }
+            ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: _, payloads: val payloads) => {
+                self.enqueueFinalDestruction(typeRef: sourceRef)
+                self.enqueueFinalDestruction(typeRef: targetRef)
                 mut val index: U64 = 0U64
                 while index < payloads.count() {
                     self.finalizeConversionDependencies(conversion: payloads[index].conversion)
