@@ -31,25 +31,6 @@ pub impl Comp {
         return true
     }
 
-    fn newtypeAdapterTypeArgs(instance: BodyInstance) -> Array[U64] {
-        val function = self.arena.functionAt(index: instance.fnIdx)
-        mut val args: Array[U64] = []
-        mut val index = 0U64
-        while index < function.typeParams.count() {
-            val binder = self.funcBindAt(binds: function.typeParams, index: index)
-            mut val binding = 0U64
-            while binding < instance.environment.params.count() && binding < instance.environment.args.count() {
-                if instance.environment.params[binding].paramId == binder.paramId {
-                    args.append(instance.environment.args[binding])
-                    break
-                }
-                binding += 1U64
-            }
-            index += 1U64
-        }
-        return args
-    }
-
     inout fn finalizeNewtypeAdapter(bodyId: U64) {
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         val target = self.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
@@ -64,7 +45,7 @@ pub impl Comp {
             conversions.append(<ValueConversionProof.Identity />)
             index += 1U64
         }
-        self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.newtypeAdapterTypeArgs(instance: target), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: self.selectedReceiverPassing(callee: target.fnIdx), argumentPassings: self.selectedArgumentPassings(callee: target.fnIdx), calleeBodyId: instance.adapterTargetBodyId, generatedSite: <CallSiteKey ownerFnIdx=instance.fnIdx originKind=2U64 originSerial=bodyId />)
+        self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: self.selectedReceiverPassing(callee: target.fnIdx), argumentPassings: self.selectedArgumentPassings(callee: target.fnIdx), calleeBodyId: instance.adapterTargetBodyId, generatedSite: <CallSiteKey ownerFnIdx=instance.fnIdx originKind=2U64 originSerial=bodyId />)
         self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: instance.adapterTargetBodyId, callResolutionId: self.finalCalleeCount())
     }
 }

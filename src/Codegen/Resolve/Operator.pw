@@ -8,7 +8,9 @@ pub impl Comp {
     // an assumption that Neg/Not/BitNot return their receiver type.
     inout fn unaryOperatorCallee(receiverRef: U64, op: I64) -> U64 {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return self.arena.functionCount() }
-        val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
+        val declaration = self.fieldStorageTypeRef(receiverRef: receiverRef)
+        if declaration == 0U64 { return self.arena.functionCount() }
+        val receiver: TypeRef = self.arena.typeAt(index: declaration)
         return self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
     }
 

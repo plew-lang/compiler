@@ -191,6 +191,21 @@ fn instantiateCanonicalStorageBoundary(c: inout Comp, rvalueId: U64, environment
     return c.mid.rvalues.count()
 }
 
+fn traceMidReturnBoundary(c: inout Comp, bodyId: U64, stage: U64, source: U64, target: U64, expected: U64) {
+    if !c.traceCodegen { return }
+    eprint(text: "[trace-codegen] Mid return boundary body=")
+    eprintU64(n: bodyId)
+    eprint(text: " stage=")
+    eprintU64(n: stage)
+    eprint(text: " source=")
+    c.traceMonoTypeHead(ref: source)
+    eprint(text: " target=")
+    c.traceMonoTypeHead(ref: target)
+    eprint(text: " expected=")
+    c.traceMonoTypeHead(ref: expected)
+    eprint(text: "\n")
+}
+
 fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
     val source = c.mid.rvalues[rvalueId - 1U64]
@@ -204,12 +219,14 @@ fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment:
     val resolution: FinalReturnResolution = c.arena.finalReturns[resolutionIndex]
     val expectedTarget: U64 = c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
     if !(c.typeRefEq(a: resolution.targetTypeRef, b: expectedTarget)) {
+        traceMidReturnBoundary(c: inout c, bodyId: bodyId, stage: 1U64, source: canonicalMidOperandTypeRef(c: c, operandId: operand), target: resolution.targetTypeRef, expected: expectedTarget)
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
         return 0U64
     }
     val conversion: U64 = c.freezeValueConversionProof(proof: resolution.conversion)
     if c.conversionProofIsIdentity(id: conversion) {
         if !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: resolution.targetTypeRef)) {
+            traceMidReturnBoundary(c: inout c, bodyId: bodyId, stage: 2U64, source: canonicalMidOperandTypeRef(c: c, operandId: operand), target: resolution.targetTypeRef, expected: expectedTarget)
             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
             return 0U64
         }
@@ -217,6 +234,7 @@ fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment:
         return c.mid.rvalues.count()
     }
     if c.conversionProofIsMissing(id: conversion) {
+        traceMidReturnBoundary(c: inout c, bodyId: bodyId, stage: 3U64, source: canonicalMidOperandTypeRef(c: c, operandId: operand), target: resolution.targetTypeRef, expected: expectedTarget)
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
         return 0U64
     }

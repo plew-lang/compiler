@@ -1279,6 +1279,17 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val sourceTerm: U64 = c.semanticExprTerm(exprId: sourceExpr)
             val selectedTarget: U64 = c.semanticExprTerm(exprId: exprId)
             if sourceTerm == 0U64 || selectedTarget == 0U64 || targetTerm == 0U64 || !(c.typeRefEq(a: selectedTarget, b: targetTerm)) {
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid cast type missing offset=")
+                    eprintU64(n: c.exprOffset(id: exprId))
+                    eprint(text: " source=")
+                    eprintU64(n: sourceTerm)
+                    eprint(text: " selected=")
+                    eprintU64(n: selectedTarget)
+                    eprint(text: " target=")
+                    eprintU64(n: targetTerm)
+                    eprint(text: "\n")
+                }
                 return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
             }
             val source: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: sourceTerm, allowAccessMarker: false)

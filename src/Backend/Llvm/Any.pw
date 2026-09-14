@@ -968,6 +968,15 @@ pub impl LlvmCtx {
                                                         if statement.destination != 0U64 {
                                                             eprint(text: " destination=")
                                                             self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].local)
+                                                            eprint(text: " destination-type=")
+                                                            self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].typeTerm)
+                                                        }
+                                                        if statement.source != 0U64 {
+                                                            val source = c.mid.places[statement.source - 1U64]
+                                                            eprint(text: " overwrite-source=")
+                                                            self.traceCodegenU64(n: source.local)
+                                                            eprint(text: " source-local-type=")
+                                                            self.traceCodegenU64(n: c.mid.locals[failedBody.locals.start + source.local].typeTerm)
                                                         }
                                                         if statement.value != 0U64 {
                                                             val value = c.mid.rvalues[statement.value - 1U64]

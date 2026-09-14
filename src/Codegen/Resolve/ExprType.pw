@@ -313,6 +313,16 @@ pub impl Comp {
     // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
     // this here (rather than in either syntax arm) makes source qualification a pure
     // selection concern, never a second generic-inference mechanism.
+    // A bare generic type qualifier has no value receiver. Infer its complete
+    // callable substitution once, then instantiate the declaration's receiver
+    // pattern before grounding Self in the public signature.
+    inout fn associatedReceiverFromArguments(f: Func, args: ArgRange) -> U64 {
+        if f.recvTy == 0U64 || f.typeParams.count() == 0U64 { return 0U64 }
+        val inferred = self.inferFnArgs(f: f, args: args)
+        if inferred.count() != f.typeParams.count() || !self.fnArgsAllResolved(args: inferred) { return 0U64 }
+        return self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred)
+    }
+
     inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
         mut val receiver = recvTy.ref
         if receiver == 0U64 && recvTy.nameLen != 0U64 { receiver = self.simpleTypeRef(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen) }
@@ -1067,50 +1077,15 @@ pub impl Comp {
                     }
                     val af: Func = self.arena.functionAt(index: afi)
                     if af.hasRet {
-                        // a factory / Self-returning assoc fn inherited through a newtype
-                        // receiver (spec/10): the result Self is the SYNTACTIC receiver
-                        // (`Brand`), not the underlying the fn is declared on (`Rgb`). When
-                        // the declared return names the fn's own receiver type (a Self
-                        // return) and the call receiver differs (a newtype), substitute it.
-                        if !(af.retIsArray) {
-                            if spansEqual(c: inout self, aStart: af.retStart, aLen: af.retLen, bStart: af.recvStart, bLen: af.recvLen) {
-                                if !(spansEqual(c: inout self, aStart: arn.nameStart, aLen: arn.nameLen, bStart: af.recvStart, bLen: af.recvLen)) {
-                                    return self.typeInfoOfName(start: arn.nameStart, len: arn.nameLen, isArray: false)
-                                }
-                            }
+                        val qualifier = self.concreteTypeQualifierTerm(exprId: recv)
+                        if qualifier != 0U64 {
+                            val result = self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: af.retTy)
+                            if result != 0U64 { return self.typeInfoOfRef(ref: result) }
                         }
-                        // a GENERIC assoc fn / factory (`Array.overBuffer(buffer:)` on
-                        // `impl[T] Array[T]`): its declared return mentions the impl's own
-                        // type params, so ground it under the args INFERRED from the call
-                        // (T = U8 from `buffer: Buffer[U8]`) — the template form
-                        // (`Array[T]`) would mis-ground under the enclosing body's env.
-                        if af.typeParams.count() > 0U64 && af.retTy != 0U64 {
-                            // only a COMPLETE inference is trusted (every param bound to a
-                            // real ref): grounding under a partial env (an argless factory)
-                            // yields a garbage inst (`Set[<sentinel>]`) that poisons every
-                            // downstream consumer. Partial -> fall through to the
-                            // name-level recovery below.
-                            val ainf: Array[U64] = self.inferFnArgs(f: af, args: args)
-                            mut val aComplete: Bool = ainf.count() >= af.typeParams.count()
-                            mut val aci: U64 = 0
-                            while aci < ainf.count() {
-                                if ainf[aci] == 0U64 {
-                                    aComplete = false
-                                }
-                                aci += 1
-                            }
-                            if aComplete {
-                                val aSavedP: Array[Bind] = self.cur.typeParams
-                                val aSavedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = self.copyFuncBinds(binds: af.typeParams)
-                                self.cur.typeArgs = ainf
-                                val agr: U64 = self.groundTypeRef(ref: af.retTy)
-                                self.cur.typeParams = aSavedP
-                                self.cur.typeArgs = aSavedA
-                                if agr != 0U64 && self.tyRefIsGround(ref: agr) {
-                                    return self.typeInfoOfRef(ref: agr)
-                                }
-                            }
+                        val inferredReceiver = self.associatedReceiverFromArguments(f: af, args: args)
+                        if inferredReceiver != 0U64 {
+                            val result = self.groundFinalMethodSignatureTerm(f: af, receiverRef: inferredReceiver, args: args, signatureTerm: af.retTy)
+                            if result != 0U64 { return self.typeInfoOfRef(ref: result) }
                         }
                         return self.declaredRetInfo(f: af)
                     }

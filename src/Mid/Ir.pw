@@ -1203,6 +1203,7 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
 // Transparent type boundaries preserve the whole root's ownership identity.
 // Field/index/deref projections still forbid partial moves.
 export fn canonicalMidPlaceIsWhole(arena: MidCanonicalArena, place: MidPlaceNode) -> Bool {
+    if !midRangeFits(range: place.projections, count: arena.projections.count()) { return false }
     mut val index = 0U64
     while index < place.projections.len {
         if arena.projections[place.projections.start + index].tag != 4U64 { return false }

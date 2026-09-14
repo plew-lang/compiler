@@ -156,15 +156,37 @@ pub impl Comp {
         return 0U64
     }
 
+    // A concrete type qualifier is provenance, not a value expression. Bare
+    // generic heads remain incomplete and use the existing inference route.
+    inout fn concreteTypeQualifierTerm(exprId: U64) -> U64 {
+        val name = self.assocRecvName(recv: exprId)
+        if name.nameLen == 0U64 { return 0U64 }
+        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: self.exprOffset(id: exprId)), start: name.nameStart, len: name.nameLen)
+        val term = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=declaration.nameLen != 0U64 declOffset=declaration.nameStart />)
+        if term == 0U64 || !self.tyRefIsGround(ref: term) { return 0U64 }
+        val storage = self.fieldStorageTypeRef(receiverRef: term)
+        if storage == 0U64 { return 0U64 }
+        val type = self.arena.typeAt(index: storage)
+        val structIndex = self.genericStructIndex(nameStart: type.nameStart, nameLen: type.nameLen)
+        if structIndex < self.arena.structCount() && self.arena.structAt(index: structIndex).typeParams.count() != type.args.count() { return 0U64 }
+        val enumIndex = self.genericEnumIndex(nameStart: type.nameStart, nameLen: type.nameLen)
+        if enumIndex < self.arena.enumCount() && self.arena.enumAt(index: enumIndex).typeParams.count() != type.args.count() { return 0U64 }
+        return term
+    }
+
     inout fn methodReceiverTerm(exprId: U64) -> U64 {
         val valueTerm: U64 = self.parametricExprTerm(exprId: exprId)
         if valueTerm != 0U64 { return valueTerm }
-        return self.typeParameterQualifierTerm(exprId: exprId)
+        val parameter = self.typeParameterQualifierTerm(exprId: exprId)
+        if parameter != 0U64 { return parameter }
+        return self.concreteTypeQualifierTerm(exprId: exprId)
     }
 
     inout fn directReceiverTemplateForExpr(exprId: U64) -> CallTemplateReceiver {
         val qualifier: U64 = self.typeParameterQualifierTerm(exprId: exprId)
         if qualifier != 0U64 { return <CallTemplateReceiver.Term term=qualifier /> }
+        val concrete = self.concreteTypeQualifierTerm(exprId: exprId)
+        if concrete != 0U64 { return <CallTemplateReceiver.Term term=concrete /> }
         return self.protocolReceiverTemplateForExpr(exprId: exprId)
     }
 
@@ -477,6 +499,11 @@ pub impl Comp {
         // generic associated factory).  Do not discard that source selection.
         if receiverTerm == 0U64 {
             if f.isAssoc {
+                val inferredReceiver = self.associatedReceiverFromArguments(f: f, args: args)
+                if inferredReceiver != 0U64 {
+                    self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
+                    return
+                }
                 self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
                 self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
                 return
@@ -554,7 +581,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result, proof: proof, receiverTypeTerm: returnReceiver)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result, proof: proof, receiverTypeTerm: receiverTerm)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
