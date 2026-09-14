@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { FinalExistentialMember, ExistentialResultMode, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2746,7 +2746,7 @@ pub impl Comp {
                 self.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />)
                 val trait: TraitDef = self.decls.traitAt(index: traitIdx)
                 val witness: WitnessMatch = self.proofWitnessForTrait(proof: proof, traitIdx: traitIdx)
-                mut val bodies: Array[U64] = []
+                mut val members: Array[FinalExistentialMember] = []
                 mut val requirement: U64 = 0U64
                 while requirement < trait.reqs.count() {
                     val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
@@ -2771,10 +2771,43 @@ pub impl Comp {
                         bodyId = self.enqueueFinalBody(fnIdx: functionIndex, args: args, recvInstRef: sourceRef, selectedProof: proof)
                         if bodyId == 0U64 { self.errorAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") }
                     }
-                    bodies.append(bodyId)
+                    mut val member = <FinalExistentialMember />
+                    if bodyId != 0U64 {
+                        mut val parameters: Array[Bind] = []
+                        mut val values: Array[U64] = []
+                        if !self.anyBindingEnv(anyRef: targetRef, traitIdx: traitIdx, outParams: inout parameters, outArgs: inout values) {
+                            self.errorAt(offset: req.nameStart, msg: "internal error: existential member has incomplete bindings")
+                        }
+                        mut val parameterTypes: Array[U64] = []
+                        mut val passings: Array[CallArgumentPassing] = []
+                        mut val parameter = 0U64
+                        while parameter < req.params.count() {
+                            val declaration = self.funcParamAt(params: req.params, index: parameter)
+                            parameterTypes.append(self.groundTraitRequirementType(ref: declaration.ty, traitIdx: traitIdx, receiverRef: targetRef, params: parameters, args: values))
+                            if declaration.isInout { passings.append(<CallArgumentPassing.Inout />) }
+                            else if declaration.isMove { passings.append(<CallArgumentPassing.Move />) }
+                            else { passings.append(<CallArgumentPassing.Borrow />) }
+                            parameter += 1U64
+                        }
+                        mut val passing = <CallReceiverPassing.Borrow />
+                        if req.selfInout { passing = <CallReceiverPassing.Inout /> }
+                        else if req.selfMove { passing = <CallReceiverPassing.Move /> }
+                        mut val result = 0U64
+                        mut val sourceResult = 0U64
+                        mut val mode = <ExistentialResultMode.Identity />
+                        if req.hasRet {
+                            val receiver = self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef
+                            result = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: targetRef, params: parameters, args: values)
+                            sourceResult = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: receiver, params: parameters, args: values)
+                            if self.reqReturnsSelf(req: req) { mode = <ExistentialResultMode.Box /> }
+                            else if self.typeRefMentionsSelf(ref: req.retTy) { mode = <ExistentialResultMode.Repack /> }
+                        }
+                        member = <FinalExistentialMember bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultMode=mode />
+                    }
+                    members.append(member)
                     requirement += 1U64
                 }
-                self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof bodies=bodies />)
+                self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof members=members />)
                 mut val visited: DestructionTypeVisits = <DestructionTypeVisits />
                 self.enqueueFinalDestruction(typeRef: sourceRef, visited: inout visited)
             }

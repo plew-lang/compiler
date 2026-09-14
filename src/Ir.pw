@@ -1833,14 +1833,28 @@ pub impl FinalMatchResolution { factory }
 // canonical BodyInstance.  A return has one ABI target but may be reached by
 // many source branches, so its key is the returned expression rather than a
 // backend return-place local.
+// The frontend selects the erased member ABI and the shape of its result
+// boundary. A zero bodyId is a non-dispatchable requirement, not a lookup miss.
+export enum ExistentialResultMode { Identity Box Repack }
+export struct FinalExistentialMember {
+    pub val bodyId: U64 = 0U64
+    pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.Borrow />
+    pub val parameterTypes: Array[U64] = []
+    pub val argumentPassings: Array[CallArgumentPassing] = []
+    pub val resultType: U64 = 0U64
+    pub val sourceResultType: U64 = 0U64
+    pub val resultMode: ExistentialResultMode = <ExistentialResultMode.Identity />
+}
+pub impl FinalExistentialMember { factory }
+
 // Concrete existential conversion contract, closed before LLVM emission.
 export struct FinalExistentialResolution {
     pub val sourceRef: U64
     pub val targetRef: U64
     pub val traitIdx: U64
     pub val proof: StaticConformanceProof
-    // One BodyId per requirement; zero denotes a non-dispatchable member.
-    pub val bodies: Array[U64] = []
+    // Declaration order determines the vtable slot; every member is finalized.
+    pub val members: Array[FinalExistentialMember] = []
 }
 pub impl FinalExistentialResolution { factory }
 

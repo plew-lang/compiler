@@ -1,5 +1,7 @@
 // Part of the LLVM backend (root: _.pw): existential `any P` vtable, witness, boxing, and dynamic dispatch.
 
+import ../../Ir with { ExistentialResultMode, CallReceiverPassing, CallArgumentPassing }
+
 // ---- existential `any P` (spec/08): vtable, boxing, dynamic dispatch ----
 //
 // An `any P` value is the fat pointer st.anyTy = { ptr data, ptr vtable }. `data`
@@ -25,27 +27,11 @@ pub impl LlvmCtx {
     // through `any` in this increment (assoc, inout/move self, or Self outside the
     // receiver). Saves/restores the builder position around the thunk body.
     inout fn buildAnyThunk(c: inout Comp, sourceRef: U64, resolutionIndex: U64, sidx: U64, anyRef: U64, traitIdx: U64, req: Func, idx: U64) -> LLVMValueRef {
-        // a trait requirement Func carries no `self` param (hasRecv=false; self is
-        // implicit) — a method requirement is `!isAssoc`. An assoc-fn requirement has no
-        // receiver to carry the witness, so it is not dispatchable through `any`.
-        if req.isAssoc {
-            return LLVMConstNull(self.ptrty)
-        }
-        if c.reqUsesSelfInInput(req: req) {
-            return LLVMConstNull(self.ptrty)
-        }
-        // `Self` in the result that we cannot covariantly erase (nested in a container we
-        // don't yet repack) makes the member non-callable through `any P` — the slot stays
-        // null so a call site loudly rejects rather than leaking an un-erased concrete.
-        if !(c.reqRetSelfErasable(req: req)) {
-            return LLVMConstNull(self.ptrty)
-        }
-        // a `-> Self` requirement re-boxes its single concrete result; a covariant CONTAINER
-        // of `Self` (`-> Optional[Self]`, `-> Array[Self]`) is repacked (eraseCovariantToAny).
-        val retsSelf: Bool = c.reqReturnsSelf(req: req)
-        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && c.typeRefMentionsSelf(ref: req.retTy)
-        val bodyId: U64 = c.arena.finalExistentials[resolutionIndex].bodies[idx]
-        if bodyId == 0U64 { c.errorAt(offset: req.nameStart, msg: "internal error: existential witness body was not finalized") }
+        val member = c.arena.finalExistentials[resolutionIndex].members[idx]
+        if member.bodyId == 0U64 { return LLVMConstNull(self.ptrty) }
+        val bodyId = member.bodyId
+        val retsSelf = match member.resultMode { ExistentialResultMode.Box => { give true } _ => { give false } }
+        val retContainerSelf = match member.resultMode { ExistentialResultMode.Repack => { give true } _ => { give false } }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val wfi: U64 = body.fnIdx
         val wInstRef: U64 = body.environment.receiverRef
@@ -53,49 +39,20 @@ pub impl LlvmCtx {
         val wslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: wfi, instRef: wInstRef, ownArgs: ownArgs, bodyId: bodyId)
         if wslot >= self.genMethK.count() { c.errorAt(offset: req.nameStart, msg: "internal error: finalized existential witness has no LLVM callable") }
         val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: wInstRef)
-        // the erased thunk signature uses the requirement's types with the trait's type
-        // parameters / associated types substituted by the existential's bindings
-        // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
-        // paramLlvmTy / llvmFnRetTy ground them.
-        mut val envParams: Array[Bind] = []
-        mut val envArgs: Array[U64] = []
-        val haveEnv: Bool = c.anyBindingEnv(anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
-        val savedEP: Array[Bind] = c.cur.typeParams
-        val savedEA: Array[U64] = c.cur.typeArgs
-        if haveEnv {
-            c.cur.typeParams = envParams
-            c.cur.typeArgs = envArgs
+        // The erased ABI is a frontend fact. Only physical types are selected here.
+        mut val ptys: Array[LLVMTypeRef] = [self.ptrty]
+        mut val pi = 0U64
+        while pi < member.parameterTypes.count() {
+            match member.argumentPassings[pi] {
+                CallArgumentPassing.Inout => { ptys.append(self.ptrty) }
+                _ => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: member.parameterTypes[pi])) }
+            }
+            pi += 1U64
         }
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        mut val pi: U64 = 0
-        while pi < req.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: req.params, index: pi)))
-            pi += 1
-        }
-        mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
-        // a covariant-`Self` container return: ground the requirement's result under `Self` =
-        // the existential (dst, the thunk's return type) and under `Self` = the concrete
-        // (src, the witness's result type) — the two ends of the repack. Grounded here while
-        // the trait-binding env is still active so `Rhs`/`Item` in the result resolve too.
-        mut val dstRetRef: U64 = 0
-        mut val srcRetRef: U64 = 0
-        if retContainerSelf {
-            dstRetRef = c.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: anyRef, params: envParams, args: envArgs)
-            srcRetRef = c.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: wInstRef, params: envParams, args: envArgs)
-        }
-        if haveEnv {
-            c.cur.typeParams = savedEP
-            c.cur.typeArgs = savedEA
-        }
-        // a `-> Self` thunk returns the existential fat pointer (the re-erased result); a
-        // covariant container returns the erased container type (`Optional[any P]`, …).
-        if retsSelf {
-            rty = self.anyTy
-        }
-        if retContainerSelf {
-            rty = self.llvmTypeOfRef(c: inout c, ref: dstRetRef)
-        }
+        mut val rty = self.voidty
+        if member.resultType != 0U64 { rty = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
+        val dstRetRef = member.resultType
+        val srcRetRef = member.sourceResultType
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvt".bytes())
@@ -123,18 +80,19 @@ pub impl LlvmCtx {
         // place — the box is shared via the fat pointer's data field, so the mutation
         // persists); a by-value self is loaded from the box.
         mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
-        if !(req.selfInout) {
+        val selfInout = match member.receiverPassing { CallReceiverPassing.Inout => { give true } _ => { give false } }
+        if !selfInout {
             selfArg = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
         }
         mut val av: Array[LLVMValueRef] = []
         av.append(selfArg)
         mut val ai: U64 = 0
-        while ai < req.params.count() {
+        while ai < member.parameterTypes.count() {
             av.append(LLVMGetParam(fv, ai + 1U64))
             ai += 1
         }
         val r: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[wslot], self.genMethVal[wslot], arrayCPtr(av), av.count(), anon())
-        if req.hasRet {
+        if member.resultType != 0U64 {
             if retsSelf {
                 // re-erase: box the witness's concrete result (the same concrete type as
                 // the boxed self) back into `any P` with this existential's vtable.
