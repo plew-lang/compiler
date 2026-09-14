@@ -49,11 +49,42 @@ fn canonicalMidConsumeRvalue(c: Comp, states: inout Array[MidOwnership], rvalueI
     }
 }
 
+fn canonicalMidConsumeEnum(c: Comp, statement: MidStatementNode, states: inout Array[MidOwnership]) {
+    if statement.source == 0U64 || statement.source > c.mid.places.count() { return }
+    val source = c.mid.places[statement.source - 1U64]
+    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(i: source.local, value: <MidOwnership.Consumed />) }
+    if statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return }
+    mut val index: U64 = 0U64
+    while index < statement.enumDestinations.len {
+        val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
+        if entry.place == 0U64 || entry.place > c.mid.places.count() { return }
+        val place = c.mid.places[entry.place - 1U64]
+        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidOwnership.Owned />) }
+        index += 1U64
+    }
+}
+
+fn canonicalMidConsumeEnumAccessibility(c: Comp, statement: MidStatementNode, states: inout Array[MidAccessibility]) {
+    if statement.source == 0U64 || statement.source > c.mid.places.count() { return }
+    val source = c.mid.places[statement.source - 1U64]
+    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(i: source.local, value: <MidAccessibility.Unavailable />) }
+    if statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return }
+    mut val index: U64 = 0U64
+    while index < statement.enumDestinations.len {
+        val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
+        if entry.place == 0U64 || entry.place > c.mid.places.count() { return }
+        val place = c.mid.places[entry.place - 1U64]
+        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidAccessibility.Available />) }
+        index += 1U64
+    }
+}
+
 fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, input: Array[MidOwnership]) -> Array[MidOwnership] {
     mut val out: Array[MidOwnership] = input
     mut val statementI: U64 = 0U64
     while statementI < block.statements.len {
         val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+        if statement.tag == 13U64 { canonicalMidConsumeEnum(c: c, statement: statement, states: inout out) }
         if statement.tag == 1U64 || statement.tag == 9U64 {
             canonicalMidConsumeRvalue(c: c, states: inout out, rvalueId: statement.value)
             mut val assignedBorrow: Bool = false
@@ -256,6 +287,7 @@ fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlock
     mut val statementI: U64 = 0U64
     while statementI < block.statements.len {
         val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+        if statement.tag == 13U64 { canonicalMidConsumeEnumAccessibility(c: c, statement: statement, states: inout out) }
         if statement.tag == 1U64 || statement.tag == 9U64 {
             canonicalMidMakeRvalueUnavailable(c: c, states: inout out, rvalueId: statement.value)
             if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
@@ -828,7 +860,19 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
-            if statement.tag == 1U64 || statement.tag == 9U64 {
+            if statement.tag == 13U64 {
+                c.mid.statements.append(statement)
+                val consumed = c.mid.places[statement.source - 1U64]
+                if consumed.local < source.locals.len && plan.needsFlag[consumed.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: consumed.local) isSet=false />) }
+                mut val index: U64 = 0U64
+                while index < statement.enumDestinations.len {
+                    val destination = c.mid.places[c.mid.enumDestinations[statement.enumDestinations.start + index].place - 1U64]
+                    if destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    index += 1U64
+                }
+                canonicalMidConsumeEnum(c: c, statement: statement, states: inout currentOwnership)
+                canonicalMidConsumeEnumAccessibility(c: c, statement: statement, states: inout currentAccessibility)
+            } else if statement.tag == 1U64 || statement.tag == 9U64 {
                 c.mid.statements.append(statement)
                 canonicalMidAppendMovedFlagClears(c: inout c, rvalueId: statement.value, sourceLocalCount: source.locals.len, plan: plan)
                 mut val assignedBorrow: Bool = false

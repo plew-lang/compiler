@@ -1,0 +1,45 @@
+import @Std/Io with { print }
+
+unique struct Resource {
+    pub val number: I64
+    deinit { print(self.number) }
+}
+pub impl Resource { factory }
+unique enum Chain {
+    End
+    Link(head: Resource, tail: Chain)
+}
+enum Tree {
+    Leaf(text: String)
+    Node(child: Tree)
+}
+fn main() {
+    val chain = <Chain.Link head=<Resource number=1I64 /> tail=<Chain.Link head=<Resource number=2I64 /> tail=<Chain.End /> /> />
+    // Written order differs from declaration order; discards commit in the
+    // declaration's order, including the recursive boxed tail.
+    match move chain {
+        Chain.Link(tail: _, head: _) => { print(3I64) }
+        Chain.End => { print(0I64) }
+    }
+    val tree = <Tree.Node child=<Tree.Leaf text="shared" + "-value" /> />
+    val alias = tree
+    // Taking the logical child out of one cell owner must preserve the alias.
+    match move tree {
+        Tree.Node(val child) => {
+            match child {
+                Tree.Leaf(val text) => { print(text) }
+                Tree.Node(child: _) => {}
+            }
+        }
+        Tree.Leaf(text: _) => {}
+    }
+    match alias {
+        Tree.Node(val child) => {
+            match child {
+                Tree.Leaf(val text) => { print(text) }
+                Tree.Node(child: _) => {}
+            }
+        }
+        Tree.Leaf(text: _) => {}
+    }
+}

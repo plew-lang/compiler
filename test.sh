@@ -434,6 +434,11 @@ if sh ./test-mid-value-match.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-value-match"
 fi
+if sh ./test-mid-consuming-match.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-consuming-match"
+fi
 if sh ./test-mid-value-if.sh; then
     :
 else

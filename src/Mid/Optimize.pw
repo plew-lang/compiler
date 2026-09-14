@@ -65,8 +65,15 @@ fn countBody(arena: MidCanonicalArena, body: MidBodyNode, definitions: inout Arr
         mut val index: U64 = 0U64
         while index < block.statements.len {
             val statement = arena.statements[block.statements.start + index]
-            if statement.tag < 1U64 || statement.tag > 10U64 { return false }
-            if statement.tag == 1U64 || statement.tag == 9U64 {
+            if statement.tag < 1U64 || (statement.tag > 10U64 && statement.tag != 13U64) { return false }
+            if statement.tag == 13U64 {
+                countPlace(arena: arena, placeId: statement.source, counts: inout uses)
+                mut val output: U64 = 0U64
+                while output < statement.enumDestinations.len {
+                    countDestination(arena: arena, placeId: arena.enumDestinations[statement.enumDestinations.start + output].place, definitions: inout definitions, uses: inout uses)
+                    output += 1U64
+                }
+            } else if statement.tag == 1U64 || statement.tag == 9U64 {
                 countDestination(arena: arena, placeId: statement.destination, definitions: inout definitions, uses: inout uses)
                 if !countRvalue(arena: arena, valueId: statement.value, uses: inout uses) { return false }
             } else {

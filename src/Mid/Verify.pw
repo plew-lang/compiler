@@ -3,6 +3,7 @@
 // lowering once Mid bodies become the production input.
 
 import ../Frontend with { Comp }
+import ../Ir with { MatchSource, SemanticMatchKind }
 import ./Ir with { canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership, analyzeCanonicalMidOwnership, midSuccessors }
 
@@ -319,6 +320,59 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
 // or range; the production path can therefore discard MidBody after freeze.
 // TypeRef allocation IDs are not type identity: use the frontend semantic
 // equality query for transferred values, retaining nominal/view distinctions.
+fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64) -> MidVerification {
+    val invalid = <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block />
+    if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 1U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
+    val source = c.mid.places[statement.source - 1U64]
+    if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || source.local >= body.locals.len { return invalid }
+    val owner = c.mid.locals[body.locals.start + source.local]
+    if owner.isBorrowed || owner.isInout || owner.isCaptureCell || !c.typeRefEq(a: owner.typeTerm, b: source.typeTerm) { return invalid }
+    match states[source.local] { MidOwnership.Owned => {} _ => { return invalid } }
+    mut val key: MatchSource = <MatchSource.Statement stmtId=statement.sourceStmt />
+    if statement.sourceTag == 1U64 { key = <MatchSource.Expression exprId=statement.sourceStmt /> }
+    val factIndex = c.finalMatchIndex(bodyId: body.bodyInstance, matchSource: key)
+    if factIndex >= c.arena.finalMatches.count() { return invalid }
+    val fact = c.arena.finalMatches[factIndex]
+    if !fact.isConsuming || !c.typeRefEq(a: fact.scrutineeTypeRef, b: source.typeTerm) { return invalid }
+    match fact.kind { SemanticMatchKind.Enum(enumIndex: val selected) => { if selected != statement.enumIndex { return invalid } } _ => { return invalid } }
+    mut val armIndex: U64 = 0U64
+    while armIndex < fact.armCount {
+        val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
+        if arm.hasVariant && arm.variantIndex == statement.variantIndex { break }
+        armIndex += 1U64
+    }
+    if armIndex == fact.armCount { return invalid }
+    val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
+    if arm.payloadCount != statement.enumDestinations.len { return invalid }
+    mut val index: U64 = 0U64
+    while index < statement.enumDestinations.len {
+        val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
+        if entry.place == 0U64 || entry.place > c.mid.places.count() { return invalid }
+        val destination = c.mid.places[entry.place - 1U64]
+        if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= states.count() || destination.local >= body.locals.len || destination.local == source.local { return invalid }
+        val local = c.mid.locals[body.locals.start + destination.local]
+        if local.isBorrowed || local.isInout || local.isCaptureCell || !c.typeRefEq(a: local.typeTerm, b: destination.typeTerm) { return invalid }
+        match states[destination.local] { MidOwnership.Consumed => {} _ => { return invalid } }
+        val field = c.arena.finalMatchPayloads[arm.payloadStart + index]
+        if field.fieldIndex != index || field.isDiscard != entry.isDiscard || field.isBoxed != entry.isBoxed || field.bindTarget != entry.bindTarget || !c.typeRefEq(a: field.fieldTypeRef, b: destination.typeTerm) { return invalid }
+        mut val previous: U64 = 0U64
+        while previous < index {
+            val prior = c.mid.enumDestinations[statement.enumDestinations.start + previous]
+            if c.mid.places[prior.place - 1U64].local == destination.local { return invalid }
+            previous += 1U64
+        }
+        index += 1U64
+    }
+    states.set(i: source.local, value: <MidOwnership.Consumed />)
+    index = 0U64
+    while index < statement.enumDestinations.len {
+        val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
+        states.set(i: c.mid.places[entry.place - 1U64].local, value: <MidOwnership.Owned />)
+        index += 1U64
+    }
+    return <MidVerification />
+}
+
 export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
@@ -333,6 +387,10 @@ export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> 
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+            if statement.tag == 13U64 {
+                val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+            }
             if statement.tag == 1U64 {
                 val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
@@ -707,6 +765,7 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
         mut val si: U64 = 0U64
         while si < body.blocks[bi].statements.count() {
             match body.blocks[bi].statements[si] {
+                MidStatement.DestructureEnum(source: _, matchSource: _, enumIndex: _, variantIndex: _, destinations: _) => { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
                 MidStatement.Assign(destination: val destination, value: val value) => {
                     val result: MidVerification = midVerifyConsumeRvalue(body: body, states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
                     match result.error { MidVerifyError.None => {} _ => { return result } }

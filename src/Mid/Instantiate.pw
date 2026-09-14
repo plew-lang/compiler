@@ -9,7 +9,7 @@ import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolut
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
+import ./Ir with { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
 
 export enum MidInstantiateError {
     None
@@ -592,10 +592,55 @@ fn traceMidInstantiationRvalue(c: Comp, sourceFunction: U64, rvalueId: U64) {
     eprint(text: "\n")
 }
 
+fn instantiateCanonicalEnumDestructure(c: inout Comp, source: MidStatementNode, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
+    val matchIndex = c.finalMatchIndex(bodyId: bodyId, matchSource: canonicalMatchSource(sourceTag: source.sourceTag, sourceId: source.sourceStmt))
+    if source.sourceTag > 1U64 || matchIndex >= c.arena.finalMatches.count() {
+        error = <MidInstantiateError.MissingFinalResolution />
+        return false
+    }
+    val fact = c.arena.finalMatches[matchIndex]
+    val place = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.source, environment: environment, itemRef: itemRef)
+    if place == 0U64 || !fact.isConsuming || !midFinalMatchShapeMatches(c: inout c, matchIndex: matchIndex, enumIndex: source.enumIndex, scrutineeTypeRef: c.mid.places[place - 1U64].typeTerm) {
+        error = <MidInstantiateError.InvalidFinalResolution />
+        return false
+    }
+    mut val armIndex: U64 = 0U64
+    while armIndex < fact.armCount {
+        val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
+        if arm.hasVariant && arm.variantIndex == source.variantIndex { break }
+        armIndex += 1U64
+    }
+    if armIndex == fact.armCount {
+        error = <MidInstantiateError.InvalidFinalResolution />
+        return false
+    }
+    val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
+    if arm.payloadCount != source.enumDestinations.len || source.enumDestinations.start > c.mid.enumDestinations.count() || source.enumDestinations.len > c.mid.enumDestinations.count() - source.enumDestinations.start {
+        error = <MidInstantiateError.InvalidFinalResolution />
+        return false
+    }
+    val start = c.mid.enumDestinations.count()
+    mut val index: U64 = 0U64
+    while index < arm.payloadCount {
+        val field = c.arena.finalMatchPayloads[arm.payloadStart + index]
+        val target = c.mid.enumDestinations[source.enumDestinations.start + index]
+        val destination = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: target.place, environment: environment, itemRef: itemRef)
+        if destination == 0U64 || field.fieldIndex != index || field.bindTarget != target.bindTarget || field.isDiscard != target.isDiscard || field.isBoxed != target.isBoxed || !c.typeRefEq(a: field.fieldTypeRef, b: c.mid.places[destination - 1U64].typeTerm) {
+            error = <MidInstantiateError.InvalidFinalResolution />
+            return false
+        }
+        c.mid.enumDestinations.append(<MidEnumDestinationNode place=destination bindTarget=target.bindTarget isDiscard=target.isDiscard isBoxed=target.isBoxed />)
+        index += 1U64
+    }
+    c.mid.statements.append(<MidStatementNode tag=13U64 source=place enumIndex=source.enumIndex variantIndex=source.variantIndex sourceTag=source.sourceTag sourceStmt=source.sourceStmt enumDestinations=<MidRange start=start len=arm.payloadCount /> />)
+    return true
+}
+
 fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRange, environment: BodyInstance, bodyId: U64, sourceFunction: U64, itemRef: U64, error: inout MidInstantiateError) -> Bool {
     if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
     val source = c.mid.statements[statementId - 1U64]
     match source.tag {
+        13U64 => { return instantiateCanonicalEnumDestructure(c: inout c, source: source, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) }
         1U64 => {
             val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef)
             val value: U64 = instantiateCanonicalRvalue(c: inout c, rvalueId: source.value, environment: environment, bodyId: bodyId, sourceFunction: sourceFunction, itemRef: itemRef, error: inout error)
@@ -1696,6 +1741,11 @@ fn instantiateMidCallReceiver(c: inout Comp, bodyId: U64, receiver: MidCallRecei
 
 fn instantiateMidStatement(c: inout Comp, statement: MidStatement, locals: Array[MidLocalDecl], environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> MidStatement {
     match statement {
+        MidStatement.DestructureEnum(source: _, matchSource: _, enumIndex: _, variantIndex: _, destinations: _) => {
+            // Whole-enum transfer is a canonical-only ownership operation.
+            error = <MidInstantiateError.InvalidFinalResolution />
+            return statement
+        }
         MidStatement.Assign(destination: val destination, value: val value) => {
             return <MidStatement.Assign destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) />
         }

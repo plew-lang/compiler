@@ -1,0 +1,48 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
+import /Mid/Ir with { MidBody, MidLocalDecl, MidScope, MidBlock, MidPlace, MidEnumDestination, MidStatement, MidTerminator }
+import /Mid/Verify with { verifyCanonicalMidBody, MidVerifyError }
+
+// The verifier must prove a whole-owner transfer, not merely that individual
+// field projections are plausible. Corrupt exactly one obligation per case.
+fn accepted(fault: U64) -> Bool {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Resource")
+    val resource = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val key = <MatchSource.Statement stmtId=0U64 />
+    compiler.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution bindTarget=10U64 fieldIndex=0U64 fieldTypeRef=integer />)
+    compiler.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution isDiscard=true fieldIndex=1U64 fieldTypeRef=integer />)
+    compiler.arena.finalMatchArms.append(<FinalMatchArmResolution hasVariant=true variantIndex=0U64 payloadStart=0U64 payloadCount=2U64 />)
+    compiler.putFinalMatch(fact: <FinalMatchResolution isConsuming=fault != 5U64 bodyId=0U64 matchSource=key scrutineeTypeRef=resource kind=<SemanticMatchKind.Enum enumIndex=0U64 /> armStart=0U64 armCount=1U64 />)
+    val source = <MidPlace local=0U64 typeTerm=resource />
+    val first = <MidPlace local=1U64 typeTerm=integer />
+    val second = <MidPlace local=2U64 typeTerm=integer />
+    mut val outputs: Array[MidEnumDestination] = [<MidEnumDestination place=first bindTarget=10U64 />]
+    if fault != 1U64 {
+        mut val target = second
+        if fault == 2U64 { target = first }
+        if fault == 3U64 { target = source }
+        outputs.append(<MidEnumDestination place=target isDiscard=true isBoxed=fault == 4U64 />)
+    }
+    mut val statements: Array[MidStatement] = []
+    if fault == 6U64 { statements.append(<MidStatement.Drop place=source />) }
+    statements.append(<MidStatement.DestructureEnum source=source matchSource=key enumIndex=0U64 variantIndex=0U64 destinations=outputs />)
+    statements.append(<MidStatement.Drop place=first />)
+    statements.append(<MidStatement.Drop place=second />)
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=resource sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=fault == 7U64 />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] />)
+    return match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => { give true } _ => { give false } }
+}
+fn main() {
+    assert(accepted(fault: 0U64))
+    mut val fault = 1U64
+    while fault <= 7U64 {
+        assert(!accepted(fault: fault))
+        fault += 1U64
+    }
+    print("ok")
+}

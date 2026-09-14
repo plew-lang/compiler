@@ -7,7 +7,7 @@ import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggr
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
-import ./Ir with { MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ./Ir with { MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -2037,6 +2037,38 @@ fn buildMidStructPattern(c: inout Comp, state: inout MidBuildState, semantic: Se
     return result
 }
 
+fn buildMidConsumingEnumArm(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, arm: SemanticMatchArm, source: MidPlace, enumIndex: U64) {
+    if !arm.hasVariant {
+        midAppendStatement(state: inout state, statement: <MidStatement.Drop place=source />)
+        return
+    }
+    mut val destinations: Array[MidEnumDestination] = []
+    mut val index: U64 = 0U64
+    while index < arm.payloads.count() {
+        val field = arm.payloads[index]
+        val local = addMidTemporary(state: inout state, typeTerm: field.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: field.fieldTerm))
+        destinations.append(<MidEnumDestination place=<MidPlace local=local typeTerm=field.fieldTerm /> bindTarget=field.bindTarget isDiscard=field.isDiscard isBoxed=field.isBoxed />)
+        index += 1U64
+    }
+    midAppendStatement(state: inout state, statement: <MidStatement.DestructureEnum source=source matchSource=semantic.matchSource enumIndex=enumIndex variantIndex=arm.variantIndex destinations=destinations />)
+    index = 0U64
+    while index < arm.payloads.count() {
+        val field = arm.payloads[index]
+        val payload = destinations[index].place
+        if field.isDiscard {
+            midAppendStatement(state: inout state, statement: <MidStatement.Drop place=payload />)
+        } else {
+            val captured = midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: field.bindTarget)
+            val local = addMidLocal(state: inout state, declarationTarget: field.bindTarget, typeTerm: field.fieldTerm, isUnique: midTermIsUnique(c: inout c, term: field.fieldTerm), isParameter: false, ownsAtEntry: false, isBorrowed: false, isCaptureCell: captured)
+            val destination = <MidPlace local=local typeTerm=field.fieldTerm />
+            val value = <MidRvalue.Use operand=<MidOperand.Move place=payload /> />
+            if captured { midAppendStatement(state: inout state, statement: <MidStatement.InitializeCaptureCell destination=destination value=value />) }
+            else { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=value />) }
+        }
+        index += 1U64
+    }
+}
+
 fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, sourceArms: MatchArmRange, hasGiveDestination: Bool, giveDestination: MidPlace, traceId: U64) -> MidBuildError {
             val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource)
             if semanticIndex >= c.decls.semanticMatches.count() {
@@ -2048,7 +2080,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "arm-count")
                 return <MidBuildError.UnsupportedMatch />
             }
-            if midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) {
+            if !semantic.isConsuming && midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-scrutinee")
                 return <MidBuildError.UnsupportedMatch />
             }
@@ -2080,7 +2112,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                     midCloseScope(state: inout state, scope: scrutineeScope)
                     return <MidBuildError.None />
                 }
-                val temporary: U64 = addMidTemporary(state: inout state, typeTerm: semantic.scrutineeTerm)
+                val temporary: U64 = addMidTemporary(state: inout state, typeTerm: semantic.scrutineeTerm, isUnique: midTermIsUnique(c: inout c, term: semantic.scrutineeTerm))
                 val temporaryPlace: MidPlace = <MidPlace local=temporary typeTerm=semantic.scrutineeTerm />
                 midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporaryPlace value=<MidRvalue.Use operand=value.operand /> />)
                 scrutinee = <MidPlaceLookup found=true place=temporaryPlace />
@@ -2150,8 +2182,9 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 val bindingMark: U64 = state.bindings.count()
                 val armScope: U64 = midOpenScope(state: inout state)
                 val semanticArm: SemanticMatchArm = semantic.arms[armIndex]
+                if semantic.isConsuming { buildMidConsumingEnumArm(c: inout c, state: inout state, semantic: semantic, arm: semanticArm, source: scrutinee.place, enumIndex: enumIndex) }
                 mut val payloadIndex: U64 = 0U64
-                while payloadIndex < semanticArm.payloads.count() {
+                while !semantic.isConsuming && payloadIndex < semanticArm.payloads.count() {
                     val payload: SemanticMatchPayload = semanticArm.payloads[payloadIndex]
                     if payload.isDiscard {
                         payloadIndex += 1U64

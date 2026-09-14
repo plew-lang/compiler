@@ -1068,6 +1068,7 @@ pub impl LlvmCtx {
                         if place.projections.count() != 0U64 { return <MidLlvmPreflight.DropProjection /> }
                     }
                     MidStatement.SetDropFlag(local: _, isSet: _) => {}
+                    MidStatement.DestructureEnum(source: _, matchSource: _, enumIndex: _, variantIndex: _, destinations: _) => { return <MidLlvmPreflight.UnsupportedRvalue /> }
                     MidStatement.Nop => {}
                     MidStatement.StorageCommit(stmtId: _) => { return <MidLlvmPreflight.ScopeExit /> }
                     MidStatement.EndBinding(local: _) => { return <MidLlvmPreflight.ScopeExit /> }
@@ -2892,6 +2893,7 @@ pub impl LlvmCtx {
             MidStatement.StorageCommit(stmtId: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.EndBinding(local: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.ScopeExit(scope: _) => { LLVMBuildUnreachable(self.b) }
+            MidStatement.DestructureEnum(source: _, matchSource: _, enumIndex: _, variantIndex: _, destinations: _) => { LLVMBuildUnreachable(self.b) }
             MidStatement.Nop => {}
         }
     }
@@ -4306,9 +4308,50 @@ pub impl LlvmCtx {
     // The first direct statement slice deliberately covers the scalar rows
     // whose semantics are independent of aggregate/call lowering.  Other
     // canonical tags remain fail-closed until their direct emitters exist.
+    // A cell owner becomes a logical value owner. Shared cells keep their
+    // payload and provide an independent ARC owner; the last cell owner moves
+    // its payload out and frees only the empty physical allocation.
+    inout fn midTakeEnumCell(c: inout Comp, cell: LLVMValueRef, typeRef: U64) -> LLVMValueRef {
+        val value = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: typeRef), cell, anon())
+        val count = self.rawbufRelease(c: inout c, cell: cell)
+        val last = LLVMBuildICmp(self.b, llvmIntEq(), count, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val release = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.free"))
+        val shared = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.shared"))
+        val continuation = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.cont"))
+        LLVMBuildCondBr(self.b, last, release, shared)
+        LLVMPositionBuilderAtEnd(self.b, release)
+        self.rawbufFree(c: inout c, cell: cell)
+        LLVMBuildBr(self.b, continuation)
+        LLVMPositionBuilderAtEnd(self.b, shared)
+        if c.arcNeedsRelease(ref: typeRef) { self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true) }
+        LLVMBuildBr(self.b, continuation)
+        LLVMPositionBuilderAtEnd(self.b, continuation)
+        return value
+    }
+
+    inout fn midCanonicalEmitEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode) -> Bool {
+        val source = c.mid.places[statement.source - 1U64]
+        val enumTy = self.midCanonicalPlaceTy(c: inout c, body: body, place: source)
+        val slot = self.midCanonicalPlacePtr(c: inout c, body: body, place: source)
+        val payloadTy = self.variantPayloadTy(c: inout c, eid: statement.enumIndex, vi: statement.variantIndex, instanceRef: source.typeTerm)
+        val payloadSlot = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: slot, instanceRef: source.typeTerm)
+        val payload = llvmLoad(self.b, payloadTy, payloadSlot, anon())
+        mut val index: U64 = 0U64
+        while index < statement.enumDestinations.len {
+            val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
+            val destination = c.mid.places[entry.place - 1U64]
+            mut val value = LLVMBuildExtractValue(self.b, payload, index, anon())
+            if entry.isBoxed { value = self.midTakeEnumCell(c: inout c, cell: value, typeRef: destination.typeTerm) }
+            llvmStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            index += 1U64
+        }
+        return true
+    }
+
     inout fn midCanonicalEmitStatement(c: inout Comp, body: MidBodyNode, statementId: U64) -> Bool {
         if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
         val statement: MidStatementNode = c.mid.statements[statementId - 1U64]
+        if statement.tag == 13U64 { return self.midCanonicalEmitEnumDestructure(c: inout c, body: body, statement: statement) }
         if statement.tag == 1U64 || statement.tag == 9U64 {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -4640,6 +4683,16 @@ impl LlvmCtx {
                     if statement.tag == 9U64 {
                         val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                         if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len || !c.mid.locals[body.locals.start + destination.local].isCaptureCell { return <MidLlvmPreflight.AssignmentProjection /> }
+                    }
+                } else if statement.tag == 13U64 {
+                    if statement.source == 0U64 || statement.source > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: statement.source) || statement.enumIndex >= c.arena.enumCount() || statement.variantIndex >= c.arena.enumAt(index: statement.enumIndex).variants.count() { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    val variant = c.arena.enumVariantAt(enumIndex: statement.enumIndex, variantIndex: statement.variantIndex)
+                    if variant.fields.count() != statement.enumDestinations.len { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    mut val index: U64 = 0U64
+                    while index < statement.enumDestinations.len {
+                        val destination = c.mid.enumDestinations[statement.enumDestinations.start + index]
+                        if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: destination.place) || destination.isBoxed != c.fieldIsBoxed(f: variant.fields[index]) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                        index += 1U64
                     }
                 } else if statement.tag == 2U64 || statement.tag == 8U64 {
                     if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return <MidLlvmPreflight.AssignmentProjection /> }
