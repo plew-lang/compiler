@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val stringName = compiler.internBytes(s: "String")
+    val label = compiler.internBytes(s: "value")
+    val originalName = compiler.internBytes(s: "(original)")
+    val aliasName = compiler.internBytes(s: "(alias)")
+    val otherName = compiler.internBytes(s: "(other)")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val string = compiler.simpleTypeRef(nameStart: stringName.nameStart, nameLen: stringName.nameLen)
+    val original = compiler.pushType(t: <TypeRef nameStart=originalName.nameStart nameLen=originalName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[integer] />)
+    val alias = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[integer] />)
+    val other = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[string] />)
+    assert(original != alias)
+    compiler.enqueueFinalDestruction(typeRef: original)
+    val contract = compiler.finalDestructionIndex(typeRef: original)
+    assert(contract != 0U64)
+    val count = compiler.arena.finalDestructions.count()
+    assert(compiler.finalDestructionIndex(typeRef: alias) == contract)
+    compiler.enqueueFinalDestruction(typeRef: alias)
+    assert(compiler.arena.finalDestructions.count() == count)
+    assert(compiler.arena.finalDestructions[contract - 1U64].ready)
+    assert(compiler.arena.finalDestructions[contract - 1U64].fieldTypes[0U64] == integer)
+    assert(compiler.finalDestructionIndex(typeRef: other) == 0U64)
+    assert(compiler.arena.finalDestructions.count() == count)
+    compiler.enqueueFinalDestruction(typeRef: other)
+    val otherContract = compiler.finalDestructionIndex(typeRef: other)
+    assert(otherContract != 0U64 && otherContract != contract)
+    assert(compiler.arena.finalDestructions[otherContract - 1U64].fieldTypes[0U64] == string)
+    print("ok")
+}

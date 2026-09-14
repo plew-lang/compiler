@@ -1773,6 +1773,15 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
 // modeled. Value types cannot be cyclic by value, so the recursion terminates.
 fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
     val sd: StructDef = c.arena.structAt(index: sidx)
+    if sd.isStructuralLayout && c.arena.recordTypeByLayout.getOr(key: sidx, fallback: 0U64) == 0U64 {
+        mut val field = 0U64
+        while field < sd.fields.count() {
+            if !c.tyRefIsGround(ref: sd.fields[field].ty) { return false }
+            field += 1U64
+        }
+        c.errorAt(offset: sd.defOffset, msg: "internal error: grounded structural layout has no semantic type")
+        return false
+    }
     if sd.typeParams.count() > 0 { return false }
     if sd.isExtern { return false }
     // unique structs are now registerable (same field layout); their deinit runs at
