@@ -910,12 +910,12 @@ pub impl Comp {
     inout fn groundUnderInst(instRef: U64, tyRef: U64) -> U64 {
         if instRef == 0U64 || instRef >= self.arena.typeCount() { return tyRef }
         val inst: TypeRef = self.arena.typeAt(index: instRef)
-        val si: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+        val si: U64 = self.structIndexForType(ref: instRef)
         mut val params: Array[Bind] = []
         if si < self.arena.structCount() {
             params = self.arena.structAt(index: si).typeParams
         } else {
-            val ei: U64 = self.genericEnumIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+            val ei: U64 = self.enumIndexForType(ref: instRef)
             if ei < self.arena.enumCount() {
                 params = self.arena.enumAt(index: ei).typeParams
             }

@@ -4,6 +4,35 @@
 // c.arena.structCount() if there is no such generic struct.
 
 pub impl Comp {
+    // Resolved nominal identity wins over authored spelling. Generated
+    // legacy terms without identity retain their existing name lookup until
+    // their producer is migrated; a missing resolved identity never falls back.
+    inout fn structIndexForType(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.structCount() }
+        val term = self.arena.typeAt(index: ref)
+        if term.hasDecl { return self.arena.structIndexByOffset(offset: term.declOffset) }
+        return self.anyStructIndex(nameStart: term.nameStart, nameLen: term.nameLen)
+    }
+
+    inout fn enumIndexForType(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return self.arena.enumCount() }
+        val term = self.arena.typeAt(index: ref)
+        if term.hasDecl { return self.arena.enumIndexByOffset(offset: term.declOffset) }
+        return self.anyEnumIndex(nameStart: term.nameStart, nameLen: term.nameLen)
+    }
+
+    inout fn variantIndexInDeclaration(enumIndex: U64, nameStart: U64, nameLen: U64) -> U64 {
+        if enumIndex >= self.arena.enumCount() { return 0U64 }
+        val declaration = self.arena.enumAt(index: enumIndex)
+        val name = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val index: U64 = 0U64
+        while index < declaration.variants.count() {
+            if declaration.variants[index].nameId == name { return index }
+            index += 1U64
+        }
+        return declaration.variants.count()
+    }
+
     inout fn genericStructIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         return self.arena.firstGenericStructNamed(nameId: qId)

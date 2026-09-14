@@ -129,6 +129,16 @@ pub impl Arena {
 
 // Offset indexes preserve the first declaration within each category.
 pub impl Arena {
+    fn structIndexByOffset(offset: U64) -> U64 {
+        val entry = self.structsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return self.structs.count() }
+        return entry - 1U64
+    }
+    fn enumIndexByOffset(offset: U64) -> U64 {
+        val entry = self.enumsByOffset.getOr(key: offset, fallback: 0U64)
+        if entry == 0U64 { return self.enums.count() }
+        return entry - 1U64
+    }
     fn structNameByOffset(offset: U64) -> Optional[DeclarationName] {
         val entry = self.structsByOffset.getOr(key: offset, fallback: 0U64)
         if entry == 0U64 { return <Optional.None /> }

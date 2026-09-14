@@ -681,48 +681,6 @@ pub impl Comp {
     // labels/variant spelling into physical layout.  Mid receives only this
     // frozen carrier; its use of ExprId is navigation into an already-selected
     // aggregate tree, never a second name or field lookup.
-    inout fn semanticAggregateFieldIndex(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> U64 {
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        if isEnum {
-            val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-            val qVariant: U64 = intern(c: inout self, start: variantStart, len: variantLen)
-            mut val ei: U64 = 0U64
-            while ei < self.arena.enumCount() {
-                val en: EnumDef = self.arena.enumAt(index: ei)
-                if en.nameId == qType {
-                    mut val vi: U64 = 0U64
-                    while vi < en.variants.count() {
-                        val variant: Variant = en.variants[vi]
-                        if variant.nameId == qVariant {
-                            mut val fi: U64 = 0U64
-                            while fi < variant.fields.count() {
-                                if variant.fields[fi].nameId == qField { return fi }
-                                fi += 1U64
-                            }
-                        }
-                        vi += 1U64
-                    }
-                }
-                ei += 1U64
-            }
-            return 0U64
-        }
-        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qType)
-        while si < self.arena.structCount() {
-            val st: StructDef = self.arena.structAt(index: si)
-            if st.nameId == qType {
-                mut val fi: U64 = 0U64
-                while fi < st.fields.count() {
-                    if st.fields[fi].nameId == qField { return fi }
-                    fi += 1U64
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
-        }
-        return 0U64
-    }
-
     inout fn recordSemanticAggregate(exprId: U64) {
         if !(self.cur.recordCallTemplates) { return }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
@@ -733,15 +691,22 @@ pub impl Comp {
                 mut val variantIndex: U64 = 0U64
                 mut val enumIndex: U64 = self.arena.enumCount()
                 if isEnum {
-                    variantIndex = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    enumIndex = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
+                    enumIndex = self.enumIndexForType(ref: resultTerm)
+                    variantIndex = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: variantStart, nameLen: variantLen)
                 }
                 mut val i: U64 = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
                     mut val fieldIndex: U64 = 0U64
                     if isEnum {
-                        fieldIndex = self.semanticAggregateFieldIndex(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: true, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                        if enumIndex < self.arena.enumCount() && variantIndex < self.arena.enumAt(index: enumIndex).variants.count() {
+                            val declaredFields = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
+                            val name = intern(c: inout self, start: field.nameStart, len: field.nameLen)
+                            while fieldIndex < declaredFields.count() {
+                                if declaredFields[fieldIndex].nameId == name { break }
+                                fieldIndex += 1U64
+                            }
+                        }
                     } else {
                         fieldIndex = self.fieldIndexOfReceiver(receiverRef: resultTerm, fieldStart: field.nameStart, fieldLen: field.nameLen)
                     }
@@ -756,8 +721,7 @@ pub impl Comp {
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
                     } else if resultTerm < self.arena.typeCount() && !(self.arena.typeAt(index: resultTerm).isRecord) {
-                        val result: TypeRef = self.arena.typeAt(index: self.fieldStorageTypeRef(receiverRef: resultTerm))
-                        val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+                        val structIndex: U64 = self.structIndexForType(ref: self.fieldStorageTypeRef(receiverRef: resultTerm))
                         if structIndex < self.arena.structCount() {
                             val declaredFields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
@@ -800,7 +764,7 @@ pub impl Comp {
                     if result.isRecord {
                         fieldCount = result.recordFieldTerms.count()
                     } else {
-                        val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+                        val structIndex: U64 = self.structIndexForType(ref: self.fieldStorageTypeRef(receiverRef: resultTerm))
                         if structIndex < self.arena.structCount() { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
                     }
                     self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Struct /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
@@ -970,7 +934,7 @@ pub impl Comp {
         val storage: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
         if storage == 0U64 || storage >= self.arena.typeCount() { return }
         val declaration: TypeRef = self.arena.typeAt(index: storage)
-        val structIndex: U64 = self.anyStructIndex(nameStart: declaration.nameStart, nameLen: declaration.nameLen)
+        val structIndex: U64 = self.structIndexForType(ref: storage)
         if !declaration.isRecord && structIndex >= self.arena.structCount() { return }
         mut val fieldCount: U64 = declaration.recordFieldTerms.count()
         if !declaration.isRecord { fieldCount = self.arena.structAt(index: structIndex).fields.count() }
@@ -1007,8 +971,7 @@ pub impl Comp {
         // Patterns select the lexical declaration's shape, while the match
         // fact retains the original value type for BodyInstance grounding.
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: scrutineeTerm)
-        val scrutinee: TypeRef = self.arena.typeAt(index: layoutReceiver)
-        val enumIndex: U64 = self.anyEnumIndex(nameStart: scrutinee.nameStart, nameLen: scrutinee.nameLen)
+        val enumIndex: U64 = self.enumIndexForType(ref: layoutReceiver)
         if enumIndex >= self.arena.enumCount() {
             self.recordStructPattern(matchSource: matchSource, scrutineeTerm: scrutineeTerm, layoutReceiver: layoutReceiver, arms: arms)
             return
@@ -1021,7 +984,7 @@ pub impl Comp {
             if arm.isWildcard {
                 selectedArms.append(<SemanticMatchArm />)
             } else {
-                val variantIndex: U64 = self.variantIndex(enumStart: scrutinee.nameStart, enumLen: scrutinee.nameLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+                val variantIndex: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: arm.variantStart, nameLen: arm.variantLen)
                 if variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return }
                 val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                 mut val payloads: Array[SemanticMatchPayload] = []
@@ -1195,7 +1158,7 @@ pub impl Comp {
             mut val isBoxed: Bool = false
             mut val fieldCount: U64 = receiver.recordFieldTerms.count()
             if !receiver.isRecord {
-                val structIndex: U64 = self.anyStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+                val structIndex: U64 = self.structIndexForType(ref: storageRef)
                 if structIndex < self.arena.structCount() {
                     fieldCount = self.arena.structAt(index: structIndex).fields.count()
                     if fieldIndex < fieldCount { isBoxed = self.fieldIsBoxed(f: self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)) }
