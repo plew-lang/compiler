@@ -1,6 +1,6 @@
 // Part of the LLVM backend (root: _.pw): existential `any P` vtable, witness, boxing, and dynamic dispatch.
 
-import ../../Ir with { ExistentialResultMode, CallReceiverPassing, CallArgumentPassing }
+import ../../Ir with { CallReceiverPassing, CallArgumentPassing }
 
 // ---- existential `any P` (spec/08): vtable, boxing, dynamic dispatch ----
 //
@@ -30,8 +30,6 @@ pub impl LlvmCtx {
         val member = c.arena.finalExistentials[resolutionIndex].members[idx]
         if member.bodyId == 0U64 { return LLVMConstNull(self.ptrty) }
         val bodyId = member.bodyId
-        val retsSelf = match member.resultMode { ExistentialResultMode.Box => { give true } _ => { give false } }
-        val retContainerSelf = match member.resultMode { ExistentialResultMode.Repack => { give true } _ => { give false } }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val wfi: U64 = body.fnIdx
         val wInstRef: U64 = body.environment.receiverRef
@@ -93,26 +91,20 @@ pub impl LlvmCtx {
         }
         val r: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[wslot], self.genMethVal[wslot], arrayCPtr(av), av.count(), anon())
         if member.resultType != 0U64 {
-            if retsSelf {
-                // re-erase: box the witness's concrete result (the same concrete type as
-                // the boxed self) back into `any P` with this existential's vtable.
-                LLVMBuildRet(self.b, self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: r, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
-            } else {
-                if retContainerSelf {
-                    // repack the concrete container into the erased one (each `Self` boxed),
-                    // then release the witness's owned result: eraseCovariantToAny retained the
-                    // payload into the fresh boxes, so this drop balances it (the erased value
-                    // now solely owns the heap — value semantics).
-                    val erased: LLVMValueRef = self.eraseCovariantToAny(c: inout c, v: r, srcRef: srcRetRef, dstRef: dstRetRef)
-                    self.valueArc(c: inout c, v: r, typeRef: srcRetRef, retain: false)
-                    LLVMBuildRet(self.b, erased)
-                } else {
-                    LLVMBuildRet(self.b, r)
-                }
+            if !self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: srcRetRef, targetRef: dstRetRef, proofId: member.resultConversion) {
+                c.errorAt(offset: req.nameStart, msg: "LLVM backend: invalid frozen existential result conversion")
             }
-        } else {
-            LLVMBuildRetVoid(self.b)
-        }
+            val conversion = c.arena.conversionProofs[member.resultConversion - 1U64]
+            if conversion.tag == 0U64 { LLVMBuildRet(self.b, r) }
+            else if conversion.tag == 2U64 {
+                val resultStruct = self.structIdxOfRef(c: inout c, ref: conversion.sourceRef)
+                LLVMBuildRet(self.b, self.boxIntoAny(c: inout c, sourceRef: conversion.sourceRef, v: r, sidx: resultStruct, anyRef: conversion.targetRef, traitIdx: conversion.traitIdx))
+            } else {
+                val erased = self.midCanonicalEmitBorrowedConversion(c: inout c, value: r, sourceRef: srcRetRef, targetRef: dstRetRef, proofId: member.resultConversion)
+                self.valueArc(c: inout c, v: r, typeRef: srcRetRef, retain: false)
+                LLVMBuildRet(self.b, erased)
+            }
+        } else { LLVMBuildRetVoid(self.b) }
         self.curFn = savedFn
         LLVMPositionBuilderAtEnd(self.b, savedBB)
         return fv

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { FinalExistentialMember, ExistentialResultMode, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2636,7 +2636,7 @@ pub impl Comp {
     // proof is in declaration variant order, so LLVM needs only enum layout to
     // extract the matching value; it never grounds a field type to choose a
     // conversion.
-    inout fn enumRepackPayloadConversions(sourceRef: U64, targetRef: U64, enumIdx: U64) -> Array[EnumPayloadConversion] {
+    inout fn enumRepackPayloadConversions(sourceRef: U64, targetRef: U64, enumIdx: U64, knownExistential: U64 = 0U64) -> Array[EnumPayloadConversion] {
         mut val payloads: Array[EnumPayloadConversion] = []
         if sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() || enumIdx >= self.arena.enumCount() { return payloads }
         val source: TypeRef = self.arena.typeAt(index: sourceRef)
@@ -2656,7 +2656,7 @@ pub impl Comp {
                 val targetFieldRef: U64 = self.groundTypeRef(ref: fields[field].ty)
                 self.cur.typeParams = savedParams
                 self.cur.typeArgs = savedArgs
-                payloads.append(<EnumPayloadConversion sourceRef=sourceFieldRef targetRef=targetFieldRef conversion=self.callArgumentConversion(sourceRef: sourceFieldRef, targetRef: targetFieldRef) />)
+                payloads.append(<EnumPayloadConversion sourceRef=sourceFieldRef targetRef=targetFieldRef conversion=self.callArgumentConversion(sourceRef: sourceFieldRef, targetRef: targetFieldRef, knownExistential: knownExistential) />)
                 field += 1U64
             }
             variant += 1U64
@@ -2669,12 +2669,21 @@ pub impl Comp {
     // Select a conversion from already-ground source and ABI terms. This is a
     // frontend proof boundary: later Mid/LLVM code receives the choice and
     // never uses an argument expression to rediscover it.
-    inout fn callArgumentConversion(sourceRef: U64, targetRef: U64) -> ValueConversionProof {
+    inout fn callArgumentConversion(sourceRef: U64, targetRef: U64, knownExistential: U64 = 0U64) -> ValueConversionProof {
         if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= self.arena.typeCount() || targetRef >= self.arena.typeCount() { return <ValueConversionProof.Missing /> }
         if self.typeRefEq(a: sourceRef, b: targetRef) { return <ValueConversionProof.Identity /> }
         val target: TypeRef = self.arena.typeAt(index: targetRef)
         val source: TypeRef = self.arena.typeAt(index: sourceRef)
         if target.isAny {
+            // A covariant witness result re-erases Self through the evidence
+            // carried by its receiver, including inside structural payloads.
+            // Do not select a different conformance at this boundary.
+            if knownExistential != 0U64 && knownExistential <= self.arena.finalExistentials.count() {
+                val known = self.arena.finalExistentials[knownExistential - 1U64]
+                if self.typeRefEq(a: sourceRef, b: known.sourceRef) && self.typeRefEq(a: targetRef, b: known.targetRef) {
+                    return <ValueConversionProof.ExistentialBox sourceRef=sourceRef targetRef=targetRef traitIdx=known.traitIdx proof=known.proof />
+                }
+            }
             // The existential TypeTerm already carries the resolver-selected
             // declaration identity. Reusing that identity prevents an import
             // or re-export with the same spelling from changing a conversion
@@ -2706,7 +2715,7 @@ pub impl Comp {
         mut val changed: Bool = false
         mut val i: U64 = 0U64
         while i < source.args.count() {
-            val child: ValueConversionProof = self.callArgumentConversion(sourceRef: source.args[i], targetRef: target.args[i])
+            val child: ValueConversionProof = self.callArgumentConversion(sourceRef: source.args[i], targetRef: target.args[i], knownExistential: knownExistential)
             match child { ValueConversionProof.Missing => { return <ValueConversionProof.Missing /> } ValueConversionProof.Identity => {} _ => { changed = true } }
             arguments.append(child)
             i += 1U64
@@ -2717,7 +2726,7 @@ pub impl Comp {
         }
         val enumIdx: U64 = self.genericEnumIndex(nameStart: target.nameStart, nameLen: target.nameLen)
         if enumIdx < self.arena.enumCount() {
-            val payloads: Array[EnumPayloadConversion] = self.enumRepackPayloadConversions(sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx)
+            val payloads: Array[EnumPayloadConversion] = self.enumRepackPayloadConversions(sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, knownExistential: knownExistential)
             mut val payload: U64 = 0U64
             while payload < payloads.count() {
                 match payloads[payload].conversion { ValueConversionProof.Missing => { return <ValueConversionProof.Missing /> } _ => {} }
@@ -2794,15 +2803,21 @@ pub impl Comp {
                         else if req.selfMove { passing = <CallReceiverPassing.Move /> }
                         mut val result = 0U64
                         mut val sourceResult = 0U64
-                        mut val mode = <ExistentialResultMode.Identity />
+                        mut val resultConversion = <ValueConversionProof.Identity />
                         if req.hasRet {
                             val receiver = self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef
                             result = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: targetRef, params: parameters, args: values)
                             sourceResult = self.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: receiver, params: parameters, args: values)
-                            if self.reqReturnsSelf(req: req) { mode = <ExistentialResultMode.Box /> }
-                            else if self.typeRefMentionsSelf(ref: req.retTy) { mode = <ExistentialResultMode.Repack /> }
+                            resultConversion = self.callArgumentConversion(sourceRef: sourceResult, targetRef: result, knownExistential: index + 1U64)
+                            match resultConversion {
+                                ValueConversionProof.Missing => { self.errorAt(offset: req.nameStart, msg: "internal error: existential result has no finalized conversion") }
+                                _ => {}
+                            }
+                            self.finalizeConversionDependencies(conversion: resultConversion)
+                            self.scanType(ref: sourceResult)
+                            self.scanType(ref: result)
                         }
-                        member = <FinalExistentialMember bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultMode=mode />
+                        member = <FinalExistentialMember bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultConversion=self.freezeValueConversionProof(proof: resultConversion) />
                     }
                     members.append(member)
                     requirement += 1U64

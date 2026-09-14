@@ -1835,7 +1835,6 @@ pub impl FinalMatchResolution { factory }
 // backend return-place local.
 // The frontend selects the erased member ABI and the shape of its result
 // boundary. A zero bodyId is a non-dispatchable requirement, not a lookup miss.
-export enum ExistentialResultMode { Identity Box Repack }
 export struct FinalExistentialMember {
     pub val bodyId: U64 = 0U64
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.Borrow />
@@ -1843,7 +1842,8 @@ export struct FinalExistentialMember {
     pub val argumentPassings: Array[CallArgumentPassing] = []
     pub val resultType: U64 = 0U64
     pub val sourceResultType: U64 = 0U64
-    pub val resultMode: ExistentialResultMode = <ExistentialResultMode.Identity />
+    // One-based frozen ValueConversionProof, shared with ordinary Mid Convert.
+    pub val resultConversion: U64 = 0U64
 }
 pub impl FinalExistentialMember { factory }
 
