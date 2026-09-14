@@ -3,6 +3,7 @@ import @Std/Io with { print }
 struct Counter { pub mut val value: I64 pub val label: String }
 pub impl Counter {
     factory
+    fn unused() -> Self { return self }
     fn duplicate() -> Self {
         val original: Counter = self
         return original

@@ -484,6 +484,7 @@ extern(c) {
     fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
     fn LLVMCountStructElementTypes(structTy~: LLVMTypeRef) -> U32
     fn LLVMIsOpaqueStruct(structTy~: LLVMTypeRef) -> I32
+    fn LLVMIsPackedStruct(structTy~: LLVMTypeRef) -> I32
     fn LLVMGetElementType(ty~: LLVMTypeRef) -> LLVMTypeRef
     fn LLVMGetArrayLength2(ty~: LLVMTypeRef) -> U64
     fn LLVMArrayType2(elemTy~: LLVMTypeRef, count~: U64) -> LLVMTypeRef

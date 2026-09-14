@@ -7,6 +7,30 @@ import ../../Ir with { ConversionProofNode, FrozenEnumPayloadConversion, Capture
 
 pub impl LlvmCtx {
 
+    // Semantic newtype evidence is necessary but cannot excuse a layout bug.
+    // Named LLVM aggregates may differ in identity; storage shape must agree.
+    fn midBoundaryLayoutMatches(source: LLVMTypeRef, target: LLVMTypeRef) -> Bool {
+        if plew_pointer_equal(source, target) != 0I32 { return true }
+        val kind = LLVMGetTypeKind(source)
+        if kind != LLVMGetTypeKind(target) { return false }
+        if kind == 10U32 {
+            if LLVMIsOpaqueStruct(source) != 0I32 || LLVMIsOpaqueStruct(target) != 0I32 || LLVMIsPackedStruct(source) != LLVMIsPackedStruct(target) { return false }
+            val count = LLVMCountStructElementTypes(source)
+            if count != LLVMCountStructElementTypes(target) { return false }
+            mut val index = 0U32
+            while index < count {
+                if !self.midBoundaryLayoutMatches(source: LLVMStructGetTypeAtIndex(source, index), target: LLVMStructGetTypeAtIndex(target, index)) { return false }
+                index += 1U32
+            }
+            return true
+        }
+        if kind == 11U32 {
+            return LLVMGetArrayLength2(source) == LLVMGetArrayLength2(target) && self.midBoundaryLayoutMatches(source: LLVMGetElementType(source), target: LLVMGetElementType(target))
+        }
+        // Primitive, pointer and function types are uniqued in this context.
+        return false
+    }
+
     // Integer spelling describes a magnitude, not the resolved value type.
     // A contextual F32/F64 literal is already a float in Mid; constructing an
     // LLVM integer with a floating type would produce an invalid i0 value.
@@ -2135,6 +2159,9 @@ pub impl LlvmCtx {
                 currentTerm = projection.typeTerm
             } else if projection.tag == 4U64 {
                 if body.bodyInstance == 0U64 || c.arena.bodyInstanceAt(index: body.bodyInstance - 1U64).adapterTargetBodyId == 0U64 || !c.typeRefEq(a: currentTerm, b: projection.sourceTerm) || !c.newtypeBoundaryTypesCompatible(source: currentTerm, target: projection.typeTerm) { return false }
+                val sourceLayout = self.llvmTypeOfRef(c: inout c, ref: currentTerm)
+                val targetLayout = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
+                if !self.midBoundaryLayoutMatches(source: sourceLayout, target: targetLayout) { return false }
                 currentTerm = projection.typeTerm
             } else if projection.tag == 3U64 {
                 if !allowDeref || currentTerm == 0U64 || !c.isStrongRefInst(ref: currentTerm) || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() { return false }

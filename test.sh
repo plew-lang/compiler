@@ -187,6 +187,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-newtype-fields"
 fi
 
+# Inherited calls use shared, demand-driven typed boundaries.
+if sh ./test-mid-newtype-adapters.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-newtype-adapters"
+fi
+
 # Loop patterns lower to ordinary owned elements and field bindings.
 if sh ./test-mid-for-destructure.sh; then
     :
