@@ -1,0 +1,28 @@
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+import @Std/Core with { assert }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internTmpName(prefix: "Original", n: 0U64)
+    val alias = compiler.internTmpName(prefix: "Alias", n: 0U64)
+    val other = compiler.internTmpName(prefix: "Other", n: 0U64)
+    val original = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart />)
+    val renamed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart />)
+    val distinct = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=other.nameStart />)
+    assert(compiler.typeRefEq(a: original, b: renamed))
+    assert(compiler.typeRefEq(a: renamed, b: original))
+    assert(!compiler.typeRefEq(a: original, b: distinct))
+    assert(compiler.typeTermSameHead(a: compiler.arena.typeAt(index: original), b: compiler.arena.typeAt(index: renamed)))
+    val container = compiler.internTmpName(prefix: "Container", n: 0U64)
+    val originalContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[original] />)
+    val aliasContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[renamed] />)
+    val distinctContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[distinct] />)
+    assert(compiler.typeRefEq(a: originalContainer, b: aliasContainer))
+    assert(!compiler.typeRefEq(a: originalContainer, b: distinctContainer))
+    val viewed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewExtId=1U64 viewIds=[1U64] />)
+    assert(!compiler.typeRefEq(a: original, b: viewed))
+    print("ok")
+}

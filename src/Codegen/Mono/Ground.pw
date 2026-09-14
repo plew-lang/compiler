@@ -352,7 +352,9 @@ pub impl Comp {
     // field, existential output binding or projection receiver.
     inout fn typeTermSameHead(a: TypeRef, b: TypeRef) -> Bool {
         if a.isRecord || b.isRecord { return a.isRecord && b.isRecord && a.isSendable == b.isSendable }
-        if a.nameId != 0U64 && b.nameId != 0U64 {
+        if a.hasDecl && b.hasDecl {
+            if a.declOffset != b.declOffset { return false }
+        } else if a.nameId != 0U64 && b.nameId != 0U64 {
             if a.nameId != b.nameId { return false }
         } else if !(spansEqual(c: inout self, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen)) {
             return false
@@ -445,7 +447,9 @@ pub impl Comp {
         val ta = self.arena.typeTerms[a]
         val tb = self.arena.typeTerms[b]
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable }
-        if ta.nameId != 0U64 && tb.nameId != 0U64 {
+        if ta.hasDecl && tb.hasDecl {
+            if ta.declOffset != tb.declOffset { return false }
+        } else if ta.nameId != 0U64 && tb.nameId != 0U64 {
             if ta.nameId != tb.nameId { return false }
         } else if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) {
             return false
