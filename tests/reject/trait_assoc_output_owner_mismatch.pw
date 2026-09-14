@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+trait NumberOutput { type Output fn number() -> Output }
+trait FlagOutput { type Output fn flag() -> Output }
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as NumberOutput {
+    type Output = I64
+    fn number() -> I64 { return 7I64 }
+}
+pub impl Sample as FlagOutput {
+    type Output = Bool
+    fn flag() -> I64 { return 1I64 }
+}
+fn main() {
+    val sample = <Sample />
+    print(sample.number())
+
+}

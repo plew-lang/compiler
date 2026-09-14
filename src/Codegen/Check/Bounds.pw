@@ -746,7 +746,25 @@ pub impl Comp {
         return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
     }
 
-    inout fn substReqParamHeadId(recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
+    // Completeness belongs to one selected impl, not every same-named
+    // associated type on its receiver (Add.Output and Pow.Output may differ).
+    inout fn conformAssocBindingSpan(cf: Conform, nameStart: U64, nameLen: U64) -> Bind {
+        val nameId = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val index: U64 = 0U64
+        while index < cf.assocBindingIds.count() {
+            val bindingId = self.conformFuncIdAt(ids: cf.assocBindingIds, index: index)
+            val binding = self.decls.assocBindings[bindingId]
+            if binding.nameId == nameId {
+                val term = self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: cf.subjectTy)
+                val ty = self.arena.typeAt(index: term)
+                return <Bind nameStart=ty.nameStart nameLen=ty.nameLen nameId=ty.nameId fieldStart=ty.nameStart fieldLen=ty.nameLen />
+            }
+            index += 1U64
+        }
+        return <Bind nameStart=nameStart nameLen=nameLen nameId=nameId fieldStart=nameStart fieldLen=nameLen />
+    }
+
+    inout fn substReqParamHeadId(cf: Conform, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
         if rangeEquals(bytes: self.arena.bytes, start: prStart, len: prLen, kw: "Self") {
             return intern(c: inout self, start: recvStart, len: recvLen)
         }
@@ -760,7 +778,7 @@ pub impl Comp {
             }
             k += 1
         }
-        val sub: Bind = self.assocBindingSpan(recvStart: recvStart, recvLen: recvLen, nameStart: prStart, nameLen: prLen)
+        val sub: Bind = self.conformAssocBindingSpan(cf: cf, nameStart: prStart, nameLen: prLen)
         return sub.nameId
     }
 
@@ -783,7 +801,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn paramSelectorEqSubst(w: FuncParamRange, r: FuncParamRange, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
+    inout fn paramSelectorEqSubst(cf: Conform, w: FuncParamRange, r: FuncParamRange, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
         if w.count() != r.count() {
             return false
         }
@@ -811,7 +829,7 @@ pub impl Comp {
                     return false
                 }
             } else {
-            val subId: U64 = self.substReqParamHeadId(recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
+            val subId: U64 = self.substReqParamHeadId(cf: cf, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs, prStart: pr.tyStart, prLen: pr.tyLen)
             // the WITNESS side may also write `Self` (`fn eqTo(other: Self)` inside
             // `impl P as MyEq`): substitute its Self -> the conforming type too, so the
             // requirement's substituted Self (=recv) matches it. A concrete witness type
@@ -829,7 +847,7 @@ pub impl Comp {
         return true
     }
 
-    inout fn reqReturnMismatch(w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
+    inout fn reqReturnMismatch(cf: Conform, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
         if !(r.hasRet) {
             return false
         }
@@ -839,7 +857,7 @@ pub impl Comp {
         // resolve an associated-type requirement return (`fn first()->Item` with
         // `type Item = I64`) through the conformance's binding, so the witness's concrete
         // return is compared to the bound concrete type.
-        val rr: Bind = self.assocBindingSpan(recvStart: recvStart, recvLen: recvLen, nameStart: r.retStart, nameLen: r.retLen)
+        val rr: Bind = self.conformAssocBindingSpan(cf: cf, nameStart: r.retStart, nameLen: r.retLen)
         if !(self.isPrimType(start: rr.nameStart, len: rr.nameLen)) {
             return false
         }
@@ -850,19 +868,25 @@ pub impl Comp {
         if w.retIsArray {
             return true
         }
-        if spansEqual(c: inout self, aStart: rr.nameStart, aLen: rr.nameLen, bStart: w.retStart, bLen: w.retLen) {
+        mut val witnessStart = w.retStart
+        mut val witnessLen = w.retLen
+        if rangeEquals(bytes: self.arena.bytes, start: witnessStart, len: witnessLen, kw: "Self") {
+            witnessStart = recvStart
+            witnessLen = recvLen
+        }
+        if spansEqual(c: inout self, aStart: rr.nameStart, aLen: rr.nameLen, bStart: witnessStart, bLen: witnessLen) {
             return false
         }
         return true
     }
 
-    inout fn witnessedHas(witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
+    inout fn witnessedHas(cf: Conform, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
         mut val i: U64 = 0
         while i < witnessed.count() {
             val w: Func = witnessed[i]
             if w.nameId == r.nameId {
-                if self.paramSelectorEqSubst(w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
-                    if !(self.reqReturnMismatch(w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
+                if self.paramSelectorEqSubst(cf: cf, w: w.params, r: r.params, recvStart: recvStart, recvLen: recvLen, tps: tps, targs: targs) {
+                    if !(self.reqReturnMismatch(cf: cf, w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
                         return true
                     }
                 }
@@ -886,7 +910,7 @@ pub impl Comp {
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
-            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: traitArgs)) {
+            if !(self.witnessedHas(cf: cf, witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: traitArgs)) {
                 return false
             }
             ri += 1
