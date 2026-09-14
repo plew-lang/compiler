@@ -565,9 +565,9 @@ impl I32 as Pow[U64] {
     }
 }
 impl I64 as Pow[U64] {
-    type Output = I64
-    assoc fn pow(base: I64, exp: U64) -> I64 {
-        mut val result: I64 = 1I64
+    type Output = Self
+    assoc fn pow(base: Self, exp: U64) -> Self {
+        mut val result: Self = 1I64
         mut val i: U64 = 0
         while i < exp { result = result * base  i += 1 }
         return result

@@ -1,24 +1,44 @@
 import @Std/Io with { print }
+import @Std/Core with { Add, Mul, Eq, Ord, Ordering }
 
-// newtype (spec/10): a distinct named type with the underlying's representation. The
-// `as` between a newtype and its underlying is a zero-cost re-tag (both directions).
-newtype Meter = I64
-newtype UserId = I64
+struct Distance { pub val value: I64 }
+pub impl Distance { factory }
+pub impl Distance as Add[Self] {
+    type Output = Self
+    assoc fn add(lhs~: Self, rhs~: Self) -> Self {
+        return <Distance value=(lhs.value + rhs.value) />
+    }
+}
+pub impl Distance as Mul[Self] {
+    type Output = Self
+    assoc fn mul(lhs~: Self, rhs~: Self) -> Self {
+        return <Distance value=(lhs.value * rhs.value) />
+    }
+}
+pub impl Distance as Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.value == rhs.value }
+}
+pub impl Distance as Ord {
+    assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering {
+        if lhs.value < rhs.value { return <Ordering.Less /> }
+        if lhs.value == rhs.value { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
+newtype Meter = Distance
+newtype UserId = Distance
 
 fn main() {
-    val d: Meter = 5 as Meter
-    val raw: I64 = d as I64
-    print(raw)                        // 5
-    val e: Meter = 12 as Meter
-    print((d as I64) + (e as I64))    // 17 (operate via the underlying for now)
-    // distinct newtypes round-trip independently
-    val u: UserId = 99 as UserId
-    print(u as I64)                   // 99
-    // operator inheritance: Meter + Meter is Meter (the underlying's Add[Self])
-    val sum: Meter = d + e
-    print(sum as I64)                 // 17
-    print((d * e) as I64)             // 60
-    // comparison inheritance: Meter vs Meter via the underlying Ord/Eq
-    if e > d { print(1I64) } else { print(0I64) }    // 1 (12 > 5)
-    if d == d { print(1I64) } else { print(0I64) }   // 1
+    val distance: Meter = <Distance value=5I64 /> as Meter
+    val raw: Distance = distance as Distance
+    print(raw.value)
+    val other: Meter = <Distance value=12I64 /> as Meter
+    print((distance as Distance).value + (other as Distance).value)
+    val user: UserId = <Distance value=99I64 /> as UserId
+    print((user as Distance).value)
+    val sum: Meter = distance + other
+    print((sum as Distance).value)
+    print(((distance * other) as Distance).value)
+    if other > distance { print(1I64) } else { print(0I64) }
+    if distance == distance { print(1I64) } else { print(0I64) }
 }

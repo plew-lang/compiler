@@ -253,84 +253,84 @@ impl I32 as Step {
         return <Optional.Some v=truncI32(n: bitCastI64(n: ((rank - count) ^ 2147483648U64))) />
     }
 }
-impl I64 as Add[I64] {
-    type Output = I64
-    assoc fn add(lhs~: I64, rhs~: I64) -> I64 { return i64Add(a: lhs, b: rhs) }
+impl I64 as Add[Self] {
+    type Output = Self
+    assoc fn add(lhs~: Self, rhs~: Self) -> Self { return i64Add(a: lhs, b: rhs) }
 }
-impl I64 as Sub[I64] {
-    type Output = I64
-    assoc fn sub(lhs~: I64, rhs~: I64) -> I64 { return i64Sub(a: lhs, b: rhs) }
+impl I64 as Sub[Self] {
+    type Output = Self
+    assoc fn sub(lhs~: Self, rhs~: Self) -> Self { return i64Sub(a: lhs, b: rhs) }
 }
-impl I64 as Mul[I64] {
-    type Output = I64
-    assoc fn mul(lhs~: I64, rhs~: I64) -> I64 { return i64Mul(a: lhs, b: rhs) }
+impl I64 as Mul[Self] {
+    type Output = Self
+    assoc fn mul(lhs~: Self, rhs~: Self) -> Self { return i64Mul(a: lhs, b: rhs) }
 }
-impl I64 as Div[I64] {
-    type Output = I64
-    assoc fn div(lhs~: I64, rhs~: I64) -> I64 { return i64Div(a: lhs, b: rhs) }
+impl I64 as Div[Self] {
+    type Output = Self
+    assoc fn div(lhs~: Self, rhs~: Self) -> Self { return i64Div(a: lhs, b: rhs) }
 }
-impl I64 as Rem[I64] {
-    type Output = I64
-    assoc fn rem(lhs~: I64, rhs~: I64) -> I64 { return i64Rem(a: lhs, b: rhs) }
+impl I64 as Rem[Self] {
+    type Output = Self
+    assoc fn rem(lhs~: Self, rhs~: Self) -> Self { return i64Rem(a: lhs, b: rhs) }
 }
-impl I64 as BitAnd[I64] {
-    type Output = I64
-    assoc fn bitand(lhs~: I64, rhs~: I64) -> I64 { return i64BitAnd(a: lhs, b: rhs) }
+impl I64 as BitAnd[Self] {
+    type Output = Self
+    assoc fn bitand(lhs~: Self, rhs~: Self) -> Self { return i64BitAnd(a: lhs, b: rhs) }
 }
-impl I64 as BitOr[I64] {
-    type Output = I64
-    assoc fn bitor(lhs~: I64, rhs~: I64) -> I64 { return i64BitOr(a: lhs, b: rhs) }
+impl I64 as BitOr[Self] {
+    type Output = Self
+    assoc fn bitor(lhs~: Self, rhs~: Self) -> Self { return i64BitOr(a: lhs, b: rhs) }
 }
-impl I64 as BitXor[I64] {
-    type Output = I64
-    assoc fn bitxor(lhs~: I64, rhs~: I64) -> I64 { return i64BitXor(a: lhs, b: rhs) }
+impl I64 as BitXor[Self] {
+    type Output = Self
+    assoc fn bitxor(lhs~: Self, rhs~: Self) -> Self { return i64BitXor(a: lhs, b: rhs) }
 }
-impl I64 as Shl[I64] {
-    type Output = I64
-    assoc fn shl(lhs~: I64, rhs~: I64) -> I64 { return i64Shl(a: lhs, b: rhs) }
+impl I64 as Shl[Self] {
+    type Output = Self
+    assoc fn shl(lhs~: Self, rhs~: Self) -> Self { return i64Shl(a: lhs, b: rhs) }
 }
-impl I64 as Shr[I64] {
-    type Output = I64
-    assoc fn shr(lhs~: I64, rhs~: I64) -> I64 { return i64Shr(a: lhs, b: rhs) }
+impl I64 as Shr[Self] {
+    type Output = Self
+    assoc fn shr(lhs~: Self, rhs~: Self) -> Self { return i64Shr(a: lhs, b: rhs) }
 }
 impl I64 as BitNot {
-    type Output = I64
-    assoc fn bitnot(value~: I64) -> I64 { return i64BitNot(a: value) }
+    type Output = Self
+    assoc fn bitnot(value~: Self) -> Self { return i64BitNot(a: value) }
 }
 impl I64 as Neg {
-    type Output = I64
-    assoc fn neg(value~: I64) -> I64 { return i64Neg(a: value) }
+    type Output = Self
+    assoc fn neg(value~: Self) -> Self { return i64Neg(a: value) }
 }
 impl I64 as Eq {
-    assoc fn eq(lhs~: I64, rhs~: I64) -> Bool { return i64Eq(a: lhs, b: rhs) }
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return i64Eq(a: lhs, b: rhs) }
 }
 impl I64 as Ord {
-    assoc fn compare(lhs~: I64, rhs~: I64) -> Ordering {
+    assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering {
         if i64Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
         if i64Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
         return <Ordering.Greater />
     }
 }
 impl I64 as FixedWidthInteger {
-    assoc fn wrappingAdd(lhs~: I64, rhs~: I64) -> I64 { return i64WrapAdd(a: lhs, b: rhs) }
-    assoc fn wrappingSub(lhs~: I64, rhs~: I64) -> I64 { return i64WrapSub(a: lhs, b: rhs) }
-    assoc fn wrappingMul(lhs~: I64, rhs~: I64) -> I64 { return i64WrapMul(a: lhs, b: rhs) }
-    assoc fn wrappingNeg(value~: I64) -> I64 { return i64WrapNeg(a: value) }
+    assoc fn wrappingAdd(lhs~: Self, rhs~: Self) -> Self { return i64WrapAdd(a: lhs, b: rhs) }
+    assoc fn wrappingSub(lhs~: Self, rhs~: Self) -> Self { return i64WrapSub(a: lhs, b: rhs) }
+    assoc fn wrappingMul(lhs~: Self, rhs~: Self) -> Self { return i64WrapMul(a: lhs, b: rhs) }
+    assoc fn wrappingNeg(value~: Self) -> Self { return i64WrapNeg(a: value) }
 }
 impl I64 as Step {
-    assoc fn stepsBetween(start: I64, end: I64) -> (lower: U64, exact: Optional[U64]) {
+    assoc fn stepsBetween(start: Self, end: Self) -> (lower: U64, exact: Optional[U64]) {
         if start > end { return (lower: 0U64, exact: <Optional.Some v=0U64 />) }
         val startRank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
         val endRank: U64 = (bitCastU64(n: end as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
         val distance: U64 = endRank - startRank
         return (lower: distance, exact: <Optional.Some v=distance />)
     }
-    assoc fn stepForward(start: I64, count: U64) -> Optional[I64] {
+    assoc fn stepForward(start: Self, count: U64) -> Optional[Self] {
         val rank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
         if count > 18446744073709551615U64 - rank { return <Optional.None /> }
         return <Optional.Some v=bitCastI64(n: ((rank + count) ^ 9223372036854775808U64)) />
     }
-    assoc fn stepBackward(start: I64, count: U64) -> Optional[I64] {
+    assoc fn stepBackward(start: Self, count: U64) -> Optional[Self] {
         val rank: U64 = (bitCastU64(n: start as I64) & 18446744073709551615U64) ^ 9223372036854775808U64
         if count > rank { return <Optional.None /> }
         return <Optional.Some v=bitCastI64(n: ((rank - count) ^ 9223372036854775808U64)) />

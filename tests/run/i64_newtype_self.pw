@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { Step, FixedWidthInteger, Pow }
+
+// Std I64 declares same-type operations with Self; newtypes inherit those signatures.
+newtype Meter = I64
+newtype UserId = I64
+
+fn main() {
+    val d: Meter = 5 as Meter
+    val raw: I64 = d as I64
+    print(raw)                        // 5
+    val e: Meter = 12 as Meter
+    print((d as I64) + (e as I64))    // 17
+    // distinct newtypes round-trip independently
+    val u: UserId = 99 as UserId
+    print(u as I64)                   // 99
+    // operator inheritance: Meter + Meter is Meter (the underlying's Add[Self])
+    val sum: Meter = d + e
+    print(sum as I64)                 // 17
+    print((d * e) as I64)             // 60
+    // comparison inheritance: Meter vs Meter via the underlying Ord/Eq
+    if e > d { print(1I64) } else { print(0I64) }    // 1 (12 > 5)
+    if d == d { print(1I64) } else { print(0I64) }   // 1
+    print(((e - d) / d) as I64)
+    print((e % d) as I64)
+    print((-d) as I64)
+    print((d & e) as I64)
+    print((d | e) as I64)
+    print((d ^ e) as I64)
+    print((~d) as I64)
+    val shift: Meter = 1 as Meter
+    print((d << shift) as I64)
+    print((e >> shift) as I64)
+    print(Meter.wrappingAdd(d, e) as I64)
+    print(Meter.pow(base: d, exp: 2U64) as I64)
+    match Meter.stepForward(start: d, count: 2U64) {
+        Optional.Some(v: val value) => { print(value as I64) }
+        Optional.None => { print(0I64) }
+    }
+}
