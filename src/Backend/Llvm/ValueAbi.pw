@@ -9,7 +9,7 @@ pub impl LlvmCtx {
         return self.valueAbiByvalKind
     }
 
-    inout fn valueAbi(signature~: LLVMTypeRef) -> LlvmValueAbi {
+    inout fn valueAbi(signature~: LLVMTypeRef) -> U64 {
         val count = LLVMCountParamTypes(signature)
         mut val parameters: Array[LLVMTypeRef] = []
         mut val index = 0U64
@@ -19,37 +19,40 @@ pub impl LlvmCtx {
         }
         if count != 0U64 { LLVMGetParamTypes(signature, arrayCPtr(parameters)) }
         mut val physical: Array[LLVMTypeRef] = []
-        mut val indices: Array[U64] = []
+        val start = self.valueAbiParameters.count()
         index = 0U64
         while index < count {
             val type = parameters[index]
-            indices.append(physical.count())
-            if !llvmTypeHasStorage(type) {
-                index += 1U64
-                continue
+            val passing = llvmValueAbiPassing(type)
+            self.valueAbiParameters.append(<LlvmValueParameter type=type physicalIndex=physical.count() passing=passing />)
+            match passing {
+                LlvmValuePassing.Omitted => {}
+                LlvmValuePassing.Direct => { physical.append(type) }
+                LlvmValuePassing.Indirect => { physical.append(self.ptrty) }
             }
-            if llvmValueAbiIsIndirect(type) { physical.append(self.ptrty) }
-            else { physical.append(type) }
             index += 1U64
         }
-        return <LlvmValueAbi parameterTypes=parameters parameterIndices=indices functionType=LLVMFunctionType(LLVMGetReturnType(signature), arrayCPtr(physical), physical.count(), 0I32) />
+        self.valueAbis.append(<LlvmValueAbi parameterStart=start parameterCount=count logicalSignature=signature functionType=LLVMFunctionType(LLVMGetReturnType(signature), arrayCPtr(physical), physical.count(), 0I32) />)
+        return self.valueAbis.count()
     }
 
     inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
-        val abi = self.valueAbi(signature)
+        val abiId = self.valueAbi(signature)
+        val abi = self.valueAbis[abiId - 1U64]
         val function = LLVMAddFunction(self.mod, name, abi.functionType)
         LLVMSetLinkage(function, 8U32)
         // The iteration/attribute binding uses a nullable integer handle at
         // the FFI floor. Resolve the actual (possibly uniqued) LLVM symbol.
         val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
-        self.valueAbiFunctions[handle] = self.valueAbiParameters.count() + 1U64
+        self.valueAbiFunctions[handle] = abiId
         mut val index = 0U64
-        while index < abi.parameterTypes.count() {
-            val type = abi.parameterTypes[index]
-            self.valueAbiParameters.append(type)
-            self.valueAbiParameterIndices.append(abi.parameterIndices[index])
-            if llvmValueAbiIsIndirect(type) {
-                LLVMAddAttributeAtIndex(handle, truncU32(n: abi.parameterIndices[index] + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), type))
+        while index < abi.parameterCount {
+            val parameter = self.valueAbiParameters[abi.parameterStart + index]
+            match parameter.passing {
+                LlvmValuePassing.Indirect => {
+                    LLVMAddAttributeAtIndex(handle, truncU32(n: parameter.physicalIndex + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), parameter.type))
+                }
+                _ => {}
             }
             index += 1U64
         }
@@ -68,32 +71,46 @@ pub impl LlvmCtx {
     }
 
     inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> LLVMValueRef {
-        val abi = self.valueAbi(signature)
-        if abi.parameterTypes.count() != arguments.count() {
+        val handle = LLVMIsAFunction(function)
+        mut val abiId = 0U64
+        if handle != 0U64 {
+            abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+            if abiId == 0U64 {
+                compileErrorAt(line: 0I64, msg: "internal error: private call lacks a declared value ABI")
+            }
+        } else { abiId = self.valueAbi(signature) }
+        val abi = self.valueAbis[abiId - 1U64]
+        if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
+            compileErrorAt(line: 0I64, msg: "internal error: private call logical signature mismatch")
+        }
+        if abi.parameterCount != arguments.count() {
             compileErrorAt(line: 0I64, msg: "internal error: private value ABI argument count mismatch")
         }
         mut val values: Array[LLVMValueRef] = []
         mut val index = 0U64
         while index < arguments.count() {
             val value = arguments[index]
-            val type = abi.parameterTypes[index]
-            if !llvmTypeHasStorage(type) {
-                index += 1U64
-                continue
+            val parameter = self.valueAbiParameters[abi.parameterStart + index]
+            match parameter.passing {
+                LlvmValuePassing.Omitted => {}
+                LlvmValuePassing.Direct => { values.append(value) }
+                LlvmValuePassing.Indirect => {
+                    val slot = self.valueAbiSlot(parameter.type)
+                    llvmStore(self.b, value, slot)
+                    values.append(slot)
+                }
             }
-            if llvmValueAbiIsIndirect(type) {
-                val slot = self.valueAbiSlot(type)
-                llvmStore(self.b, value, slot)
-                values.append(slot)
-            } else { values.append(value) }
             index += 1U64
         }
         val call = LLVMBuildCall2(self.b, abi.functionType, function, arrayCPtr(values), values.count(), anon())
         index = 0U64
-        while index < abi.parameterTypes.count() {
-            val type = abi.parameterTypes[index]
-            if llvmValueAbiIsIndirect(type) {
-                LLVMAddCallSiteAttribute(call, truncU32(n: abi.parameterIndices[index] + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), type))
+        while index < abi.parameterCount {
+            val parameter = self.valueAbiParameters[abi.parameterStart + index]
+            match parameter.passing {
+                LlvmValuePassing.Indirect => {
+                    LLVMAddCallSiteAttribute(call, truncU32(n: parameter.physicalIndex + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), parameter.type))
+                }
+                _ => {}
             }
             index += 1U64
         }
@@ -102,15 +119,19 @@ pub impl LlvmCtx {
 
     inout fn valueParameter(function: LLVMValueRef, index: U64) -> LLVMValueRef {
         val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
-        val start = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
-        if start == 0U64 {
+        val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+        if abiId == 0U64 {
             compileErrorAt(line: 0I64, msg: "internal error: private value ABI parameter lacks declaration")
         }
-        val slot = start - 1U64 + index
-        val type = self.valueAbiParameters[slot]
-        if !llvmTypeHasStorage(type) { return LLVMGetUndef(type) }
-        val value = LLVMGetParam(function, self.valueAbiParameterIndices[slot])
-        if llvmValueAbiIsIndirect(type) { return llvmLoad(self.b, type, value, anon()) }
-        return value
+        val abi = self.valueAbis[abiId - 1U64]
+        if index >= abi.parameterCount {
+            compileErrorAt(line: 0I64, msg: "internal error: private value ABI parameter index out of range")
+        }
+        val parameter = self.valueAbiParameters[abi.parameterStart + index]
+        match parameter.passing {
+            LlvmValuePassing.Omitted => { return LLVMGetUndef(parameter.type) }
+            LlvmValuePassing.Direct => { return LLVMGetParam(function, parameter.physicalIndex) }
+            LlvmValuePassing.Indirect => { return llvmLoad(self.b, parameter.type, LLVMGetParam(function, parameter.physicalIndex), anon()) }
+        }
     }
 }

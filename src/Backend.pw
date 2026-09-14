@@ -139,19 +139,32 @@ struct LlvmExistentialWitness {
 }
 pub impl LlvmExistentialWitness { factory }
 
+enum LlvmValuePassing {
+    Omitted
+    Direct
+    Indirect
+}
+struct LlvmValueParameter {
+    pub val type: LLVMTypeRef
+    pub val physicalIndex: U64
+    pub val passing: LlvmValuePassing
+}
+pub impl LlvmValueParameter { factory }
+
 // Logical value types stay separate from the private physical call signature.
 struct LlvmValueAbi {
-    pub val parameterTypes: Array[LLVMTypeRef]
-    pub val parameterIndices: Array[U64]
+    pub val parameterStart: U64
+    pub val parameterCount: U64
+    pub val logicalSignature: LLVMTypeRef
     pub val functionType: LLVMTypeRef
 }
 pub impl LlvmValueAbi { factory }
 
 struct LlvmCtx {
     pub mut val valueAbiByvalKind: U32 = 0U32
+    pub mut val valueAbis: Array[LlvmValueAbi] = []
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
-    pub mut val valueAbiParameters: Array[LLVMTypeRef] = []
-    pub mut val valueAbiParameterIndices: Array[U64] = []
+    pub mut val valueAbiParameters: Array[LlvmValueParameter] = []
 
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich
@@ -526,6 +539,7 @@ extern(c) {
     // integer narrowing (wrapping / TryFrom) lands.
     fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
 
+    fn LLVMIsAFunction(value~: LLVMValueRef) -> U64
     fn LLVMCountParamTypes(functionType~: LLVMTypeRef) -> U64
     fn LLVMGetParamTypes(functionType~: LLVMTypeRef, parameters~: CPtr[LLVMTypeRef])
     fn LLVMGetReturnType(functionType~: LLVMTypeRef) -> LLVMTypeRef
@@ -1935,7 +1949,9 @@ fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValue
     if llvmTypeHasStorage(LLVMTypeOf(value)) { LLVMBuildStore(builder, value, address) }
 }
 
-fn llvmValueAbiIsIndirect(type~: LLVMTypeRef) -> Bool {
+fn llvmValueAbiPassing(type~: LLVMTypeRef) -> LlvmValuePassing {
+    if !llvmTypeHasStorage(type) { return <LlvmValuePassing.Omitted /> }
     val kind = LLVMGetTypeKind(type)
-    return (kind == 10U32 || kind == 11U32) && llvmTypeHasStorage(type)
+    if kind == 10U32 || kind == 11U32 { return <LlvmValuePassing.Indirect /> }
+    return <LlvmValuePassing.Direct />
 }
