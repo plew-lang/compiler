@@ -208,7 +208,7 @@ pub impl LlvmCtx {
                 mut val bodyI: U64 = 0U64
                 while bodyI < c.monoWork.bodyInstances.count() {
                     val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyInstances[bodyI] - 1U64)
-                    if c.semanticBodyOwner(fnIdx: body.fnIdx) == closure.ownerFnIdx {
+                    if c.arena.bodyIsCallable(bodyId: c.monoWork.bodyInstances[bodyI]) && c.semanticBodyOwner(fnIdx: body.fnIdx) == closure.ownerFnIdx {
                         self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
                     }
                     bodyI += 1U64

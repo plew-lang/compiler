@@ -22,21 +22,11 @@ import ../../Ir with { CallReceiverPassing, CallArgumentPassing }
 
 pub impl LlvmCtx {
 
-    // Build the thunk for requirement `idx` (`req`) on concrete struct `sidx`. Returns
-    // its function pointer, or a null ptr when the requirement can't be dispatched
-    // through `any` in this increment (assoc, inout/move self, or Self outside the
-    // receiver). Saves/restores the builder position around the thunk body.
-    inout fn buildAnyThunk(c: inout Comp, sourceRef: U64, resolutionIndex: U64, sidx: U64, anyRef: U64, traitIdx: U64, req: Func, idx: U64) -> LLVMValueRef {
+    // Register the physical erased ABI. The semantic body is emitted later
+    // from verified Mid, never while another body owns the local environment.
+    inout fn buildAnyThunk(c: inout Comp, resolutionIndex: U64, sidx: U64, idx: U64) -> LLVMValueRef {
         val member = c.arena.finalExistentials[resolutionIndex].members[idx]
         if member.bodyId == 0U64 { return LLVMConstNull(self.ptrty) }
-        val bodyId = member.bodyId
-        val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
-        val wfi: U64 = body.fnIdx
-        val wInstRef: U64 = body.environment.receiverRef
-        val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: c.arena.functionAt(index: wfi), environment: body.environment)
-        val wslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: wfi, instRef: wInstRef, ownArgs: ownArgs, bodyId: bodyId)
-        if wslot >= self.genMethK.count() { c.errorAt(offset: req.nameStart, msg: "internal error: finalized existential witness has no LLVM callable") }
-        val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: wInstRef)
         // The erased ABI is a frontend fact. Only physical types are selected here.
         mut val ptys: Array[LLVMTypeRef] = [self.ptrty]
         mut val pi = 0U64
@@ -49,8 +39,6 @@ pub impl LlvmCtx {
         }
         mut val rty = self.voidty
         if member.resultType != 0U64 { rty = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
-        val dstRetRef = member.resultType
-        val srcRetRef = member.sourceResultType
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvt".bytes())
@@ -61,53 +49,101 @@ pub impl LlvmCtx {
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
-        // a covariant-container return repack (eraseCovariantToAny) appends basic blocks to
-        // `self.curFn`; retarget it to the thunk so those blocks land here, not in the
-        // function that triggered demand-registration of this thunk.
-        val savedFn: LLVMValueRef = self.curFn
-        self.curFn = fv
-        // split entry -> body0 (as in beginFnBody) so `entryAlloca` — used by the covariant
-        // repack for its scratch slots — has a terminated entry block to insert before.
-        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
-        val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "body0"))
-        LLVMPositionBuilderAtEnd(self.b, entry)
-        LLVMBuildBr(self.b, body0)
-        LLVMPositionBuilderAtEnd(self.b, body0)
-        // self: an `inout fn` witness takes self by pointer (mutates the boxed value in
-        // place — the box is shared via the fat pointer's data field, so the mutation
-        // persists); a by-value self is loaded from the box.
-        mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
-        val selfInout = match member.receiverPassing { CallReceiverPassing.Inout => { give true } _ => { give false } }
-        if !selfInout {
-            selfArg = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
-        }
-        mut val av: Array[LLVMValueRef] = []
-        av.append(selfArg)
-        mut val ai: U64 = 0
-        while ai < member.parameterTypes.count() {
-            av.append(LLVMGetParam(fv, ai + 1U64))
-            ai += 1
-        }
-        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[wslot], self.genMethVal[wslot], arrayCPtr(av), av.count(), anon())
-        if member.resultType != 0U64 {
-            if !self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: srcRetRef, targetRef: dstRetRef, proofId: member.resultConversion) {
-                c.errorAt(offset: req.nameStart, msg: "LLVM backend: invalid frozen existential result conversion")
-            }
-            val conversion = c.arena.conversionProofs[member.resultConversion - 1U64]
-            if conversion.tag == 0U64 { LLVMBuildRet(self.b, r) }
-            else if conversion.tag == 2U64 {
-                val resultStruct = self.structIdxOfRef(c: inout c, ref: conversion.sourceRef)
-                LLVMBuildRet(self.b, self.boxIntoAny(c: inout c, sourceRef: conversion.sourceRef, v: r, sidx: resultStruct, anyRef: conversion.targetRef, traitIdx: conversion.traitIdx))
-            } else {
-                val erased = self.midCanonicalEmitBorrowedConversion(c: inout c, value: r, sourceRef: srcRetRef, targetRef: dstRetRef, proofId: member.resultConversion)
-                self.valueArc(c: inout c, v: r, typeRef: srcRetRef, retain: false)
-                LLVMBuildRet(self.b, erased)
-            }
-        } else { LLVMBuildRetVoid(self.b) }
-        self.curFn = savedFn
-        LLVMPositionBuilderAtEnd(self.b, savedBB)
+        self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return fv
+    }
+
+    inout fn prepareExistentialMidBody(c: inout Comp, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
+        val built = buildMidBodyForInstance(c: inout c, fnIdx: fnIdx, bodyId: bodyId)
+        match built.error {
+            MidBuildError.None => {}
+            _ => {
+                self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: fnIdx, error: built.error)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val instantiated = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: bodyId)
+        match instantiated.error {
+            MidInstantiateError.None => {}
+            _ => {
+                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: instantiated.error)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
+        match accesses.error {
+            MidAccessError.None => {}
+            _ => {
+                self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val dropped = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
+        val verification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
+        match verification.error {
+            MidVerifyError.None => {}
+            _ => {
+                self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        val preflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped, abiParameterCount: parameterCount)
+        match preflight {
+            MidLlvmPreflight.Ready => {}
+            _ => {
+                self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: preflight)
+                return <MidLlvmPrepared.None />
+            }
+        }
+        return <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=parameterCount />
+    }
+
+    inout fn emitExistentialWitnesses(c: inout Comp) {
+        val savedFn = c.cur.bodyFnIdx
+        val savedEnvironment = c.cur.bodyEnvironment
+        val savedBody = c.cur.bodyId
+        while self.existentialWitnessesEmitted < self.existentialWitnesses.count() {
+            val witness = self.existentialWitnesses[self.existentialWitnessesEmitted]
+            val member = c.arena.finalExistentials[witness.resolution].members[witness.member]
+            val body = c.arena.bodyInstanceAt(index: member.adapterBodyId - 1U64)
+            c.cur.bodyFnIdx = body.fnIdx
+            c.cur.bodyEnvironment = body.environment
+            c.cur.bodyId = member.adapterBodyId
+            self.curFn = witness.function
+            self.curIsMain = false
+            self.curRetVoid = member.resultType == 0U64
+            self.curRetRef = member.resultType
+            self.curRetTy = self.voidty
+            if member.resultType != 0U64 { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
+            val prepared = self.prepareExistentialMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64)
+            match prepared {
+                MidLlvmPrepared.None => { c.errorAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") }
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
+                    self.beginFnBody(fv: witness.function)
+                    // The only erased ABI adaptation: a read receiver is a
+                    // borrowed load from its box; inout keeps the same address.
+                    mut val receiver = LLVMGetParam(witness.function, 0U64)
+                    match member.receiverPassing {
+                        CallReceiverPassing.Inout => {}
+                        _ => { receiver = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef), receiver, anon()) }
+                    }
+                    mut val parameters: Array[LLVMValueRef] = [receiver]
+                    mut val index = 0U64
+                    while index < member.parameterTypes.count() {
+                        parameters.append(LLVMGetParam(witness.function, index + 1U64))
+                        index += 1U64
+                    }
+                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters) {
+                        c.errorAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: prepared existential Mid body failed to emit")
+                    }
+                }
+            }
+            self.existentialWitnessesEmitted += 1U64
+            tracePhaseProgress(c: inout c, label: "backend:existential-witness", count: self.existentialWitnessesEmitted, stride: 16U64)
+        }
+        c.cur.bodyFnIdx = savedFn
+        c.cur.bodyEnvironment = savedEnvironment
+        c.cur.bodyId = savedBody
     }
 
     // Build the copy thunk for concrete struct `sidx` (vtable slot 0): `copy(ptr src)
@@ -315,7 +351,7 @@ pub impl LlvmCtx {
         slots.append(self.buildAnyDropThunk(c: inout c, sourceRef: sourceRef, sidx: sidx))
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            slots.append(self.buildAnyThunk(c: inout c, sourceRef: sourceRef, resolutionIndex: resolutionIndex, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: c.traitReqAt(reqs: t.reqs, index: ri), idx: ri))
+            slots.append(self.buildAnyThunk(c: inout c, resolutionIndex: resolutionIndex, sidx: sidx, idx: ri))
             ri += 1
         }
         LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count()))

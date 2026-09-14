@@ -4,12 +4,19 @@ pub impl Arena {
     fn bodyInstanceCount() -> U64 { return self.bodyInstances.count() }
     fn bodyInstanceAt(index: U64) -> BodyInstance { return self.bodyInstances[index] }
 
-    inout fn registerBodyInstance(instance~: BodyInstance) -> U64 {
+    fn bodyOrigin(bodyId: U64) -> BodyOrigin { return self.bodyOrigins[bodyId - 1U64] }
+    fn bodyIsCallable(bodyId: U64) -> Bool {
+        match self.bodyOrigin(bodyId: bodyId) { BodyOrigin.Callable => { return true } _ => { return false } }
+    }
+
+    inout fn registerBodyInstance(instance~: BodyInstance, origin: BodyOrigin = <BodyOrigin.Callable />) -> U64 {
         val bodyId = self.bodyInstances.count() + 1U64
         val tail = self.bodyFunctionTails.getOr(key: instance.fnIdx, fallback: 0U64)
         self.bodyInstances.append(instance)
+        self.bodyOrigins.append(origin)
         self.bodySignatures.append(<BodySignature />)
         self.bodyFunctionNext.append(0U64)
+        if !self.bodyIsCallable(bodyId: bodyId) { return bodyId }
         if tail == 0U64 {
             self.bodyFunctionHeads[instance.fnIdx] = bodyId
         } else {

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2817,7 +2817,10 @@ pub impl Comp {
                             self.scanType(ref: sourceResult)
                             self.scanType(ref: result)
                         }
-                        member = <FinalExistentialMember bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultConversion=self.freezeValueConversionProof(proof: resultConversion) />
+                        val targetBody = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+                        val adapterBody = self.arena.registerBodyInstance(<BodyInstance fnIdx=targetBody.fnIdx environment=targetBody.environment />, origin: <BodyOrigin.ExistentialWitness resolution=index member=requirement />)
+                        self.monoWork.bodyInstances.append(adapterBody)
+                        member = <FinalExistentialMember adapterBodyId=adapterBody bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultConversion=self.freezeValueConversionProof(proof: resultConversion) />
                     }
                     members.append(member)
                     requirement += 1U64
@@ -4296,7 +4299,46 @@ pub impl Comp {
     // receiver instance, and Self/Item binding are installed before resolving
     // nested calls.  This is the only place generic bodies acquire their
     // instance-specific final-callable entries.
+    inout fn finalizeExistentialWitness(bodyId: U64, resolutionIndex: U64, memberIndex: U64) {
+        val resolution = self.arena.finalExistentials[resolutionIndex]
+        val member = resolution.members[memberIndex]
+        val target = self.arena.bodyInstanceAt(index: member.bodyId - 1U64)
+        val signature = self.arena.bodySignature(bodyId: member.bodyId)
+        if !signature.ready || member.adapterBodyId != bodyId || !self.typeRefEq(a: signature.resultType, b: member.sourceResultType) || !self.sameResolvedTypeRefs(a: signature.parameterTypes, b: member.parameterTypes) {
+            self.errorAt(offset: self.arena.functionAt(index: target.fnIdx).nameStart, msg: "internal error: existential witness target signature is not finalized")
+            return
+        }
+        val savedFn = self.cur.bodyFnIdx
+        val savedEnvironment = self.cur.bodyEnvironment
+        val savedBody = self.cur.bodyId
+        self.cur.bodyFnIdx = target.fnIdx
+        self.cur.bodyEnvironment = target.environment
+        self.cur.bodyId = bodyId
+        mut val conversions: Array[ValueConversionProof] = []
+        mut val parameter = 0U64
+        while parameter < signature.parameterTypes.count() {
+            conversions.append(<ValueConversionProof.Identity />)
+            self.scanType(ref: signature.parameterTypes[parameter])
+            parameter += 1U64
+        }
+        self.arena.setBodySignature(bodyId: bodyId, parameters: member.parameterTypes, result: member.resultType)
+        self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: member.receiverPassing, argumentPassings: member.argumentPassings, calleeBodyId: member.bodyId, generatedSite: <CallSiteKey ownerFnIdx=target.fnIdx originKind=2U64 originSerial=bodyId />)
+        mut val members = resolution.members
+        members[memberIndex] = <FinalExistentialMember bodyId=member.bodyId adapterBodyId=bodyId callResolution=self.finalCalleeCount() receiverPassing=member.receiverPassing parameterTypes=member.parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType sourceResultType=member.sourceResultType resultConversion=member.resultConversion />
+        self.arena.finalExistentials[resolutionIndex] = <FinalExistentialResolution sourceRef=resolution.sourceRef targetRef=resolution.targetRef traitIdx=resolution.traitIdx proof=resolution.proof members=members />
+        self.cur.bodyFnIdx = savedFn
+        self.cur.bodyEnvironment = savedEnvironment
+        self.cur.bodyId = savedBody
+    }
+
     inout fn scanFinalBodyInstance(bodyId: U64) {
+        match self.arena.bodyOrigin(bodyId: bodyId) {
+            BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
+                self.finalizeExistentialWitness(bodyId: bodyId, resolutionIndex: resolution, memberIndex: member)
+                return
+            }
+            BodyOrigin.Callable => {}
+        }
         val instance: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         if self.genMode { self.prepareLexicalBody(fnIdx: instance.fnIdx) }
         if !self.callTemplatesClosedForBody(fnIdx: instance.fnIdx) {

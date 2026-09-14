@@ -86,7 +86,7 @@ pub impl LlvmCtx {
         mut val bodyIndex: U64 = 0U64
         while bodyIndex < c.monoWork.bodyInstances.count() {
             val bodyId: U64 = c.monoWork.bodyInstances[bodyIndex]
-            if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() {
+            if bodyId != 0U64 && bodyId <= c.arena.bodyInstanceCount() && c.arena.bodyIsCallable(bodyId: bodyId) {
                 val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
                 if body.fnIdx < c.arena.functionCount() {
                     val f: Func = c.arena.functionAt(index: body.fnIdx)

@@ -1837,6 +1837,8 @@ pub impl FinalMatchResolution { factory }
 // boundary. A zero bodyId is a non-dispatchable requirement, not a lookup miss.
 export struct FinalExistentialMember {
     pub val bodyId: U64 = 0U64
+    pub val adapterBodyId: U64 = 0U64
+    pub val callResolution: U64 = 0U64
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.Borrow />
     pub val parameterTypes: Array[U64] = []
     pub val argumentPassings: Array[CallArgumentPassing] = []
@@ -1975,6 +1977,8 @@ export struct BodySignature {
     pub val closureSignatureId: U64 = 0U64
 }
 pub impl BodySignature { factory }
+
+export enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) }
 
 export struct BodyInstance {
     pub val fnIdx: U64
@@ -2411,6 +2415,7 @@ export struct Arena {
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
     mut val bodyInstances: Array[BodyInstance] = []
+    mut val bodyOrigins: Array[BodyOrigin] = []
     mut val bodySignatures: Array[BodySignature] = []
     mut val closureSignatures: Array[ClosureSignature] = []
     mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]

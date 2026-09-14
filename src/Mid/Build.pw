@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -2673,6 +2673,10 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 
 export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> MidBodyBuild {
     if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
+    match c.arena.bodyOrigin(bodyId: bodyId) {
+        BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => { return buildMidExistentialWitness(c: inout c, bodyId: bodyId, resolutionIndex: resolution, memberIndex: member) }
+        BodyOrigin.Callable => {}
+    }
     val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
     if instance.adapterTargetBodyId == 0U64 { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
     val target = c.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
@@ -2713,6 +2717,61 @@ export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> Mid
         exit = <MidTerminator.ReturnValue value=<MidOperand.Move place=midAdapterPlace(c: inout c, local: resultLocal, source: executable.resultType, target: surface.resultType) /> />
     }
     val body = <MidBody bodyInstance=bodyId sourceFunction=fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=parameterCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=instance.adapterCallResolutionId - 1U64 /> receiver=receiver args=args destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=exit />] entry=0U64 />
+    val canonical = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
+    return <MidBodyBuild body=body canonical=canonical />
+}
+
+// Witness bodies have no lexical AST. Their call, ABI and result conversion
+// were finalized from the receiver's selected conformance by the frontend.
+fn buildMidExistentialWitness(c: inout Comp, bodyId: U64, resolutionIndex: U64, memberIndex: U64) -> MidBodyBuild {
+    val member = c.arena.finalExistentials[resolutionIndex].members[memberIndex]
+    val target = c.arena.bodyInstanceAt(index: member.bodyId - 1U64)
+    val function = target.fnIdx
+    if member.adapterBodyId != bodyId || member.callResolution == 0U64 || !c.arena.bodySignature(bodyId: bodyId).ready {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: function) error=<MidBuildError.InvalidFunction /> />
+    }
+    val receiverType = target.environment.receiverRef
+    val receiverMove = match member.receiverPassing { CallReceiverPassing.Move => { give true } _ => { give false } }
+    val receiverInout = match member.receiverPassing { CallReceiverPassing.Inout => { give true } _ => { give false } }
+    mut val locals: Array[MidLocalDecl] = [<MidLocalDecl typeTerm=receiverType sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: receiverType) isParameter=true isInout=receiverInout ownsAtEntry=receiverMove sourceNameStart=identSelfTarget() />]
+    val receiver = <MidCallReceiver.Value operand=midAdapterOperand(place: <MidPlace local=0U64 typeTerm=receiverType />, isMove: receiverMove, isInout: receiverInout) />
+    mut val arguments: Array[MidOperand] = []
+    mut val parameter = 0U64
+    while parameter < member.parameterTypes.count() {
+        val type = member.parameterTypes[parameter]
+        val isMove = match member.argumentPassings[parameter] { CallArgumentPassing.Move => { give true } _ => { give false } }
+        val isInout = match member.argumentPassings[parameter] { CallArgumentPassing.Inout => { give true } _ => { give false } }
+        val local = locals.count()
+        locals.append(<MidLocalDecl typeTerm=type sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: type) isParameter=true isInout=isInout ownsAtEntry=isMove />)
+        arguments.append(midAdapterOperand(place: <MidPlace local=local typeTerm=type />, isMove: isMove, isInout: isInout))
+        parameter += 1U64
+    }
+    val hasResult = member.resultType != 0U64
+    val identity = c.conversionProofIsIdentity(id: member.resultConversion)
+    val resultLocal = locals.count()
+    locals.append(<MidLocalDecl typeTerm=member.sourceResultType sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: member.sourceResultType) isParameter=false isReturnPlace=hasResult && identity />)
+    val result = <MidPlace local=resultLocal typeTerm=member.sourceResultType />
+    mut val statements: Array[MidStatement] = []
+    mut val exit: MidTerminator = <MidTerminator.Return />
+    mut val cleanupCount = resultLocal
+    if hasResult {
+        mut val returned = result
+        if !identity {
+            returned = <MidPlace local=locals.count() typeTerm=member.resultType />
+            locals.append(<MidLocalDecl typeTerm=member.resultType sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: member.resultType) isParameter=false isReturnPlace=true />)
+            // A box consumes its owned source. Structural repacking borrows
+            // the container and gains shares for each copied payload; Drop
+            // elaboration ends the original result's lifetime after Convert.
+            mut val operand: MidOperand = <MidOperand.Copy place=result />
+            if c.arena.conversionProofs[member.resultConversion - 1U64].tag == 2U64 { operand = <MidOperand.Move place=result /> }
+            statements.append(<MidStatement.Assign destination=returned value=<MidRvalue.Convert operand=operand conversion=member.resultConversion /> />)
+            cleanupCount += 1U64
+        }
+        exit = <MidTerminator.ReturnValue value=<MidOperand.Move place=returned /> />
+    }
+    statements.append(<MidStatement.ScopeExit scope=0U64 />)
+    val body = <MidBody bodyInstance=bodyId sourceFunction=function locals=locals scopes=[<MidScope firstLocal=0U64 localCount=cleanupCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=member.callResolution - 1U64 /> receiver=receiver args=arguments destination=result target=1U64 /> />, <MidBlock statements=statements terminator=exit />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
     return <MidBodyBuild body=body canonical=canonical />

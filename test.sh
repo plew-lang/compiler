@@ -520,6 +520,12 @@ else
 fi
 
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
+if python3 ./test-existential-mid-bodies.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed existential-mid-bodies"
+fi
+
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as
 # the corpus reaches zero coverage the expected gate result changes from 1 to

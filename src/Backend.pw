@@ -125,6 +125,13 @@ struct LlvmClosure {
 }
 pub impl LlvmClosure { factory }
 
+struct LlvmExistentialWitness {
+    pub val resolution: U64
+    pub val member: U64
+    pub val function: LLVMValueRef
+}
+pub impl LlvmExistentialWitness { factory }
+
 struct LlvmCtx {
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich
@@ -165,6 +172,8 @@ struct LlvmCtx {
     // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
     pub mut val anyVtResolution: Array[U64]
     pub mut val anyVtVal: Array[LLVMValueRef]
+    pub mut val existentialWitnesses: Array[LlvmExistentialWitness] = []
+    pub mut val existentialWitnessesEmitted: U64 = 0U64
     pub mut val curFn: LLVMValueRef
     pub mut val terminated: Bool
     // the function currently being emitted: is it `main` (returns i32 0), and its
@@ -1007,13 +1016,14 @@ export fn emitLlvm(c: inout Comp) {
         // witness body's deinit call is now a `gm` instance (B3-2), which queues onto
         // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
         // or those deinit method bodies would be declared but never emitted (link error).
+        st.emitExistentialWitnesses(c: inout c)
         st.emitWitnessBodies(c: inout c)
         tracePhaseProgress(c: inout c, label: "backend:drain:provided-after-witness", count: st.provEmit.count(), stride: 16U64)
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-after-witness", count: st.genMethEmit.count(), stride: 16U64)
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count(), stride: 16U64)
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
-                if genfDone >= st.genFnEmit.count() {
+                if genfDone >= st.genFnEmit.count() && st.existentialWitnessesEmitted >= st.existentialWitnesses.count() {
                     draining = false
                 }
             }

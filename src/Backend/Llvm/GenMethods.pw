@@ -161,7 +161,7 @@ pub impl LlvmCtx {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: bodyIndex, stride: 64U64)
             val bodyId: U64 = bodyIndex + 1U64
             val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyIndex)
-            if body.fnIdx < c.arena.functionCount() {
+            if c.arena.bodyIsCallable(bodyId: bodyId) && body.fnIdx < c.arena.functionCount() {
                 val f: Func = c.arena.functionAt(index: body.fnIdx)
                 // A `provided` body has a trait-proof environment and belongs
                 // to the dedicated provided/witness emission path.  It is not

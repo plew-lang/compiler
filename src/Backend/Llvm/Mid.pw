@@ -4510,7 +4510,7 @@ pub impl LlvmCtx {
         return true
     }
 
-    inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64) -> Bool {
+    inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = []) -> Bool {
         self.nLocals = 0U64
         self.locStart = []
         self.locLen = []
@@ -4534,8 +4534,10 @@ pub impl LlvmCtx {
             if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
             if declaration.isParameter {
                 val abiIndex: U64 = abiParameterStart + local
-                if declaration.isInout { slot = LLVMGetParam(self.curFn, abiIndex) }
-                else { llvmStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot) }
+                mut val value = LLVMGetParam(self.curFn, abiIndex)
+                if abiParameterValues.count() != 0U64 { value = abiParameterValues[local] }
+                if declaration.isInout { slot = value }
+                else { llvmStore(self.b, value, slot) }
             }
             self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
@@ -4744,13 +4746,16 @@ impl LlvmCtx {
         return <MidLlvmPreflight.Ready />
     }
 
-    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64, closureBodyId: U64 = 0U64) -> Bool {
+    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64, closureBodyId: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = []) -> Bool {
         val canonical: MidCanonicalBody = match prepared {
             MidLlvmPrepared.None => { return false }
-            MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: _) => { give canonical }
+            MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: val count) => {
+                if abiParameterValues.count() != 0U64 && abiParameterValues.count() != count { return false }
+                give canonical
+            }
         }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-        if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
+        if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart, abiParameterValues: abiParameterValues) { return false }
         if closureBodyId != 0U64 && !self.bindMidClosureCaptures(c: inout c, body: body, bodyId: closureBodyId) { return false }
         mut val blocks: Array[LLVMBasicBlockRef] = []
         mut val blockI: U64 = 0U64
