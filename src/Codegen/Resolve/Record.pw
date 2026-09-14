@@ -1212,6 +1212,10 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) {
+        // Recording owns its destination slot. Parent expressions can be
+        // newer than every child; type publication must not depend on an
+        // unrelated expression having already extended this table.
+        self.ensureSemanticExprType(exprId: exprId)
         // This full lexical semantic walk is observable only in phase tracing.
         // Reuse the existing transient work counter so normal compilation gains
         // neither stored state nor a second diagnostic traversal.

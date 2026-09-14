@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { Expr, ExprRange }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integer = compiler.internBytes(s: "I64")
+    val array = compiler.internBytes(s: "Array")
+    compiler.arena.exprs.append(<Expr.Int value=4U64 offset=integer.nameStart isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    compiler.arena.exprChildPool.append(0U64)
+    compiler.arena.exprs.append(<Expr.Array elems=<ExprRange start=0U64 len=1U64 /> />)
+    // The parent is newer than its child and has no preallocated type row.
+    compiler.recordExpr(exprId: 1U64)
+    val term = compiler.semanticExprTerm(exprId: 1U64)
+    assert(term != 0U64)
+    val recorded = compiler.arena.typeAt(index: term)
+    assert(recorded.nameStart == array.nameStart && recorded.args.count() == 1U64)
+    assert(compiler.typeRefEq(a: recorded.args[0U64], b: compiler.semanticExprTerm(exprId: 0U64)))
+    print("ok")
+}
