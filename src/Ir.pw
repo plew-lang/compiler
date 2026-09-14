@@ -2404,6 +2404,11 @@ export struct Arena {
     pub mut val finalMatchArms: Array[FinalMatchArmResolution] = []
     pub mut val finalMatchPayloads: Array[FinalMatchPayloadResolution] = []
     pub mut val finalMatchIndexSlots: Array[U64] = []
+    pub mut val recordTypeByLayout: Dictionary[U64, U64] = [:]
+    pub mut val finalDestructions: Array[FinalDestruction] = []
+    pub mut val finalDestructionIds: Array[U64] = []
+    pub mut val finalDestructionHeads: Dictionary[U64, U64] = [:]
+    pub mut val finalDestructionNext: Array[U64] = []
     // Storage/writeback provenance is deliberately separate from callable
     // provenance. It is derived from final call descriptors after their
     // worklist reaches a fixpoint.
@@ -3053,16 +3058,16 @@ export struct MonoWork {
 }
 pub impl MonoWork { factory }
 
-// Transient reachability state. Type IDs are allocation identities; grounding
-// can allocate a new row for a type already reached through a recursive field.
-// Name buckets narrow candidates, whose full TypeTerms are compared by Comp.
-export struct DestructionTypeVisits {
-    pub mut val ids: Array[Bool] = []
-    pub mut val heads: Dictionary[U64, U64] = [:]
-    pub mut val terms: Array[U64] = []
-    pub mut val next: Array[U64] = []
+// Final destruction facts are shared by semantically equal TypeRef rows.
+// Zero is a missing contract; a published placeholder closes recursive types.
+export struct FinalDestruction {
+    pub val typeRef: U64
+    pub val ready: Bool = false
+    pub val deinitBodyId: U64 = 0U64
+    pub val underlying: U64 = 0U64
+    pub val fieldTypes: Array[U64] = []
 }
-pub impl DestructionTypeVisits { factory }
+pub impl FinalDestruction { factory }
 
 // Typed-AST cache (Phase B): each expression node's recovered `TypeInfo`, stored
 // as parallel scalar arrays keyed by expr id (struct-array IndexSet isn't in the

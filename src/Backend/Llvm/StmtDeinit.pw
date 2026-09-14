@@ -107,77 +107,49 @@ pub impl LlvmCtx {
             return
         }
         // unregistered (rare; normally rejected at construction) — walk inline.
-        self.emitDropWitnessWalk(c: inout c, v: v, sidx: sidx)
+        self.emitDropWitnessWalk(c: inout c, v: v, sidx: sidx, typeRef: ref)
     }
 
     // The recursive struct-destruction walker — emitted ONCE inside each type's witness
     // body (and used as the inline fallback for an unregistered struct). Sub-struct fields
     // recurse through `emitDeinitValue`, which routes them to their own witness calls.
-    inout fn emitDropWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64) {
-        // break a self-referential type's codegen recursion (Array[Self] element release).
-        if self.arcOnStack(sidx: sidx) {
+    inout fn emitDropWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64, typeRef: U64) {
+        if self.arcOnStack(sidx: sidx) { return }
+        val declaration = c.arena.structAt(index: sidx)
+        mut val contractId = c.finalDestructionIndex(typeRef: typeRef)
+        while contractId != 0U64 && c.arena.finalDestructions[contractId - 1U64].underlying != 0U64 {
+            contractId = c.finalDestructionIndex(typeRef: c.arena.finalDestructions[contractId - 1U64].underlying)
+        }
+        if contractId == 0U64 {
+            c.errorAt(offset: declaration.defOffset, msg: "internal error: struct drop has no finalized destruction contract")
+            return
+        }
+        val contract = c.arena.finalDestructions[contractId - 1U64]
+        if !contract.ready || contract.fieldTypes.count() != declaration.fields.count() {
+            c.errorAt(offset: declaration.defOffset, msg: "internal error: struct drop has an incomplete destruction contract")
             return
         }
         self.arcPush(sidx: sidx)
-        val sd: StructDef = c.arena.structAt(index: sidx)
-        val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
-        if fi < c.arena.functionCount() {
-            // the deinit method is its struct's 0-type-arg `gm` instance (B3-2): declare it on
-            // demand and call the symbol directly with the value (no recv expr here).
-            val dslot: U64 = self.structSlotForSidx(structIndex: sidx)
-            if dslot < self.genStructRefs.count() {
-                val dinst: U64 = self.genStructRefs[dslot]
-                val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: fi, instRef: dinst, ownArgs: [])
-                if gslot < self.genMethK.count() {
-                    mut val av: Array[LLVMValueRef] = []
-                    av.append(v)
-                    LLVMBuildCall2(self.b, self.genMethTy[gslot], self.genMethVal[gslot], arrayCPtr(av), 1U64, anon())
-                }
+        if contract.deinitBodyId != 0U64 {
+            val slot = self.ensureFinalGenMethodBody(c: inout c, bodyId: contract.deinitBodyId)
+            if slot >= self.genMethK.count() {
+                c.errorAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body")
+                self.arcPop()
+                return
             }
+            val arguments: Array[LLVMValueRef] = [v]
+            LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(arguments), 1U64, anon())
         }
-        mut val i: U64 = 0
-        while i < sd.fields.count() {
-            val fd: FieldDef = sd.fields[i]
-            if c.fieldIsBoxed(f: fd) {
-                // a boxed (recursive) field: CoW-shared rc'd cell — drop one owner, and
-                // at rc 0 destroy the pointee (witness-routed, so a recursive structure
-                // walks at runtime) then free the cell.
-                self.emitBoxedFieldRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()), f: fd)
-            } else if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
-                // release the field's rc-managed array/Buffer buffer (its elements cascade
-                // when they own heap; scalar elements just free the buffer at rc 0). Sound
-                // because every site that places a struct value deep-copies / CoW-shares its
-                // heap (genFieldValue / genLlvmMakeEnum / copyValueIfPlace), so a struct's
-                // array/Buffer fields are independently owned. Array and Buffer fields are
-                // rep-identical (single rawbuf pointer) so they share emitReleaseArrayValue.
-                val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, v, i, anon())
-                val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
-                mut val ety: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
-                if er != 0U64 {
-                    ety = self.llvmTypeOfRef(c: inout c, ref: er)
-                }
-                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), elemTy: ety, elemRef: er)
-            } else {
-                // every other class routes through the classifier + valueArc (the single
-                // class->action table): Ref/WeakRef cells, String, sub-struct (GROUNDED —
-                // the old structIndexByName here missed bare-T / generic-inst fields, so
-                // their heap was retained by the retain twin but never dropped), and enums.
-                val g: U64 = c.arcFieldTy(f: fd)
-                match c.arcClassOfRef(ref: g) {
-                    ArcClass.Scalar => {}
-                    ArcClass.StructVal(sidx: _) => {
-                        // instance-aware gate: `g` carries the grounded type args, so a
-                        // generic-instance field (Box[Ref[Cell]]) gates on ITS payload.
-                        if c.arcNeedsRelease(ref: g) {
-                            self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: false)
-                        }
-                    }
-                    _ => {
-                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: false)
-                    }
-                }
+        mut val field = 0U64
+        while field < contract.fieldTypes.count() {
+            val type = contract.fieldTypes[field]
+            val value = LLVMBuildExtractValue(self.b, v, field, anon())
+            if c.fieldIsBoxed(f: declaration.fields[field]) {
+                self.emitCellRelease(c: inout c, cell: value, ref: type)
+            } else if c.arcNeedsRelease(ref: type) {
+                self.valueArc(c: inout c, v: value, typeRef: type, retain: false)
             }
-            i += 1
+            field += 1U64
         }
         self.arcPop()
     }
@@ -194,14 +166,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            val didSet: Bool = self.setStructEnv(c: inout c, ref: self.genStructRefs[reg])
-            self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: self.genStructDefs[reg])
-            if didSet {
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
-            }
+            self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.dropWitDone += 1
         }

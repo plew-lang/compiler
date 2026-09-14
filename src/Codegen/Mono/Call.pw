@@ -2826,8 +2826,7 @@ pub impl Comp {
                     requirement += 1U64
                 }
                 self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof members=members />)
-                mut val visited: DestructionTypeVisits = <DestructionTypeVisits />
-                self.enqueueFinalDestruction(typeRef: sourceRef, visited: inout visited)
+                self.enqueueFinalDestruction(typeRef: sourceRef)
             }
             ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => { self.finalizeConversionDependencies(conversion: element) }
             ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, payloads: val payloads) => {
@@ -4774,6 +4773,11 @@ pub impl Comp {
     // pass adds the missing invariant: every emitted body instance has resolved
     // every static call exactly once in its own concrete environment.
     inout fn finalizeCallables() {
+        self.arena.finalDestructions = []
+        self.arena.finalDestructionIds = []
+        val noDestructionHeads: Dictionary[U64, U64] = [:]
+        self.arena.finalDestructionHeads = noDestructionHeads
+        self.arena.finalDestructionNext = []
         self.arena.finalCallees = []
         self.arena.finalCalleeIndexSlots = []
         self.arena.finalAggregates = []
@@ -4853,7 +4857,6 @@ pub impl Comp {
         // after its CallResolution has been frozen.
         mut val aggregateI: U64 = 0U64
         mut val callI: U64 = 0U64
-        mut val destructionTypes: DestructionTypeVisits = <DestructionTypeVisits />
         while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
             if bodyI < self.monoWork.bodyInstances.count() {
                 self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
@@ -4871,11 +4874,11 @@ pub impl Comp {
             // Destructors can call ordinary functions and construct further
             // values. Both queues must close together, before the freeze.
             while aggregateI < self.arena.finalAggregates.count() {
-                self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef, visited: inout destructionTypes)
+                self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef)
                 aggregateI += 1U64
             }
             while callI < self.finalCalleeCount() {
-                self.enqueueFinalDestruction(typeRef: self.arena.finalCallees[callI].resultTypeRef, visited: inout destructionTypes)
+                self.enqueueFinalDestruction(typeRef: self.arena.finalCallees[callI].resultTypeRef)
                 callI += 1U64
             }
         }

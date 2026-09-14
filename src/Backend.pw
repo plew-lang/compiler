@@ -1674,9 +1674,7 @@ fn anon() -> CPtr[U8] {
     return cString("")
 }
 
-fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
-    return c.structOwnDeinitFi(sidx: sidx)
-}
+
 
 // ---- string literals ----
 //

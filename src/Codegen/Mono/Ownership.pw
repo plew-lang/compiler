@@ -1,91 +1,96 @@
-// An owned value makes its destruction reachable even without an authored
-// call expression. Close these edges before LLVM, alongside ordinary calls.
-// Roots are concrete values in finalized calls/constructions, never the list
-// of imported declarations or provisional layout requests.
+// Close destruction alongside authored calls. LLVM consumes these facts;
+// it may memoize semantic aliases, but never selects a destructor or field type.
 pub impl Comp {
-    inout fn visitDestructionType(typeRef: U64, visited: inout DestructionTypeVisits) -> Bool {
-        while visited.ids.count() <= typeRef { visited.ids.append(false) }
-        if visited.ids[typeRef] { return false }
-        visited.ids.set(i: typeRef, value: true)
-        val term = self.arena.typeTerms[typeRef]
-        mut val bucket: U64 = term.nameId
-        // Record identity is structural, independent of its synthesized name.
-        if term.isRecord { bucket = 0U64 }
-        mut val candidate: U64 = visited.heads.getOr(key: bucket, fallback: 0U64)
-        while candidate != 0U64 {
-            val index: U64 = candidate - 1U64
-            if self.typeRefEq(a: visited.terms[index], b: typeRef) { return false }
-            candidate = visited.next[index]
+    inout fn finalDestructionIndex(typeRef: U64) -> U64 {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return 0U64 }
+        if typeRef < self.arena.finalDestructionIds.count() {
+            val known = self.arena.finalDestructionIds[typeRef]
+            if known != 0U64 { return known }
         }
-        visited.terms.append(typeRef)
-        visited.next.append(visited.heads.getOr(key: bucket, fallback: 0U64))
-        visited.heads[bucket] = visited.terms.count()
-        return true
+        val term = self.arena.typeTerms[typeRef]
+        mut val bucket = term.nameId
+        if term.isRecord { bucket = 0U64 }
+        mut val candidate = self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64)
+        while candidate != 0U64 {
+            if self.typeRefEq(a: self.arena.finalDestructions[candidate - 1U64].typeRef, b: typeRef) {
+                while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
+                self.arena.finalDestructionIds[typeRef] = candidate
+                return candidate
+            }
+            candidate = self.arena.finalDestructionNext[candidate - 1U64]
+        }
+        return 0U64
     }
 
-    inout fn enqueueFinalDestruction(typeRef: U64, visited: inout DestructionTypeVisits) {
+    inout fn enqueueFinalDestruction(typeRef: U64) {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
-        if !self.visitDestructionType(typeRef: typeRef, visited: inout visited) { return }
-        val type: TypeRef = self.arena.typeAt(index: typeRef)
+        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
+        val type = self.arena.typeAt(index: typeRef)
+        val term = self.arena.typeTerms[typeRef]
+        mut val bucket = term.nameId
+        if term.isRecord { bucket = 0U64 }
+        val contract = self.arena.finalDestructions.count() + 1U64
+        self.arena.finalDestructions.append(<FinalDestruction typeRef=typeRef />)
+        self.arena.finalDestructionNext.append(self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64))
+        self.arena.finalDestructionHeads[bucket] = contract
+        while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
+        self.arena.finalDestructionIds[typeRef] = contract
+        mut val fields: Array[U64] = []
+        mut val destructor = 0U64
+        mut val underlying = 0U64
         if type.isRecord {
-            mut val index: U64 = 0U64
-            while index < type.recordFieldTerms.count() {
-                self.enqueueFinalDestruction(typeRef: type.recordFieldTerms[index], visited: inout visited)
-                index += 1U64
-            }
-            return
-        }
-        val underlying: U64 = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
-        if underlying != 0U64 && underlying != typeRef {
-            self.enqueueFinalDestruction(typeRef: underlying, visited: inout visited)
-            return
-        }
-        match self.arcClassOfRef(ref: typeRef) {
-            ArcClass.StructVal(sidx: val index) => {
-                val declaration: StructDef = self.arena.structAt(index: index)
-                if declaration.isUnique {
-                    val destructor: U64 = self.structOwnDeinitFi(sidx: index)
-                    if destructor < self.arena.functionCount() {
-                        self.enqueueFinalBody(fnIdx: destructor, args: type.args, recvInstRef: typeRef)
+            fields = type.recordFieldTerms
+        } else {
+            underlying = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
+            if underlying == typeRef { underlying = 0U64 }
+            if underlying != 0U64 {
+                self.enqueueFinalDestruction(typeRef: underlying)
+            } else {
+                match self.arcClassOfRef(ref: typeRef) {
+                    ArcClass.StructVal(sidx: val index) => {
+                        val declaration = self.arena.structAt(index: index)
+                        if declaration.isUnique {
+                            val function = self.structOwnDeinitFi(sidx: index)
+                            if function < self.arena.functionCount() {
+                                destructor = self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef)
+                            }
+                        }
+                        mut val field = 0U64
+                        while field < declaration.fields.count() {
+                            fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                            field += 1U64
+                        }
                     }
-                }
-                mut val field: U64 = 0U64
-                while field < declaration.fields.count() {
-                    val term: U64 = self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef)
-                    self.enqueueFinalDestruction(typeRef: term, visited: inout visited)
-                    field += 1U64
-                }
-            }
-            ArcClass.EnumVal(eidx: val index) => {
-                val declaration: EnumDef = self.arena.enumAt(index: index)
-                mut val variant: U64 = 0U64
-                while variant < declaration.variants.count() {
-                    mut val field: U64 = 0U64
-                    while field < declaration.variants[variant].fields.count() {
-                        val term: U64 = self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef)
-                        self.enqueueFinalDestruction(typeRef: term, visited: inout visited)
-                        field += 1U64
+                    ArcClass.EnumVal(eidx: val index) => {
+                        val declaration = self.arena.enumAt(index: index)
+                        mut val variant = 0U64
+                        while variant < declaration.variants.count() {
+                            mut val field = 0U64
+                            while field < declaration.variants[variant].fields.count() {
+                                fields.append(self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                                field += 1U64
+                            }
+                            variant += 1U64
+                        }
                     }
-                    variant += 1U64
+                    ArcClass.BufferLike(elem: val element) => { self.enqueueFinalDestruction(typeRef: element) }
+                    ArcClass.RefCell(inst: val instance) => { self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.PromiseCell(inst: val instance) => { self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    // Weak references do not own their pointee. Erased values
+                    // close their concrete owners at construction instead.
+                    ArcClass.WeakCell(inst: _) => {}
+                    ArcClass.ClosureVal => {}
+                    ArcClass.AnyBox => {}
+                    ArcClass.StringLike => {}
+                    ArcClass.Scalar => {}
                 }
             }
-            ArcClass.BufferLike(elem: val element) => {
-                self.enqueueFinalDestruction(typeRef: element, visited: inout visited)
-            }
-            ArcClass.RefCell(inst: val instance) => {
-                self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64], visited: inout visited)
-            }
-            ArcClass.PromiseCell(inst: val instance) => {
-                self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64], visited: inout visited)
-            }
-            // Weak destruction never destroys the pointee. A closure's values
-            // and an existential's concrete source join through their own
-            // reachable construction/call results, not the erased type.
-            ArcClass.WeakCell(inst: _) => {}
-            ArcClass.ClosureVal => {}
-            ArcClass.AnyBox => {}
-            ArcClass.StringLike => {}
-            ArcClass.Scalar => {}
         }
+        mut val field = 0U64
+        while field < fields.count() {
+            self.enqueueFinalDestruction(typeRef: fields[field])
+            field += 1U64
+        }
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields />
     }
 }

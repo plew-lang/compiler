@@ -125,6 +125,12 @@ pub impl Comp {
     // generic inference and grounding recurse through the explicit field
     // terms below.  `ensureRecordStruct` sorts fields, so this is also the
     // canonical ordering for structural equality and keys.
+    inout fn publishRecordLayoutTerm(ref: U64) {
+        if !self.tyRefIsGround(ref: ref) { return }
+        val layout = self.recordStructIndex(ref: ref)
+        if layout < self.arena.structCount() { self.arena.recordTypeByLayout[layout] = ref }
+    }
+
     inout fn recordTypeTermForLayout(name: Bind) -> U64 {
         val si: U64 = self.anyStructIndex(nameStart: name.nameStart, nameLen: name.nameLen)
         if si >= self.arena.structCount() {
@@ -141,7 +147,9 @@ pub impl Comp {
             terms.append(fields[i].ty)
             i += 1U64
         }
-        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        self.publishRecordLayoutTerm(ref: ref)
+        return ref
     }
 
     // Construct a Record TypeTerm from the lexical terms at its source site.
@@ -178,7 +186,9 @@ pub impl Comp {
             terms.append(fieldTerms[order[oi]])
             oi += 1U64
         }
-        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        self.publishRecordLayoutTerm(ref: ref)
+        return ref
     }
 
     // Register (or find) the synthetic struct for an anonymous record type with the given
@@ -292,7 +302,9 @@ pub impl Comp {
             terms.append(fieldTerms[order[oi]])
             oi += 1U64
         }
-        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+        self.publishRecordLayoutTerm(ref: ref)
+        return ref
     }
 
     inout fn ensureRecordStructSpans(fieldNames: Array[Span], fieldTys: Array[PType]) -> Bind {
