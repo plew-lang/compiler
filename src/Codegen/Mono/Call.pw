@@ -1606,7 +1606,11 @@ pub impl Comp {
         while index < self.arena.functionCount() {
             val function = self.arena.functionAt(index: index)
             if function.isAssoc && function.params.count() >= 2U64 && rangeEquals(bytes: self.arena.bytes, start: function.nameStart, len: function.nameLen, kw: name) {
-                val witness = self.methodReceiverEnvironment(f: function, instRef: receiverRef)
+                // Candidate parameters use the same lexical receiver as the
+                // callable body. A caller's extra view selects visible members;
+                // it must not become Self inside an unrelated implementation.
+                val implementationReceiver = self.canonicalBodyReceiverRef(fnIdx: index, recvInstRef: receiverRef)
+                val witness = self.methodReceiverEnvironment(f: function, instRef: implementationReceiver)
                 if witness.conformIdx != 0U64 {
                     val parameter = self.funcParamAt(params: function.params, index: 1U64)
                     val rhs = self.groundWitnessTypeTerm(ref: parameter.ty, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)
