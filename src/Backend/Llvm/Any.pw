@@ -48,12 +48,11 @@ pub impl LlvmCtx {
         if bodyId == 0U64 { c.errorAt(offset: req.nameStart, msg: "internal error: existential witness body was not finalized") }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val wfi: U64 = body.fnIdx
-        val regSlot: U64 = self.genStructSlot(c: inout c, ref: body.environment.receiverRef)
         val wInstRef: U64 = body.environment.receiverRef
         val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: c.arena.functionAt(index: wfi), environment: body.environment)
         val wslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: wfi, instRef: wInstRef, ownArgs: ownArgs, bodyId: bodyId)
         if wslot >= self.genMethK.count() { c.errorAt(offset: req.nameStart, msg: "internal error: finalized existential witness has no LLVM callable") }
-        val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
+        val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: wInstRef)
         // the erased thunk signature uses the requirement's types with the trait's type
         // parameters / associated types substituted by the existential's bindings
         // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
