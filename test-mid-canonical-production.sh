@@ -36,12 +36,32 @@ for needle in 'abiParameterCount: abiParameterCount' 'MidLlvmPrepared.Ready cano
         exit 1
     fi
 done
-for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return false }' 'MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: _)'; do
+for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return false }' 'MidLlvmPrepared.Ready(canonical:'; do
     if ! grep -F "$needle" src/Backend/Llvm/Mid.pw >/dev/null; then
         echo "canonical Mid prepared-body contract is missing $needle" >&2
         exit 1
     fi
 done
+
+# The admitted count may now be consumed when physical ABI values are supplied.
+# Verify the hand-off and rejection guard without pinning the binding's name.
+python3 - <<'PYABI'
+from pathlib import Path
+import re
+source = Path('src/Backend/Llvm/Mid.pw').read_text()
+body = source.split('inout fn genLlvmPreparedMidBody(', 1)[1]
+signature, body = body.split(') -> Bool {', 1)
+assert 'abiParameterCount:' not in signature, 'emission must not accept a second count'
+ready = re.search(r'MidLlvmPrepared\.Ready\(canonical:\s*val\s+(\w+),\s*abiParameterCount:\s*val\s+(\w+)\)', body)
+assert ready, 'Ready must carry the admitted body and parameter count'
+canonical, count = ready.groups()
+values = re.search(r'(\w+):\s*Array\[LLVMValueRef\]', signature)
+assert values, 'physical ABI bindings must be explicit'
+array = re.escape(values.group(1))
+guard = rf'if\s+{array}\.count\(\)\s*!=\s*0U64\s*&&\s*{array}\.count\(\)\s*!=\s*{re.escape(count)}\s*\{{\s*return false\s*\}}'
+assert re.search(guard, body), 'mismatched physical bindings must be rejected'
+assert re.search(rf'give\s+{re.escape(canonical)}\b', body), 'emit the admitted canonical body'
+PYABI
 
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a

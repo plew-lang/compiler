@@ -530,32 +530,7 @@ fi
 # instances.  This deliberately does not pin a permanent legacy fallback: as
 # the corpus reaches zero coverage the expected gate result changes from 1 to
 # 0, but disagreement or unstructured output is always a failure.
-mid_coverage_results=$(sh -c '
-    source="tests/run/generic_extension_receiver_record_direct_field.pw"
-    stem="/tmp/t_mid_coverage_$$"
-    coverage="$stem.coverage"; required="$stem.required"
-    if ! "$PLEWC" --emit-mid-coverage "$source" >"$stem.ll" 2>"$coverage"; then
-        echo "FAIL mid-coverage(emit)"; exit 0
-    fi
-    records=$(grep -Ec "^mid-coverage body=[0-9]+ fn=[0-9]+ name=[A-Za-z][A-Za-z0-9]* category=[a-z-]+(:[a-z-]+){0,2}$" "$coverage" || true)
-    nonempty=$(wc -l <"$coverage" | tr -d " ")
-    if [ "$records" != "$nonempty" ]; then
-        echo "FAIL mid-coverage(format)"; exit 0
-    fi
-    # A bare `preflight:call` conflates independent ABI constraints.  If this
-    # fixture still reaches call preflight, the record must identify its
-    # closed reason so coverage can select the next representation slice.
-    if grep -q "category=preflight:call$" "$coverage"; then
-        echo "FAIL mid-coverage(call-reason)"; exit 0
-    fi
-    code=0
-    "$PLEWC" --require-mid "$source" >"$stem.require.ll" 2>"$required" || code=$?
-    if [ "$records" -eq 0 ]; then
-        [ "$code" -eq 0 ] && [ ! -s "$required" ] && echo "PASS mid-coverage" || echo "FAIL mid-coverage(require-zero)"
-    else
-        [ "$code" -eq 1 ] && cmp -s "$coverage" "$required" && echo "PASS mid-coverage" || echo "FAIL mid-coverage(require-nonzero)"
-    fi
-' sh)
+mid_coverage_results=$(python3 ./test-mid-coverage.py || echo "FAIL mid-coverage")
 mcpass=$(printf '%s\n' "$mid_coverage_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$mid_coverage_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
