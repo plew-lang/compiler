@@ -26,7 +26,7 @@ fn accepted(alive: Bool, validPlace: Bool, tag: U64) -> Bool {
     mut val accessPlace = compiler.mid.places.count()
     if !validPlace { accessPlace += 1U64 }
     compiler.mid.operands.set(i: operandId - 1U64, value: <MidOperandNode tag=tag place=operand.place capability=2U64 accessPlace=accessPlace />)
-    return match verifyCanonicalMidBody(c: compiler, canonical: canonical).error {
+    return match verifyCanonicalMidBody(c: inout compiler, canonical: canonical).error {
         MidVerifyError.None => { give true }
         _ => { give false }
     }

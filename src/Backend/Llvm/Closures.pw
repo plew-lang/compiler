@@ -245,7 +245,7 @@ pub impl LlvmCtx {
             }
         }
         val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-        val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: dropped)
+        val verification: MidVerification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
         match verification.error {
             MidVerifyError.None => {}
             _ => {

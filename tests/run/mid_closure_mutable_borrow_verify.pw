@@ -20,7 +20,7 @@ fn verified(readOnly: Bool, replacement: Bool, releaseCell: Bool) -> MidVerifyEr
     else { statements.append(<MidStatement.Drop place=source />) }
     val body = <MidBody locals=[<MidLocalDecl typeTerm=type sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=false isBorrowed=readOnly isInout=!readOnly isCaptureCell=true />, <MidLocalDecl typeTerm=type sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] entry=0U64 />
     val canonical = compiler.mid.store(body: body)
-    return verifyCanonicalMidBody(c: compiler, canonical: canonical).error
+    return verifyCanonicalMidBody(c: inout compiler, canonical: canonical).error
 }
 
 fn main() {

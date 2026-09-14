@@ -111,7 +111,7 @@ pub impl LlvmCtx {
                             match accesses.error {
                                 MidAccessError.None => {
                                     val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: dropped)
+                                    val verification: MidVerification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
                                     match verification.error {
                                         MidVerifyError.None => {
                                             // Preflight before emission so an unsupported
@@ -236,7 +236,7 @@ pub impl LlvmCtx {
                                 }
                                 if accessReady {
                                     val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: elaborated)
+                                    val verification: MidVerification = verifyCanonicalMidBody(c: inout c, canonical: elaborated)
                                     match verification.error {
                                         MidVerifyError.None => {
                                             match self.midVerifiedLlvmPreflight(c: inout c, canonical: elaborated) {

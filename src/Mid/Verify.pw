@@ -317,7 +317,9 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
 // Verify the elaborated frozen CFG directly.  This mirrors the draft verifier
 // intentionally at the ownership boundary, but every read is a canonical row
 // or range; the production path can therefore discard MidBody after freeze.
-export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVerification {
+// TypeRef allocation IDs are not type identity: use the frontend semantic
+// equality query for transferred values, retaining nominal/view distinctions.
+export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
@@ -357,7 +359,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
@@ -395,7 +397,7 @@ export fn verifyCanonicalMidBody(c: Comp, canonical: MidCanonicalBody) -> MidVer
                 if body.sourceFunction != 18446744073709551615U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || destination.typeTerm != c.mid.locals[body.locals.start + source.local].typeTerm { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }

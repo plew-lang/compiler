@@ -50,24 +50,24 @@ fn main() {
     c.arena.globals.append(<Global nameStart=78U64 nameLen=1U64 letStmt=0U64 mutable=true />)
     val canonicalSynthetic: MidCanonicalBody = c.mid.store(body: synthetic)
     val canonicalOrdinary: MidCanonicalBody = c.mid.store(body: ordinary)
-    match verifyCanonicalMidBody(c: c, canonical: canonicalSynthetic).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: canonicalSynthetic).error {
         MidVerifyError.None => { write(s: "canonical-synthetic:accepted\n") }
         _ => { write(s: "canonical-synthetic:rejected\n") }
     }
-    match verifyCanonicalMidBody(c: c, canonical: canonicalOrdinary).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: canonicalOrdinary).error {
         MidVerifyError.MoveUnavailable => { write(s: "canonical-ordinary:rejected\n") }
         MidVerifyError.None => { write(s: "canonical-ordinary:accepted\n") }
         _ => { write(s: "canonical-ordinary:wrong-error\n") }
     }
 
     val missingDrop: MidCanonicalBody = c.mid.store(body: globalReplaceBody(withDrop: false))
-    match verifyCanonicalMidBody(c: c, canonical: missingDrop).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: missingDrop).error {
         MidVerifyError.DropUnavailable => { write(s: "global-overwrite-without-drop:rejected\n") }
         MidVerifyError.None => { write(s: "global-overwrite-without-drop:accepted\n") }
         _ => { write(s: "global-overwrite-without-drop:wrong-error\n") }
     }
     val explicitDrop: MidCanonicalBody = c.mid.store(body: globalReplaceBody(withDrop: true))
-    match verifyCanonicalMidBody(c: c, canonical: explicitDrop).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: explicitDrop).error {
         MidVerifyError.None => { write(s: "global-overwrite-after-drop:accepted\n") }
         _ => { write(s: "global-overwrite-after-drop:rejected\n") }
     }

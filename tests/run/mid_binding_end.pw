@@ -48,7 +48,7 @@ fn check(mode: U64) {
     mut val compiler: Comp = <Comp />
     val frozen = compiler.mid.store(body: body)
     val canonical = elaborateCanonicalMidDrops(c: inout compiler, canonical: frozen)
-    match verifyCanonicalMidBody(c: compiler, canonical: canonical).error { MidVerifyError.None => {} _ => { print(901I64) } }
+    match verifyCanonicalMidBody(c: inout compiler, canonical: canonical).error { MidVerifyError.None => {} _ => { print(901I64) } }
     val node = compiler.mid.bodies[canonical.body - 1U64]
     drops = 0U64
     conditional = 0U64

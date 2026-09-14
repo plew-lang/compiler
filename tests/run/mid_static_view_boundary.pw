@@ -12,7 +12,7 @@ fn check(compiler: inout Comp, sourceType: U64, targetType: U64, valid: Bool, bo
     val target = <MidPlace local=1U64 typeTerm=targetType />
     val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=sourceType sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=targetType sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[<MidStatement.Assign destination=target value=<MidRvalue.ViewBoundary operand=operand targetTerm=targetType /> />] terminator=<MidTerminator.Return /> />] />)
     assert(compiler.mid.isWellFormed(body: body))
-    match verifyCanonicalMidBody(c: compiler, canonical: body).error {
+    match verifyCanonicalMidBody(c: inout compiler, canonical: body).error {
         MidVerifyError.UninstantiatedCastBoundary => {}
         _ => { panic "unchecked view passed verification" }
     }

@@ -1,0 +1,27 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+import /Mid with { MidBody, MidBlock, MidScope, MidLocalDecl, MidPlace, MidStatement, MidTerminator, verifyCanonicalMidBody }
+import /Mid/Verify with { MidVerifyError }
+
+fn accepted(compiler: inout Comp, source: U64, target: U64) -> Bool {
+    val destination = <MidPlace local=0U64 typeTerm=target />
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=target sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=source sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[<MidStatement.Drop place=destination />, <MidStatement.Overwrite destination=destination source=<MidPlace local=1U64 typeTerm=source /> />] terminator=<MidTerminator.Return /> />] />)
+    return match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => { give true } _ => { give false } }
+}
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "I64")
+    val first = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val second = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    assert(first != second)
+    assert(accepted(compiler: inout compiler, source: first, target: second))
+    val viewed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewExtId=1U64 />)
+    assert(!accepted(compiler: inout compiler, source: first, target: viewed))
+    val otherName = compiler.internBytes(s: "U64")
+    val other = compiler.simpleTypeRef(nameStart: otherName.nameStart, nameLen: otherName.nameLen)
+    assert(!accepted(compiler: inout compiler, source: first, target: other))
+    print("ok")
+}
