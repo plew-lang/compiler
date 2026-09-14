@@ -512,6 +512,8 @@ extern(c) {
     fn LLVMGetFirstFunction(m~: LLVMModuleRef) -> U64
     fn LLVMGetNextFunction(func~: U64) -> U64
     fn LLVMIsDeclaration(func~: U64) -> I32
+    fn LLVMCountBasicBlocks(func~: LLVMValueRef) -> U32
+    fn LLVMSetLinkage(global~: LLVMValueRef, linkage~: U32)
     fn LLVMAddAttributeAtIndex(func~: U64, idx~: U32, attr~: LLVMAttributeRef)
 
     // Constants / introspection.
@@ -527,6 +529,7 @@ extern(c) {
 
     // Builder + instructions.
     fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMDisposeBuilder(builder~: LLVMBuilderRef)
     fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
     fn LLVMGetInsertBlock(b~: LLVMBuilderRef) -> LLVMBasicBlockRef
     fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef

@@ -345,28 +345,49 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
-    // Declare/cache `plew_rawbuf_count(ptr) -> i64` — the buffer's live-element count,
-    // read from the heap header (the Buffer floor maintains it; spec/02, buffer-floor.md).
-    inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_count", fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(data)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    // The opaque Buffer floor owns this physical header layout. Keep the small
+    // null-safe reader in this LLVM module so ordinary optimization can inline
+    // and combine reads; do not expand a CFG at every generated call site.
+    inout fn rawbufHeaderValue(c: inout Comp, data: LLVMValueRef, name: String, distance: U64) -> LLVMValueRef {
+        val parameters: Array[LLVMTypeRef] = [self.ptrty]
+        val signature = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 1U64, 0I32)
+        val function = self.getOrDeclare(c: inout c, name: name, fnTy: signature)
+        if LLVMCountBasicBlocks(function) == 0U32 {
+            // LLVMInternalLinkage: implementation-only physical runtime glue.
+            LLVMSetLinkage(function, 8U32)
+            val builder = LLVMCreateBuilderInContext(self.ctx)
+            val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
+            val present = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "present"))
+            val done = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "done"))
+            LLVMPositionBuilderAtEnd(builder, entry)
+            val pointer = LLVMGetParam(function, 0U64)
+            val zero = LLVMConstInt(self.i64ty, 0U64, 0I32)
+            val absent = LLVMBuildICmp(builder, llvmIntEq(), pointer, LLVMConstNull(self.ptrty), anon())
+            LLVMBuildCondBr(builder, absent, done, present)
+            LLVMPositionBuilderAtEnd(builder, present)
+            val offset = LLVMBuildSub(builder, zero, LLVMConstInt(self.i64ty, distance, 0I32), anon())
+            val indices: Array[LLVMValueRef] = [offset]
+            val address = LLVMBuildGEP2(builder, self.i64ty, pointer, arrayCPtr(indices), 1U64, anon())
+            val loaded = llvmLoad(builder, self.i64ty, address, anon())
+            LLVMBuildBr(builder, done)
+            LLVMPositionBuilderAtEnd(builder, done)
+            val result = LLVMBuildPhi(builder, self.i64ty, anon())
+            val values: Array[LLVMValueRef] = [zero, loaded]
+            val blocks: Array[LLVMBasicBlockRef] = [entry, present]
+            LLVMAddIncoming(result, arrayCPtr(values), arrayCPtr(blocks), 2U64)
+            LLVMBuildRet(builder, result)
+            LLVMDisposeBuilder(builder)
+        }
+        val arguments: Array[LLVMValueRef] = [data]
+        return LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), 1U64, anon())
     }
 
-    // Declare/cache `plew_rawbuf_cap(ptr) -> i64` — the buffer's allocated capacity,
-    // read from the heap header.
+    inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
+        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_count", distance: 2U64)
+    }
+
     inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_cap", fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(data)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_capacity", distance: 3U64)
     }
 
     // Declare/cache `plew_rawbuf_set_count(ptr, i64)` — store the buffer's live-element

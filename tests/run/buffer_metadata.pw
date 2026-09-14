@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    print(buffer.count())
+    print(buffer.capacity())
+    buffer.reserve(additionalCapacity: 8U64)
+    print(buffer.count())
+    print(buffer.capacity() >= 8U64)
+    buffer.append(42I64)
+    val alias = buffer
+    buffer.append(43I64)
+    print(buffer.count())
+    print(alias.count())
+    print(buffer[1U64])
+    print(alias[0U64])
+}
