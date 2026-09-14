@@ -1273,9 +1273,17 @@ pub impl Comp {
                 }
             }
             Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
-            Expr.Binary(op: _, val lhs, val rhs) => {
+            Expr.Binary(val op, val lhs, val rhs) => {
                 self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
                 self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
+                if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    val contextual = self.recordFloatingOperandContext(lhs: lhs, rhs: rhs)
+                    if contextual && isBinTraitOp(op: op) {
+                        val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
+                        val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
+                        self.recordSemanticExprInfo(exprId: exprId, ti: self.operatorOutputType(lt: left, rt: right, op: op))
+                    }
+                }
             }
             Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
                 mut val i: U64 = 0

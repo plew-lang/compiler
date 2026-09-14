@@ -1201,6 +1201,38 @@ pub impl Comp {
         return acceptsContext
     }
 
+    // Only an entirely unsuffixed numeric expression accepts a sibling's
+    // numeric context. A named value or explicit suffix owns its own type.
+    fn contextualNumericExpression(exprId: U64) -> Bool {
+        match self.arena.exprs[exprId] {
+            Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => { return !isBool && suffixLen == 0U64 }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => { return suffixLen == 0U64 }
+            Expr.Unary(op: val op, operand: val operand) => { return op == opSub() && self.contextualNumericExpression(exprId: operand) }
+            Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => { return (op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem()) && self.contextualNumericExpression(exprId: lhs) && self.contextualNumericExpression(exprId: rhs) }
+            _ => { return false }
+        }
+    }
+
+    inout fn recordFloatingOperandContext(lhs: U64, rhs: U64) -> Bool {
+        val left = self.parametricExprTerm(exprId: lhs)
+        val right = self.parametricExprTerm(exprId: rhs)
+        if left != 0U64 {
+            val type = self.arena.typeTerms[left]
+            if self.isFloatType(start: type.nameStart, len: type.nameLen) && !self.contextualNumericExpression(exprId: lhs) && self.contextualNumericExpression(exprId: rhs) {
+                self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: left)
+                return true
+            }
+        }
+        if right != 0U64 {
+            val type = self.arena.typeTerms[right]
+            if self.isFloatType(start: type.nameStart, len: type.nameLen) && !self.contextualNumericExpression(exprId: rhs) && self.contextualNumericExpression(exprId: lhs) {
+                self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: right)
+                return true
+            }
+        }
+        return false
+    }
+
     // Record the expected result at a semantic statement boundary.  It is not
     // a replacement expression type: an uninstantiated generic call still
     // owns its callee return TypeTerm.  Keeping the two facts distinct lets a
@@ -1249,6 +1281,8 @@ pub impl Comp {
                     if self.isIntType(start: expected.nameStart, len: expected.nameLen) {
                         self.checkLitCtx(id: exprId, eKind: 1U64, eBits: self.intBits(start: expected.nameStart, len: expected.nameLen), eSgn: self.intSigned(start: expected.nameStart, len: expected.nameLen))
                         self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    } else if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
+                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                     }
                 }
             }
@@ -1278,14 +1312,25 @@ pub impl Comp {
         // untyped arithmetic: an ordinary trait operation may have an
         // independent associated Output, and comparisons produce Bool, so
         // neither admits this equality propagation.
+        val expectedNumeric = self.arena.typeTerms[expectedTerm]
+        val floatingContext = self.isFloatType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
-                if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
+                if floatingContext && self.contextualNumericExpression(exprId: exprId) {
+                    self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
+                    self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
+                } else if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
                     self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
+                if floatingContext && self.contextualNumericExpression(exprId: exprId) {
+                    self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
+                    self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
+                    self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false)
+                } else if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
                     self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
                     self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
                 }

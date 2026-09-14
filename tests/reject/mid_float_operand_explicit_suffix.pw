@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+fn main() {
+    val value: F32 = 1.5F32
+    print(value * 2.0F64)
+}
