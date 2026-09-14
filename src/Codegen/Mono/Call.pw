@@ -3242,6 +3242,7 @@ pub impl Comp {
         val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
         mut val kind: SemanticMatchKind = source.kind
         match source.kind {
+            SemanticMatchKind.Wildcard => {}
             SemanticMatchKind.Enum(enumIndex: _) => {}
             SemanticMatchKind.Struct(layoutTerm: val term) => {
                 val layout = self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)

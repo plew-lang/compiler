@@ -367,6 +367,7 @@ fn midFinalMatchShapeMatches(c: inout Comp, matchIndex: U64, enumIndex: U64, scr
     val resolution: FinalMatchResolution = c.arena.finalMatches[matchIndex]
     match resolution.kind {
         SemanticMatchKind.Enum(enumIndex: val selected) => { return selected == enumIndex && c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeTypeRef) }
+        SemanticMatchKind.Wildcard => { return false }
         SemanticMatchKind.Struct(layoutTerm: _) => { return false }
     }
 }

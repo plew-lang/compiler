@@ -1,0 +1,65 @@
+import @Std/Io with { print }
+
+unique struct Resource {
+    pub val label: String
+    deinit { print(self.label) }
+}
+pub impl Resource { factory }
+unique enum Packet { Value(resource: Resource, discarded: Resource) Empty }
+fn packet() -> Packet {
+    print(100I64)
+    return <Packet.Value resource=<Resource label="owned" + "-value" /> discarded=<Resource label="discard" + "-value" /> />
+}
+fn take(resource: move Resource) { print(1I64) }
+fn temporary() {
+    match packet() {
+        Packet.Value(discarded: _, val resource) => { take(resource: move resource) }
+        Packet.Empty => {}
+    }
+    print(2I64)
+}
+fn named() {
+    val owner: Packet = packet()
+    match move owner {
+        Packet.Value(discarded: _, val resource) => { take(resource: move resource) }
+        Packet.Empty => {}
+    }
+    print(2I64)
+}
+fn returned() -> Resource {
+    match packet() {
+        Packet.Value(discarded: _, val resource) => { return move resource }
+        Packet.Empty => { return <Resource label="empty" /> }
+    }
+}
+fn early() {
+    match packet() {
+        Packet.Value(discarded: _, val resource) => {
+            take(resource: move resource)
+            return
+        }
+        Packet.Empty => { return }
+    }
+}
+fn main() {
+    temporary()
+    named()
+    take(resource: returned())
+    early()
+    val number: I64 = match packet() {
+        Packet.Value(discarded: _, val resource) => {
+            take(resource: move resource)
+            give 4I64
+        }
+        Packet.Empty => { give 0I64 }
+    }
+    print(number)
+    match <Packet.Value resource=<Resource label="direct" /> discarded=<Resource label="direct-discard" /> /> {
+        Packet.Value(discarded: _, val resource) => { take(resource: move resource) }
+        Packet.Empty => {}
+    }
+    match packet() { _ => { print(3I64) } }
+    val answer: I64 = match 41I64 { _ => { give 42I64 } }
+    print(answer)
+    match <Resource label="whole-struct" /> { _ => { print(5I64) } }
+}

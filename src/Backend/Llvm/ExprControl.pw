@@ -80,7 +80,6 @@ pub impl LlvmCtx {
             matchExpectedTy = crET
         }
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
-        val consuming: Bool = c.matchScrutIsMove(scrut: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a value-position struct destructuring match (irrefutable, one arm): bind the
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
@@ -131,6 +130,7 @@ pub impl LlvmCtx {
         // ONLY around bindMatchPayload, never for the arm bodies (which keep the outer
         // env so a body's `self.f` grounds against the enclosing method).
         val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
+        val consuming: Bool = c.matchConsumesValue(scrut: scrut, typeTerm: scrutRef)
         val savedVP: Array[Bind] = c.cur.typeParams
         val savedVA: Array[U64] = c.cur.typeArgs
         mut val eid: U64 = c.arena.enumCount()

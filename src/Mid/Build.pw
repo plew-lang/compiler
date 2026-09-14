@@ -2011,11 +2011,17 @@ fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: 
 // A struct pattern is irrefutable. Bind the first arm in the current CFG;
 // Bound fields are independent values: the original aggregate may be
 // overwritten inside the arm. Ordinary Copy/Drop owns those snapshots.
-fn buildMidStructPattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, sourceArms: MatchArmRange, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
+fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, sourceArms: MatchArmRange, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, hasGiveDestination: Bool, giveDestination: MidPlace) -> MidBuildError {
     if semantic.arms.count() == 0U64 || sourceArms.len == 0U64 { return <MidBuildError.UnsupportedMatch /> }
     val bindingMark: U64 = state.bindings.count()
     val armScope: U64 = midOpenScope(state: inout state)
     val arm: SemanticMatchArm = semantic.arms[0U64]
+    match semantic.kind {
+        SemanticMatchKind.Wildcard => {
+            if semantic.isConsuming { midAppendStatement(state: inout state, statement: <MidStatement.Drop place=scrutinee />) }
+        }
+        _ => {}
+    }
     mut val payloadIndex: U64 = 0U64
     while payloadIndex < arm.payloads.count() {
         val payload: SemanticMatchPayload = arm.payloads[payloadIndex]
@@ -2126,8 +2132,11 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
             mut val enumIndex: U64 = 0U64
             match semantic.kind {
                 SemanticMatchKind.Enum(enumIndex: val selected) => { enumIndex = selected }
+                SemanticMatchKind.Wildcard => {
+                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+                }
                 SemanticMatchKind.Struct(layoutTerm: _) => {
-                    return buildMidStructPattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
+                    return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
                 }
             }
             val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)

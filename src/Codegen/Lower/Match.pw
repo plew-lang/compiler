@@ -75,16 +75,18 @@ pub impl Comp {
     }
 
     inout fn syntaxMatchHasEnumOrStruct(arms: SyntaxSlice) -> Bool {
+        mut val onlyDiscards: Bool = syntaxMatchArmCount(file: self.syntax, arms: arms) > 0U64
         mut val i: U64 = 0U64
         while i < syntaxMatchArmCount(file: self.syntax, arms: arms) {
             val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: i))
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
+            if !pattern.isWildcard || pattern.captureName.end > pattern.captureName.start { onlyDiscards = false }
             if !(pattern.isWildcard) {
                 if !(pattern.isLiteral) { return true }
             }
             i += 1U64
         }
-        return false
+        return onlyDiscards
     }
 
     inout fn syntaxMatchHasCapture(arms: SyntaxSlice) -> Bool {

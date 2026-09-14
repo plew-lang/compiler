@@ -23,7 +23,6 @@ pub impl LlvmCtx {
     }
 
     inout fn genLlvmMatch(c: inout Comp, scrut: U64, arms: MatchArmRange) {
-        val consuming: Bool = c.matchScrutIsMove(scrut: scrut)
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a struct destructuring match `match s { S { val x } => … }` is irrefutable
@@ -76,6 +75,7 @@ pub impl LlvmCtx {
         // the outer (e.g. monomorphized-method) env so a body's `self.f` / `self.inner`
         // still grounds. Saved here so each arm can set/restore around its bind.
         val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
+        val consuming: Bool = c.matchConsumesValue(scrut: scrut, typeTerm: scrutRef)
         // Semantic TypeRefs may be reconstructed at distinct source sites while
         // denoting the same instance.  The stored LLVM value, however, has one
         // concrete registered layout.  Payload reads must use that layout's

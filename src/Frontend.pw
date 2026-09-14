@@ -1821,9 +1821,11 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
 // True if any arm dispatches on an enum variant or a struct pattern (so the match
 // must go through the enum emitter, not the scalar desugar).
 fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
+    mut val onlyDiscards: Bool = arms.count() > 0U64
     mut val i: U64 = 0
     while i < arms.count() {
         val p: PatternAst = arms[i].pattern
+        if !p.isWildcard || p.captureName.bytes().count() > 0U64 { onlyDiscards = false }
         if !(p.isWildcard) {
             if !(p.isLiteral) {
                 return true
@@ -1831,7 +1833,7 @@ fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
         }
         i += 1
     }
-    return false
+    return onlyDiscards
 }
 
 // True if the arms are exactly the two boolean literals `true` and `false` (a

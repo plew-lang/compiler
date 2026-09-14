@@ -968,6 +968,19 @@ pub impl Comp {
         if !(self.cur.recordCallTemplates) { return }
         val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
         if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.typeCount() { return }
+        mut val onlyDiscards: Bool = arms.len > 0U64
+        mut val discardArms: Array[SemanticMatchArm] = []
+        mut val discardIndex: U64 = 0U64
+        while discardIndex < arms.len {
+            val arm = self.matchArmAt(arms: arms, index: discardIndex)
+            if !arm.isWildcard || arm.binds.len != 0U64 { onlyDiscards = false }
+            discardArms.append(<SemanticMatchArm />)
+            discardIndex += 1U64
+        }
+        if onlyDiscards {
+            self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchConsumesValue(scrut: scrut, typeTerm: scrutineeTerm) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Wildcard /> arms=discardArms />)
+            return
+        }
         // Patterns select the lexical declaration's shape, while the match
         // fact retains the original value type for BodyInstance grounding.
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: scrutineeTerm)
@@ -1014,7 +1027,7 @@ pub impl Comp {
             }
             armIndex += 1U64
         }
-        self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchScrutIsMove(scrut: scrut) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Enum enumIndex=enumIndex /> arms=selectedArms />)
+        self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchConsumesValue(scrut: scrut, typeTerm: scrutineeTerm) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Enum enumIndex=enumIndex /> arms=selectedArms />)
     }
 
     // The value of an expression block is its final `give`.  Read the term
