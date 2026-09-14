@@ -139,7 +139,20 @@ struct LlvmExistentialWitness {
 }
 pub impl LlvmExistentialWitness { factory }
 
+// Logical value types stay separate from the private physical call signature.
+struct LlvmValueAbi {
+    pub val parameterTypes: Array[LLVMTypeRef]
+    pub val parameterIndices: Array[U64]
+    pub val functionType: LLVMTypeRef
+}
+pub impl LlvmValueAbi { factory }
+
 struct LlvmCtx {
+    pub mut val valueAbiByvalKind: U32 = 0U32
+    pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
+    pub mut val valueAbiParameters: Array[LLVMTypeRef] = []
+    pub mut val valueAbiParameterIndices: Array[U64] = []
+
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich
     // record here ensures that reporting never owns or copies Mid internals.
@@ -512,6 +525,17 @@ extern(c) {
     // the callee reads the low 32 bits, and our counts are tiny. Revisit once
     // integer narrowing (wrapping / TryFrom) lands.
     fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
+
+    fn LLVMCountParamTypes(functionType~: LLVMTypeRef) -> U64
+    fn LLVMGetParamTypes(functionType~: LLVMTypeRef, parameters~: CPtr[LLVMTypeRef])
+    fn LLVMGetReturnType(functionType~: LLVMTypeRef) -> LLVMTypeRef
+    fn LLVMGetNamedFunction(module~: LLVMModuleRef, name~: CPtr[U8]) -> U64
+    fn LLVMGetValueName(value~: LLVMValueRef) -> CPtr[U8]
+    fn LLVMCreateTypeAttribute(context~: LLVMContextRef, kind~: U32, valueType~: LLVMTypeRef) -> LLVMAttributeRef
+    fn LLVMAddCallSiteAttribute(call~: LLVMValueRef, index~: U32, attribute~: LLVMAttributeRef)
+    fn LLVMGetBasicBlockParent(block~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMGetFirstInstruction(block~: LLVMBasicBlockRef) -> U64
+    fn LLVMPositionBuilder(builder~: LLVMBuilderRef, block~: LLVMBasicBlockRef, instruction~: U64)
 
     // Functions / basic blocks / params.
     fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
@@ -1909,4 +1933,9 @@ fn llvmLoad(builder~: LLVMBuilderRef, valueType~: LLVMTypeRef, address~: LLVMVal
 
 fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValueRef) {
     if llvmTypeHasStorage(LLVMTypeOf(value)) { LLVMBuildStore(builder, value, address) }
+}
+
+fn llvmValueAbiIsIndirect(type~: LLVMTypeRef) -> Bool {
+    val kind = LLVMGetTypeKind(type)
+    return (kind == 10U32 || kind == 11U32) && llvmTypeHasStorage(type)
 }

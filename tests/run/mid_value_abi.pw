@@ -22,6 +22,13 @@ fn changed(packet: Packet) -> Packet {
     copy.items[0] = 40I64
     return copy
 }
+fn emptyWorker() -> Worker {
+    print(7I64)
+    return <Worker />
+}
+fn surrounded(before: Worker, packet: Packet, after: Worker) -> I64 {
+    return packet.total()
+}
 fn exercise() {
     val original = <Packet first=1 second=2 third=3 items=[4I64] />
     val copy = changed(packet: identity(value: original))
@@ -31,5 +38,8 @@ fn exercise() {
     print(copy.total())
     print(closure(original))
     print(reader.read(packet: copy))
+    print(surrounded(before: emptyWorker(), packet: copy, after: emptyWorker()))
+    val emptyClosure = fn(before: Worker, packet: Packet, after: Worker) -> I64 { return packet.total() }
+    print(emptyClosure(<Worker />, original, <Worker />))
 }
 fn main() { exercise() }

@@ -340,7 +340,7 @@ pub impl LlvmCtx {
                     if fgslot >= self.genFnK.count() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` error conversion factory has no frozen free-function body")
                     }
-                    convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
+                    convErrVal = self.callValueFunction(signature: self.genFnTy[fgslot], function: self.genFnVal[fgslot], arguments: cav)
                     didConvert = true
                 }
             }

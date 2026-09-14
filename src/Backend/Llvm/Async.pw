@@ -177,7 +177,7 @@ pub impl LlvmCtx {
                 appendU64Dec(into: inout rnm, n: fi)
                 appendBytes(into: inout rnm, from: "_resume".bytes())
                 rnm.append(0)
-                val resumeFn: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(rnm), resumeTy)
+                val resumeFn: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(rnm), signature: resumeTy)
                 self.asyncFnIdx.append(fi)
                 self.asyncFrameTy.append(frameTy)
                 self.asyncResumeFn.append(resumeFn)
@@ -195,7 +195,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout enm, from: "pf".bytes())
                     appendU64Dec(into: inout enm, n: fi)
                     enm.append(0)
-                    val entryFn: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(enm), fty)
+                    val entryFn: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(enm), signature: fty)
                     self.asyncEntryIdx.append(fi)
                     self.asyncEntryVal.append(entryFn)
                     self.asyncEntryTy.append(fty)
@@ -487,7 +487,7 @@ pub impl LlvmCtx {
         // params included).
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            val pv: LLVMValueRef = LLVMGetParam(entryFn, pi)
+            val pv: LLVMValueRef = self.valueParameter(function: entryFn, index: pi)
             llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
             val param: Param = c.funcParamAt(params: f.params, index: pi)
             if c.arcNeedsRelease(ref: param.ty) {
@@ -512,7 +512,7 @@ pub impl LlvmCtx {
         mut val cty: Array[LLVMTypeRef] = []
         cty.append(self.ptrty)
         val resumeFnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(cty), 1U64, 0I32)
-        val ignore: LLVMValueRef = LLVMBuildCall2(self.b, resumeFnTy, resumeFn, arrayCPtr(cargs), 1U64, anon())
+        val ignore: LLVMValueRef = self.callValueFunction(signature: resumeFnTy, function: resumeFn, arguments: cargs)
         if isMain {
             self.asyncLoopRun(c: inout c)
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
@@ -525,7 +525,7 @@ pub impl LlvmCtx {
         self.curRetVoid = true
         self.curAsync = true
         self.curFrameTy = frameTy
-        self.curFrameBase = LLVMGetParam(resumeFn, 0U64)
+        self.curFrameBase = self.valueParameter(function: resumeFn, index: 0U64)
         self.curResumeFn = resumeFn
         self.curAsyncState = 0
         val rEntry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, resumeFn, cstr(s: "entry"))

@@ -14,10 +14,13 @@ if result.returncode:
 llvm = result.stdout
 attributes = lambda text: re.findall(r'\bbyval\(([^)]+)\)', text)
 definitions = {}
+empty_types = re.findall(r'^(%[\w.]+) = type \{\s*\}', llvm, re.M)
 for line in llvm.splitlines():
     match = re.match(r'^define\b.*?@([\w.]+)\((.*)\)\s*\{', line)
     if match:
         definitions[match[1]] = attributes(match[2])
+        for empty in empty_types:
+            assert not re.search(re.escape(empty) + r'\s', match[2]), 'empty value parameter must have no physical lane'
 assert any(definitions.values()), 'no indirect aggregate value parameter was emitted'
 assert re.search(r'^define i32 @main\(', llvm, re.M), 'C entry linkage must remain external'
 assert not re.search(r'^declare[^\n]*byval', llvm, re.M), 'foreign declarations must keep their C ABI'

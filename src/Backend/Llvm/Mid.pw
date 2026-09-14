@@ -1782,9 +1782,9 @@ pub impl LlvmCtx {
         if calleeDef.isExtern {
             result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon())
         } else if useMethodInstance {
-            result = LLVMBuildCall2(self.b, self.genMethTy[methodSlot], self.genMethVal[methodSlot], arrayCPtr(values), values.count(), anon())
+            result = self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values)
         } else {
-            result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon())
+            result = self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values)
         }
         if c.arena.functionAt(index: selected.callee).hasRet {
             val projected: LLVMValueRef = self.midProjectCallResult(selected: selected, value: result)
@@ -3778,7 +3778,7 @@ pub impl LlvmCtx {
         mut val resultType: LLVMTypeRef = self.voidty
         if !unit { resultType = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
         val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-        val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), values.count(), anon())
+        val result: LLVMValueRef = self.callValueFunction(signature: signature, function: function, arguments: values)
         if !unit { llvmStore(self.b, result, self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64])) }
         return true
     }
@@ -3888,7 +3888,7 @@ pub impl LlvmCtx {
                 mut val resultType: LLVMTypeRef = self.voidty
                 if requirement.hasRet { resultType = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
                 val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-                val result: LLVMValueRef = LLVMBuildCall2(self.b, signature, function, arrayCPtr(values), values.count(), anon())
+                val result: LLVMValueRef = self.callValueFunction(signature: signature, function: function, arguments: values)
                 if requirement.hasRet { llvmStore(self.b, result, self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true)) }
                 return true
             }
@@ -4156,8 +4156,8 @@ pub impl LlvmCtx {
         self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
-        else if useMethod { result = LLVMBuildCall2(self.b, self.genMethTy[methodSlot], self.genMethVal[methodSlot], arrayCPtr(values), values.count(), anon()) }
-        else { result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon()) }
+        else if useMethod { result = self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values) }
+        else { result = self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values) }
         if callee.hasRet {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
             llvmStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
@@ -4498,9 +4498,9 @@ pub impl LlvmCtx {
                     // The ABI already gives the storage address. Retaining a
                     // second stack slot would turn `inout` mutation into a
                     // callee-local copy and break CoW writeback semantics.
-                    slot = LLVMGetParam(self.curFn, abiIndex)
+                    slot = self.valueParameter(function: self.curFn, index: abiIndex)
                 } else {
-                    llvmStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot)
+                    llvmStore(self.b, self.valueParameter(function: self.curFn, index: abiIndex), slot)
                 }
             }
             self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
@@ -4534,7 +4534,7 @@ pub impl LlvmCtx {
             if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
             if declaration.isParameter {
                 val abiIndex: U64 = abiParameterStart + local
-                val value = if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give LLVMGetParam(self.curFn, abiIndex) }
+                val value = if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give self.valueParameter(function: self.curFn, index: abiIndex) }
                 if declaration.isInout { slot = value }
                 else { llvmStore(self.b, value, slot) }
             }

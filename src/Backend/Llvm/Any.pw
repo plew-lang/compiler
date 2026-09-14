@@ -48,7 +48,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return fv
     }
@@ -77,7 +77,7 @@ pub impl LlvmCtx {
                     self.beginFnBody(fv: witness.function)
                     // The only erased ABI adaptation: a read receiver is a
                     // borrowed load from its box; inout keeps the same address.
-                    mut val receiver = LLVMGetParam(witness.function, 0U64)
+                    mut val receiver = self.valueParameter(function: witness.function, index: 0U64)
                     match member.receiverPassing {
                         CallReceiverPassing.Inout => {}
                         _ => { receiver = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef), receiver, anon()) }
@@ -85,7 +85,7 @@ pub impl LlvmCtx {
                     mut val parameters: Array[LLVMValueRef] = [receiver]
                     mut val index = 0U64
                     while index < member.parameterTypes.count() {
-                        parameters.append(LLVMGetParam(witness.function, index + 1U64))
+                        parameters.append(self.valueParameter(function: witness.function, index: index + 1U64))
                         index += 1U64
                     }
                     if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters) {
@@ -115,11 +115,11 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pfvtcopy".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
-        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueParameter(function: fv, index: 0U64), anon())
         val copied: LLVMValueRef = self.deepCopyStructValue(c: inout c, v: srcVal, sidx: sidx)
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
         llvmStore(self.b, copied, cell)
@@ -142,14 +142,14 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pfvtdrop".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val savedFn: LLVMValueRef = self.curFn
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
         if c.arcNeedsRelease(ref: instRef) {
-            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueParameter(function: fv, index: 0U64), anon())
             self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }
         LLVMBuildRetVoid(self.b)
@@ -183,7 +183,7 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        LLVMBuildCall2(self.b, dty, dropFn, arrayCPtr(av), 1U64, anon())
+        self.callValueFunction(signature: dty, function: dropFn, arguments: av)
         self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -229,7 +229,7 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
-        val newData: LLVMValueRef = LLVMBuildCall2(self.b, fty, copyFn, arrayCPtr(av), 1U64, anon())
+        val newData: LLVMValueRef = self.callValueFunction(signature: fty, function: copyFn, arguments: av)
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())
@@ -696,7 +696,7 @@ pub impl LlvmCtx {
         // overlapping-inout runtime tier: the `any` receiver is a boxed copy (not a caller
         // place), so only the argument pairs need the pre-call place-identity check.
         self.emitInoutOverlapChecks(c: inout c, f: req, av: av, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 1U64, pinMark: pinMark)
-        val rv: LLVMValueRef = LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count(), anon())
+        val rv: LLVMValueRef = self.callValueFunction(signature: fty, function: fnPtr, arguments: av)
         self.releaseInoutPins(c: inout c, mark: pinMark)
         return rv
     }
@@ -1152,10 +1152,10 @@ pub impl LlvmCtx {
                     recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                 }
             }
-            mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+            mut val selfPtr: LLVMValueRef = self.valueParameter(function: fv, index: 0U64)
             if !(f.selfInout) {
                 selfPtr = self.entryAlloca(ty: recvTy)
-                llvmStore(self.b, LLVMGetParam(fv, 0U64), selfPtr)
+                llvmStore(self.b, self.valueParameter(function: fv, index: 0U64), selfPtr)
             }
             // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
             // `self.m()` in the body resolves through the same extension (so it is

@@ -1,0 +1,116 @@
+// The private Plew ABI preserves aggregate value snapshots through byval.
+// Logical signatures remain the inputs of call preparation and parameter binding;
+// this layer alone maps them to physical LLVM parameters and attributes.
+pub impl LlvmCtx {
+    inout fn byvalAttributeKind() -> U32 {
+        if self.valueAbiByvalKind == 0U32 {
+            self.valueAbiByvalKind = LLVMGetEnumAttributeKindForName(cstr(s: "byval"), 5U64)
+        }
+        return self.valueAbiByvalKind
+    }
+
+    inout fn valueAbi(signature~: LLVMTypeRef) -> LlvmValueAbi {
+        val count = LLVMCountParamTypes(signature)
+        mut val parameters: Array[LLVMTypeRef] = []
+        mut val index = 0U64
+        while index < count {
+            parameters.append(self.voidty)
+            index += 1U64
+        }
+        if count != 0U64 { LLVMGetParamTypes(signature, arrayCPtr(parameters)) }
+        mut val physical: Array[LLVMTypeRef] = []
+        mut val indices: Array[U64] = []
+        index = 0U64
+        while index < count {
+            val type = parameters[index]
+            indices.append(physical.count())
+            if !llvmTypeHasStorage(type) {
+                index += 1U64
+                continue
+            }
+            if llvmValueAbiIsIndirect(type) { physical.append(self.ptrty) }
+            else { physical.append(type) }
+            index += 1U64
+        }
+        return <LlvmValueAbi parameterTypes=parameters parameterIndices=indices functionType=LLVMFunctionType(LLVMGetReturnType(signature), arrayCPtr(physical), physical.count(), 0I32) />
+    }
+
+    inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
+        val abi = self.valueAbi(signature)
+        val function = LLVMAddFunction(self.mod, name, abi.functionType)
+        LLVMSetLinkage(function, 8U32)
+        // The iteration/attribute binding uses a nullable integer handle at
+        // the FFI floor. Resolve the actual (possibly uniqued) LLVM symbol.
+        val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
+        self.valueAbiFunctions[handle] = self.valueAbiParameters.count() + 1U64
+        mut val index = 0U64
+        while index < abi.parameterTypes.count() {
+            val type = abi.parameterTypes[index]
+            self.valueAbiParameters.append(type)
+            self.valueAbiParameterIndices.append(abi.parameterIndices[index])
+            if llvmValueAbiIsIndirect(type) {
+                LLVMAddAttributeAtIndex(handle, truncU32(n: abi.parameterIndices[index] + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), type))
+            }
+            index += 1U64
+        }
+        return function
+    }
+
+    // Use the actual builder's function: physical thunks may be emitted while
+    // another source body is active. Entry allocation prevents loop stack growth.
+    inout fn valueAbiSlot(type~: LLVMTypeRef) -> LLVMValueRef {
+        val entry = LLVMGetEntryBasicBlock(LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b)))
+        val builder = LLVMCreateBuilderInContext(self.ctx)
+        LLVMPositionBuilder(builder, entry, LLVMGetFirstInstruction(entry))
+        val slot = LLVMBuildAlloca(builder, type, anon())
+        LLVMDisposeBuilder(builder)
+        return slot
+    }
+
+    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> LLVMValueRef {
+        val abi = self.valueAbi(signature)
+        if abi.parameterTypes.count() != arguments.count() {
+            compileErrorAt(line: 0I64, msg: "internal error: private value ABI argument count mismatch")
+        }
+        mut val values: Array[LLVMValueRef] = []
+        mut val index = 0U64
+        while index < arguments.count() {
+            val value = arguments[index]
+            val type = abi.parameterTypes[index]
+            if !llvmTypeHasStorage(type) {
+                index += 1U64
+                continue
+            }
+            if llvmValueAbiIsIndirect(type) {
+                val slot = self.valueAbiSlot(type)
+                llvmStore(self.b, value, slot)
+                values.append(slot)
+            } else { values.append(value) }
+            index += 1U64
+        }
+        val call = LLVMBuildCall2(self.b, abi.functionType, function, arrayCPtr(values), values.count(), anon())
+        index = 0U64
+        while index < abi.parameterTypes.count() {
+            val type = abi.parameterTypes[index]
+            if llvmValueAbiIsIndirect(type) {
+                LLVMAddCallSiteAttribute(call, truncU32(n: abi.parameterIndices[index] + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), type))
+            }
+            index += 1U64
+        }
+        return call
+    }
+
+    inout fn valueParameter(function: LLVMValueRef, index: U64) -> LLVMValueRef {
+        val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
+        val start = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+        if start == 0U64 {
+            compileErrorAt(line: 0I64, msg: "internal error: private value ABI parameter lacks declaration")
+        }
+        val slot = start - 1U64 + index
+        val type = self.valueAbiParameters[slot]
+        if !llvmTypeHasStorage(type) { return LLVMGetUndef(type) }
+        val value = LLVMGetParam(function, self.valueAbiParameterIndices[slot])
+        if llvmValueAbiIsIndirect(type) { return llvmLoad(self.b, type, value, anon()) }
+        return value
+    }
+}

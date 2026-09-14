@@ -103,7 +103,7 @@ pub impl LlvmCtx {
             }
             mut val itArgs: Array[LLVMValueRef] = []
             itArgs.append(iterableVal)
-            iterVal = LLVMBuildCall2(self.b, self.genMethTy[itgSlot], self.genMethVal[itgSlot], arrayCPtr(itArgs), 1U64, anon())
+            iterVal = self.callValueFunction(signature: self.genMethTy[itgSlot], function: self.genMethVal[itgSlot], arguments: itArgs)
             iterStructStart = c.arena.functionAt(index: itfi).retStart
             iterStructLen = c.arena.functionAt(index: itfi).retLen
         }
@@ -277,7 +277,7 @@ pub impl LlvmCtx {
         // it.next() — self is `inout` (the iterator slot pointer); yields Optional[Item].
         mut val nArgs: Array[LLVMValueRef] = []
         nArgs.append(iterSlot)
-        val opt: LLVMValueRef = LLVMBuildCall2(self.b, nextTy, nextVal, arrayCPtr(nArgs), 1U64, anon())
+        val opt: LLVMValueRef = self.callValueFunction(signature: nextTy, function: nextVal, arguments: nArgs)
         val optSlot: LLVMValueRef = self.entryAlloca(ty: optTy)
         llvmStore(self.b, opt, optSlot)
         val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())

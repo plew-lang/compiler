@@ -60,7 +60,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "pwclodrop".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function = LLVMAddFunction(self.mod, arrayCPtr(name), type)
+        val function = self.declareValueFunction(name: arrayCPtr(name), signature: type)
         self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
         return function
     }
@@ -87,7 +87,7 @@ pub impl LlvmCtx {
                 MidLlvmPrepared.None => { c.errorAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
                     self.beginFnBody(fv: queued.function)
-                    val environment = LLVMGetParam(queued.function, 0U64)
+                    val environment = self.valueParameter(function: queued.function, index: 0U64)
                     val environmentType = self.closureEnvTy(c: inout c, caps: closure.captures)
                     mut val parameters: Array[LLVMValueRef] = []
                     mut val index = 0U64
@@ -136,7 +136,7 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(env)
-        LLVMBuildCall2(self.b, dty, dropFn, arrayCPtr(av), 1U64, anon())
+        self.callValueFunction(signature: dty, function: dropFn, arguments: av)
         LLVMBuildBr(self.b, tailBB)
         LLVMPositionBuilderAtEnd(self.b, tailBB)
         self.rawbufFree(c: inout c, cell: env)
@@ -190,7 +190,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "__closure".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(name), functionTypeLlvm)
+        val function: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(name), signature: functionTypeLlvm)
         self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
     }
 
@@ -273,7 +273,7 @@ pub impl LlvmCtx {
         if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return false }
         if closure.captures.count() == 0U64 { return true }
         val environmentType: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: closure.captures)
-        val environment: LLVMValueRef = LLVMGetParam(self.curFn, 0U64)
+        val environment: LLVMValueRef = self.valueParameter(function: self.curFn, index: 0U64)
         mut val captureI: U64 = 0U64
         while captureI < closure.captures.count() {
             val capture: CaptureEntry = closure.captures[captureI]

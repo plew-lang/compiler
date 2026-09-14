@@ -238,7 +238,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_b".bytes())
         appendU64Dec(into: inout nm, n: bodyId)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.genMethK.append(mfi)
         self.genMethInst.append(instRef)
         self.genMethVal.append(fv)
@@ -373,10 +373,10 @@ pub impl LlvmCtx {
             val element = c.arena.typeAt(index: term.args[0])
             elementKind = kindFromTySpan(c: inout c, tyStart: element.nameStart, tyLen: element.nameLen)
         }
-        mut val slot: LLVMValueRef = LLVMGetParam(fv, argIdx)
+        mut val slot: LLVMValueRef = self.valueParameter(function: fv, index: argIdx)
         if !p.isInout {
             slot = self.entryAlloca(ty: pty)
-            llvmStore(self.b, LLVMGetParam(fv, argIdx), slot)
+            llvmStore(self.b, self.valueParameter(function: fv, index: argIdx), slot)
         }
         self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot, ty: pty, kind: kind, structIdx: structIndex, isArr: isArray, elemTy: elementType, elemKind: elementKind, typeRef: typeRef)
         if isArray { self.setLocalElemTypeRef(ref: term.args[0]) }

@@ -65,7 +65,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pf".bytes())
         appendU64Dec(into: inout nm, n: fi)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.fnIdx.append(fi)
         self.fnVal.append(fv)
         self.fnTy.append(fty)
@@ -126,7 +126,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
-                    val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+                    val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
                     c.cur.selfRef = savedSelf

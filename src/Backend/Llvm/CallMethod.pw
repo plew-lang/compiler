@@ -100,7 +100,7 @@ pub impl LlvmCtx {
                         c.cur.typeParams = gsavedP
                         c.cur.typeArgs = gsavedA
                         self.emitInoutOverlapChecks(c: inout c, f: gaf, av: gav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: gPinMark)
-                        val grv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(gav), gav.count(), anon())
+                        val grv: LLVMValueRef = self.callValueFunction(signature: self.genFnTy[agslot], function: self.genFnVal[agslot], arguments: gav)
                         self.releaseInoutPins(c: inout c, mark: gPinMark)
                         return self.projectFinalCallResult(c: inout c, callId: callId, value: grv)
                     }
@@ -114,7 +114,7 @@ pub impl LlvmCtx {
                 val agslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
                 if agslot < self.genFnK.count() {
                     self.emitInoutOverlapChecks(c: inout c, f: af, av: aav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: aPinMark)
-                    val arv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(aav), aav.count(), anon())
+                    val arv: LLVMValueRef = self.callValueFunction(signature: self.genFnTy[agslot], function: self.genFnVal[agslot], arguments: aav)
                     self.releaseInoutPins(c: inout c, mark: aPinMark)
                     return self.projectFinalCallResult(c: inout c, callId: callId, value: arv)
                 }
@@ -177,7 +177,7 @@ pub impl LlvmCtx {
                     }
                     self.appendCallArgValues(c: inout c, av: inout sav, f: smf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                     self.emitInoutOverlapChecks(c: inout c, f: smf, av: sav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: sPinMark)
-                    val srv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count(), anon())
+                    val srv: LLVMValueRef = self.callValueFunction(signature: self.fnTy[sslot], function: self.fnVal[sslot], arguments: sav)
                     self.releaseInoutPins(c: inout c, mark: sPinMark)
                     return self.projectFinalCallResult(c: inout c, callId: callId, value: srv)
                 }
@@ -270,7 +270,7 @@ pub impl LlvmCtx {
                             }
                             self.appendCallArgValues(c: inout c, av: inout eav, f: emf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                             self.emitInoutOverlapChecks(c: inout c, f: emf, av: eav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: ePinMark)
-                            val erv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count(), anon())
+                            val erv: LLVMValueRef = self.callValueFunction(signature: self.fnTy[eslot], function: self.fnVal[eslot], arguments: eav)
                             self.releaseInoutPins(c: inout c, mark: ePinMark)
                             return self.projectFinalCallResult(c: inout c, callId: callId, value: erv)
                         }
@@ -369,7 +369,7 @@ pub impl LlvmCtx {
         }
         self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
-        val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
+        val rv: LLVMValueRef = self.callValueFunction(signature: self.fnTy[slot], function: self.fnVal[slot], arguments: av)
         self.releaseInoutPins(c: inout c, mark: pinMark)
         return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
     }

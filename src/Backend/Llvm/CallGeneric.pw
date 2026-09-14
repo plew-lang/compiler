@@ -62,7 +62,7 @@ pub impl LlvmCtx {
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
-        val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
+        val rv: LLVMValueRef = self.callValueFunction(signature: self.genMethTy[slot], function: self.genMethVal[slot], arguments: av)
         self.releaseInoutPins(c: inout c, mark: pinMark)
         return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
     }

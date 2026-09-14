@@ -75,7 +75,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwdrop".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.dropWitReg.append(reg)
         self.dropWitVal.append(fv)
         self.dropWitTy.append(fty)
@@ -103,7 +103,7 @@ pub impl LlvmCtx {
             val slot: U64 = self.structDropWitness(c: inout c, reg: reg)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
-            LLVMBuildCall2(self.b, self.dropWitTy[slot], self.dropWitVal[slot], arrayCPtr(av), 1U64, anon())
+            self.callValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: av)
             return
         }
         // unregistered (rare; normally rejected at construction) — walk inline.
@@ -165,7 +165,7 @@ pub impl LlvmCtx {
                 return
             }
             val arguments: Array[LLVMValueRef] = [v]
-            LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(arguments), 1U64, anon())
+            self.callValueFunction(signature: self.genMethTy[slot], function: self.genMethVal[slot], arguments: arguments)
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
@@ -192,7 +192,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
+            self.emitDropWitnessWalk(c: inout c, v: self.valueParameter(function: fv, index: 0U64), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.dropWitDone += 1
         }

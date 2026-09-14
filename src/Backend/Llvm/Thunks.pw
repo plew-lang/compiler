@@ -47,7 +47,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "__fnthunk".bytes())
         appendU64Dec(into: inout nm, n: fi)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.thunkIdx.append(fi)
         self.thunkVal.append(fv)
         self.thunkTy.append(fty)
@@ -86,7 +86,7 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
-                av.append(LLVMGetParam(fv, pi + 1U64))
+                av.append(self.valueParameter(function: fv, index: pi + 1U64))
                 pi += 1
             }
             // Named function values are not source-reachable in v1. If this legacy
@@ -103,7 +103,7 @@ pub impl LlvmCtx {
                 callTy = self.genFnTy[callSlot]
                 callVal = self.genFnVal[callSlot]
             }
-            val r: LLVMValueRef = LLVMBuildCall2(self.b, callTy, callVal, arrayCPtr(av), av.count(), anon())
+            val r: LLVMValueRef = self.callValueFunction(signature: callTy, function: callVal, arguments: av)
             if f.hasRet {
                 LLVMBuildRet(self.b, r)
             } else {

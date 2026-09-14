@@ -312,7 +312,7 @@ pub impl LlvmCtx {
                 val slot: U64 = self.enumReleaseWitness(c: inout c, reg: ge)
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
-                LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
+                self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: av)
             }
             if didSet {
                 c.cur.typeParams = savedP
@@ -327,7 +327,7 @@ pub impl LlvmCtx {
                 val slot: U64 = self.enumReleaseWitness(c: inout c, reg: reg)
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
-                LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
+                self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: av)
             }
             return true
         }
@@ -363,7 +363,7 @@ pub impl LlvmCtx {
                 val slot: U64 = self.enumCopyWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
-                return LLVMBuildCall2(self.b, self.enumCopyWitTy[slot], self.enumCopyWitVal[slot], arrayCPtr(av), 1U64, anon())
+                return self.callValueFunction(signature: self.enumCopyWitTy[slot], function: self.enumCopyWitVal[slot], arguments: av)
             }
         }
         return v
@@ -585,7 +585,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwenumrel".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.enumRelWitReg.append(reg)
         self.enumRelWitVal.append(fv)
         self.enumRelWitTy.append(fty)
@@ -603,7 +603,7 @@ pub impl LlvmCtx {
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             val didSet: Bool = self.setEnumEnv(c: inout c, ref: self.genEnumRefs[reg])
-            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
+            self.emitEnumRelease(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
             if didSet {
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA
@@ -635,7 +635,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwenumret".bytes())
         appendU64Dec(into: inout nm, n: eid)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.enumRetWitEid.append(eid)
         self.enumRetWitVal.append(fv)
         self.enumRetWitTy.append(fty)
@@ -647,7 +647,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRetain(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRetWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
+            self.emitEnumRetain(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.enumRetWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
@@ -675,7 +675,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwenumcopy".bytes())
         appendU64Dec(into: inout nm, n: eid)
         nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.enumCopyWitEid.append(eid)
         self.enumCopyWitVal.append(fv)
         self.enumCopyWitTy.append(fty)
@@ -687,7 +687,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumCopyWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            LLVMBuildRet(self.b, self.deepCopyEnumValue(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumCopyWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumCopyWitEid[s])]))
+            LLVMBuildRet(self.b, self.deepCopyEnumValue(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.enumCopyWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumCopyWitEid[s])]))
             self.enumCopyWitDone += 1
         }
     }
@@ -737,7 +737,7 @@ pub impl LlvmCtx {
                 val slot: U64 = self.enumRetainWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
-                LLVMBuildCall2(self.b, self.enumRetWitTy[slot], self.enumRetWitVal[slot], arrayCPtr(av), 1U64, anon())
+                self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: av)
             }
             return true
         }

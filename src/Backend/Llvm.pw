@@ -25,6 +25,7 @@
 // The emitter is split across `Llvm/` for readability (one concern per file);
 // all parts share the module scope, so the split is purely organizational.
 
+part ./Llvm/ValueAbi
 part ./Llvm/Types
 part ./Llvm/Enums
 part ./Llvm/GenericStruct
