@@ -143,11 +143,10 @@ pub impl LlvmCtx {
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
             val type = contract.fieldTypes[field]
-            val value = LLVMBuildExtractValue(self.b, v, field, anon())
             if c.fieldIsBoxed(f: declaration.fields[field]) {
-                self.emitCellRelease(c: inout c, cell: value, ref: type)
+                self.emitCellRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()), ref: type)
             } else if c.arcNeedsRelease(ref: type) {
-                self.valueArc(c: inout c, v: value, typeRef: type, retain: false)
+                self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: type, retain: false)
             }
             field += 1U64
         }
