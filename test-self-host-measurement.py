@@ -54,10 +54,15 @@ int main(int argc, char **argv) {
             assert len({r['compiler_sha256'] for r in state['measurements']}) == 1, state
             assert 'self_compile_median_seconds=' in summary
             assert '-fdebug-pass-manager' in state['link_command'], state
+            assert '-passes=function(sroa,early-cse),cgscc(argpromotion)' in state['optimization_command'], state
+            assert state['optimizer_version'], state
             for row in state['generations']:
                 if 'successor' in row:
                     link_log = output / row['artifact'] / 'link.log'
                     assert link_log.is_file() and 'Running pass:' in link_log.read_text(), link_log
+                    opt_log = link_log.with_name('link.opt.log')
+                    assert opt_log.is_file() and 'Running pass:' in opt_log.read_text(), opt_log
+                    assert link_log.with_name('link.optimized.ll').is_file()
         print('PASS', label, flush=True)
 
     compiler('stable', 'stable')

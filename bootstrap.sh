@@ -52,7 +52,6 @@ LDLIBS="-L$LLVM_LIBDIR -lLLVM"
 # self-compile, so -O2 roughly halves self-compile time (measured 89s -> 45s).
 # The emitted IR is plewc's deterministic output, independent of this flag, so
 # the fixpoint still holds bit-for-bit; -O2 only costs a slower clang link.
-OPT="-O2"
 TRACE_DIR="${BOOTSTRAP_LOG_DIR:-tmp/bootstrap}"
 mkdir -p "$TRACE_DIR"
 
@@ -64,8 +63,11 @@ trace() {
 
 link() {
     stage=$1
-    shift
-    trace "$stage" clang -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions "$@"
+    llvm=$2
+    runtime=$3
+    output=$4
+    shift 4
+    python3 ./llvm_link.py --config "$LC" --log-prefix "$TRACE_DIR/$stage" --llvm "$llvm" --runtime "$runtime" --output "$output" -- "$@"
 }
 
 [ -f "$SEED_LL" ] || { echo "missing $SEED_LL — cannot bootstrap" >&2; exit 1; }
@@ -74,7 +76,7 @@ link() {
 echo "[1/4] clang the IR seed -> plewc0..."
 # Built at plewc0 so it resolves @Std from std/ (the std
 # root is the binary's directory + std/, see computeStdRoot).
-link seed-link -w $OPT "$SEED_LL" "$SEED_RT" $LDLIBS -o plewc0
+link seed-link "$SEED_LL" "$SEED_RT" plewc0 $LDLIBS
 
 echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # The resolver (resolve/_.pw) imports only the arena-free toolchain leaves
@@ -85,14 +87,14 @@ echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # refresh is fine (we rely on what is already cached).
 trace resolver-compile ./plewc0 --trace-phases resolve/_.pw > plew-resolve.ll
 ./plewc0 --runtime > plew-resolve.runtime.c
-link resolver-link -w $OPT plew-resolve.ll plew-resolve.runtime.c -o plew-resolve
+link resolver-link plew-resolve.ll plew-resolve.runtime.c plew-resolve
 ./plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
 rm -f plew-resolve.ll plew-resolve.runtime.c
 
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
 trace compiler-compile ./plewc0 --trace-phases "$PW" > plewc.ll
 ./plewc0 --runtime > plewc.runtime.c
-link compiler-link -w $OPT plewc.ll plewc.runtime.c $LDLIBS -o plewc
+link compiler-link plewc.ll plewc.runtime.c plewc $LDLIBS
 
 if [ "$1" = "--reseed" ]; then
     cp plewc.ll "$SEED_LL"

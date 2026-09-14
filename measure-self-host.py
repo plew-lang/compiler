@@ -10,6 +10,8 @@ import statistics
 import subprocess
 import sys
 
+import llvm_link
+
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -42,12 +44,15 @@ def main():
     if not libdir:
         prefix = Path(config).parent.parent / 'lib'
         libdir = str(prefix) if (prefix / 'libLLVM.dylib').exists() else subprocess.check_output([config, '--libdir'], text=True).strip()
+    opt = llvm_link.optimizer(config)
     output.mkdir(parents=True, exist_ok=False)
     state = dict(schema='self-host-measure-v2', status='running', carrier=str(carrier),
                  carrier_sha256=digest(carrier), source=str(source), runs=runs,
-                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
+                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<optimized-llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
                  llvm_config=config, llvm_version=subprocess.check_output([config, '--version'], text=True).strip(),
                  clang_version=subprocess.check_output([clang, '--version'], text=True).strip(),
+                 optimization_command=llvm_link.optimization_command(config, '<llvm>', '<optimized-llvm>'),
+                 optimizer_version=subprocess.check_output([opt, '--version'], text=True).strip(),
                  generations=[], measurements=[])
 
     def save():
@@ -69,7 +74,8 @@ def main():
         for root in (Path('std'), Path('../syntax')):
             paths.update(p for p in root.rglob('*') if p.suffix == '.pw' or p.name in ('Plew.toml', 'Plew.lock'))
         paths.update(Path(p) for p in ('Plew.toml', 'Plew.lock'))
-        paths.update((carrier, Path(config), Path(clang)))
+        paths.update((carrier, Path(config), Path(clang), Path(opt)))
+        paths.update(Path(p) for p in ('llvm_link.py', 'trace-command.py', 'measure-self-host.py', 'measure-self-host.sh', 'measure-self-compile.sh', 'measure-self-compile.py'))
         paths.update(Path(libdir).glob('libLLVM*.dylib'))
         return {str(p.absolute()): digest(p) for p in sorted(paths) if p.is_file()}
 
@@ -101,10 +107,9 @@ def main():
             # Linking is not a timed compiler sample. Observe real LLVM pass
             # progress and bound inactivity, rather than killing a progressing
             # optimized link after an arbitrary total wall time.
-            subprocess.run([sys.executable, './trace-command.py', str(directory / 'link.log'), '--',
-                            clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2',
-                            str(directory / 'compiler.ll'), str(directory / 'runtime.c'),
-                            '-L' + libdir, '-lLLVM', '-o', str(successor)], check=True)
+            llvm_link.link(config, directory / 'link', directory / 'compiler.ll',
+                           directory / 'runtime.c', successor, ['-L' + libdir, '-lLLVM'], clang)
+            check_inputs()
             (successor.parent / 'std').symlink_to(Path('std').absolute(), target_is_directory=True)
             row['successor'] = str(successor)
             row['successor_sha256'] = digest(successor)

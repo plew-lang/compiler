@@ -36,11 +36,10 @@ fi
 LDLIBS="-L$LLVM_LIBDIR -lLLVM"
 # -O2 to match bootstrap.sh: plewc is run on every self-compile, so optimizing
 # the binary roughly halves rebuild/compile time (the emitted IR is unaffected).
-OPT="-O2"
 TRACE_DIR="${DEV_REBUILD_LOG_DIR:-tmp/dev-rebuild}"
 mkdir -p "$TRACE_DIR"
 python3 ./trace-command.py "$TRACE_DIR/compile.log" -- "$PLEWC" --trace-phases src/_.pw > /tmp/_plewc.ll
 "$PLEWC" --runtime > /tmp/_plewc.runtime.c
-python3 ./trace-command.py "$TRACE_DIR/link.log" -- clang -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -w $OPT /tmp/_plewc.ll /tmp/_plewc.runtime.c $LDLIBS -o /tmp/_plewc.new
+python3 ./llvm_link.py --config "$LC" --log-prefix "$TRACE_DIR/link" --llvm /tmp/_plewc.ll --runtime /tmp/_plewc.runtime.c --output /tmp/_plewc.new -- $LDLIBS
 mv -f /tmp/_plewc.new plewc
 echo "rebuilt plewc from current source"
