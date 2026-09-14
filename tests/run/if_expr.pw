@@ -14,7 +14,7 @@ fn classify(n: I64) -> I64 {
 }
 
 fn main() {
-    val a: I64 = if 3 > 2 {
+    val a: I64 = if 3I64 > 2 {
         val x: I64 = 10
         give x + 5
     } else {
