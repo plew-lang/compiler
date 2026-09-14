@@ -2142,7 +2142,7 @@ pub impl Comp {
         self.cur.typeParams = noParams
         self.cur.typeArgs = noArgs
         self.cur.recordCallTemplates = recordCallTemplates
-        self.cur.checkFn = self.arena.functionCount()
+        self.cur.checkFn = 18446744073709551615U64
         mut val gvi: U64 = 0
         while !self.genMode && gvi < self.arena.globals.count() {
             self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
@@ -2170,7 +2170,7 @@ pub impl Comp {
         self.cur.itemRef = 0
         self.cur.typeParams = []
         self.cur.typeArgs = []
-        self.cur.checkFn = self.arena.functionCount()
+        self.cur.checkFn = 18446744073709551615U64
         self.cur.recordCallTemplates = false
     }
 }
