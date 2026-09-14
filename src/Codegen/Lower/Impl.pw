@@ -569,7 +569,7 @@ pub impl Comp {
                 val optN: Bind = self.internBytes(s: "Optional")
                 mut val oargs: Array[U64] = []
                 oargs.append(ft.ref)
-                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=m.name.start />)
                 retStart = optN.nameStart
                 retLen = optN.nameLen
             } else {
@@ -579,7 +579,7 @@ pub impl Comp {
                     mut val rargs: Array[U64] = []
                     rargs.append(ft.ref)
                     rargs.append(et.ref)
-                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=m.name.start />)
                     retStart = resN.nameStart
                     retLen = resN.nameLen
                 } else {
@@ -606,6 +606,9 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
+        if recvTraitOwner == 0U64 {
+            self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
+        }
         val body: U64 = self.lowerSyntaxBlock(id: m.body)
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
@@ -710,7 +713,7 @@ pub impl Comp {
                 val optN: Bind = self.internBytes(s: "Optional")
                 mut val oargs: Array[U64] = []
                 oargs.append(ft.ref)
-                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=m.nameSpan.start />)
                 retStart = optN.nameStart
                 retLen = optN.nameLen
                 retIsArray = false
@@ -721,7 +724,7 @@ pub impl Comp {
                     mut val rargs: Array[U64] = []
                     rargs.append(ft.ref)
                     rargs.append(et.ref)
-                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=m.nameSpan.start />)
                     retStart = resN.nameStart
                     retLen = resN.nameLen
                     retIsArray = false
@@ -751,6 +754,9 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
+        if recvTraitOwner == 0U64 {
+            self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
+        }
         val body: U64 = self.lowerBlock(b: m.body)
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()

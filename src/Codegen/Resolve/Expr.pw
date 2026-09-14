@@ -379,6 +379,14 @@ pub impl Comp {
         return 0U64
     }
 
+    // Signature Self remains abstract at the public boundary. Context inside
+    // the declaration uses its lexical receiver, including its own binders.
+    inout fn semanticBodyReturnContext(fnIdx: U64) -> U64 {
+        val term = self.semanticBodyReturnTerm(fnIdx: fnIdx)
+        if fnIdx >= self.arena.functionCount() { return term }
+        return self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: self.parametricSelfRef(f: self.arena.functionAt(index: fnIdx)))
+    }
+
     // A conferred callable executes an authored body under its own proof.
     // All declaration-time facts (calls, aggregates, matches and closures)
     // belong to that shared source body. The copy records its exact owner;
