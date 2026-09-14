@@ -17,3 +17,6 @@
 /asan.runtime.c
 /plewc_asan
 /plewc_asan.dSYM/
+
+# Python helper bytecode
+/__pycache__/
