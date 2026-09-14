@@ -1,0 +1,53 @@
+import @Std/Io with { print }
+
+fn addU8(first~: U8, second~: U8) -> U8 { return first + second }
+fn subU8(first~: U8, second~: U8) -> U8 { return first - second }
+fn mulU8(first~: U8, second~: U8) -> U8 { return first * second }
+fn addU16(first~: U16, second~: U16) -> U16 { return first + second }
+fn subU16(first~: U16, second~: U16) -> U16 { return first - second }
+fn mulU16(first~: U16, second~: U16) -> U16 { return first * second }
+fn addU32(first~: U32, second~: U32) -> U32 { return first + second }
+fn subU32(first~: U32, second~: U32) -> U32 { return first - second }
+fn mulU32(first~: U32, second~: U32) -> U32 { return first * second }
+fn addU64(first~: U64, second~: U64) -> U64 { return first + second }
+fn subU64(first~: U64, second~: U64) -> U64 { return first - second }
+fn mulU64(first~: U64, second~: U64) -> U64 { return first * second }
+fn addI8(first~: I8, second~: I8) -> I8 { return first + second }
+fn subI8(first~: I8, second~: I8) -> I8 { return first - second }
+fn mulI8(first~: I8, second~: I8) -> I8 { return first * second }
+fn addI16(first~: I16, second~: I16) -> I16 { return first + second }
+fn subI16(first~: I16, second~: I16) -> I16 { return first - second }
+fn mulI16(first~: I16, second~: I16) -> I16 { return first * second }
+fn addI32(first~: I32, second~: I32) -> I32 { return first + second }
+fn subI32(first~: I32, second~: I32) -> I32 { return first - second }
+fn mulI32(first~: I32, second~: I32) -> I32 { return first * second }
+fn addI64(first~: I64, second~: I64) -> I64 { return first + second }
+fn subI64(first~: I64, second~: I64) -> I64 { return first - second }
+fn mulI64(first~: I64, second~: I64) -> I64 { return first * second }
+
+fn main() {
+    print(addU8(255U8, 0U8))
+    print(subU8(255U8, 1U8))
+    print(mulU8(255U8, 1U8))
+    print(addU16(65535U16, 0U16))
+    print(subU16(65535U16, 1U16))
+    print(mulU16(65535U16, 1U16))
+    print(addU32(4294967295U32, 0U32))
+    print(subU32(4294967295U32, 1U32))
+    print(mulU32(4294967295U32, 1U32))
+    print(addU64(18446744073709551615U64, 0U64))
+    print(subU64(18446744073709551615U64, 1U64))
+    print(mulU64(18446744073709551615U64, 1U64))
+    print(addI8(127I8, 0I8))
+    print(subI8(127I8, 1I8))
+    print(mulI8(127I8, 1I8))
+    print(addI16(32767I16, 0I16))
+    print(subI16(32767I16, 1I16))
+    print(mulI16(32767I16, 1I16))
+    print(addI32(2147483647I32, 0I32))
+    print(subI32(2147483647I32, 1I32))
+    print(mulI32(2147483647I32, 1I32))
+    print(addI64(9223372036854775807I64, 0I64))
+    print(subI64(9223372036854775807I64, 1I64))
+    print(mulI64(9223372036854775807I64, 1I64))
+}

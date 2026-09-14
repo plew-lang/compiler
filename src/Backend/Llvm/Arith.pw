@@ -45,8 +45,53 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // add/sub/mul/div/rem -> a call to the checked runtime helper; any other op (and
-    // the wrapping* methods, which call buildBinOpS directly) -> the raw builder.
+    // Physical lowering of the selected checked integer operation. The helper
+    // remains small before optimization and exposes both arithmetic and panic
+    // to ordinary LLVM inlining, without weakening overflow semantics.
+    inout fn checkedArithmeticFunction(c: inout Comp, op: I64, unsigned: Bool, wi: U64, signature: LLVMTypeRef) -> LLVMValueRef {
+        val name = "pw_checked_" + checkedFnName(op: op, unsigned: unsigned, wi: wi)
+        val function = self.getOrDeclare(c: inout c, name: name, fnTy: signature)
+        if LLVMCountBasicBlocks(function) != 0U32 { return function }
+        LLVMSetLinkage(function, 8U32) // LLVMInternalLinkage
+        val integerType = self.llvmIntTyOfIdx(wi: wi)
+        val parameters: Array[LLVMTypeRef] = [integerType, integerType]
+        val resultFields: Array[LLVMTypeRef] = [integerType, self.i1ty]
+        val resultType = LLVMStructTypeInContext(self.ctx, arrayCPtr(resultFields), 2U64, 0I32)
+        val intrinsicType = LLVMFunctionType(resultType, arrayCPtr(parameters), 2U64, 0I32)
+        mut val intrinsicName = "llvm.".bytes()
+        if unsigned { appendBytes(into: inout intrinsicName, from: "u".bytes()) }
+        else { appendBytes(into: inout intrinsicName, from: "s".bytes()) }
+        if op == opAdd() { appendBytes(into: inout intrinsicName, from: "add".bytes()) }
+        else if op == opSub() { appendBytes(into: inout intrinsicName, from: "sub".bytes()) }
+        else { appendBytes(into: inout intrinsicName, from: "mul".bytes()) }
+        appendBytes(into: inout intrinsicName, from: ".with.overflow.".bytes())
+        appendBytes(into: inout intrinsicName, from: checkedPrefixBytes(unsigned: false, wi: wi))
+        val intrinsic = self.getOrDeclare(c: inout c, name: stringFromBytesUnchecked(intrinsicName), fnTy: intrinsicType)
+        val panicParameters: Array[LLVMTypeRef] = [self.ptrty, self.i64ty]
+        val panicType = LLVMFunctionType(LLVMVoidTypeInContext(self.ctx), arrayCPtr(panicParameters), 2U64, 0I32)
+        val panicFunction = self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: panicType)
+        val builder = LLVMCreateBuilderInContext(self.ctx)
+        val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
+        val overflow = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "overflow"))
+        val done = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "done"))
+        LLVMPositionBuilderAtEnd(builder, entry)
+        val arguments: Array[LLVMValueRef] = [LLVMGetParam(function, 0U64), LLVMGetParam(function, 1U64)]
+        val result = LLVMBuildCall2(builder, intrinsicType, intrinsic, arrayCPtr(arguments), 2U64, anon())
+        val failed = LLVMBuildExtractValue(builder, result, 1U64, anon())
+        LLVMBuildCondBr(builder, failed, overflow, done)
+        LLVMPositionBuilderAtEnd(builder, overflow)
+        val message = LLVMBuildGlobalStringPtr(builder, cstr(s: "integer overflow"), anon())
+        val panicArguments: Array[LLVMValueRef] = [message, LLVMConstInt(self.i64ty, 16U64, 0I32)]
+        LLVMBuildCall2(builder, panicType, panicFunction, arrayCPtr(panicArguments), 2U64, anon())
+        LLVMBuildUnreachable(builder)
+        LLVMPositionBuilderAtEnd(builder, done)
+        LLVMBuildRet(builder, LLVMBuildExtractValue(builder, result, 0U64, anon()))
+        LLVMDisposeBuilder(builder)
+        return function
+    }
+
+    // Checked arithmetic uses an optimizable helper; division/remainder retain
+    // their runtime helper. Other operations use the raw builder.
     inout fn buildBinOpChecked(c: inout Comp, op: I64, l: LLVMValueRef, r: LLVMValueRef, unsigned: Bool) -> LLVMValueRef {
         if op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem() {
             val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
@@ -55,7 +100,12 @@ pub impl LlvmCtx {
             ptys.append(ity)
             ptys.append(ity)
             val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+            mut val callee: LLVMValueRef = LLVMConstNull(self.ptrty)
+            if op == opAdd() || op == opSub() || op == opMul() {
+                callee = self.checkedArithmeticFunction(c: inout c, op: op, unsigned: unsigned, wi: wi, signature: fty)
+            } else {
+                callee = self.getOrDeclare(c: inout c, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
+            }
             mut val av: Array[LLVMValueRef] = []
             av.append(l)
             av.append(r)
