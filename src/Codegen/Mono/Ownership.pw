@@ -46,21 +46,26 @@ pub impl Comp {
             if underlying != 0U64 {
                 self.enqueueFinalDestruction(typeRef: underlying)
             } else {
-                match self.arcClassOfRef(ref: typeRef) {
-                    ArcClass.StructVal(sidx: val index) => {
-                        val declaration = self.arena.structAt(index: index)
-                        if declaration.isUnique {
-                            val function = self.structOwnDeinitFi(sidx: index)
-                            if function < self.arena.functionCount() {
-                                destructor = self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef)
-                            }
-                        }
-                        mut val field = 0U64
-                        while field < declaration.fields.count() {
-                            fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
-                            field += 1U64
+                // Structural layout is independent of the specialized ARC
+                // action (String/Buffer/Ref/Promise). Freeze declared fields
+                // even when that action is not StructVal.
+                val structure = self.structIndexForType(ref: typeRef)
+                if structure < self.arena.structCount() {
+                    val declaration = self.arena.structAt(index: structure)
+                    if declaration.isUnique {
+                        val function = self.structOwnDeinitFi(sidx: structure)
+                        if function < self.arena.functionCount() {
+                            destructor = self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef)
                         }
                     }
+                    mut val field = 0U64
+                    while field < declaration.fields.count() {
+                        fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                        field += 1U64
+                    }
+                }
+                match self.arcClassOfRef(ref: typeRef) {
+                    ArcClass.StructVal(sidx: _) => {}
                     ArcClass.EnumVal(eidx: val index) => {
                         val declaration = self.arena.enumAt(index: index)
                         mut val variant = 0U64
