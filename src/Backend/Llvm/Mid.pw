@@ -4775,6 +4775,18 @@ impl LlvmCtx {
             } else if !self.midCanonicalEmitNonCallTerminator(c: inout c, body: body, terminatorId: block.terminator, blocks: blocks) { return false }
             blockI = blockI + 1U64
         }
+        if c.emitMidCoverage {
+            // Emission evidence belongs to the prepared-body consumer, not to
+            // eligibility or fallback selection. LLVM-generated symbols are
+            // C strings; retain their exact spelling for definition matching.
+            val length: Array[U64] = [0U64]
+            val symbol = stringFromCString(LLVMGetValueName2(self.curFn, arrayCPtr(length)))
+            eprint(text: "mid-body symbol=")
+            eprint(text: symbol)
+            eprint(text: " canonical=")
+            self.traceCodegenU64(n: canonical.body)
+            eprint(text: "\n")
+        }
         return true
     }
 }

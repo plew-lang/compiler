@@ -106,11 +106,33 @@ def main():
             for line in llvm:
                 if line.startswith("define "):
                     definitions.append(line.rstrip())
+        emitted = []
+        for row in trace.splitlines():
+            if row.startswith("mid-body "):
+                match = re.fullmatch(r"mid-body symbol=(\S+) canonical=([1-9][0-9]*)", row)
+                if not match:
+                    raise ValueError(f"Malformed Mid emission row: {row}")
+                emitted.append({"symbol": match[1], "canonical": int(match[2])})
+        symbols = []
+        for definition in definitions:
+            match = re.search(r'@([A-Za-z0-9_.$]+)\(', definition)
+            if not match:
+                raise ValueError(f"Unrecognized LLVM definition: {definition}")
+            symbols.append(match[1])
+        emitted_symbols = [row["symbol"] for row in emitted]
+        if len(emitted_symbols) != len(set(emitted_symbols)):
+            raise ValueError(f"Duplicate Mid emission evidence in {source}")
+        if set(emitted_symbols) - set(symbols):
+            raise ValueError(f"Mid emission evidence has no LLVM definition in {source}")
+        # These definitions still need entry-by-entry classification/audit.
+        # A missing Mid row is not automatically a failure or physical glue.
+        without_mid = sorted(set(symbols) - set(emitted_symbols))
         # The per-case LLVM is diagnostic scratch, not retained source history.
         (directory / "input.ll").unlink()
         return {"index": index, "source": source, "flags": flags,
                 "exit": code, "fallbacks": rows, "categories": dict(categories),
-                "llvm_definitions": definitions}
+                "llvm_definitions": definitions, "mid_emissions": emitted,
+                "definitions_without_mid_evidence": without_mid}
 
     results = []
     print(f"mid-inventory: start cases={len(cases)} jobs={args.jobs}", file=sys.stderr, flush=True)
@@ -127,6 +149,8 @@ def main():
                   f"flags={result['flags']}", file=sys.stderr, flush=True)
     summary = {"cases": len(cases), "compile_failures": sum(r["exit"] != 0 for r in results),
                "cases_with_fallback": sum(bool(r["fallbacks"]) for r in results),
+               "mid_emissions": sum(len(r["mid_emissions"]) for r in results),
+               "definitions_without_mid_evidence": sum(len(r["definitions_without_mid_evidence"]) for r in results),
                "results": sorted(results, key=lambda r: r["index"])}
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(f"mid-inventory: finished cases={summary['cases']} "

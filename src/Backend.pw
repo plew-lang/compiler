@@ -509,6 +509,7 @@ extern(c) {
     // by returning a NULL pointer, which LLVMIsNull (a null-CONSTANT test) can't
     // detect — so we thread the handle as U64 (pointer-as-integer, ABI-identical on
     // LP64, same convention as the `count~: U64` bindings above) and stop on `== 0`.
+    fn LLVMGetValueName2(value~: LLVMValueRef, length~: CPtr[U64]) -> CPtr[U8]
     fn LLVMGetFirstFunction(m~: LLVMModuleRef) -> U64
     fn LLVMGetNextFunction(func~: U64) -> U64
     fn LLVMIsDeclaration(func~: U64) -> I32
