@@ -53,51 +53,6 @@ pub impl LlvmCtx {
         return fv
     }
 
-    inout fn prepareExistentialMidBody(c: inout Comp, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
-        val built = buildMidBodyForInstance(c: inout c, fnIdx: fnIdx, bodyId: bodyId)
-        match built.error {
-            MidBuildError.None => {}
-            _ => {
-                self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: fnIdx, error: built.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val instantiated = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: bodyId)
-        match instantiated.error {
-            MidInstantiateError.None => {}
-            _ => {
-                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: instantiated.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-        match accesses.error {
-            MidAccessError.None => {}
-            _ => {
-                self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val dropped = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-        val verification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
-        match verification.error {
-            MidVerifyError.None => {}
-            _ => {
-                self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val preflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped, abiParameterCount: parameterCount)
-        match preflight {
-            MidLlvmPreflight.Ready => {}
-            _ => {
-                self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: preflight)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        return <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=parameterCount />
-    }
-
     inout fn emitExistentialWitnesses(c: inout Comp) {
         val savedFn = c.cur.bodyFnIdx
         val savedEnvironment = c.cur.bodyEnvironment
@@ -115,7 +70,7 @@ pub impl LlvmCtx {
             self.curRetRef = member.resultType
             self.curRetTy = self.voidty
             if member.resultType != 0U64 { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
-            val prepared = self.prepareExistentialMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64)
+            val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64)
             match prepared {
                 MidLlvmPrepared.None => { c.errorAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {

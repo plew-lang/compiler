@@ -301,7 +301,7 @@ pub impl LlvmCtx {
                         }
                         mut val thunkV: LLVMValueRef = LLVMConstNull(self.ptrty)
                         if thunkOk {
-                            thunkV = self.buildClosureDropThunk(c: inout c, cloId: id, caps: caps)
+                            thunkV = self.declareClosureEnvironmentDrop(c: inout c, closureSlot: slot)
                         }
                         llvmStore(self.b, thunkV, LLVMBuildStructGEP2(self.b, envTy, env, 0U64, anon()))
                         mut val ci: U64 = 0

@@ -125,6 +125,13 @@ struct LlvmClosure {
 }
 pub impl LlvmClosure { factory }
 
+struct LlvmClosureEnvironmentDrop {
+    pub val closureSlot: U64
+    pub val bodyId: U64
+    pub val function: LLVMValueRef
+}
+pub impl LlvmClosureEnvironmentDrop { factory }
+
 struct LlvmExistentialWitness {
     pub val resolution: U64
     pub val member: U64
@@ -172,6 +179,8 @@ struct LlvmCtx {
     // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
     pub mut val anyVtResolution: Array[U64]
     pub mut val anyVtVal: Array[LLVMValueRef]
+    pub mut val closureEnvironmentDrops: Array[LlvmClosureEnvironmentDrop] = []
+    pub mut val closureEnvironmentDropsEmitted: U64 = 0U64
     pub mut val existentialWitnesses: Array[LlvmExistentialWitness] = []
     pub mut val existentialWitnessesEmitted: U64 = 0U64
     pub mut val curFn: LLVMValueRef
@@ -1016,6 +1025,7 @@ export fn emitLlvm(c: inout Comp) {
         // witness body's deinit call is now a `gm` instance (B3-2), which queues onto
         // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
         // or those deinit method bodies would be declared but never emitted (link error).
+        st.emitClosureEnvironmentDrops(c: inout c)
         st.emitExistentialWitnesses(c: inout c)
         st.emitWitnessBodies(c: inout c)
         tracePhaseProgress(c: inout c, label: "backend:drain:provided-after-witness", count: st.provEmit.count(), stride: 16U64)
@@ -1023,7 +1033,7 @@ export fn emitLlvm(c: inout Comp) {
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count(), stride: 16U64)
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
-                if genfDone >= st.genFnEmit.count() && st.existentialWitnessesEmitted >= st.existentialWitnesses.count() {
+                if genfDone >= st.genFnEmit.count() && st.existentialWitnessesEmitted >= st.existentialWitnesses.count() && st.closureEnvironmentDropsEmitted >= st.closureEnvironmentDrops.count() {
                     draining = false
                 }
             }

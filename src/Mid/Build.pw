@@ -2674,6 +2674,7 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> MidBodyBuild {
     if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
     match c.arena.bodyOrigin(bodyId: bodyId) {
+        BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val closureBodyId) => { return buildMidClosureEnvironmentDrop(c: inout c, bodyId: bodyId, closureBodyId: closureBodyId) }
         BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => { return buildMidExistentialWitness(c: inout c, bodyId: bodyId, resolutionIndex: resolution, memberIndex: member) }
         BodyOrigin.Callable => {}
     }
@@ -2772,6 +2773,29 @@ fn buildMidExistentialWitness(c: inout Comp, bodyId: U64, resolutionIndex: U64, 
     }
     statements.append(<MidStatement.ScopeExit scope=0U64 />)
     val body = <MidBody bodyInstance=bodyId sourceFunction=function locals=locals scopes=[<MidScope firstLocal=0U64 localCount=cleanupCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=member.callResolution - 1U64 /> receiver=receiver args=arguments destination=result target=1U64 /> />, <MidBlock statements=statements terminator=exit />] entry=0U64 />
+    val canonical = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
+    return <MidBodyBuild body=body canonical=canonical />
+}
+
+// The environment transfers its capture owners to this body at its last release.
+// ScopeExit determines both the reverse cleanup order and cell-owner release.
+fn buildMidClosureEnvironmentDrop(c: inout Comp, bodyId: U64, closureBodyId: U64) -> MidBodyBuild {
+    val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+    val closure = c.arena.closureSignature(bodyId: closureBodyId)
+    val signature = c.arena.bodySignature(bodyId: bodyId)
+    if closure.environmentDropBodyId != bodyId || !signature.ready || signature.parameterTypes.count() != closure.captures.count() {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: instance.fnIdx) error=<MidBuildError.InvalidFunction /> />
+    }
+    mut val locals: Array[MidLocalDecl] = []
+    mut val index = 0U64
+    while index < closure.captures.count() {
+        val capture = closure.captures[index]
+        val cell = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } SemanticClosureCaptureMode.ValueCopy => { give false } }
+        locals.append(<MidLocalDecl typeTerm=capture.typeTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: capture.typeTerm) isParameter=true isCaptureCell=cell ownsAtEntry=true />)
+        index += 1U64
+    }
+    val body = <MidBody bodyInstance=bodyId sourceFunction=instance.fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=locals.count() />] blocks=[<MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=<MidTerminator.Return /> />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
     return <MidBodyBuild body=body canonical=canonical />

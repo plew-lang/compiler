@@ -1965,6 +1965,7 @@ pub impl CallSiteSelection { factory }
 // to the actual conformer.
 // Final ABI types belong to a body, but do not participate in its identity.
 export struct ClosureSignature {
+    pub val environmentDropBodyId: U64 = 0U64
     pub val functionTypeTerm: U64 = 0U64
     pub val captures: Array[SemanticClosureCapture] = []
 }
@@ -1978,7 +1979,7 @@ export struct BodySignature {
 }
 pub impl BodySignature { factory }
 
-export enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) }
+export enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
 
 export struct BodyInstance {
     pub val fnIdx: U64

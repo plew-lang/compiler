@@ -9,15 +9,7 @@ pub impl LlvmCtx {
     // The captured variable's own VALUE type (ignoring boxing) — the type stored in
     // the shared cell for a boxed capture, or in the env slot for a by-value one.
     inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
-        // A recorded TypeRef is the layout authority for every capture, including
-        // non-generic structs. Only old ref-less capture rows use the span fallback.
-        if cap.ty != 0U64 {
-            return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
-        }
-        if cap.isArray {
-            return self.arrayTy
-        }
-        return self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
+        return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
     }
 
     // The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
@@ -46,69 +38,76 @@ pub impl LlvmCtx {
         return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
     }
 
-    // The TypeRef used to ARC a capture's VALUE (release in the drop thunk / the
-    // boxed cell's pointee): the capture's own structured ref when it carries one, a
-    // synthesized `Array[elem]` for an array capture (tyStart/tyLen span the ELEMENT
-    // type — captureValueTy's convention), else the bare name span's ref. 0 = scalar.
-    inout fn captureArcRef(c: inout Comp, cap: CaptureEntry) -> U64 {
-        if cap.ty != 0U64 {
-            return cap.ty
+    // Every backend capture comes from a checked, frozen closure signature.
+    inout fn captureArcRef(c: inout Comp, cap: CaptureEntry) -> U64 { return cap.ty }
+
+    // Register only. Emission must not overwrite the enclosing body's locals.
+    inout fn declareClosureEnvironmentDrop(c: inout Comp, closureSlot: U64) -> LLVMValueRef {
+        val closure = self.closures[closureSlot]
+        val bodyId = c.arena.closureSignature(bodyId: closure.bodyId).environmentDropBodyId
+        if bodyId == 0U64 {
+            c.errorAt(offset: c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId), msg: "internal error: closure environment has no finalized drop body")
+            return LLVMConstNull(self.ptrty)
         }
-        if cap.isArray {
-            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-            mut val aargs: Array[U64] = []
-            aargs.append(c.findOrAddTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen))
-            return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        mut val index = 0U64
+        while index < self.closureEnvironmentDrops.count() {
+            if self.closureEnvironmentDrops[index].bodyId == bodyId { return self.closureEnvironmentDrops[index].function }
+            index += 1U64
         }
-        if cap.tyLen == 0U64 {
-            return 0U64
-        }
-        return c.findOrAddTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
+        val parameters: Array[LLVMTypeRef] = [self.ptrty]
+        val type = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+        mut val name: Array[U8] = []
+        appendBytes(into: inout name, from: "pwclodrop".bytes())
+        appendU64Dec(into: inout name, n: bodyId)
+        name.append(0U8)
+        val function = LLVMAddFunction(self.mod, arrayCPtr(name), type)
+        self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
+        return function
     }
 
-    // Build the drop thunk for closure `cloId` (env slot 0): `drop(ptr env)` destroys
-    // every capture the env owns — a boxed (mut) capture drops one owner of its shared
-    // cell (pointee destroyed at cell rc 0); a by-value capture releases its owned
-    // heap (classifier-routed valueArc). emitClosureRelease calls it when the env's
-    // own rc reaches 0, then frees the env. Rebuilt per creation site (LLVM uniques
-    // duplicate names) so a generic caller's grounded capture types are honored.
-    inout fn buildClosureDropThunk(c: inout Comp, cloId: U64, caps: Array[CaptureEntry]) -> LLVMValueRef {
-        val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwclodrop".bytes())
-        appendU64Dec(into: inout nm, n: cloId)
-        nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
-        val savedFn: LLVMValueRef = self.curFn
-        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
-        LLVMPositionBuilderAtEnd(self.b, entry)
-        self.curFn = fv
-        val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
-        mut val ci: U64 = 0
-        while ci < caps.count() {
-            val cap: CaptureEntry = caps[ci]
-            val slotPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon())
-            val cref: U64 = self.captureArcRef(c: inout c, cap: cap)
-            if cap.boxed {
-                self.emitCellRelease(c: inout c, cell: llvmLoad(self.b, self.ptrty, slotPtr, anon()), ref: cref)
-            } else {
-                if cref != 0U64 {
-                    if c.arcNeedsRelease(ref: cref) {
-                        val cv: LLVMValueRef = llvmLoad(self.b, self.captureValueTy(c: inout c, cap: cap), slotPtr, anon())
-                        self.valueArc(c: inout c, v: cv, typeRef: cref, retain: false)
+    inout fn emitClosureEnvironmentDrops(c: inout Comp) {
+        val savedFn = c.cur.bodyFnIdx
+        val savedEnvironment = c.cur.bodyEnvironment
+        val savedBody = c.cur.bodyId
+        while self.closureEnvironmentDropsEmitted < self.closureEnvironmentDrops.count() {
+            val queued = self.closureEnvironmentDrops[self.closureEnvironmentDropsEmitted]
+            val closure = self.closures[queued.closureSlot]
+            val body = c.arena.bodyInstanceAt(index: queued.bodyId - 1U64)
+            val offset = c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId)
+            c.cur.bodyFnIdx = body.fnIdx
+            c.cur.bodyEnvironment = body.environment
+            c.cur.bodyId = queued.bodyId
+            self.curFn = queued.function
+            self.curIsMain = false
+            self.curRetVoid = true
+            self.curRetRef = 0U64
+            self.curRetTy = self.voidty
+            val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: queued.bodyId, fnIdx: body.fnIdx, parameterCount: closure.captures.count())
+            match prepared {
+                MidLlvmPrepared.None => { c.errorAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") }
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
+                    self.beginFnBody(fv: queued.function)
+                    val environment = LLVMGetParam(queued.function, 0U64)
+                    val environmentType = self.closureEnvTy(c: inout c, caps: closure.captures)
+                    mut val parameters: Array[LLVMValueRef] = []
+                    mut val index = 0U64
+                    while index < closure.captures.count() {
+                        val capture = closure.captures[index]
+                        val address = LLVMBuildStructGEP2(self.b, environmentType, environment, index + 1U64, anon())
+                        parameters.append(llvmLoad(self.b, self.captureSlotTy(c: inout c, cap: capture), address, anon()))
+                        index += 1U64
+                    }
+                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters) {
+                        c.errorAt(offset: offset, msg: "LLVM backend: prepared closure environment Mid body failed to emit")
                     }
                 }
             }
-            ci += 1
+            self.closureEnvironmentDropsEmitted += 1U64
+            tracePhaseProgress(c: inout c, label: "backend:closure-environment-drop", count: self.closureEnvironmentDropsEmitted, stride: 16U64)
         }
-        LLVMBuildRetVoid(self.b)
-        self.curFn = savedFn
-        LLVMPositionBuilderAtEnd(self.b, savedBB)
-        return fv
+        c.cur.bodyFnIdx = savedFn
+        c.cur.bodyEnvironment = savedEnvironment
+        c.cur.bodyId = savedBody
     }
 
     // Release one owner of a closure value's env: decrement the env cell's rc, and at

@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Resource {
+    pub val id: I64
+    deinit { print(self.id) }
+}
+pub impl Resource { factory }
+
+fn makeReader() -> fn() -> I64 {
+    val first: MutableRef[Resource] = <MutableRef value=<Resource id=1 /> />
+    val second: MutableRef[Resource] = <MutableRef value=<Resource id=2 /> />
+    mut val count: I64 = 0
+    return fn() -> I64 {
+        count += 1
+        return first->id + second->id + count
+    }
+}
+
+fn main() {
+    val read = makeReader()
+    print(read())
+    val alias = read
+    print(alias())
+    print(99I64)
+}

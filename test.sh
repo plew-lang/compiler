@@ -526,6 +526,12 @@ else
     fail=$((fail + 1)); failed="$failed existential-mid-bodies"
 fi
 
+if python3 ./test-closure-environment-mid.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed closure-environment-mid"
+fi
+
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as
 # the corpus reaches zero coverage the expected gate result changes from 1 to

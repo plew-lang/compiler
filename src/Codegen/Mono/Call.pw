@@ -4333,6 +4333,7 @@ pub impl Comp {
 
     inout fn scanFinalBodyInstance(bodyId: U64) {
         match self.arena.bodyOrigin(bodyId: bodyId) {
+            BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return }
             BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
                 self.finalizeExistentialWitness(bodyId: bodyId, resolutionIndex: resolution, memberIndex: member)
                 return
@@ -5086,7 +5087,21 @@ pub impl Comp {
             captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }
-        self.arena.setClosureSignature(bodyId: self.currentBodyInstanceId(), parameters: parameters, result: signature.args[0U64], closure: <ClosureSignature functionTypeTerm=functionType captures=captures />)
+        val closureBodyId = self.currentBodyInstanceId()
+        mut val dropBodyId = self.arena.closureSignature(bodyId: closureBodyId).environmentDropBodyId
+        if captures.count() != 0U64 && dropBodyId == 0U64 {
+            val instance = self.arena.bodyInstanceAt(index: closureBodyId - 1U64)
+            dropBodyId = self.arena.registerBodyInstance(<BodyInstance fnIdx=instance.fnIdx environment=instance.environment />, origin: <BodyOrigin.ClosureEnvironmentDrop closureBodyId=closureBodyId />)
+            mut val captureTypes: Array[U64] = []
+            mut val captureIndex = 0U64
+            while captureIndex < captures.count() {
+                captureTypes.append(captures[captureIndex].typeTerm)
+                captureIndex += 1U64
+            }
+            self.arena.setBodySignature(bodyId: dropBodyId, parameters: captureTypes, result: 0U64)
+            self.monoWork.bodyInstances.append(dropBodyId)
+        }
+        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, result: signature.args[0U64], closure: <ClosureSignature environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
         typeI = 0U64
         while typeI < signature.args.count() { self.scanType(ref: signature.args[typeI]) typeI += 1U64 }
         captureI = 0U64
