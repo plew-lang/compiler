@@ -113,6 +113,33 @@ pub impl LlvmCtx {
     // The recursive struct-destruction walker — emitted ONCE inside each type's witness
     // body (and used as the inline fallback for an unregistered struct). Sub-struct fields
     // recurse through `emitDeinitValue`, which routes them to their own witness calls.
+    // A single-field wrapper with no user destructor contributes no action
+    // of its own. Consume its frozen contract directly instead of emitting
+    // a runtime forwarding call. Boxed recursion remains behind its cell.
+    inout fn emitFinalDropValue(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+        val contractId = c.finalDestructionIndex(typeRef: typeRef)
+        if contractId != 0U64 {
+            val contract = c.arena.finalDestructions[contractId - 1U64]
+            if contract.ready && contract.underlying != 0U64 {
+                self.emitFinalDropValue(c: inout c, v: v, typeRef: contract.underlying)
+                return
+            }
+            if contract.ready && contract.deinitBodyId == 0U64 && contract.fieldTypes.count() == 1U64 {
+                match c.arcClassOfRef(ref: typeRef) {
+                    ArcClass.StructVal(sidx: val index) => {
+                        val declaration = c.arena.structAt(index: index)
+                        if declaration.fields.count() == 1U64 && !c.fieldIsBoxed(f: declaration.fields[0U64]) {
+                            self.emitFinalDropValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, 0U64, anon()), typeRef: contract.fieldTypes[0U64])
+                            return
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.valueArc(c: inout c, v: v, typeRef: typeRef, retain: false)
+    }
+
     inout fn emitDropWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64, typeRef: U64) {
         if self.arcOnStack(sidx: sidx) { return }
         val declaration = c.arena.structAt(index: sidx)
@@ -146,7 +173,7 @@ pub impl LlvmCtx {
             if c.fieldIsBoxed(f: declaration.fields[field]) {
                 self.emitCellRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()), ref: type)
             } else if c.arcNeedsRelease(ref: type) {
-                self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: type, retain: false)
+                self.emitFinalDropValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: type)
             }
             field += 1U64
         }
