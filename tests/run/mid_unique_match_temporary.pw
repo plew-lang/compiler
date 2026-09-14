@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+unique struct Resource {
+    pub val number: I64
+    deinit { print(self.number) }
+}
+pub impl Resource { factory }
+unique enum Packet { Value(resource: Resource, label: String) Empty }
+fn packet() -> Packet {
+    print(100I64)
+    return <Packet.Value resource=<Resource number=7I64 /> label="heap" + "-value" />
+}
+fn main() {
+    match packet() {
+        Packet.Value(resource: _, val label) => { print(label) }
+        Packet.Empty => {}
+    }
+    print(2I64)
+    val label: String = match packet() {
+        Packet.Value(resource: _, val label) => { give label }
+        Packet.Empty => { give "empty" }
+    }
+    print(label)
+    match <Resource number=9I64 /> {
+        Resource { val number } => { print(number) }
+    }
+    print(3I64)
+}

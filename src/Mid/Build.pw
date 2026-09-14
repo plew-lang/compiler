@@ -2080,11 +2080,13 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "arm-count")
                 return <MidBuildError.UnsupportedMatch />
             }
-            if !semantic.isConsuming && midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) {
-                traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-scrutinee")
+            mut val scrutinee: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm)
+            // Bare unique storage is forbidden; an unnamed unique rvalue has
+            // its own match-scoped home and uses ordinary cleanup below.
+            if !semantic.isConsuming && scrutinee.found && midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) {
+                traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-storage-scrutinee")
                 return <MidBuildError.UnsupportedMatch />
             }
-            mut val scrutinee: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm)
             // A statement match consumes its scrutinee expression exactly once,
             // but tag reads and every arm payload projection need a stable
             // place for the lifetime of the complete arm CFG.  Normalize an
