@@ -467,6 +467,8 @@ pub impl Comp {
                 if ai < self.arena.functionCount() {
                     val af: Func = self.arena.functionAt(index: ai)
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
+                    mut val qualifier = self.concreteTypeQualifierTerm(exprId: recv)
+                    if qualifier == 0U64 { qualifier = self.associatedReceiverFromArguments(f: af, args: args) }
                     mut val ginf: Array[U64] = []
                     if af.typeParams.count() > 0U64 {
                         ginf = self.inferFnArgs(f: af, args: args)
@@ -478,7 +480,15 @@ pub impl Comp {
                             val ap: Param = aps[pi]
                             self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
                             mut val checkedGround: Bool = false
-                            if ap.ty != 0U64 {
+                            if qualifier != 0U64 && ap.ty != 0U64 {
+                                val parameter = self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty)
+                                if parameter != 0U64 && self.tyRefIsGround(ref: parameter) {
+                                    self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
+                                    self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
+                                    checkedGround = true
+                                }
+                            }
+                            if !checkedGround && ap.ty != 0U64 {
                                 if ginf.count() == af.typeParams.count() {
                                     val savedP: Array[Bind] = self.cur.typeParams
                                     val savedA: Array[U64] = self.cur.typeArgs
