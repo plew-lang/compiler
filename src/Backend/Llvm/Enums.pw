@@ -118,51 +118,68 @@ pub impl LlvmCtx {
             if c.cur.typeParams.count() > 0U64 {
                 g = c.groundTypeRef(ref: f.ty)
             }
-            // Payload sizing is a physical-layout query. A nominal newtype
-            // occupies precisely its underlying storage, including aggregates
-            // reached through a generic parameter. Keep semantic types intact.
-            val storage = c.fieldStorageTypeRef(receiverRef: g)
-            if storage != 0U64 { g = storage }
-            // a type param bound to an existential (`Some(T)` with `T = any P`): the fat
-            // pointer is 2 words (data + vtable). The head-name path below sizes a bare `T`
-            // as 1 word, undersizing the enclosing enum's `[N x i64]` payload area.
-            if refIsAny(c: inout c, ref: g) {
-                return 2U64
-            }
-            // a public Ref wrapper or `Buffer[T]` payload (possibly reached via a type param
-            // `Some(v: T)`, T -> Ref[Cell]) is a single pointer-sized word. Buffer and internal
-            // ref cells are extern intrinsics; public Ref-family wrappers are normal one-field
-            // structs, but keeping this fast path preserves the enum payload's compact word form.
-            if c.isStrongRefInst(ref: g) {
-                return 1U64
-            }
-            // a `WeakRef[T]` payload is likewise a single pointer-sized word.
-            if c.isWeakRefLikeInst(ref: g) {
-                return 1U64
-            }
-            if c.isRawBufInst(ref: g) {
-                return 1U64
-            }
-            // a function-typed payload (`fn(...) -> R`, possibly via `T -> fn`) is the
-            // closure value { fn ptr, env ptr } = 2 words. The head-name fallback below
-            // would size it as 1, undersizing the payload area — a closure stored into
-            // an `Optional[fn ...]` then overflows into the adjacent words.
-            if c.isFnType(ref: g) {
-                return 2U64
-            }
-            if c.isGenericInst(ref: g) {
-                // Array[E] is the {ptr,i64} value type, not an inline instance.
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: g).nameStart, len: c.arena.typeAt(index: g).nameLen, kw: "Array") {
-                    return 2U64
-                }
-                return self.genInstWords(c: inout c, ref: g)
-            }
-            if g != 0U64 && g < c.arena.typeCount() {
-                val physical = c.arena.typeAt(index: g)
-                return self.fieldWords(c: inout c, tyStart: physical.nameStart, tyLen: physical.nameLen)
-            }
+            return self.typeWords(c: inout c, typeRef: g)
         }
         return self.fieldWords(c: inout c, tyStart: f.tyStart, tyLen: f.tyLen)
+    }
+
+    // Grounded structural fields retain their identity during physical sizing;
+    // an authored record name is not a nominal declaration lookup key.
+    inout fn typeWords(c: inout Comp, typeRef: U64) -> U64 {
+        mut val g = typeRef
+        // Payload sizing is a physical-layout query. A nominal newtype
+        // occupies precisely its underlying storage, including aggregates
+        // reached through a generic parameter. Keep semantic types intact.
+        val storage = c.fieldStorageTypeRef(receiverRef: g)
+        if storage != 0U64 { g = storage }
+        // a type param bound to an existential (`Some(T)` with `T = any P`): the fat
+        // pointer is 2 words (data + vtable). The head-name path below sizes a bare `T`
+        // as 1 word, undersizing the enclosing enum's `[N x i64]` payload area.
+        if refIsAny(c: inout c, ref: g) {
+            return 2U64
+        }
+        // a public Ref wrapper or `Buffer[T]` payload (possibly reached via a type param
+        // `Some(v: T)`, T -> Ref[Cell]) is a single pointer-sized word. Buffer and internal
+        // ref cells are extern intrinsics; public Ref-family wrappers are normal one-field
+        // structs, but keeping this fast path preserves the enum payload's compact word form.
+        if c.isStrongRefInst(ref: g) {
+            return 1U64
+        }
+        // a `WeakRef[T]` payload is likewise a single pointer-sized word.
+        if c.isWeakRefLikeInst(ref: g) {
+            return 1U64
+        }
+        if c.isRawBufInst(ref: g) {
+            return 1U64
+        }
+        // a function-typed payload (`fn(...) -> R`, possibly via `T -> fn`) is the
+        // closure value { fn ptr, env ptr } = 2 words. The head-name fallback below
+        // would size it as 1, undersizing the payload area — a closure stored into
+        // an `Optional[fn ...]` then overflows into the adjacent words.
+        if c.isFnType(ref: g) {
+            return 2U64
+        }
+        if c.isGenericInst(ref: g) {
+            // Array[E] is the {ptr,i64} value type, not an inline instance.
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: g).nameStart, len: c.arena.typeAt(index: g).nameLen, kw: "Array") {
+                return 2U64
+            }
+            return self.genInstWords(c: inout c, ref: g)
+        }
+        if g != 0U64 && g < c.arena.typeCount() {
+            val physical = c.arena.typeAt(index: g)
+            if physical.isRecord {
+                mut val words = 0U64
+                mut val field = 0U64
+                while field < physical.recordFieldTerms.count() {
+                    words += self.typeWords(c: inout c, typeRef: physical.recordFieldTerms[field])
+                    field += 1U64
+                }
+                return words
+            }
+            return self.fieldWords(c: inout c, tyStart: physical.nameStart, tyLen: physical.nameLen)
+        }
+        return 1U64
     }
 
     // The inline word size of a concrete generic instance `ref` (a generic-struct or
