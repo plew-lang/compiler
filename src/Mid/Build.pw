@@ -1341,19 +1341,23 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             // prematurely materializing a getter value with no setter path.
             val baseValue: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm, allowAccessMarker: allowAccessMarker)
             match baseValue.error { MidBuildError.None => {} _ => { return baseValue } }
-            match baseValue.operand {
-                MidOperand.Copy(place: val place) => {
-                    mut val projections: Array[MidProjection] = place.projections
-                    projections.append(<MidProjection.Field isBoxed=field.fieldProjectionIsBoxed index=field.fieldProjectionIndex typeTerm=typeTerm />)
-                    return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=typeTerm /> /> />
-                }
+            // A produced unique value offers a whole-owner Move to a value
+            // consumer. A field read instead keeps that owner in its evaluation
+            // scope and copies only the selected field; it is not a partial move.
+            val place: MidPlace = match baseValue.operand {
+                MidOperand.Copy(place: val source) => { give source }
+                MidOperand.Move(place: val source) => { give source }
                 MidOperand.Access(candidate: val candidate) => {
                     if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
                     return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> />
                 }
                 _ => { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> /> }
             }
+            mut val projections: Array[MidProjection] = place.projections
+            projections.append(<MidProjection.Field isBoxed=field.fieldProjectionIsBoxed index=field.fieldProjectionIndex typeTerm=typeTerm />)
+            return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=projections typeTerm=typeTerm /> /> />
         }
+
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
             if allowAccessMarker && !c.isMutableRefInst(ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }

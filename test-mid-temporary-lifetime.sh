@@ -27,3 +27,12 @@ if grep -E 'name=(main|positive|observe|consume) category=' "$directory/coverage
     exit 1
 fi
 echo 'PASS mid-unique-temporary-borrow' >&2
+
+# Reading a copyable field from an owned unique result does not consume
+# the parent: its deinit remains at the enclosing statement boundary.
+if ! "$PLEWC" --require-mid tests/run/arc_temp_lifetimes.pw >"$directory/input.ll" 2>"$directory/coverage"; then
+    cat "$directory/coverage" >&2
+    echo 'FAIL mid-owned-temporary-field' >&2
+    exit 1
+fi
+echo 'PASS mid-owned-temporary-field' >&2
