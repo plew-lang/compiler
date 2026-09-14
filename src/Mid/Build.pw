@@ -1994,14 +1994,9 @@ fn midEnumTagForVariantSlot(slot: U64) -> I64 {
     return result
 }
 
-// A statement enum match has one semantic owner: Record resolves the source
-// pattern spelling into SemanticMatch, then this builder turns that frozen
-// descriptor into ordinary CFG.  In particular, neither variant names nor
-// payload field names cross this boundary. The first slice accepts a copied
-// scalar payload only. ARC-owned payloads need a distinct borrowed-place
-// binding (with a lifetime tied to the scrutinee); treating one as a copy here
-// would silently omit its retain/drop semantics. Move matches likewise need a
-// consuming payload operation and drop-flag transfer.
+// Record resolves pattern spelling into a frozen descriptor. Copyable bindings
+// own independent snapshots. Consuming matches additionally need an explicit
+// whole-enum transfer operation before the arm's ordinary local cleanup.
 fn traceMidUnsupportedMatch(c: Comp, state: MidBuildState, stmtId: U64, reason: String) {
     if !(c.traceCodegen) { return }
     eprint(text: "[trace-codegen] Mid match-preflight fn=")
@@ -2158,6 +2153,10 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 mut val payloadIndex: U64 = 0U64
                 while payloadIndex < semanticArm.payloads.count() {
                     val payload: SemanticMatchPayload = semanticArm.payloads[payloadIndex]
+                    if payload.isDiscard {
+                        payloadIndex += 1U64
+                        continue
+                    }
                     if midTermIsUnique(c: inout c, term: payload.fieldTerm) {
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "unique-payload")
                         return <MidBuildError.UnsupportedMatch />

@@ -489,6 +489,8 @@ export enum MatchSource {
 // field slot and its parametric TypeTerm are frozen beside it so Mid never
 // maps a field spelling back onto an aggregate declaration.
 export struct SemanticMatchPayload {
+    // Discards have no binding identity but retain their field/drop obligation.
+    pub val isDiscard: Bool = false
     pub val bindTarget: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val fieldTerm: U64 = 0U64
@@ -519,6 +521,7 @@ export enum SemanticMatchKind {
 // Parametric terms are grounded by ordinary Mid place instantiation; enum
 // payload operations also consume a FinalMatchResolution for the BodyInstance.
 export struct SemanticMatch {
+    pub val isConsuming: Bool = false
     pub val ownerFnIdx: U64 = 0U64
     pub val matchSource: MatchSource
     pub val scrutineeTerm: U64 = 0U64
@@ -1793,6 +1796,8 @@ pub impl FinalAggregateResolution { factory }
 // Payload types are already grounded here; Mid instantiation and LLVM consume
 // only declaration slots and these final TypeRefs.
 export struct FinalMatchPayloadResolution {
+    pub val isDiscard: Bool = false
+    pub val isBoxed: Bool = false
     pub val bindTarget: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val fieldTypeRef: U64 = 0U64
@@ -1811,6 +1816,7 @@ export struct FinalMatchArmResolution {
 pub impl FinalMatchArmResolution { factory }
 
 export struct FinalMatchResolution {
+    pub val isConsuming: Bool = false
     pub val bodyId: U64 = 0U64
     pub val matchSource: MatchSource
     pub val scrutineeTypeRef: U64 = 0U64

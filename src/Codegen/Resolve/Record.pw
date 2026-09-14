@@ -930,7 +930,7 @@ pub impl Comp {
 
     // Freeze struct field bindings while Record owns name-to-layout work.
     // Missing or invalid terms leave no fact; Mid must not reconstruct them.
-    inout fn recordStructPattern(matchSource: MatchSource, scrutineeTerm: U64, layoutReceiver: U64, arms: MatchArmRange) {
+    inout fn recordStructPattern(matchSource: MatchSource, isConsuming: Bool, scrutineeTerm: U64, layoutReceiver: U64, arms: MatchArmRange) {
         val storage: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
         if storage == 0U64 || storage >= self.arena.typeCount() { return }
         val declaration: TypeRef = self.arena.typeAt(index: storage)
@@ -961,7 +961,7 @@ pub impl Comp {
             selectedArms.append(<SemanticMatchArm payloads=payloads />)
             armIndex += 1U64
         }
-        self.putSemanticMatch(fact: <SemanticMatch ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Struct layoutTerm=storage /> arms=selectedArms />)
+        self.putSemanticMatch(fact: <SemanticMatch isConsuming=isConsuming ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Struct layoutTerm=storage /> arms=selectedArms />)
     }
 
     inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) {
@@ -973,7 +973,7 @@ pub impl Comp {
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: scrutineeTerm)
         val enumIndex: U64 = self.enumIndexForType(ref: layoutReceiver)
         if enumIndex >= self.arena.enumCount() {
-            self.recordStructPattern(matchSource: matchSource, scrutineeTerm: scrutineeTerm, layoutReceiver: layoutReceiver, arms: arms)
+            self.recordStructPattern(matchSource: matchSource, isConsuming: self.matchScrutIsMove(scrut: scrut), scrutineeTerm: scrutineeTerm, layoutReceiver: layoutReceiver, arms: arms)
             return
         }
         mut val selectedArms: Array[SemanticMatchArm] = []
@@ -988,30 +988,33 @@ pub impl Comp {
                 if variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return }
                 val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                 mut val payloads: Array[SemanticMatchPayload] = []
-                mut val bindIndex: U64 = 0U64
-                while bindIndex < arm.binds.len {
-                    val bind: Bind = self.bindAt(binds: arm.binds, index: bindIndex)
-                    if bind.nameLen != 0U64 {
+                // Keep every active field in declaration order. Pattern spelling
+                // chooses a binding or discard, never the destruction order.
+                mut val fieldIndex: U64 = 0U64
+                while fieldIndex < fields.count() {
+                    mut val bindTarget: U64 = 0U64
+                    mut val isDiscard: Bool = true
+                    mut val bindIndex: U64 = 0U64
+                    while bindIndex < arm.binds.len {
+                        val bind: Bind = self.bindAt(binds: arm.binds, index: bindIndex)
                         val fieldName: U64 = intern(c: inout self, start: bind.fieldStart, len: bind.fieldLen)
-                        mut val fieldIndex: U64 = 0U64
-                        while fieldIndex < fields.count() {
-                            if fields[fieldIndex].nameId == fieldName { break }
-                            fieldIndex += 1U64
+                        if fields[fieldIndex].nameId == fieldName {
+                            isDiscard = bind.nameLen == 0U64
+                            if !isDiscard { bindTarget = bind.nameStart }
+                            break
                         }
-                        if fieldIndex >= fields.count() { return }
-                        val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: layoutReceiver, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
-                        if fieldTerm == 0U64 { return }
-                        val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
-                        if fieldIndex >= fields.count() { return }
-                        payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm isBoxed=self.fieldIsBoxed(f: fields[fieldIndex]) />)
+                        bindIndex += 1U64
                     }
-                    bindIndex += 1U64
+                    val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: layoutReceiver, isEnum: true, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)
+                    if fieldTerm == 0U64 { return }
+                    payloads.append(<SemanticMatchPayload isDiscard=isDiscard bindTarget=bindTarget fieldIndex=fieldIndex fieldTerm=fieldTerm isBoxed=self.fieldIsBoxed(f: fields[fieldIndex]) />)
+                    fieldIndex += 1U64
                 }
                 selectedArms.append(<SemanticMatchArm hasVariant=true variantIndex=variantIndex payloads=payloads />)
             }
             armIndex += 1U64
         }
-        self.putSemanticMatch(fact: <SemanticMatch ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Enum enumIndex=enumIndex /> arms=selectedArms />)
+        self.putSemanticMatch(fact: <SemanticMatch isConsuming=self.matchScrutIsMove(scrut: scrut) ownerFnIdx=self.cur.checkFn matchSource=matchSource scrutineeTerm=scrutineeTerm kind=<SemanticMatchKind.Enum enumIndex=enumIndex /> arms=selectedArms />)
     }
 
     // The value of an expression block is its final `give`.  Read the term

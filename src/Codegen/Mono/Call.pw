@@ -3261,13 +3261,13 @@ pub impl Comp {
                 val sourcePayload: SemanticMatchPayload = sourceArm.payloads[payloadIndex]
                 val fieldTypeRef: U64 = self.groundTermForBody(ref: sourcePayload.fieldTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
                 if fieldTypeRef == 0U64 { return }
-                self.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
+                self.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution isDiscard=sourcePayload.isDiscard isBoxed=sourcePayload.isBoxed bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
                 payloadIndex += 1U64
             }
             self.arena.finalMatchArms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloadStart=payloadStart payloadCount=self.arena.finalMatchPayloads.count() - payloadStart />)
             armIndex += 1U64
         }
-        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef kind=kind armStart=armStart armCount=self.arena.finalMatchArms.count() - armStart />)
+        self.putFinalMatch(fact: <FinalMatchResolution isConsuming=source.isConsuming bodyId=bodyId matchSource=matchSource scrutineeTypeRef=scrutineeTypeRef kind=kind armStart=armStart armCount=self.arena.finalMatchArms.count() - armStart />)
     }
 
     // A return is a source-level value boundary just like a call argument. The
@@ -5675,7 +5675,7 @@ pub impl Comp {
         mut val payloadIndex: U64 = 0U64
         while payloadIndex < arm.payloadCount {
             val payload: FinalMatchPayloadResolution = self.arena.finalMatchPayloads[arm.payloadStart + payloadIndex]
-            if payload.bindTarget == bindTarget { return payload.fieldTypeRef }
+            if !payload.isDiscard && payload.bindTarget == bindTarget { return payload.fieldTypeRef }
             payloadIndex += 1U64
         }
         return 0U64
