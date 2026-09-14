@@ -759,7 +759,7 @@ pub impl Comp {
             name = self.internTmpName(prefix: "(record.layout.", n: suffix)
             suffix += 1U64
         }
-        self.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=fields isUnique=false isExtern=false />)
+        self.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=fields isUnique=false isExtern=false isStructuralLayout=true />)
     }
 
     inout fn groundRecordStruct(ref: U64) -> U64 {
@@ -823,7 +823,7 @@ pub impl Comp {
         if !(registered) {
             if self.inCollection {
                 val noTP: Array[Bind] = []
-                self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset />)
+                self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset isStructuralLayout=sd.isStructuralLayout />)
             }
         }
         return self.recordTypeTermForLayout(name: nm)

@@ -162,7 +162,7 @@ pub impl LlvmCtx {
                 // one genStructSlot/`%gs` path; its body is set by registerGenStructBodies like
                 // any instance (the 0-arg env is empty, so field types resolve identically).
                 mut val zargs: Array[U64] = []
-                val instRef: U64 = c.pushType(t: <TypeRef nameStart=c.arena.structAt(index: i).nameStart nameLen=c.arena.structAt(index: i).nameLen args=zargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                val instRef: U64 = c.pushType(t: <TypeRef nameStart=c.arena.structAt(index: i).nameStart nameLen=c.arena.structAt(index: i).nameLen args=zargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] hasDecl=!(c.arena.structAt(index: i).isStructuralLayout) declOffset=c.arena.structAt(index: i).defOffset />)
                 self.registerStructInstance(c: inout c, typeRef: instRef, llvmType: sty, structIndex: i)
             }
             i += 1

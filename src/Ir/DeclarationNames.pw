@@ -22,7 +22,7 @@ pub impl Arena {
     }
 
     inout fn registerStruct(declaration~: StructDef) {
-        if self.structsByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
+        if !declaration.isStructuralLayout && self.structsByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
             self.structsByOffset[declaration.defOffset] = self.structs.count() + 1U64
         }
         val entry = self.structs.count() + 1U64
