@@ -1051,6 +1051,23 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
     val resolution: U64 = resolutionId - 1U64
     val selected: CallResolution = c.arena.finalCallees[resolution]
     if selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid call arity body=")
+            eprintU64(n: bodyId)
+            eprint(text: " resolution=")
+            eprintU64(n: resolutionId)
+            eprint(text: " expr=")
+            eprintU64(n: selected.exprId)
+            eprint(text: " operands=")
+            eprintU64(n: term.args.len)
+            eprint(text: " parameters=")
+            eprintU64(n: selected.parameterTypeRefs.len)
+            eprint(text: " conversions=")
+            eprintU64(n: selected.argumentConversions.len)
+            eprint(text: " passings=")
+            eprintU64(n: selected.argumentPassings.len)
+            eprint(text: "\n")
+        }
         return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionArity /> />
     }
     val signature: MidSelectedSignature = midSelectedSignature(c: inout c, selected: selected)
