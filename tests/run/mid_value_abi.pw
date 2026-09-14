@@ -1,0 +1,35 @@
+import @Std/Io with { print }
+
+struct Packet {
+    pub val first: I64
+    pub val second: I64
+    pub val third: I64
+    pub mut val items: Array[I64]
+}
+pub impl Packet {
+    factory
+    fn total() -> I64 { return self.first + self.second + self.third + self.items[0] }
+}
+trait Reader { fn read(packet: Packet) -> I64 }
+struct Worker {}
+pub impl Worker { factory }
+pub impl Worker as Reader {
+    fn read(packet: Packet) -> I64 { return packet.total() }
+}
+fn identity[T](value: T) -> T { return value }
+fn changed(packet: Packet) -> Packet {
+    mut val copy = packet
+    copy.items[0] = 40I64
+    return copy
+}
+fn exercise() {
+    val original = <Packet first=1 second=2 third=3 items=[4I64] />
+    val copy = changed(packet: identity(value: original))
+    val closure = fn(packet: Packet) -> I64 { return packet.total() }
+    val reader: any Reader = <Worker />
+    print(original.total())
+    print(copy.total())
+    print(closure(original))
+    print(reader.read(packet: copy))
+}
+fn main() { exercise() }
