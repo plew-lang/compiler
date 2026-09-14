@@ -51,10 +51,11 @@ export struct MidPlaceNode {
 }
 pub impl MidPlaceNode { factory }
 
-// `tag` is 1=Field, 2=Index, 3=Deref.  A canonical node never embeds the draft
+// `tag` is 1=Field, 2=Index, 3=Deref, 4=NewtypeBoundary.  A canonical node never embeds the draft
 // `MidProjection` enum: all payload fields remain scalar and the parent Place
 // owns only a range in this dedicated pool.
 export struct MidProjectionNode {
+    pub val sourceTerm: U64 = 0U64
     pub val isBoxed: Bool = false
     pub val tag: U64
     pub val index: U64 = 0U64
@@ -311,6 +312,10 @@ pub impl MidCanonicalBody { factory }
 // Field/index paths are already needed for assignments and future borrow/access
 // analysis; partial unique moves stay rejected by the frontend.
 export enum MidProjection {
+    // A transparent, whole-place boundary inside a synthesized adapter. The
+    // source term and target are checked during instantiation. This neither
+    // projects a subobject nor acquires a new owner or mutable capability.
+    NewtypeBoundary(sourceTerm: U64, typeTerm: U64)
     // Cross from a strong reference value to its pointee storage. This is
     // an aliasing boundary, not a field of the reference variable.
     Deref(typeTerm: U64)
@@ -733,6 +738,9 @@ pub impl MidProgram { factory }
 
 fn midFreezeProjection(arena: inout MidCanonicalArena, projection: MidProjection) {
     match projection {
+        MidProjection.NewtypeBoundary(sourceTerm: val sourceTerm, typeTerm: val typeTerm) => {
+            arena.projections.append(<MidProjectionNode tag=4U64 sourceTerm=sourceTerm typeTerm=typeTerm />)
+        }
         MidProjection.Deref(typeTerm: val typeTerm) => {
             arena.projections.append(<MidProjectionNode tag=3U64 typeTerm=typeTerm />)
         }
@@ -1096,8 +1104,9 @@ fn midCanonicalPlaceIsWellFormed(arena: MidCanonicalArena, place: U64) -> Bool {
     mut val i: U64 = 0U64
     while i < node.projections.len {
         val projection: MidProjectionNode = arena.projections[node.projections.start + i]
-        if projection.tag != 1U64 && projection.tag != 2U64 && projection.tag != 3U64 { return false }
+        if projection.tag != 1U64 && projection.tag != 2U64 && projection.tag != 3U64 && projection.tag != 4U64 { return false }
         if projection.tag != 1U64 && projection.isBoxed { return false }
+        if projection.tag == 4U64 && (projection.sourceTerm == 0U64 || projection.typeTerm == 0U64 || projection.index != 0U64 || projection.indexLocal != 0U64) { return false }
         if projection.tag == 3U64 && (projection.typeTerm == 0U64 || projection.index != 0U64 || projection.indexLocal != 0U64) { return false }
         i = i + 1U64
     }
@@ -1187,6 +1196,17 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
             if !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.discriminant) || terminator.target >= node.blocks.len || terminator.otherwise >= node.blocks.len { return false }
         } else if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }
         blockI = blockI + 1U64
+    }
+    return true
+}
+
+// Transparent type boundaries preserve the whole root's ownership identity.
+// Field/index/deref projections still forbid partial moves.
+export fn canonicalMidPlaceIsWhole(arena: MidCanonicalArena, place: MidPlaceNode) -> Bool {
+    mut val index = 0U64
+    while index < place.projections.len {
+        if arena.projections[place.projections.start + index].tag != 4U64 { return false }
+        index += 1U64
     }
     return true
 }

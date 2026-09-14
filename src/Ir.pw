@@ -1954,6 +1954,10 @@ pub impl BodySignature { factory }
 export struct BodyInstance {
     pub val fnIdx: U64
     pub val environment: InstanceEnvironment
+    // A reachable inherited surface owns an adapter, never a reinterpretation
+    // of the declaration's AST. Zero denotes an ordinary executable body.
+    pub val adapterTargetBodyId: U64 = 0U64
+    pub val adapterCallResolutionId: U64 = 0U64
 }
 
 export struct EnumDef {

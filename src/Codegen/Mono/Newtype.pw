@@ -1,0 +1,70 @@
+// Newtype inheritance has two environments: the public signature substitutes
+// Self, while the executable declaration retains its original Self. Only the
+// reachable-body worklist creates the edge between them.
+pub impl Comp {
+    fn newtypeUnderlyingTypeRef(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
+        val term = self.arena.typeAt(index: ref)
+        if !term.hasDecl { return 0U64 }
+        return self.arena.newtypeUnderlyingByOffset(offset: term.declOffset)
+    }
+
+    // Closed structural evidence for a compiler-synthesized boundary, not an
+    // implicit source conversion. All unchanged constructors/labels retain
+    // identity; the only differing leaves are transparent newtype edges.
+    inout fn newtypeBoundaryTypesCompatible(source: U64, target: U64) -> Bool {
+        if source == 0U64 || target == 0U64 { return false }
+        if self.typeRefEq(a: source, b: target) { return true }
+        val sourceUnderlying = self.newtypeUnderlyingTypeRef(ref: source)
+        val targetUnderlying = self.newtypeUnderlyingTypeRef(ref: target)
+        if sourceUnderlying != 0U64 && self.typeRefEq(a: sourceUnderlying, b: target) { return true }
+        if targetUnderlying != 0U64 && self.typeRefEq(a: targetUnderlying, b: source) { return true }
+        if !self.typeTermRefSameHead(a: source, b: target) { return false }
+        val count = self.typeTermRefChildCount(ref: source)
+        if count != self.typeTermRefChildCount(ref: target) { return false }
+        mut val index = 0U64
+        while index < count {
+            if self.typeTermRefIdentityChildLabel(ref: source, index: index) != self.typeTermRefIdentityChildLabel(ref: target, index: index) { return false }
+            if !self.newtypeBoundaryTypesCompatible(source: self.typeTermRefChildRef(ref: source, index: index), target: self.typeTermRefChildRef(ref: target, index: index)) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    fn newtypeAdapterTypeArgs(instance: BodyInstance) -> Array[U64] {
+        val function = self.arena.functionAt(index: instance.fnIdx)
+        mut val args: Array[U64] = []
+        mut val index = 0U64
+        while index < function.typeParams.count() {
+            val binder = self.funcBindAt(binds: function.typeParams, index: index)
+            mut val binding = 0U64
+            while binding < instance.environment.params.count() && binding < instance.environment.args.count() {
+                if instance.environment.params[binding].paramId == binder.paramId {
+                    args.append(instance.environment.args[binding])
+                    break
+                }
+                binding += 1U64
+            }
+            index += 1U64
+        }
+        return args
+    }
+
+    inout fn finalizeNewtypeAdapter(bodyId: U64) {
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val target = self.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
+        val signature = self.arena.bodySignature(bodyId: instance.adapterTargetBodyId)
+        if !signature.ready {
+            self.errorAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: adapter target signature is not finalized")
+            return
+        }
+        mut val conversions: Array[ValueConversionProof] = []
+        mut val index = 0U64
+        while index < signature.parameterTypes.count() {
+            conversions.append(<ValueConversionProof.Identity />)
+            index += 1U64
+        }
+        self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.newtypeAdapterTypeArgs(instance: target), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: self.selectedReceiverPassing(callee: target.fnIdx), argumentPassings: self.selectedArgumentPassings(callee: target.fnIdx), calleeBodyId: instance.adapterTargetBodyId, generatedSite: <CallSiteKey ownerFnIdx=instance.fnIdx originKind=2U64 originSerial=bodyId />)
+        self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: instance.adapterTargetBodyId, callResolutionId: self.finalCalleeCount())
+    }
+}

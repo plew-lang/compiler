@@ -1121,6 +1121,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0U64
         while i < place.projections.count() {
             match place.projections[i] {
+                MidProjection.NewtypeBoundary(sourceTerm: _, typeTerm: _) => { return false }
                 MidProjection.Deref(typeTerm: _) => { return false }
                 MidProjection.Field(index: _, typeTerm: val typeTerm, isBoxed: _) => {
                     if typeTerm == 0U64 || typeTerm >= c.arena.typeCount() { return false }
@@ -1860,6 +1861,8 @@ pub impl LlvmCtx {
                 self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
                 currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
                 pointer = self.arrElemPtr(elemTy: currentTy, data: data, idx: index)
+            } else if projection.tag == 4U64 {
+                currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
             } else if projection.tag == 3U64 {
                 pointer = self.refCellFromValue(v: llvmLoad(self.b, currentTy, pointer, anon()))
                 currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
@@ -2130,6 +2133,9 @@ pub impl LlvmCtx {
             } else if projection.tag == 2U64 {
                 if projection.indexLocal >= body.locals.len || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() || currentTerm == 0U64 { return false }
                 currentTerm = projection.typeTerm
+            } else if projection.tag == 4U64 {
+                if body.bodyInstance == 0U64 || c.arena.bodyInstanceAt(index: body.bodyInstance - 1U64).adapterTargetBodyId == 0U64 || !c.typeRefEq(a: currentTerm, b: projection.sourceTerm) || !c.newtypeBoundaryTypesCompatible(source: currentTerm, target: projection.typeTerm) { return false }
+                currentTerm = projection.typeTerm
             } else if projection.tag == 3U64 {
                 if !allowDeref || currentTerm == 0U64 || !c.isStrongRefInst(ref: currentTerm) || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() { return false }
                 if !c.typeRefEq(a: c.arena.typeAt(index: currentTerm).args[0U64], b: projection.typeTerm) { return false }
@@ -2322,6 +2328,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0U64
         while i < place.projections.count() {
             match place.projections[i] {
+                MidProjection.NewtypeBoundary(sourceTerm: _, typeTerm: _) => { panic "Mid newtype boundary requires canonical lowering" }
                 MidProjection.Deref(typeTerm: _) => { panic "Mid dereference reached LLVM without place support" }
                 MidProjection.Field(index: val index, typeTerm: val typeTerm, isBoxed: val isBoxed) => {
                     pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, index, anon())

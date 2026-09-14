@@ -85,7 +85,10 @@ fn instantiateCanonicalPlace(c: inout Comp, bodyId: U64, placeId: U64, environme
     mut val i: U64 = 0U64
     while i < source.projections.len {
         val projection: MidProjectionNode = c.mid.projections[source.projections.start + i]
-        c.mid.projections.append(<MidProjectionNode isBoxed=projection.isBoxed tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        val targetTerm = c.groundTermForBody(ref: projection.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        val sourceTerm = c.groundTermForBody(ref: projection.sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        if projection.tag == 4U64 && (environment.adapterTargetBodyId == 0U64 || !c.newtypeBoundaryTypesCompatible(source: sourceTerm, target: targetTerm)) { return 0U64 }
+        c.mid.projections.append(<MidProjectionNode sourceTerm=sourceTerm isBoxed=projection.isBoxed tag=projection.tag index=projection.index indexLocal=projection.indexLocal typeTerm=targetTerm />)
         i = i + 1U64
     }
     c.mid.places.append(<MidPlaceNode rootTag=source.rootTag local=source.local globalTarget=source.globalTarget globalMutable=source.globalMutable projections=<MidRange start=projectionStart len=source.projections.len /> typeTerm=instantiateMidType(c: inout c, typeTerm: source.typeTerm, typeRecipe: source.typeRecipe, bodyId: bodyId, environment: environment, itemRef: itemRef) />)
@@ -1331,6 +1334,9 @@ fn midApplyArgumentPassing(operand: MidOperand, passing: CallArgumentPassing) ->
 
 fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environment: BodyInstance, itemRef: U64) -> MidProjection {
     match projection {
+        MidProjection.NewtypeBoundary(sourceTerm: val sourceTerm, typeTerm: val typeTerm) => {
+            return <MidProjection.NewtypeBoundary sourceTerm=c.groundTermForBody(ref: sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+        }
         MidProjection.Deref(typeTerm: val typeTerm) => {
             return <MidProjection.Deref typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
         }

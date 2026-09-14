@@ -336,16 +336,6 @@ pub impl Comp {
             out = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
         }
         if out == 0U64 || out >= self.arena.typeCount() { return out }
-        if f.hasRecv && out != 0U64 && out < self.arena.typeCount() {
-            val actual: TypeRef = self.arena.typeAt(index: out)
-            val underlying: U64 = self.newtypeUnderRef(start: actual.nameStart, len: actual.nameLen)
-            if underlying != 0U64 && underlying < self.arena.typeCount() {
-                val underTy: TypeRef = self.arena.typeAt(index: underlying)
-                if spansEqual(c: inout self, aStart: underTy.nameStart, aLen: underTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
-                    out = underlying
-                }
-            }
-        }
         val base: TypeRef = self.arena.typeAt(index: out)
         if base.viewExtId != 0U64 || base.viewIds.count() != 0U64 {
             val noViews: Array[U64] = []
@@ -911,7 +901,7 @@ pub impl Comp {
             }
         }
         if canonicalRecv != 0U64 && canonicalRecv < self.arena.typeCount() {
-            val recv: TypeRef = self.arena.typeAt(index: canonicalRecv)
+            val recv: TypeRef = self.arena.typeAt(index: self.fieldStorageTypeRef(receiverRef: canonicalRecv))
             val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
             if si < self.arena.structCount() {
                 val declared: Array[Bind] = self.arena.structAt(index: si).typeParams
@@ -1038,7 +1028,17 @@ pub impl Comp {
         // evidence; abstract checking records its template, while a concrete
         // call re-enters here with a reified proof.
         if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return 0U64 }
+        mut val adapterTarget: U64 = 0U64
+        val underlying: U64 = self.newtypeUnderlyingTypeRef(ref: environment.receiverRef)
+        if underlying != 0U64 {
+            adapterTarget = self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying)
+            if adapterTarget == 0U64 {
+                self.errorAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target")
+                return 0U64
+            }
+        }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
+        if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {
             if self.monoWork.bodyInstances[i] == bodyId { return bodyId }
@@ -1938,9 +1938,10 @@ pub impl Comp {
         return true
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64, generatedSite: CallSiteKey = <CallSiteKey />) {
         val bodyId: U64 = self.currentBodyInstanceId()
-        val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        mut val siteKey: CallSiteKey = generatedSite
+        if siteKey.originKind == 0U64 { siteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot) }
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
         val typeArgs: CallResolutionTypeArgRange = self.pushFinalCalleeTypeArgs(args: calleeTypeArgs)
         val parameterTypes: CallResolutionParameterTypeRange = self.pushFinalCalleeParameterTypes(types: parameterTypeRefs)
@@ -4321,7 +4322,9 @@ pub impl Comp {
             self.scanType(ref: signatureResult)
         }
         self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, result: signatureResult)
-        self.scanBlockInsts(blkId: f.body)
+        if instance.adapterTargetBodyId != 0U64 {
+            self.finalizeNewtypeAdapter(bodyId: bodyId)
+        } else { self.scanBlockInsts(blkId: f.body) }
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
     }
 

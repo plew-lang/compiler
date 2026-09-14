@@ -4,7 +4,7 @@
 // always-on verifier.
 
 import ../Frontend with { Comp }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidCallArgument, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+import ./Ir with { canonicalMidPlaceIsWhole, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidProjection, MidOperand, MidCallArgument, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 // Ownership state is function-local. A Global place denotes a stable storage
 // address whose owner is the module lifetime, so reads and borrows never
@@ -23,7 +23,7 @@ fn canonicalMidConsumeOperand(c: Comp, states: inout Array[MidOwnership], operan
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag != 2U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
-    if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() {
+    if canonicalMidIsLocalRoot(place: place) && canonicalMidPlaceIsWhole(arena: c.mid, place: place) && place.local < states.count() {
         states.set(i: place.local, value: <MidOwnership.Consumed />)
     }
 }

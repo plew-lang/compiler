@@ -529,20 +529,10 @@ pub impl Comp {
                 _ => {}
             }
         }
-        // Newtype member selection deliberately chooses the underlying
-        // declaration, so its return-term environment must use the same
-        // normalized receiver. The source value remains the newtype; this is
-        // only the callee's `Self` substitution for signature grounding.
-        mut val returnReceiver: U64 = receiverTerm
-        val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
-        val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
-        if underlying != 0U64 && underlying < self.arena.typeCount() {
-            val under: TypeRef = self.arena.typeAt(index: underlying)
-            if spansEqual(c: inout self, aStart: under.nameStart, aLen: under.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
-                returnReceiver = underlying
-            }
-        }
-        val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: returnReceiver, args: args)
+        // Selection names the original declaration, but its public signature
+        // substitutes the authored receiver. Mono supplies the adapter that
+        // separates this surface from the executable body's original Self.
+        val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: receiverTerm, args: args)
         val result: U64 = self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: f.retTy)
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected

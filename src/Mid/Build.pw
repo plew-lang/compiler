@@ -2598,3 +2598,64 @@ export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
     return <MidBodyBuild body=body canonical=canonical />
 }
+
+// A concrete adapter is built from frozen signatures, with no source AST walk.
+// Its place boundaries preserve aliasing for borrow/inout and transfer the
+// same whole owner for move. The normal Mid pipeline checks the resulting CFG.
+fn midAdapterPlace(c: inout Comp, local: U64, source: U64, target: U64) -> MidPlace {
+    if c.typeRefEq(a: source, b: target) { return <MidPlace local=local typeTerm=target /> }
+    return <MidPlace local=local typeTerm=target projections=[<MidProjection.NewtypeBoundary sourceTerm=source typeTerm=target />] />
+}
+
+fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand {
+    if isMove { return <MidOperand.Move place=place /> }
+    if isInout { return <MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> }
+    return <MidOperand.Borrow place=place capability=<MidBorrowCapability.Read /> />
+}
+
+export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> MidBodyBuild {
+    if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
+    val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+    if instance.adapterTargetBodyId == 0U64 { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
+    val target = c.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
+    val surface = c.arena.bodySignature(bodyId: bodyId)
+    val executable = c.arena.bodySignature(bodyId: instance.adapterTargetBodyId)
+    val function = c.arena.functionAt(index: fnIdx)
+    if instance.fnIdx != fnIdx || target.fnIdx != fnIdx || !surface.ready || !executable.ready || surface.parameterTypes.count() != function.params.count() || executable.parameterTypes.count() != function.params.count() || instance.adapterCallResolutionId == 0U64 {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
+    }
+    mut val locals: Array[MidLocalDecl] = []
+    mut val receiver: MidCallReceiver = <MidCallReceiver.None />
+    if function.hasRecv {
+        val sourceTerm = instance.environment.receiverRef
+        val targetTerm = target.environment.receiverRef
+        if !c.newtypeBoundaryTypesCompatible(source: sourceTerm, target: targetTerm) { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> /> }
+        locals.append(<MidLocalDecl typeTerm=sourceTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: sourceTerm) isParameter=true isInout=function.selfInout ownsAtEntry=function.selfMove sourceNameStart=identSelfTarget() />)
+        receiver = <MidCallReceiver.Value operand=midAdapterOperand(place: midAdapterPlace(c: inout c, local: 0U64, source: sourceTerm, target: targetTerm), isMove: function.selfMove, isInout: function.selfInout) />
+    }
+    mut val args: Array[MidOperand] = []
+    mut val index = 0U64
+    while index < function.params.count() {
+        val param = c.funcParamAt(params: function.params, index: index)
+        val sourceTerm = surface.parameterTypes[index]
+        val targetTerm = executable.parameterTypes[index]
+        if !c.newtypeBoundaryTypesCompatible(source: sourceTerm, target: targetTerm) { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> /> }
+        val local = locals.count()
+        locals.append(<MidLocalDecl typeTerm=sourceTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: sourceTerm) isParameter=true isInout=param.isInout ownsAtEntry=param.isMove sourceNameStart=param.nameStart />)
+        args.append(midAdapterOperand(place: midAdapterPlace(c: inout c, local: local, source: sourceTerm, target: targetTerm), isMove: param.isMove, isInout: param.isInout))
+        index += 1U64
+    }
+    val parameterCount = locals.count()
+    val resultLocal = locals.count()
+    locals.append(<MidLocalDecl typeTerm=executable.resultType sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: executable.resultType) isParameter=false isReturnPlace=function.hasRet />)
+    val destination = <MidPlace local=resultLocal typeTerm=executable.resultType />
+    mut val exit: MidTerminator = <MidTerminator.Return />
+    if function.hasRet {
+        if !c.newtypeBoundaryTypesCompatible(source: executable.resultType, target: surface.resultType) { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> /> }
+        exit = <MidTerminator.ReturnValue value=<MidOperand.Move place=midAdapterPlace(c: inout c, local: resultLocal, source: executable.resultType, target: surface.resultType) /> />
+    }
+    val body = <MidBody bodyInstance=bodyId sourceFunction=fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=parameterCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=instance.adapterCallResolutionId - 1U64 /> receiver=receiver args=args destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=exit />] entry=0U64 />
+    val canonical = c.mid.store(body: body)
+    if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
+    return <MidBodyBuild body=body canonical=canonical />
+}

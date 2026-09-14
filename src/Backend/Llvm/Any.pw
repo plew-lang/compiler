@@ -837,7 +837,7 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
+            val parametric: MidBodyBuild = buildMidBodyForInstance(c: inout c, fnIdx: fi, bodyId: bodyId)
             if c.traceCodegen {
                 eprint(text: "[trace-codegen] Mid build-done name=")
                 self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -1076,6 +1076,10 @@ pub impl LlvmCtx {
                 MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 16U64) }
             }
         } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
+        if !midReady && bodyId != 0U64 && c.arena.bodyInstanceAt(index: bodyId - 1U64).adapterTargetBodyId != 0U64 {
+            c.errorAt(offset: f.nameStart, msg: "internal error: newtype adapter requires verified Mid lowering")
+            return
+        }
         if requiresOwnershipCfg && !midReady {
             c.errorAt(offset: f.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
         }

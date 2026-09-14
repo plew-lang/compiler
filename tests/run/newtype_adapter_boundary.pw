@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+
+struct Counter { pub mut val value: I64 pub val label: String }
+pub impl Counter {
+    factory
+    fn duplicate() -> Self {
+        val original: Counter = self
+        return original
+    }
+    inout fn increment() { self.value = self.value + 1I64 }
+    assoc fn replace(value: inout Self, replacement: Self) { value = replacement }
+    assoc fn batch(values: Array[Self]) -> Array[Self] { return values }
+    assoc fn maybe(value: Self) -> Optional[Self] { return <Optional.Some v=value /> }
+    assoc fn echo[T](value: T) -> T { return value }
+}
+newtype Wrapped = Counter
+
+fn main() {
+    mut val counter: Wrapped = <Counter value=4I64 label="first" /> as Wrapped
+    counter.increment()
+    val duplicate: Wrapped = counter.duplicate()
+    print(duplicate.value)
+    print(duplicate.label)
+    Wrapped.replace(value: inout counter, replacement: <Counter value=9I64 label="second" /> as Wrapped)
+    print(counter.value)
+    print(duplicate.label)
+    val batch: Array[Wrapped] = Wrapped.batch(values: [counter, duplicate])
+    print(batch[0U64].label)
+    print(batch[1U64].value)
+    match Wrapped.maybe(value: counter) {
+        Optional.Some(v: val value) => { print(value.label) }
+        Optional.None => { print("missing") }
+    }
+    val echoed: Wrapped = Wrapped.echo(value: duplicate)
+    print(echoed.value)
+    print(counter.duplicate().label)
+}

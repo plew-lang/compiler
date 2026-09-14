@@ -19,6 +19,12 @@ pub impl Arena {
         return bodyId
     }
 
+    inout fn setBodyAdapter(bodyId: U64, targetBodyId: U64, callResolutionId: U64 = 0U64) {
+        val instance = self.bodyInstances[bodyId - 1U64]
+        val resolution = if callResolutionId == 0U64 { give instance.adapterCallResolutionId } else { give callResolutionId }
+        self.bodyInstances[bodyId - 1U64] = <BodyInstance fnIdx=instance.fnIdx environment=instance.environment adapterTargetBodyId=targetBodyId adapterCallResolutionId=resolution />
+    }
+
     fn bodySignature(bodyId: U64) -> BodySignature {
         if bodyId == 0U64 || bodyId > self.bodySignatures.count() { return <BodySignature /> }
         return self.bodySignatures[bodyId - 1U64]
