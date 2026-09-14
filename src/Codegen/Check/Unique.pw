@@ -452,12 +452,22 @@ pub impl Comp {
     // with by-value). `inout` is valid for both. Array params are containers
     // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
     // declaration offset (Param.nameStart is interned = maps to no source file).
-    inout fn checkParamModes(params: FuncParamRange, anchor: U64) {
+    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64) {
         mut val i: U64 = 0
         while i < params.count() {
             val p: Param = self.funcParamAt(params: params, index: i)
             if !(p.tyIsArray) {
-                if self.typeIsUnique(start: p.tyStart, len: p.tyLen) {
+                // Ownership modes describe the lexical parameter type, not
+                // the spelling Self in an inherited public signature.
+                val term = self.groundTermInEnvironment(ref: p.ty, params: [], values: [], selfRef: selfRef)
+                mut val typeStart = p.tyStart
+                mut val typeLen = p.tyLen
+                if term != 0U64 {
+                    val resolved = self.arena.typeAt(index: term)
+                    typeStart = resolved.nameStart
+                    typeLen = resolved.nameLen
+                }
+                if self.typeIsUnique(start: typeStart, len: typeLen) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
                         self.errorAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
@@ -467,7 +477,7 @@ pub impl Comp {
                     // lang-item generic surfaces such as `Ref.factory(value: move T)`;
                     // allow an explicit ownership mode there and let each call/instance
                     // decide whether it is meaningful.
-                    if !(self.isTypeParamName(start: p.tyStart, len: p.tyLen)) {
+                    if !(self.isTypeParamName(start: typeStart, len: typeLen)) {
                         if p.isMove {
                             self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
                         }
@@ -559,7 +569,8 @@ pub impl Comp {
     inout fn checkAllParamModes() {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
-            self.checkParamModes(params: self.arena.functionAt(index: i).params, anchor: self.fnAnchor(f: self.arena.functionAt(index: i)))
+            val function = self.arena.functionAt(index: i)
+            self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function))
             i += 1
         }
     }

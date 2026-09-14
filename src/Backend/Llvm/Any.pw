@@ -809,11 +809,9 @@ pub impl LlvmCtx {
         // function identity or spelling when a frozen instance is unavailable.
 
         // Select a complete Mid body before beginning LLVM emission.  The
-        // initial ordinary-body slice is deliberately exact: source receiver
-        // (when by-value) and parameters form the checked Mid-local ABI prefix.
-        // Inout/move receiver, globals, and field projection do not silently
-        // recover through legacy backend state; each gains a Mid form before it
-        // joins this path.
+        // receiver and parameters form the checked Mid-local ABI prefix.
+        // Receiver ownership is carried by ownsAtEntry/isInout and checked
+        // by the same dataflow and LLVM admission as ordinary parameters.
         mut val midReady: Bool = false
         mut val preparedMid: MidLlvmPrepared = <MidLlvmPrepared.None />
         mut val midEligible: Bool = true
@@ -823,10 +821,6 @@ pub impl LlvmCtx {
         }
         if f.isExtern {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Extern />)
-            midEligible = false
-        }
-        if f.hasRecv && f.selfMove {
-            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.MoveReceiver />)
             midEligible = false
         }
         if midEligible {

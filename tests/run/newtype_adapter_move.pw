@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+unique struct Resource { pub val label: String }
+pub impl Resource {
+    factory
+    assoc fn transfer(value: move Self) -> Self { return move value }
+    move fn finish() { print(self.label) }
+}
+impl Resource { deinit { print("drop") } }
+newtype Handle = Resource
+
+fn main() {
+    val resource: Handle = <Resource label="owned" /> as Handle
+    val transferred: Handle = Handle.transfer(value: move resource)
+    transferred.finish()
+}
