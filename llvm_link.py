@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 
 def optimizer(config):
     configured = os.environ.get('LLVM_OPT')
-    path = shutil.which(configured) if configured else str(Path(config).absolute().parent / 'opt')
+    path = shutil.which(configured) if configured else str(Path(subprocess.check_output([config, '--bindir'], text=True).strip()) / 'opt')
     if not path or not os.access(path, os.X_OK):
         raise ValueError('selected LLVM opt is unavailable; set LLVM_OPT explicitly')
     return path
