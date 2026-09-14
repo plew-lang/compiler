@@ -1698,7 +1698,7 @@ pub impl Comp {
             }
             Expr.Index(val base, val index) => {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
-                self.recordExpr(exprId: index, chainHoleRef: chainHoleRef)
+                mut val keyTerm: U64 = 0U64
                 // Array/Buffer indexing is equally structural: the selected
                 // element term is an existing child of the recorded receiver.
                 // Other index forms lower through a final method callable and
@@ -1717,9 +1717,16 @@ pub impl Comp {
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
                             self.recordSemanticExprTerm(exprId: exprId, term: baseTy.args[0])
+                            // Structural subscripts have the same U64 key
+                            // contract as their selected collection operation.
+                            // Publish context before recording the key so Mid
+                            // never has to infer an unsuffixed literal's type.
+                            val keyName: Bind = self.kwSpan(kw: "U64", kwLen: 3U64)
+                            keyTerm = self.simpleTypeRef(nameStart: keyName.nameStart, nameLen: keyName.nameLen)
                         }
                     }
                 }
+                self.recordExpr(exprId: index, chainHoleRef: chainHoleRef, expectedTerm: keyTerm)
                 // A non-structural subscript is syntax for a selected method
                 // call.  Freeze that selection here, before CallTemplates are
                 // closed; Mono must not rewrite Expr.Index and then attempt

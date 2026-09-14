@@ -12,3 +12,8 @@ for name in replace nested; do
     fi
 done
 echo 'PASS reference writes (replacement lifetime and nested reference use Mid)' >&2
+
+# The collection key supplies U64 context to bare integer literals before
+# the reference value is materialized and pinned for its field overwrite.
+"$PLEWC" --require-mid tests/run/arrow_store_literal.pw >"$directory/input.ll" 2>"$directory/trace"
+echo 'PASS indexed reference write with contextual literal (Mid required)' >&2
