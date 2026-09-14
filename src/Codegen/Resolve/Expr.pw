@@ -1233,6 +1233,13 @@ pub impl Comp {
         return false
     }
 
+    inout fn recordBlockExpectedResult(blkId: U64, expectedTerm: U64) {
+        val value = self.blockGiveExpr(blkId: blkId)
+        if value < self.arena.exprs.count() {
+            self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expectedTerm)
+        }
+    }
+
     // Record the expected result at a semantic statement boundary.  It is not
     // a replacement expression type: an uninstantiated generic call still
     // owns its callee return TypeTerm.  Keeping the two facts distinct lets a
@@ -1249,6 +1256,33 @@ pub impl Comp {
         // aggregate carrier, so Mid consumes the same selected E and never
         // reconstructs it from an element literal or method receiver query.
         match self.arena.exprs[exprId] {
+            // A value block passes its surrounding expectation to its give,
+            // including expectations discovered after the initial arm walk.
+            // Use recorded child types afterwards; never label a mismatched
+            // explicit child with the expected type to make it pass.
+            Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+                self.recordBlockExpectedResult(blkId: thenBlk, expectedTerm: expectedTerm)
+                self.recordBlockExpectedResult(blkId: elseBlk, expectedTerm: expectedTerm)
+                if !self.recordValueBlockResult(exprId: exprId, blockId: thenBlk) {
+                    self.recordValueBlockResult(exprId: exprId, blockId: elseBlk)
+                }
+            }
+            Expr.MatchExpr(scrut: _, arms: val arms) => {
+                mut val index: U64 = 0U64
+                mut val selected: Bool = false
+                while index < arms.len {
+                    val arm = self.matchArmAt(arms: arms, index: index)
+                    if !arm.isDiverge {
+                        self.recordBlockExpectedResult(blkId: arm.body, expectedTerm: expectedTerm)
+                        if !selected {
+                            self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
+                            selected = true
+                        }
+                    }
+                    index += 1U64
+                }
+            }
+
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
                 val acceptsContext: Bool = self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm)
                 if acceptsContext {

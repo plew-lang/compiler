@@ -14,3 +14,9 @@ for source in tests/run/mid_value_match_cfg_lowering.pw tests/run/mid_value_matc
     fi
 done
 echo "PASS $source(mid)" >&2
+
+for source in tests/run/match_expr_scrutinee_temp_arc.pw tests/run/mid_value_block_context.pw; do
+    echo "check $source(contextual value block)" >&2
+    "$PLEWC" --require-mid "$source" >"$directory/input.ll" 2>"$directory/coverage"
+    echo "PASS $source(mid)" >&2
+done

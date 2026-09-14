@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+
+fn read(value: Optional[I32]) -> I32 { return value.unwrap() }
+fn main() {
+    val value: Optional[I32] = if true { give <Optional.Some v=3I32 /> } else { give <Optional.None /> }
+    print(value.unwrap())
+    print(read(value: if true { give <Optional.Some v=3I32 /> } else { give <Optional.None /> }))
+}
