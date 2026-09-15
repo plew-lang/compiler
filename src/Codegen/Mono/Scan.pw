@@ -334,8 +334,7 @@ pub impl Comp {
     }
 
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-        val t: TypeRef = self.arena.typeAt(index: instRef)
-        val ei: U64 = self.anyEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        val ei: U64 = self.enumIndexForType(ref: instRef)
         if ei >= self.arena.enumCount() {
             return scalarInfo()
         }

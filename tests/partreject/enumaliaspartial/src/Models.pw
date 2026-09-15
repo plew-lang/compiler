@@ -1,0 +1,1 @@
+export enum Payload { Pair(a: I64, b: I64) Empty }

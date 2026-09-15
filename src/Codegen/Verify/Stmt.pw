@@ -288,7 +288,7 @@ pub impl Comp {
                     val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark
-                    self.checkDestructureComplete(a: arm)
+                    self.checkDestructureComplete(a: arm, scrut: scrut)
                     self.verifyAddArmBinds(a: arm, scrut: scrut)
                     self.verifyBlock(blockId: arm.body)
                     self.cur.branchBase = savedArmBB

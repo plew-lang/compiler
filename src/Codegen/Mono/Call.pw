@@ -5759,17 +5759,12 @@ pub impl Comp {
             self.addForStructBinds(et: scrutTi, binds: a.binds)
             return
         }
-        val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
         mut val bi: U64 = 0U64
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
             if bd.nameLen != 0U64 {
-                if genericMatch {
-                    val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                    self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
-                } else {
-                    self.addBindLocal(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
-                }
+                val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: scrutTi), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
             }
             bi += 1U64
         }

@@ -1,0 +1,8 @@
+import /Models with { Payload as Selection }
+fn main() {
+    val value: Selection = <Selection.Pair a=1I64 b=2I64 />
+    match value {
+        Selection.Pair(val a) => {}
+        Selection.Empty => {}
+    }
+}
