@@ -765,7 +765,7 @@ pub impl Comp {
             return
         }
         val subject: TypeInfo = self.typeOf(id: scrut)
-        val ei: U64 = self.enumIndexForType(ref: self.typedIrRefOfInfo(ti: subject))
+        val ei: U64 = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: subject)))
         if ei < self.arena.enumCount() {
             val vi: U64 = self.variantIndexInDeclaration(enumIndex: ei, nameStart: a.variantStart, nameLen: a.variantLen)
             if vi < self.arena.enumAt(index: ei).variants.count() {

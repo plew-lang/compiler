@@ -334,7 +334,8 @@ pub impl Comp {
     }
 
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-        val ei: U64 = self.enumIndexForType(ref: instRef)
+        val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: instRef)
+        val ei: U64 = self.enumIndexForType(ref: layoutReceiver)
         if ei >= self.arena.enumCount() {
             return scalarInfo()
         }
@@ -355,7 +356,7 @@ pub impl Comp {
                         // substitution as struct fields.  Keeping a separate
                         // `nameId` loop here made reconstructed `T` refs (whose
                         // cache id is 0) escape only through match bindings.
-                        return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: instRef, tyRef: fd.ty))
+                        return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: layoutReceiver, tyRef: fd.ty))
                     }
                     fi += 1
                 }
