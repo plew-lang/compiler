@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import /Models with { Packet as Envelope, Payload as Selection }
+
+fn first(value~: Selection) -> I64 {
+    match value {
+        Selection.Item(packet: val packet) => { return packet.values[0U64] }
+        Selection.Empty => { return 0I64 }
+    }
+}
+fn main() {
+    mut val original: Envelope = <Envelope values=[1I64, 2I64] />
+    mut val changed: Envelope = original
+    val wrapped: Selection = <Selection.Item packet=original />
+    val copied: Selection = wrapped
+    changed.values[0U64] = 9I64
+    original.values[0U64] = 7I64
+    print(original.values[0U64])
+    print(changed.values[0U64])
+    print(first(wrapped))
+    print(first(copied))
+}
