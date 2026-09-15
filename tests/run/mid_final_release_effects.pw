@@ -1,0 +1,48 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { FieldDef, EnumDef, Variant }
+
+fn field(compiler: inout Comp, name: String, typeName: String) -> FieldDef {
+    val label = compiler.internBytes(s: name)
+    val type = compiler.internBytes(s: typeName)
+    val term = compiler.simpleTypeRef(nameStart: type.nameStart, nameLen: type.nameLen)
+    return <FieldDef nameStart=label.nameStart nameLen=label.nameLen nameId=label.nameId tyStart=type.nameStart tyLen=type.nameLen tyNameId=type.nameId tyIsArray=false ty=term isMut=false hasDefault=false defaultVal=0U64 />
+}
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val rootName = compiler.internBytes(s: "EffectRoot")
+    val branchName = compiler.internBytes(s: "EffectBranch")
+    val leafName = compiler.internBytes(s: "EffectLeaf")
+    val rootField = field(compiler: inout compiler, name: "branch", typeName: "EffectBranch")
+    val branchField = field(compiler: inout compiler, name: "leaf", typeName: "EffectLeaf")
+    val leafField = field(compiler: inout compiler, name: "root", typeName: "EffectRoot")
+    compiler.arena.registerEnum(<EnumDef nameStart=rootName.nameStart nameLen=rootName.nameLen nameId=rootName.nameId typeParams=[] variants=[<Variant nameStart=0U64 nameLen=0U64 fields=[rootField] />] />)
+    compiler.arena.registerEnum(<EnumDef nameStart=branchName.nameStart nameLen=branchName.nameLen nameId=branchName.nameId typeParams=[] variants=[<Variant nameStart=0U64 nameLen=0U64 fields=[branchField] />] />)
+    compiler.arena.registerEnum(<EnumDef nameStart=leafName.nameStart nameLen=leafName.nameLen nameId=leafName.nameId typeParams=[] variants=[<Variant nameStart=0U64 nameLen=0U64 fields=[] />, <Variant nameStart=0U64 nameLen=0U64 fields=[leafField] />] />)
+    // The layout closes the recursive value through this box. Its release
+    // requirement must propagate back through both unboxed containing enums.
+    compiler.monoWork.boxedFields.append(leafField.nameStart)
+    val root = compiler.simpleTypeRef(nameStart: rootName.nameStart, nameLen: rootName.nameLen)
+    val branch = compiler.simpleTypeRef(nameStart: branchName.nameStart, nameLen: branchName.nameLen)
+    val leaf = compiler.simpleTypeRef(nameStart: leafName.nameStart, nameLen: leafName.nameLen)
+    compiler.enqueueFinalDestruction(typeRef: root)
+    val count = compiler.arena.finalDestructions.count()
+    assert(compiler.finalNeedsRelease(typeRef: root))
+    assert(compiler.finalNeedsRelease(typeRef: branch))
+    assert(compiler.finalNeedsRelease(typeRef: leaf))
+    compiler.monoWork.boxedFields = []
+    assert(compiler.finalNeedsRelease(typeRef: root))
+    assert(compiler.arena.finalDestructions.count() == count)
+    val rootContract = compiler.finalDestructionIndex(typeRef: root)
+    val branchContract = compiler.finalDestructionIndex(typeRef: branch)
+    assert(compiler.arena.finalDestructions[rootContract - 1U64].fieldNeedsRelease[0U64])
+    assert(compiler.arena.finalDestructions[branchContract - 1U64].fieldNeedsRelease[0U64])
+    val scalar = field(compiler: inout compiler, name: "number", typeName: "I64")
+    compiler.enqueueFinalDestruction(typeRef: scalar.ty)
+    assert(!compiler.finalNeedsRelease(typeRef: scalar.ty))
+    assert(!compiler.finalNeedsRelease(typeRef: 0U64))
+    print("ok")
+}

@@ -582,7 +582,7 @@ pub impl LlvmCtx {
     // that stored it (a short-circuit RHS drains inside its arm). A scalar-classed
     // value needs no home (nothing to release).
     inout fn registerArgTemp(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
-        if !(c.arcNeedsRelease(ref: typeRef)) {
+        if !(c.finalNeedsRelease(typeRef: typeRef)) {
             return
         }
         // The home is an alloca even inside an async fn: a temp's borrower (the call)

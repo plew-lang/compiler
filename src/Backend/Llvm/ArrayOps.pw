@@ -86,7 +86,7 @@ pub impl LlvmCtx {
             val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
             // An index read is a fresh value under value semantics.  Retain the
             // ARC-bearing element before returning it, matching Buffer.get.
-            if c.arcNeedsRelease(ref: elemRef) {
+            if c.finalNeedsRelease(typeRef: elemRef) {
                 self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: true)
             }
             return elem
@@ -331,7 +331,7 @@ pub impl LlvmCtx {
         // §4; exprAliasesPlace answers false for Index, so every consumer balances this
         // one count). Ref/WeakRef retain here too — the old exclusion assumed the
         // borrow-era contract where the consumer retained instead.
-        if c.arcNeedsRelease(ref: er) {
+        if c.finalNeedsRelease(typeRef: er) {
             self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
         }
         return elem
@@ -371,7 +371,7 @@ pub impl LlvmCtx {
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
         val slotPtr: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-        if c.arcNeedsRelease(ref: er) {
+        if c.finalNeedsRelease(typeRef: er) {
             val old: LLVMValueRef = llvmLoad(self.b, elemTy, slotPtr, anon())
             llvmStore(self.b, rv, slotPtr)
             self.valueArc(c: inout c, v: old, typeRef: er, retain: false)

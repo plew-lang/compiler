@@ -1282,7 +1282,7 @@ pub impl LlvmCtx {
                             // own an independent share.  Merely rebuilding `{ptr}` would make
                             // the result dangle when that argument is released.
                             val arrayTerm: U64 = self.midOperandTypeTerm(operand: args[0U64])
-                            if arrayTerm != 0U64 && arrayTerm < c.arena.typeCount() && c.arcNeedsRelease(ref: arrayTerm) {
+                            if arrayTerm != 0U64 && arrayTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: arrayTerm) {
                                 self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true)
                             }
                             val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.stringLlvmTy(c: inout c))
@@ -1386,7 +1386,7 @@ pub impl LlvmCtx {
                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                             self.emitBoundsCheck(c: inout c, idx: index, count: count)
                             val result: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: index), anon())
-                            if c.arcNeedsRelease(ref: elemRef) { self.valueArc(c: inout c, v: result, typeRef: elemRef, retain: true) }
+                            if c.finalNeedsRelease(typeRef: elemRef) { self.valueArc(c: inout c, v: result, typeRef: elemRef, retain: true) }
                             llvmStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
                             return true
                         }
@@ -1405,7 +1405,7 @@ pub impl LlvmCtx {
                                             val grown: LLVMValueRef = self.growBuf(c: inout c, data: data, elemTy: elemTy, count: count)
                                             llvmStore(self.b, grown, slot)
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[1U64]), elemTy: elemTy)
-                                            if self.midOperandNeedsOwnedDestination(operand: args[1U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[1U64]) && c.finalNeedsRelease(typeRef: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             llvmStore(self.b, value, self.arrElemPtr(elemTy: elemTy, data: grown, idx: count))
@@ -1463,11 +1463,11 @@ pub impl LlvmCtx {
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             self.emitBoundsCheck(c: inout c, idx: index, count: count)
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[2U64]), elemTy: elemTy)
-                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.finalNeedsRelease(typeRef: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             val elementSlot: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: index)
-                                            if c.arcNeedsRelease(ref: elemRef) {
+                                            if c.finalNeedsRelease(typeRef: elemRef) {
                                                 val old: LLVMValueRef = llvmLoad(self.b, elemTy, elementSlot, anon())
                                                 llvmStore(self.b, value, elementSlot)
                                                 self.valueArc(c: inout c, v: old, typeRef: elemRef, retain: false)
@@ -1504,7 +1504,7 @@ pub impl LlvmCtx {
                                             llvmStore(self.b, data, slot)
                                             self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: index, n: LLVMBuildSub(self.b, count, index, anon()))
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[2U64]), elemTy: elemTy)
-                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.finalNeedsRelease(typeRef: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             llvmStore(self.b, value, self.arrElemPtr(elemTy: elemTy, data: data, idx: index))
@@ -1908,7 +1908,7 @@ pub impl LlvmCtx {
             if operand.place == 0U64 || operand.place > c.mid.places.count() { return LLVMConstNull(self.ptrty) }
             val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
             val value: LLVMValueRef = self.midCanonicalReadPlace(c: inout c, body: body, place: place)
-            if operand.tag == 1U64 && place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() && c.arcNeedsRelease(ref: place.typeTerm) {
+            if operand.tag == 1U64 && place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: place.typeTerm) {
                 self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: true)
             }
             return value
@@ -2398,7 +2398,7 @@ pub impl LlvmCtx {
                 // Copy is an owned value operation under Plew value semantics.
                 // The source place retains its owner; this new value receives
                 // its own ARC share before any subsequent Mid drop consumes it.
-                if place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() && c.arcNeedsRelease(ref: place.typeTerm) {
+                if place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: place.typeTerm) {
                     self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: true)
                 }
                 return value
@@ -3250,7 +3250,7 @@ pub impl LlvmCtx {
                             CoreStringIntrinsic.FromBytesUnchecked => {
                                 val array: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)
                                 val arrayTerm: U64 = self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: argument)
-                                if arrayTerm != 0U64 && arrayTerm < c.arena.typeCount() && c.arcNeedsRelease(ref: arrayTerm) { self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true) }
+                                if arrayTerm != 0U64 && arrayTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: arrayTerm) { self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true) }
                                 val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.stringLlvmTy(c: inout c))
                                 llvmStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
@@ -3522,7 +3522,7 @@ pub impl LlvmCtx {
                                 val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
                                 self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
                                 val result: LLVMValueRef = llvmLoad(self.b, elementTy, self.arrElemPtr(elemTy: elementTy, data: data, idx: index), anon())
-                                if c.arcNeedsRelease(ref: elementRef) { self.valueArc(c: inout c, v: result, typeRef: elementRef, retain: true) }
+                                if c.finalNeedsRelease(typeRef: elementRef) { self.valueArc(c: inout c, v: result, typeRef: elementRef, retain: true) }
                                 llvmStore(self.b, result, destination)
                             }
                             BufferIntrinsic.BytewiseComparable => {
@@ -3550,7 +3550,7 @@ pub impl LlvmCtx {
                                 llvmStore(self.b, grown, slot)
                                 val valueOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64)
                                 mut val value: LLVMValueRef = self.coerceElem(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: valueOperandId), elemTy: elementTy)
-                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.arcNeedsRelease(ref: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
+                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.finalNeedsRelease(typeRef: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
                                 llvmStore(self.b, value, self.arrElemPtr(elemTy: elementTy, data: grown, idx: count))
                                 self.rawbufSetCount(c: inout c, data: grown, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
                             }
@@ -3578,9 +3578,9 @@ pub impl LlvmCtx {
                                 self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
                                 val valueOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 2U64)
                                 mut val value: LLVMValueRef = self.coerceElem(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: valueOperandId), elemTy: elementTy)
-                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.arcNeedsRelease(ref: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
+                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.finalNeedsRelease(typeRef: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
                                 val elementSlot: LLVMValueRef = self.arrElemPtr(elemTy: elementTy, data: data, idx: index)
-                                if c.arcNeedsRelease(ref: elementRef) {
+                                if c.finalNeedsRelease(typeRef: elementRef) {
                                     val old: LLVMValueRef = llvmLoad(self.b, elementTy, elementSlot, anon())
                                     llvmStore(self.b, value, elementSlot)
                                     self.valueArc(c: inout c, v: old, typeRef: elementRef, retain: false)
@@ -3601,7 +3601,7 @@ pub impl LlvmCtx {
                                 self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elementTy), dst: LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: index, n: LLVMBuildSub(self.b, count, index, anon()))
                                 val valueOperandId: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 2U64)
                                 mut val value: LLVMValueRef = self.coerceElem(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: valueOperandId), elemTy: elementTy)
-                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.arcNeedsRelease(ref: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
+                                if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.finalNeedsRelease(typeRef: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
                                 llvmStore(self.b, value, self.arrElemPtr(elemTy: elementTy, data: data, idx: index))
                                 self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
                             }
@@ -4208,7 +4208,7 @@ pub impl LlvmCtx {
         val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: element.operand)
         if element.operand != 0U64 && element.operand <= c.mid.operands.count() {
             val operand: MidOperandNode = c.mid.operands[element.operand - 1U64]
-            if operand.tag != 1U64 && operand.tag != 2U64 && element.targetTerm != 0U64 && element.targetTerm < c.arena.typeCount() && c.arcNeedsRelease(ref: element.targetTerm) {
+            if operand.tag != 1U64 && operand.tag != 2U64 && element.targetTerm != 0U64 && element.targetTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: element.targetTerm) {
                 self.valueArc(c: inout c, v: value, typeRef: element.targetTerm, retain: true)
             }
         }
@@ -4323,7 +4323,7 @@ pub impl LlvmCtx {
         self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, continuation)
         LLVMPositionBuilderAtEnd(self.b, shared)
-        if c.arcNeedsRelease(ref: typeRef) { self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true) }
+        if c.finalNeedsRelease(typeRef: typeRef) { self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true) }
         LLVMBuildBr(self.b, continuation)
         LLVMPositionBuilderAtEnd(self.b, continuation)
         return value
@@ -4363,7 +4363,7 @@ pub impl LlvmCtx {
             else if rvalue.tag != 11U64 && rvalue.tag != 12U64 && rvalue.tag != 13U64 && rvalue.tag != 14U64 && rvalue.tag != 15U64 && rvalue.tag != 16U64 && rvalue.tag != 17U64 && rvalue.tag != 18U64 { value = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand) }
             if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag >= 11U64 && rvalue.tag <= 17U64 { value = self.midCanonicalEmitEnumLayoutRvalue(c: inout c, body: body, value: rvalue) }
-            if (rvalue.tag == 12U64 || rvalue.tag == 14U64 || rvalue.tag == 17U64) && c.arcNeedsRelease(ref: rvalue.resultTerm) { self.valueArc(c: inout c, v: value, typeRef: rvalue.resultTerm, retain: true) }
+            if (rvalue.tag == 12U64 || rvalue.tag == 14U64 || rvalue.tag == 17U64) && c.finalNeedsRelease(typeRef: rvalue.resultTerm) { self.valueArc(c: inout c, v: value, typeRef: rvalue.resultTerm, retain: true) }
             if rvalue.tag == 18U64 { value = self.midCanonicalEmitTryErrResult(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
             if rvalue.tag == 9U64 {

@@ -34,13 +34,19 @@ pub impl Comp {
     }
 
     inout fn finalOwnershipClass(typeRef: U64) -> ArcClass {
-        // Zero is the closed Mid Unit term. Missing non-Unit terms are
-        // rejected by frontend/instantiation before ownership emission.
         if typeRef == 0U64 { return <ArcClass.Scalar /> }
+        return self.arena.finalDestructions[self.requireFinalDestruction(typeRef: typeRef) - 1U64].ownershipClass
+    }
+
+    inout fn finalNeedsRelease(typeRef: U64) -> Bool {
+        // Zero is the closed Mid Unit term, with no owned payload.
+        if typeRef == 0U64 { return false }
+        return self.arena.finalDestructions[self.requireFinalDestruction(typeRef: typeRef) - 1U64].needsRelease
+    }
+
+    inout fn requireFinalDestruction(typeRef: U64) -> U64 {
         val identity = self.finalDestructionIndex(typeRef: typeRef)
-        if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready {
-            return self.arena.finalDestructions[identity - 1U64].ownershipClass
-        }
+        if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready { return identity }
         eprint(text: "[ownership-contract] missing typeRef=")
         eprintU64(n: typeRef)
         eprint(text: " type=")
@@ -51,10 +57,113 @@ pub impl Comp {
         mut val offset = 0U64
         if typeRef < self.arena.typeCount() { offset = self.arena.typeAt(index: typeRef).nameStart }
         self.errorAt(offset: offset, msg: "internal error: ownership action has no finalized classification")
-        return <ArcClass.Scalar />
+        return 0U64
     }
 
+    // Collect shape first; no unfinished recursive node is interpreted as
+    // release-free. Propagate positive effects over reverse dependency edges.
     inout fn enqueueFinalDestruction(typeRef: U64) {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
+        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
+        val start = self.arena.finalDestructions.count()
+        self.collectFinalDestruction(typeRef: typeRef)
+        val count = self.arena.finalDestructions.count() - start
+        mut val needs: Array[Bool] = []
+        mut val heads: Array[U64] = []
+        // Each edge stores (dependent node, previous edge), using one-based links.
+        mut val edges: Array[U64] = []
+        mut val pending: Array[U64] = []
+        mut val index = 0U64
+        while index < count {
+            needs.append(false)
+            heads.append(0U64)
+            index += 1U64
+        }
+        index = 0U64
+        while index < count {
+            val contract = self.arena.finalDestructions[start + index]
+            if contract.underlying != 0U64 {
+                self.recordFinalReleaseDependency(typeRef: contract.underlying, owner: index, start: start, needs: inout needs, heads: inout heads, edges: inout edges)
+            } else {
+                mut val aggregate = false
+                match contract.ownershipClass {
+                    ArcClass.Scalar => {}
+                    ArcClass.StructVal(sidx: _) => { aggregate = true }
+                    ArcClass.EnumVal(eidx: _) => { aggregate = true }
+                    _ => { needs[index] = true }
+                }
+                if aggregate {
+                    if contract.deinitBodyId != 0U64 { needs[index] = true }
+                    mut val field = 0U64
+                    while field < contract.fieldTypes.count() {
+                        if contract.fieldBoxed[field] { needs[index] = true }
+                        else {
+                            self.recordFinalReleaseDependency(typeRef: contract.fieldTypes[field], owner: index, start: start, needs: inout needs, heads: inout heads, edges: inout edges)
+                        }
+                        field += 1U64
+                    }
+                }
+            }
+            if needs[index] { pending.append(index) }
+            index += 1U64
+        }
+        index = 0U64
+        while index < pending.count() {
+            mut val edge = heads[pending[index]]
+            while edge != 0U64 {
+                val owner = edges[edge - 1U64]
+                if !needs[owner] {
+                    needs[owner] = true
+                    pending.append(owner)
+                }
+                edge = edges[edge]
+            }
+            index += 1U64
+        }
+        index = 0U64
+        while index < count {
+            val contract = self.arena.finalDestructions[start + index]
+            mut val releases: Array[Bool] = []
+            mut val field = 0U64
+            while field < contract.fieldTypes.count() {
+                releases.append(contract.fieldBoxed[field] || self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs))
+                field += 1U64
+            }
+            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitBodyId=contract.deinitBodyId underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
+            index += 1U64
+        }
+    }
+
+    inout fn recordFinalReleaseDependency(typeRef: U64, owner: U64, start: U64, needs: inout Array[Bool], heads: inout Array[U64], edges: inout Array[U64]) {
+        if typeRef == 0U64 { return }
+        val identity = self.finalDestructionIndex(typeRef: typeRef)
+        if identity == 0U64 {
+            self.errorAt(offset: 0U64, msg: "internal error: ownership dependency has no collected shape")
+            return
+        }
+        val child = identity - 1U64
+        if child < start {
+            if self.finalNeedsRelease(typeRef: typeRef) { needs[owner] = true }
+            return
+        }
+        val edge = edges.count() + 1U64
+        edges.append(owner)
+        edges.append(heads[child - start])
+        heads[child - start] = edge
+    }
+
+    inout fn collectedFinalReleaseEffect(typeRef: U64, start: U64, needs: Array[Bool]) -> Bool {
+        if typeRef == 0U64 { return false }
+        val identity = self.finalDestructionIndex(typeRef: typeRef)
+        if identity == 0U64 {
+            self.errorAt(offset: 0U64, msg: "internal error: ownership field has no collected shape")
+            return false
+        }
+        if identity - 1U64 < start { return self.finalNeedsRelease(typeRef: typeRef) }
+        return needs[identity - 1U64 - start]
+    }
+
+    inout fn collectFinalDestruction(typeRef: U64) {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
         val type = self.arena.typeAt(index: typeRef)
@@ -90,7 +199,7 @@ pub impl Comp {
             underlying = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
             if underlying == typeRef { underlying = 0U64 }
             if underlying != 0U64 {
-                self.enqueueFinalDestruction(typeRef: underlying)
+                self.collectFinalDestruction(typeRef: underlying)
             } else {
                 // Structural layout is independent of the specialized ARC
                 // action (String/Buffer/Ref/Promise). Freeze declared fields
@@ -128,9 +237,9 @@ pub impl Comp {
                             variant += 1U64
                         }
                     }
-                    ArcClass.BufferLike(elem: val element) => { self.enqueueFinalDestruction(typeRef: element) }
-                    ArcClass.RefCell(inst: val instance) => { self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
-                    ArcClass.PromiseCell(inst: val instance) => { self.enqueueFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.BufferLike(elem: val element) => { self.collectFinalDestruction(typeRef: element) }
+                    ArcClass.RefCell(inst: val instance) => { self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.PromiseCell(inst: val instance) => { self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
                     // Weak references do not own their pointee. Erased values
                     // close their concrete owners at construction instead.
                     ArcClass.WeakCell(inst: _) => {}
@@ -141,13 +250,11 @@ pub impl Comp {
                 }
             }
         }
-        mut val releases: Array[Bool] = []
         mut val field = 0U64
         while field < fields.count() {
-            self.enqueueFinalDestruction(typeRef: fields[field])
-            releases.append(boxed[field] || self.arcNeedsRelease(ref: fields[field]))
+            self.collectFinalDestruction(typeRef: fields[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed fieldNeedsRelease=releases variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
     }
 }

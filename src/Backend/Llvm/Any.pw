@@ -145,7 +145,7 @@ pub impl LlvmCtx {
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
-        if c.arcNeedsRelease(ref: instRef) {
+        if c.finalNeedsRelease(typeRef: instRef) {
             val v: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueParameter(function: fv, index: 0U64), anon())
             self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }

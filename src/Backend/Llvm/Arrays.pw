@@ -540,7 +540,7 @@ pub impl LlvmCtx {
         // class (including Array as its ordinary struct representation).
         if typeRef != 0U64 {
             if exprAliasesPlace(c: inout c, id: expr) {
-                if c.arcNeedsRelease(ref: typeRef) {
+                if c.finalNeedsRelease(typeRef: typeRef) {
                     self.valueArc(c: inout c, v: v, typeRef: typeRef, retain: true)
                 }
             }
@@ -759,7 +759,7 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         if ref != 0U64 {
-            if c.arcNeedsRelease(ref: ref) {
+            if c.finalNeedsRelease(typeRef: ref) {
                 val pv: LLVMValueRef = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: ref), cell, anon())
                 self.valueArc(c: inout c, v: pv, typeRef: ref, retain: false)
             }
@@ -862,7 +862,7 @@ pub impl LlvmCtx {
         // non-struct pointee (enum / String / nested Ref) were silently never destroyed.
         if c.isStrongRefInst(ref: refTy) {
             val pr: U64 = c.arena.typeAt(index: refTy).args[0]
-            if c.arcNeedsRelease(ref: pr) {
+            if c.finalNeedsRelease(typeRef: pr) {
                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                 self.valueArc(c: inout c, v: llvmLoad(self.b, pty, cell, anon()), typeRef: pr, retain: false)
             }
@@ -926,7 +926,7 @@ pub impl LlvmCtx {
         // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
         // duplicated every element's leading heap reference too — retain each so the new
         // owner co-owns it (balanced by this owner's eventual element release at drop).
-        if c.arcNeedsRelease(ref: elemRef) {
+        if c.finalNeedsRelease(typeRef: elemRef) {
             val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
             val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.retain"))
             val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.cont"))
@@ -1159,7 +1159,7 @@ pub impl LlvmCtx {
         // icmp + 2 blocks + condbr + free at every site (~8800 sites — most array releases).
         // Semantically identical; cuts ~60k IR lines. (String / Ref / struct / enum elements
         // DO need the per-element cascade below — arcNeedsRelease is true for them.)
-        if !(c.arcNeedsRelease(ref: elemRef)) {
+        if !(c.finalNeedsRelease(typeRef: elemRef)) {
             self.rawbufDrop(c: inout c, cell: data)
             return
         }
@@ -1207,7 +1207,7 @@ pub impl LlvmCtx {
     // clear/truncate to drop a removed suffix). A no-op when the element type carries no
     // value-ARC. The caller must have committed the smaller count first (commit-then-release).
     inout fn emitArrayElemRangeRelease(c: inout Comp, data: LLVMValueRef, start: LLVMValueRef, end: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
-        if !(c.arcNeedsRelease(ref: elemRef)) {
+        if !(c.finalNeedsRelease(typeRef: elemRef)) {
             return
         }
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)

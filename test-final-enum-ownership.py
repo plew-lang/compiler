@@ -28,3 +28,10 @@ for name in ('valueArc',):
     for forbidden in ('arcClassOfRef(', 'setStructEnv(', 'groundTypeRef('):
         assert forbidden not in match.group(1), f'{name} reopens ownership through {forbidden}'
 print('PASS value ARC consumes finalized classification')
+
+ownership = (Path(__file__).resolve().parent / 'src/Codegen/Mono/Ownership.pw').read_text()
+assert 'arcNeedsRelease(' not in ownership, 'finalization re-resolves fields instead of consuming the collected graph'
+for name in ('Mid', 'Arrays', 'Any', 'ArrayOps', 'CallGeneric'):
+    body = (Path(__file__).resolve().parent / f'src/Backend/Llvm/{name}.pw').read_text()
+    assert 'c.arcNeedsRelease(' not in body, f'{name} re-resolves release requirements'
+print('PASS Mid and ownership glue consume finalized release effects')

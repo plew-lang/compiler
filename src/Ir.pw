@@ -3063,6 +3063,7 @@ pub impl MonoWork { factory }
 // Final destruction facts are shared by semantically equal TypeRef rows.
 // Zero is a missing contract; a published placeholder closes recursive types.
 export struct FinalDestruction {
+    pub val needsRelease: Bool = false
     pub val typeRef: U64
     pub val ownershipClass: ArcClass = <ArcClass.Scalar />
     pub val ready: Bool = false
