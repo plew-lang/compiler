@@ -157,7 +157,7 @@ pub impl LlvmCtx {
             self.terminated = false
             if arm.isWildcard {
                 if consuming {
-                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty)
+                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty, typeRef: scrutRef)
                 }
             } else {
                 // bind the payload under the enum env, then restore the outer env so the
@@ -234,7 +234,7 @@ pub impl LlvmCtx {
     inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, instanceRef: U64, consuming: Bool) {
         if arm.binds.len == 0U64 {
             if consuming {
-                self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy)
+                self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy, typeRef: instanceRef)
             }
             return
         }

@@ -194,7 +194,7 @@ pub impl LlvmCtx {
             self.terminated = false
             if arm.isWildcard {
                 if consuming {
-                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty)
+                    self.emitEnumRelease(c: inout c, v: llvmLoad(self.b, sty, sslot, anon()), eid: eid, ety: sty, typeRef: scrutRef)
                 }
             } else {
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)

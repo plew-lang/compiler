@@ -526,6 +526,12 @@ else
     fail=$((fail + 1)); failed="$failed existential-mid-bodies"
 fi
 
+if python3 ./test-final-enum-ownership.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed final-enum-ownership"
+fi
+
 if python3 ./test-bounds-lowering.py; then
     :
 else
