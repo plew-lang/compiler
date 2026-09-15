@@ -125,7 +125,7 @@ pub impl LlvmCtx {
                 return
             }
             if contract.ready && contract.deinitBodyId == 0U64 && contract.fieldTypes.count() == 1U64 {
-                match c.arcClassOfRef(ref: typeRef) {
+                match contract.ownershipClass {
                     ArcClass.StructVal(sidx: val index) => {
                         val declaration = c.arena.structAt(index: index)
                         if declaration.fields.count() == 1U64 && contract.fieldBoxed.count() == 1U64 && !contract.fieldBoxed[0U64] {

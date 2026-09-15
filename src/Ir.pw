@@ -3064,6 +3064,7 @@ pub impl MonoWork { factory }
 // Zero is a missing contract; a published placeholder closes recursive types.
 export struct FinalDestruction {
     pub val typeRef: U64
+    pub val ownershipClass: ArcClass = <ArcClass.Scalar />
     pub val ready: Bool = false
     pub val deinitBodyId: U64 = 0U64
     pub val underlying: U64 = 0U64

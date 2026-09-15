@@ -4866,9 +4866,18 @@ pub impl Comp {
         // after its CallResolution has been frozen.
         mut val aggregateI: U64 = 0U64
         mut val callI: U64 = 0U64
-        while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() {
+        mut val storageI: U64 = 0U64
+        while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() || storageI < self.arena.finalStorages.count() {
             if bodyI < self.monoWork.bodyInstances.count() {
-                self.scanFinalBodyInstance(bodyId: self.monoWork.bodyInstances[bodyI])
+                val bodyId = self.monoWork.bodyInstances[bodyI]
+                self.scanFinalBodyInstance(bodyId: bodyId)
+                val signature = self.arena.bodySignature(bodyId: bodyId)
+                self.enqueueFinalDestruction(typeRef: signature.resultType)
+                mut val parameter = 0U64
+                while parameter < signature.parameterTypes.count() {
+                    self.enqueueFinalDestruction(typeRef: signature.parameterTypes[parameter])
+                    parameter += 1U64
+                }
                 bodyI += 1U64
             }
             if globalI < self.selectedGlobalTargets.count() {
@@ -4887,8 +4896,21 @@ pub impl Comp {
                 aggregateI += 1U64
             }
             while callI < self.finalCalleeCount() {
-                self.enqueueFinalDestruction(typeRef: self.arena.finalCallees[callI].resultTypeRef)
+                val call = self.arena.finalCallees[callI]
+                self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
+                self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
+                mut val parameter = 0U64
+                while parameter < call.parameterTypeRefs.len {
+                    self.enqueueFinalDestruction(typeRef: self.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter))
+                    parameter += 1U64
+                }
                 callI += 1U64
+            }
+            while storageI < self.arena.finalStorages.count() {
+                val storage = self.arena.finalStorages[storageI]
+                self.enqueueFinalDestruction(typeRef: storage.sourceTypeRef)
+                self.enqueueFinalDestruction(typeRef: storage.targetTypeRef)
+                storageI += 1U64
             }
         }
         if self.genMode {

@@ -17,6 +17,11 @@ fn main() {
     val original = compiler.pushType(t: <TypeRef nameStart=originalName.nameStart nameLen=originalName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[integer] />)
     val alias = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[integer] />)
     val other = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen args=[] isRecord=true recordFieldLabels=[label.nameId] recordFieldTerms=[string] />)
+    // Final ownership contracts consume layouts prepared by collection.
+    compiler.inCollection = true
+    compiler.collectRecordLayout(ref: original)
+    compiler.collectRecordLayout(ref: other)
+    compiler.inCollection = false
     assert(original != alias)
     compiler.enqueueFinalDestruction(typeRef: original)
     val contract = compiler.finalDestructionIndex(typeRef: original)

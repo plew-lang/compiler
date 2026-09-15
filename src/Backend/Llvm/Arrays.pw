@@ -968,7 +968,7 @@ pub impl LlvmCtx {
     // the active variant). The type dispatch is shared; only the leaf op differs by `retain`.
     // Scalars / unsupported types: nop. The single value-ARC entry (retain and release).
     inout fn valueArc(c: inout Comp, v: LLVMValueRef, typeRef: U64, retain: Bool) {
-        match c.arcClassOfRef(ref: typeRef) {
+        match c.finalOwnershipClass(typeRef: typeRef) {
             ArcClass.Scalar => {}
             // a String value IS the Array[U8] buffer — value-ARC it directly (U8
             // scalars, so just the rc-managed outer buffer; literal Strings carry a
@@ -1048,23 +1048,13 @@ pub impl LlvmCtx {
                     self.emitClosureRelease(c: inout c, fat: v)
                 }
             }
-            // a registered struct value (`Array[I64]`, any grounded generic inst):
-            // ground this value's own instance env (`Array[String]` -> T=String) so a
-            // generic field (`data: Buffer[T]`) resolves to its concrete element while
-            // the inline walker descends. setStructEnv is a no-op for an unregistered /
-            // already-ungrounded ref, so a caller-set env is preserved.
+            // The field contract is already grounded for this value. Physical
+            // witness emission must not reopen an ambient instance environment.
             ArcClass.StructVal(val sidx) => {
-                val savedP: Array[Bind] = c.cur.typeParams
-                val savedA: Array[U64] = c.cur.typeArgs
-                val didSet: Bool = self.setStructEnv(c: inout c, ref: typeRef)
                 if retain {
                     self.emitStructRetain(c: inout c, v: v, sidx: sidx, ref: typeRef)
                 } else {
                     self.emitDeinitValue(c: inout c, v: v, sidx: sidx, ref: typeRef)
-                }
-                if didSet {
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
                 }
             }
             // an enum value: value-ARC its active variant's non-boxed heap.

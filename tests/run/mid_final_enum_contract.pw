@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
-import /Ir with { FieldDef, EnumDef, Variant, TypeRef }
+import /Ir with { FieldDef, EnumDef, Variant, TypeRef, ArcClass }
 
 fn field(compiler: inout Comp, name: String, typeName: String) -> FieldDef {
     val label = compiler.internBytes(s: name)
@@ -34,6 +34,10 @@ fn main() {
     compiler.monoWork.boxedFields = []
     val contract = compiler.arena.finalDestructions[identity - 1U64]
     assert(contract.ready)
+    match compiler.finalOwnershipClass(typeRef: type) {
+        ArcClass.EnumVal(eidx: val index) => { assert(index == 0U64) }
+        _ => { assert(false) }
+    }
     assert(contract.variantFieldStarts.count() == 5U64)
     assert(contract.variantFieldStarts[0U64] == 0U64)
     assert(contract.variantFieldStarts[1U64] == 0U64)

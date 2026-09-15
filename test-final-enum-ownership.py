@@ -21,3 +21,10 @@ for name in ('emitRetainWitnessWalk', 'emitRetainWitnessBodies'):
 for retired in ('deepCopyStructValue', 'deepCopyEnumRef', 'deepCopyEnumValue', 'copyArrayValue', 'copyWitSlot', 'enumCopyWitSlot'):
     assert retired not in source + arrays, f'retired eager-copy path returned: {retired}'
 print('PASS struct copies share frozen retain contracts')
+
+for name in ('valueArc',):
+    match = re.search(r'    inout fn ' + name + r'\([^\n]+\{\n(.*?)(?=\n    inout fn |\Z)', arrays, re.S)
+    assert match, f'missing ownership entry: {name}'
+    for forbidden in ('arcClassOfRef(', 'setStructEnv(', 'groundTypeRef('):
+        assert forbidden not in match.group(1), f'{name} reopens ownership through {forbidden}'
+print('PASS value ARC consumes finalized classification')

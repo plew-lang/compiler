@@ -33,6 +33,27 @@ pub impl Comp {
         return 0U64
     }
 
+    inout fn finalOwnershipClass(typeRef: U64) -> ArcClass {
+        // Zero is the closed Mid Unit term. Missing non-Unit terms are
+        // rejected by frontend/instantiation before ownership emission.
+        if typeRef == 0U64 { return <ArcClass.Scalar /> }
+        val identity = self.finalDestructionIndex(typeRef: typeRef)
+        if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready {
+            return self.arena.finalDestructions[identity - 1U64].ownershipClass
+        }
+        eprint(text: "[ownership-contract] missing typeRef=")
+        eprintU64(n: typeRef)
+        eprint(text: " type=")
+        self.traceMonoTypeHead(ref: typeRef)
+        eprint(text: " function=")
+        eprintU64(n: self.cur.checkFn)
+        eprint(text: "\n")
+        mut val offset = 0U64
+        if typeRef < self.arena.typeCount() { offset = self.arena.typeAt(index: typeRef).nameStart }
+        self.errorAt(offset: offset, msg: "internal error: ownership action has no finalized classification")
+        return <ArcClass.Scalar />
+    }
+
     inout fn enqueueFinalDestruction(typeRef: U64) {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
@@ -52,6 +73,7 @@ pub impl Comp {
         self.arena.finalDestructionNominalNext.append(nominalNext)
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
+        val ownershipClass = self.arcClassOfRef(ref: typeRef)
         mut val fields: Array[U64] = []
         mut val boxed: Array[Bool] = []
         mut val variantStarts: Array[U64] = []
@@ -89,7 +111,7 @@ pub impl Comp {
                         field += 1U64
                     }
                 }
-                match self.arcClassOfRef(ref: typeRef) {
+                match ownershipClass {
                     ArcClass.StructVal(sidx: _) => {}
                     ArcClass.EnumVal(eidx: val index) => {
                         val declaration = self.arena.enumAt(index: index)
@@ -126,6 +148,6 @@ pub impl Comp {
             releases.append(boxed[field] || self.arcNeedsRelease(ref: fields[field]))
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed fieldNeedsRelease=releases variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed fieldNeedsRelease=releases variantFieldStarts=variantStarts />
     }
 }
