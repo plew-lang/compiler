@@ -8,6 +8,6 @@ for name in ('enumNeedsDeinit', 'emitEnumOwnership', 'emitEnumReleaseWitnessBodi
     match = re.search(r'    inout fn ' + name + r'\([^\n]+\{\n(.*?)(?=\n    inout fn |\Z)', source, re.S)
     assert match, f'missing ownership entry: {name}'
     body = match.group(1)
-    for forbidden in ('arcFieldTy(', 'fieldIsBoxed(', 'enumVariantAt(', 'setEnumEnv(', 'groundTypeRef(', 'findOrAddTypeRef('):
+    for forbidden in ('arcNeedsRelease(', 'arcFieldTy(', 'fieldIsBoxed(', 'enumVariantAt(', 'setEnumEnv(', 'groundTypeRef(', 'findOrAddTypeRef('):
         assert forbidden not in body, f'{name} re-resolves payload facts through {forbidden}'
 print('PASS enum ownership consumes frozen payload facts')

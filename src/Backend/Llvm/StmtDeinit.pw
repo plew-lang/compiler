@@ -152,7 +152,7 @@ pub impl LlvmCtx {
             return
         }
         val contract = c.arena.finalDestructions[contractId - 1U64]
-        if !contract.ready || contract.fieldTypes.count() != declaration.fields.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
+        if !contract.ready || contract.fieldTypes.count() != declaration.fields.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() || contract.fieldNeedsRelease.count() != contract.fieldTypes.count() {
             c.errorAt(offset: declaration.defOffset, msg: "internal error: struct drop has an incomplete destruction contract")
             return
         }
@@ -172,7 +172,7 @@ pub impl LlvmCtx {
             val type = contract.fieldTypes[field]
             if contract.fieldBoxed[field] {
                 self.emitCellRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()), ref: type)
-            } else if c.arcNeedsRelease(ref: type) {
+            } else if contract.fieldNeedsRelease[field] {
                 self.emitFinalDropValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: type)
             }
             field += 1U64

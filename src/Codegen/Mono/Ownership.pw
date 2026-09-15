@@ -102,11 +102,13 @@ pub impl Comp {
                 }
             }
         }
+        mut val releases: Array[Bool] = []
         mut val field = 0U64
         while field < fields.count() {
             self.enqueueFinalDestruction(typeRef: fields[field])
+            releases.append(boxed[field] || self.arcNeedsRelease(ref: fields[field]))
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed fieldNeedsRelease=releases variantFieldStarts=variantStarts />
     }
 }

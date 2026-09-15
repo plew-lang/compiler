@@ -27,11 +27,13 @@ fn main() {
     assert(compiler.arena.finalDestructions.count() == count)
     assert(compiler.arena.finalDestructions[contract - 1U64].ready)
     assert(compiler.arena.finalDestructions[contract - 1U64].fieldTypes[0U64] == integer)
+    assert(!compiler.arena.finalDestructions[contract - 1U64].fieldNeedsRelease[0U64])
     assert(compiler.finalDestructionIndex(typeRef: other) == 0U64)
     assert(compiler.arena.finalDestructions.count() == count)
     compiler.enqueueFinalDestruction(typeRef: other)
     val otherContract = compiler.finalDestructionIndex(typeRef: other)
     assert(otherContract != 0U64 && otherContract != contract)
     assert(compiler.arena.finalDestructions[otherContract - 1U64].fieldTypes[0U64] == string)
+    assert(compiler.arena.finalDestructions[otherContract - 1U64].fieldNeedsRelease[0U64])
     print("ok")
 }

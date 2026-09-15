@@ -408,13 +408,13 @@ pub impl LlvmCtx {
             return false
         }
         val contract = c.arena.finalDestructions[identity - 1U64]
-        if !contract.ready || contract.fieldTypes.count() != contract.fieldBoxed.count() {
+        if !contract.ready || contract.fieldTypes.count() != contract.fieldBoxed.count() || contract.fieldNeedsRelease.count() != contract.fieldTypes.count() {
             c.errorAt(offset: 0U64, msg: "internal error: enum ownership query has an incomplete destruction contract")
             return false
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
-            if contract.fieldBoxed[field] || c.arcNeedsRelease(ref: contract.fieldTypes[field]) { return true }
+            if contract.fieldNeedsRelease[field] { return true }
             field += 1U64
         }
         return false
@@ -430,7 +430,7 @@ pub impl LlvmCtx {
             return
         }
         val contract = c.arena.finalDestructions[identity - 1U64]
-        if !contract.ready || contract.variantFieldStarts.count() == 0U64 || contract.fieldBoxed.count() != contract.fieldTypes.count() {
+        if !contract.ready || contract.variantFieldStarts.count() == 0U64 || contract.fieldBoxed.count() != contract.fieldTypes.count() || contract.fieldNeedsRelease.count() != contract.fieldTypes.count() {
             c.errorAt(offset: 0U64, msg: "internal error: enum ownership has an incomplete destruction contract")
             return
         }
@@ -452,7 +452,7 @@ pub impl LlvmCtx {
             mut val hasOwnership = false
             mut val field = start
             while field < end {
-                if contract.fieldBoxed[field] || c.arcNeedsRelease(ref: contract.fieldTypes[field]) { hasOwnership = true }
+                if contract.fieldNeedsRelease[field] { hasOwnership = true }
                 field += 1U64
             }
             if hasOwnership {
@@ -477,7 +477,7 @@ pub impl LlvmCtx {
                         val cell = LLVMBuildExtractValue(self.b, value, field - start, anon())
                         if retain { self.rawbufRetain(c: inout c, cell: cell) }
                         else { self.emitCellRelease(c: inout c, cell: cell, ref: type) }
-                    } else if c.arcNeedsRelease(ref: type) {
+                    } else if contract.fieldNeedsRelease[field] {
                         self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, value, field - start, anon()), typeRef: type, retain: retain)
                     }
                     field += 1U64

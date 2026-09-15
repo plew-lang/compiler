@@ -48,5 +48,9 @@ fn main() {
     assert(!contract.fieldBoxed[0U64])
     assert(contract.fieldBoxed[1U64])
     assert(!contract.fieldBoxed[2U64])
+    assert(contract.fieldNeedsRelease.count() == 3U64)
+    assert(!contract.fieldNeedsRelease[0U64])
+    assert(contract.fieldNeedsRelease[1U64])
+    assert(!contract.fieldNeedsRelease[2U64])
     print("ok")
 }
