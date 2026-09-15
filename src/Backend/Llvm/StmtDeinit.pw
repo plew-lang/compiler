@@ -128,7 +128,7 @@ pub impl LlvmCtx {
                 match c.arcClassOfRef(ref: typeRef) {
                     ArcClass.StructVal(sidx: val index) => {
                         val declaration = c.arena.structAt(index: index)
-                        if declaration.fields.count() == 1U64 && !c.fieldIsBoxed(f: declaration.fields[0U64]) {
+                        if declaration.fields.count() == 1U64 && contract.fieldBoxed.count() == 1U64 && !contract.fieldBoxed[0U64] {
                             self.emitFinalDropValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, 0U64, anon()), typeRef: contract.fieldTypes[0U64])
                             return
                         }
@@ -152,7 +152,7 @@ pub impl LlvmCtx {
             return
         }
         val contract = c.arena.finalDestructions[contractId - 1U64]
-        if !contract.ready || contract.fieldTypes.count() != declaration.fields.count() {
+        if !contract.ready || contract.fieldTypes.count() != declaration.fields.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
             c.errorAt(offset: declaration.defOffset, msg: "internal error: struct drop has an incomplete destruction contract")
             return
         }
@@ -170,7 +170,7 @@ pub impl LlvmCtx {
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
             val type = contract.fieldTypes[field]
-            if c.fieldIsBoxed(f: declaration.fields[field]) {
+            if contract.fieldBoxed[field] {
                 self.emitCellRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()), ref: type)
             } else if c.arcNeedsRelease(ref: type) {
                 self.emitFinalDropValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: type)

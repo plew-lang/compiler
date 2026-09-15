@@ -36,10 +36,17 @@ pub impl Comp {
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
         mut val fields: Array[U64] = []
+        mut val boxed: Array[Bool] = []
+        mut val variantStarts: Array[U64] = []
         mut val destructor = 0U64
         mut val underlying = 0U64
         if type.isRecord {
             fields = type.recordFieldTerms
+            mut val field = 0U64
+            while field < fields.count() {
+                boxed.append(false)
+                field += 1U64
+            }
         } else {
             underlying = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
             if underlying == typeRef { underlying = 0U64 }
@@ -61,6 +68,7 @@ pub impl Comp {
                     mut val field = 0U64
                     while field < declaration.fields.count() {
                         fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                        boxed.append(self.fieldIsBoxed(f: declaration.fields[field]))
                         field += 1U64
                     }
                 }
@@ -68,13 +76,16 @@ pub impl Comp {
                     ArcClass.StructVal(sidx: _) => {}
                     ArcClass.EnumVal(eidx: val index) => {
                         val declaration = self.arena.enumAt(index: index)
+                        variantStarts.append(fields.count())
                         mut val variant = 0U64
                         while variant < declaration.variants.count() {
                             mut val field = 0U64
                             while field < declaration.variants[variant].fields.count() {
                                 fields.append(self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                                boxed.append(self.fieldIsBoxed(f: declaration.variants[variant].fields[field]))
                                 field += 1U64
                             }
+                            variantStarts.append(fields.count())
                             variant += 1U64
                         }
                     }
@@ -96,6 +107,6 @@ pub impl Comp {
             self.enqueueFinalDestruction(typeRef: fields[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ready=true deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
     }
 }

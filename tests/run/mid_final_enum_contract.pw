@@ -1,0 +1,52 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { FieldDef, EnumDef, Variant }
+
+fn field(compiler: inout Comp, name: String, typeName: String) -> FieldDef {
+    val label = compiler.internBytes(s: name)
+    val type = compiler.internBytes(s: typeName)
+    val term = compiler.simpleTypeRef(nameStart: type.nameStart, nameLen: type.nameLen)
+    return <FieldDef nameStart=label.nameStart nameLen=label.nameLen nameId=label.nameId tyStart=type.nameStart tyLen=type.nameLen tyNameId=type.nameId tyIsArray=false ty=term isMut=false hasDefault=false defaultVal=0U64 />
+}
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Example")
+    val first = field(compiler: inout compiler, name: "first", typeName: "I64")
+    val boxed = field(compiler: inout compiler, name: "boxed", typeName: "String")
+    val last = field(compiler: inout compiler, name: "last", typeName: "I64")
+    val variants: Array[Variant] = [
+        <Variant nameStart=0U64 nameLen=0U64 fields=[] />,
+        <Variant nameStart=0U64 nameLen=0U64 fields=[first] />,
+        <Variant nameStart=0U64 nameLen=0U64 fields=[boxed, last] />,
+        <Variant nameStart=0U64 nameLen=0U64 fields=[] />,
+    ]
+    compiler.arena.registerEnum(<EnumDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] variants=variants />)
+    // The layout phase has already decided which field is boxed. Finalization
+    // must preserve that decision independently of the mutable worklist.
+    compiler.monoWork.boxedFields.append(boxed.nameStart)
+    val type = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    compiler.enqueueFinalDestruction(typeRef: type)
+    val identity = compiler.finalDestructionIndex(typeRef: type)
+    assert(identity != 0U64)
+    compiler.monoWork.boxedFields = []
+    val contract = compiler.arena.finalDestructions[identity - 1U64]
+    assert(contract.ready)
+    assert(contract.variantFieldStarts.count() == 5U64)
+    assert(contract.variantFieldStarts[0U64] == 0U64)
+    assert(contract.variantFieldStarts[1U64] == 0U64)
+    assert(contract.variantFieldStarts[2U64] == 1U64)
+    assert(contract.variantFieldStarts[3U64] == 3U64)
+    assert(contract.variantFieldStarts[4U64] == 3U64)
+    assert(contract.fieldTypes.count() == 3U64)
+    assert(contract.fieldTypes[0U64] == first.ty)
+    assert(contract.fieldTypes[1U64] == boxed.ty)
+    assert(contract.fieldTypes[2U64] == last.ty)
+    assert(contract.fieldBoxed.count() == 3U64)
+    assert(!contract.fieldBoxed[0U64])
+    assert(contract.fieldBoxed[1U64])
+    assert(!contract.fieldBoxed[2U64])
+    print("ok")
+}

@@ -3066,6 +3066,10 @@ export struct FinalDestruction {
     pub val deinitBodyId: U64 = 0U64
     pub val underlying: U64 = 0U64
     pub val fieldTypes: Array[U64] = []
+    pub val fieldBoxed: Array[Bool] = []
+    // Enum variant ranges in the flattened field arrays, including the end
+    // sentinel. Empty variants repeat an offset; non-enums leave this empty.
+    pub val variantFieldStarts: Array[U64] = []
 }
 pub impl FinalDestruction { factory }
 
