@@ -124,6 +124,12 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
 fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, executable: Bool) -> MidVerification {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    // These operations obtain an owned payload without a Copy operand.
+    if executable && (value.tag == 12U64 || value.tag == 14U64 || value.tag == 17U64) {
+        if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: value.resultTerm) {
+            return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
+        }
+    }
     if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
     if value.tag == 20U64 { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
     if value.tag == 7U64 || value.tag == 23U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
@@ -328,7 +334,7 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
 // or range; the production path can therefore discard MidBody after freeze.
 // TypeRef allocation IDs are not type identity: use the frontend semantic
 // equality query for transferred values, retaining nominal/view distinctions.
-fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64) -> MidVerification {
+fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64, executable: Bool) -> MidVerification {
     val invalid = <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block />
     if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 1U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
     val source = c.mid.places[statement.source - 1U64]
@@ -363,6 +369,11 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
         match states[destination.local] { MidOwnership.Consumed => {} _ => { return invalid } }
         val field = c.arena.finalMatchPayloads[arm.payloadStart + index]
         if field.fieldIndex != index || field.isDiscard != entry.isDiscard || field.isBoxed != entry.isBoxed || field.bindTarget != entry.bindTarget || !c.typeRefEq(a: field.fieldTypeRef, b: destination.typeTerm) { return invalid }
+        // A shared physical cell must copy its payload even though the
+        // enclosing enum owner is consumed by this operation.
+        if executable && entry.isBoxed && !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: destination.typeTerm) {
+            return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block local=destination.local />
+        }
         mut val previous: U64 = 0U64
         while previous < index {
             val prior = c.mid.enumDestinations[statement.enumDestinations.start + previous]
@@ -413,7 +424,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
             if statement.tag == 13U64 {
-                val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI)
+                val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI, executable: executable)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
             if statement.tag == 1U64 {

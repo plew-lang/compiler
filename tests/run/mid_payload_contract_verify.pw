@@ -1,0 +1,50 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { FieldDef, EnumDef, Variant, FinalDestruction, MatchSource, SemanticMatchKind, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution }
+import /Mid with { MidBody, MidBlock, MidStatement, MidRvalue, MidTerminator, MidPlace, MidLocalDecl, MidEnumDestination, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+
+fn check(operation: U64) {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "String")
+    val payload = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val enumName = compiler.internBytes(s: "Envelope")
+    val fieldName = compiler.internBytes(s: "value")
+    val field = <FieldDef nameStart=fieldName.nameStart nameLen=fieldName.nameLen nameId=fieldName.nameId tyStart=name.nameStart tyLen=name.nameLen tyNameId=name.nameId tyIsArray=false ty=payload isMut=false hasDefault=false defaultVal=0U64 />
+    compiler.arena.registerEnum(<EnumDef nameStart=enumName.nameStart nameLen=enumName.nameLen nameId=enumName.nameId typeParams=[] variants=[<Variant nameStart=0U64 nameLen=0U64 fields=[field] />] />)
+    if operation == 1U64 || operation == 3U64 { compiler.monoWork.boxedFields.append(fieldName.nameStart) }
+    val owner = compiler.simpleTypeRef(nameStart: enumName.nameStart, nameLen: enumName.nameLen)
+    val source = <MidPlace local=0U64 typeTerm=owner />
+    val destination = <MidPlace local=1U64 typeTerm=payload />
+    val key = <MatchSource.Statement stmtId=0U64 />
+    mut val value = <MidRvalue.EnumPayloadCopy place=source enumIndex=0U64 variantIndex=0U64 fieldIndex=0U64 bindTarget=fieldName.nameStart matchSource=key resultTerm=payload />
+    if operation == 1U64 { value = <MidRvalue.EnumPayloadBoxedCopy place=source enumIndex=0U64 variantIndex=0U64 fieldIndex=0U64 bindTarget=fieldName.nameStart matchSource=key resultTerm=payload /> }
+    if operation == 2U64 { value = <MidRvalue.TryPayloadCopy place=source exprId=0U64 variantIndex=0U64 resultTerm=payload /> }
+    mut val statement = <MidStatement.Assign destination=destination value=value />
+    if operation == 3U64 {
+        compiler.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution bindTarget=fieldName.nameStart fieldIndex=0U64 fieldTypeRef=payload isBoxed=true />)
+        compiler.arena.finalMatchArms.append(<FinalMatchArmResolution hasVariant=true variantIndex=0U64 payloadStart=0U64 payloadCount=1U64 />)
+        compiler.putFinalMatch(fact: <FinalMatchResolution isConsuming=true bodyId=0U64 matchSource=key scrutineeTypeRef=owner kind=<SemanticMatchKind.Enum enumIndex=0U64 /> armStart=0U64 armCount=1U64 />)
+        statement = <MidStatement.DestructureEnum source=source matchSource=key enumIndex=0U64 variantIndex=0U64 destinations=[<MidEnumDestination place=destination bindTarget=fieldName.nameStart isBoxed=true />] />
+    }
+    // Abort needs no cleanup. A later Copy or Drop must not accidentally be
+    // the instruction that detects the missing payload copy contract.
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=owner sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=operation == 3U64 />, <MidLocalDecl typeTerm=payload sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=[statement] terminator=<MidTerminator.Abort /> />] />)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
+    compiler.enqueueFinalDestruction(typeRef: payload)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    val identity = compiler.finalDestructionIndex(typeRef: payload)
+    compiler.arena.finalDestructions[identity - 1U64] = <FinalDestruction typeRef=payload />
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
+}
+
+fn main() {
+    mut val operation = 0U64
+    while operation < 4U64 {
+        check(operation: operation)
+        operation += 1U64
+    }
+    print("ok")
+}
