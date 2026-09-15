@@ -1880,6 +1880,17 @@ export struct FinalReturnResolution {
 }
 pub impl FinalReturnResolution { factory }
 
+// Grounded types for one await in one executable body. Zero resultTypeRef
+// denotes a value-less completion; absence of a row denotes missing evidence.
+export struct FinalAwaitResolution {
+    pub val bodyId: U64
+    pub val exprId: U64
+    pub val operandExprId: U64
+    pub val promiseTypeRef: U64
+    pub val resultTypeRef: U64
+}
+pub impl FinalAwaitResolution { factory }
+
 // Concrete control-flow meaning of one `try` expression in one canonical
 // BodyInstance. The frontend, not Mid/LLVM, identifies Result's physical enum
 // layout and the already-selected implicit `From` conversion. `try` is an
@@ -2447,6 +2458,8 @@ export struct Arena {
     // Concrete `try` propagation facts, keyed by (BodyInstance, source ExprId).
     // This is frontend semantic output; Mid must not reconstruct Result or
     // From details from source names.
+    pub mut val finalAwaits: Array[FinalAwaitResolution] = []
+    pub mut val finalAwaitIndexSlots: Array[U64] = []
     pub mut val finalTries: Array[FinalTryResolution] = []
     pub mut val finalTryIndexSlots: Array[U64] = []
     pub mut val finalFors: Array[FinalForResolution] = []

@@ -1,0 +1,35 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { FinalAwaitResolution }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    assert(compiler.finalAwaitIndex(bodyId: 1U64, exprId: 0U64) == 0U64)
+    mut val index = 1U64
+    while index <= 200U64 {
+        compiler.putFinalAwait(fact: <FinalAwaitResolution bodyId=index exprId=0U64 operandExprId=index promiseTypeRef=index + 1U64 resultTypeRef=index + 2U64 />)
+        compiler.putFinalAwait(fact: <FinalAwaitResolution bodyId=index exprId=1U64 operandExprId=index + 1U64 promiseTypeRef=index + 3U64 resultTypeRef=0U64 />)
+        index += 1U64
+    }
+    assert(compiler.arena.finalAwaits.count() == 400U64)
+    index = 1U64
+    while index <= 200U64 {
+        val first = compiler.finalAwaitIndex(bodyId: index, exprId: 0U64)
+        val second = compiler.finalAwaitIndex(bodyId: index, exprId: 1U64)
+        assert(first < compiler.arena.finalAwaits.count())
+        assert(second < compiler.arena.finalAwaits.count())
+        assert(first != second)
+        assert(compiler.arena.finalAwaits[first].resultTypeRef == index + 2U64)
+        assert(compiler.arena.finalAwaits[second].resultTypeRef == 0U64)
+        index += 1U64
+    }
+    compiler.putFinalAwait(fact: <FinalAwaitResolution bodyId=10U64 exprId=0U64 operandExprId=900U64 promiseTypeRef=901U64 resultTypeRef=902U64 />)
+    assert(compiler.arena.finalAwaits.count() == 400U64)
+    val updated = compiler.finalAwaitIndex(bodyId: 10U64, exprId: 0U64)
+    assert(compiler.arena.finalAwaits[updated].operandExprId == 900U64)
+    assert(compiler.arena.finalAwaits[updated].resultTypeRef == 902U64)
+    assert(compiler.finalAwaitIndex(bodyId: 201U64, exprId: 0U64) == compiler.arena.finalAwaits.count())
+    assert(compiler.finalAwaitIndex(bodyId: 10U64, exprId: 2U64) == compiler.arena.finalAwaits.count())
+    print("ok")
+}

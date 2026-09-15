@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -3078,10 +3078,96 @@ pub impl Comp {
         self.arena.finalReturnIndexSlots.set(i: slot, value: self.arena.finalReturns.count())
     }
 
-    // `finalTries` is keyed exactly like final aggregates and returns.  It is
+    // Await facts use the same indexed BodyInstance/source-site relation as
+    // try and aggregate facts. It is
     // frontend semantic output, but its derived lookup index must still scale
-    // with generic body instances; a linear scan here would make each `try`
+    // with generic body instances; a linear scan here would make each `await`
     // site depend on every earlier monomorphization.
+    inout fn rebuildFinalAwaitIndex(capacity: U64) {
+        self.arena.finalAwaitIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.arena.finalAwaitIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.arena.finalAwaits.count() {
+            val fact: FinalAwaitResolution = self.arena.finalAwaits[entry]
+            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.arena.finalAwaitIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalAwaitIndex(nextCount: U64) {
+        if self.arena.finalAwaitIndexSlots.count() == 0U64 {
+            self.rebuildFinalAwaitIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.arena.finalAwaitIndexSlots.count() * 7U64 {
+            self.rebuildFinalAwaitIndex(capacity: self.arena.finalAwaitIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Returns the table-count sentinel when the active body has no frozen
+    // `await` fact for this source expression.
+    fn finalAwaitIndex(bodyId: U64, exprId: U64) -> U64 {
+        val capacity: U64 = self.arena.finalAwaitIndexSlots.count()
+        if capacity == 0U64 { return self.arena.finalAwaits.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.arena.finalAwaitIndexSlots[slot] - 1U64
+            val fact: FinalAwaitResolution = self.arena.finalAwaits[entry]
+            if fact.bodyId == bodyId && fact.exprId == exprId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.arena.finalAwaits.count()
+    }
+
+    inout fn putFinalAwait(fact: FinalAwaitResolution) {
+        val prior: U64 = self.finalAwaitIndex(bodyId: fact.bodyId, exprId: fact.exprId)
+        if prior < self.arena.finalAwaits.count() {
+            self.arena.finalAwaits.set(i: prior, value: fact)
+            return
+        }
+        self.ensureFinalAwaitIndex(nextCount: self.arena.finalAwaits.count() + 1U64)
+        self.arena.finalAwaits.append(fact)
+        val capacity: U64 = self.arena.finalAwaitIndexSlots.count()
+        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.arena.finalAwaitIndexSlots.set(i: slot, value: self.arena.finalAwaits.count())
+    }
+
+    inout fn finalizeCurrentBodyAwait(exprId: U64, operandExprId: U64) {
+        val bodyId = self.currentBodyInstanceId()
+        if bodyId == 0U64 { return }
+        val promise = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: operandExprId, term: self.semanticExprTerm(exprId: operandExprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if promise == 0U64 { return }
+        // The completed operand type carries the instantiated Promise payload;
+        // a parametric await expression may still refer to its source binder.
+        val promiseType = self.arena.typeAt(index: promise)
+        mut val result = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if promiseType.args.count() == 1U64 { result = promiseType.args[0U64] }
+        self.enqueueFinalDestruction(typeRef: promise)
+        self.enqueueFinalDestruction(typeRef: result)
+        self.putFinalAwait(fact: <FinalAwaitResolution bodyId=bodyId exprId=exprId operandExprId=operandExprId promiseTypeRef=promise resultTypeRef=result />)
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] final-await body=")
+            eprintU64(n: bodyId)
+            eprint(text: " expr=")
+            eprintU64(n: exprId)
+            eprint(text: " promise=")
+            self.traceMonoTypeHead(ref: promise)
+            eprint(text: " result=")
+            self.traceMonoTypeHead(ref: result)
+            eprint(text: "\n")
+        }
+    }
+
     inout fn rebuildFinalTryIndex(capacity: U64) {
         self.arena.finalTryIndexSlots = []
         mut val zero: U64 = 0U64
@@ -5753,7 +5839,10 @@ pub impl Comp {
             // Finalization must visit it before the resume emitter consumes the
             // completed descriptor; skipping it made `await sleep(...)` look like
             // an unrecorded call solely because it crossed the async lowering seam.
-            Expr.Await(val operand) => { self.scanExprInsts(exprId: operand) }
+            Expr.Await(val operand) => {
+                self.scanExprInsts(exprId: operand)
+                self.finalizeCurrentBodyAwait(exprId: exprId, operandExprId: operand)
+            }
             _ => {}
         }
     }

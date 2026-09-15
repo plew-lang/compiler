@@ -526,6 +526,12 @@ else
     fail=$((fail + 1)); failed="$failed existential-mid-bodies"
 fi
 
+if python3 ./test-final-await-facts.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed final-await-facts"
+fi
+
 if python3 ./test-final-enum-ownership.py; then
     :
 else
