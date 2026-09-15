@@ -89,8 +89,9 @@ python3 - <<'PYVERIFY'
 from pathlib import Path
 source = Path('src/Mid/Verify.pw').read_text()
 body = source.split('export fn verifyExecutableCanonicalMidBody(', 1)[1].split('export fn verifyCanonicalMidBody(', 1)[0]
-assert 'verifyCanonicalMidBody(c: inout c, canonical: canonical)' in body
-assert 'MissingOwnershipContract' in body
+assert 'verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: true)' in body
+assert 'executable: false' in source
+assert 'MissingOwnershipContract' in source
 for path in Path('src/Backend').rglob('*.pw'):
     assert 'verifyCanonicalMidBody(' not in path.read_text(), f'{path}: executable admission bypassed'
 PYVERIFY
