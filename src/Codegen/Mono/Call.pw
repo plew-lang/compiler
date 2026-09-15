@@ -5613,6 +5613,13 @@ pub impl Comp {
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
                 self.scanExprInsts(exprId: recv)
+                // Every intermediate view is a typed value, even when only
+                // the outermost view reaches a call or storage boundary.
+                val bodyId = self.currentBodyInstanceId()
+                if bodyId != 0U64 {
+                    val type = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    self.enqueueFinalDestruction(typeRef: type)
+                }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
