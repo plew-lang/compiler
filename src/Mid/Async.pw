@@ -56,10 +56,11 @@ fn useOperand(c: Comp, locals: inout Array[Bool], operandId: U64) {
     usePlace(c: c, locals: inout locals, placeId: operand.accessPlace)
 }
 
-fn useRvalue(c: Comp, locals: inout Array[Bool], valueId: U64) -> Bool {
+fn useRvalue(c: Comp, body: MidBodyNode, locals: inout Array[Bool], valueId: U64) -> Bool {
     if valueId == 0U64 { return false }
     val value = c.mid.rvalues[valueId - 1U64]
-    if value.tag == 0U64 || value.tag == 2U64 || value.tag == 7U64 || value.tag >= 20U64 { return false }
+    if value.tag == 0U64 || value.tag == 7U64 || value.tag >= 20U64 { return false }
+    if value.tag == 2U64 && (body.bodyInstance == 0U64 || value.targetTerm == 0U64) { return false }
     useOperand(c: c, locals: inout locals, operandId: value.operand)
     usePlace(c: c, locals: inout locals, placeId: value.place)
     mut val index: U64 = 0U64
@@ -116,7 +117,7 @@ fn transferStatements(c: Comp, locals: inout Array[Bool], body: MidBodyNode, blo
                 val destination = c.mid.places[statement.destination - 1U64]
                 if destination.rootTag == 1U64 && destination.local < locals.count() { locals.set(i: destination.local, value: false) }
             } else { definePlace(c: c, body: body, locals: inout locals, placeId: statement.destination) }
-            if !useRvalue(c: c, locals: inout locals, valueId: statement.value) { return false }
+            if !useRvalue(c: c, body: body, locals: inout locals, valueId: statement.value) { return false }
         } else if statement.tag == 2U64 || statement.tag == 8U64 {
             definePlace(c: c, body: body, locals: inout locals, placeId: statement.destination)
             usePlace(c: c, locals: inout locals, placeId: statement.source)
@@ -167,7 +168,7 @@ fn borrowedOwners(c: Comp, body: MidBodyNode) -> Array[Array[Bool]] {
                 val destination = c.mid.places[statement.destination - 1U64]
                 if destination.rootTag == 1U64 && destination.projections.len == 0U64 && destination.local < body.locals.len && c.mid.locals[body.locals.start + destination.local].isBorrowed {
                     mut val dependencies = owners[destination.local]
-                    val valid = useRvalue(c: c, locals: inout dependencies, valueId: statement.value)
+                    val valid = useRvalue(c: c, body: body, locals: inout dependencies, valueId: statement.value)
                     owners.set(i: destination.local, value: dependencies)
                 }
             }

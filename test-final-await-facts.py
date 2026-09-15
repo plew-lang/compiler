@@ -17,14 +17,18 @@ with tempfile.TemporaryDirectory(prefix='final-await-', dir=root / 'tmp') as scr
     for index, (name, expected_count, payload) in enumerate(cases, 1):
         source = root / 'tests/run' / (name + '.pw')
         results = []
-        for flags in ([], ['--trace-codegen']):
-            print(f'final-await {index}/{len(cases)} compile {name} trace={bool(flags)}', file=sys.stderr, flush=True)
+        for flags in (['--require-mid'], ['--require-mid', '--trace-codegen', '--emit-mid-coverage']):
+            print(f'final-await {index}/{len(cases)} compile {name} trace={'--trace-codegen' in flags}', file=sys.stderr, flush=True)
             result = subprocess.run([str(compiler), *flags, str(source)], capture_output=True, timeout=55)
             if result.returncode:
                 raise SystemExit(result.stderr.decode(errors='replace'))
             results.append(result)
         if results[0].stdout != results[1].stdout:
             raise SystemExit(f'{name}: tracing changed LLVM')
+        resumes = set(re.findall(rb'^define[^\n]*@(__af[0-9]+_resume)\(', results[1].stdout, re.M))
+        emitted = re.findall(rb'^mid-body symbol=(__af[0-9]+_resume) canonical=[1-9][0-9]*$', results[1].stderr, re.M)
+        if not resumes or set(emitted) != resumes or len(emitted) != len(resumes):
+            raise SystemExit(f'{name}: every async resume must have exactly one Mid emission record')
         facts = {}
         for line in results[1].stderr.decode().splitlines():
             if not line.startswith('[trace-codegen] final-await '):

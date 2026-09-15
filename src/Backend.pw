@@ -446,6 +446,8 @@ struct LlvmCtx {
     // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
     // resume fn value, so the entry/resume/await sites all agree on the layout.
     pub mut val asyncFnIdx: Array[U64]
+    pub mut val asyncMidBodies: Array[MidCanonicalBody] = []
+    pub mut val asyncLocalSlots: Array[Array[U64]] = []
     pub mut val asyncFrameTy: Array[LLVMTypeRef]
     pub mut val asyncResumeFn: Array[LLVMValueRef]
     // the promise-returning ENTRY symbol of each non-main async fn (`async fn doubler`

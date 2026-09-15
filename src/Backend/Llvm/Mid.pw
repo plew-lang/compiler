@@ -988,7 +988,7 @@ pub impl LlvmCtx {
     // then source parameters), rather than reconstructed from source names by
     // the backend.  Main has zero parameters; the first free-function slice
     // has `f.params.count()` and no receiver.
-    inout fn midInitialLlvmPreflight(c: inout Comp, body: MidBody, abiParameterCount: U64 = 0U64) -> MidLlvmPreflight {
+    inout fn midInitialLlvmPreflight(c: inout Comp, body: MidBody, abiParameterCount: U64 = 0U64, asyncBody: Bool = false) -> MidLlvmPreflight {
         mut val parameter: U64 = 0U64
         mut val local: U64 = 0U64
         while local < body.locals.count() {
@@ -3015,7 +3015,7 @@ pub impl LlvmCtx {
         match selected.target { CallTarget.Direct => {} _ => { return <MidCallPreflight.Target /> } }
         if selected.callee >= c.arena.functionCount() { return <MidCallPreflight.Callee /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
-        if callee.isAsync { return <MidCallPreflight.Async /> }
+        if callee.isAsync && (callee.hasRecv || callee.typeParams.count() != 0U64 || self.asyncEntrySlot(fi: selected.callee) >= self.asyncEntryIdx.count()) { return <MidCallPreflight.Async /> }
         if callee.hasRecv {
             if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing) {
                 if c.traceCodegen {
@@ -3099,6 +3099,7 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
+                    RuntimeIntrinsic.TimerSleep => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                     RuntimeIntrinsic.HashSeed => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                     RuntimeIntrinsic.EntropyU64 => { if !callee.hasRet || term.args.len != 0U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
                     RuntimeIntrinsic.Process(intrinsic: val process) => {
@@ -3143,6 +3144,11 @@ pub impl LlvmCtx {
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic {
+                    RuntimeIntrinsic.TimerSleep => {
+                        val duration = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))
+                        llvmStore(self.b, self.genTimerSleep(c: inout c, duration: duration), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                        return true
+                    }
                     RuntimeIntrinsic.HashSeed => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_dict_seed", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) return true }
                     RuntimeIntrinsic.EntropyU64 => { llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_random_u64", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) return true }
                     RuntimeIntrinsic.Io(intrinsic: val io) => {
@@ -4099,7 +4105,7 @@ pub impl LlvmCtx {
         mut val methodSlot: U64 = self.genMethK.count()
         mut val freeSlot: U64 = self.genFnK.count()
         mut val useMethod: Bool = false
-        if !callee.isExtern {
+        if !callee.isExtern && !callee.isAsync {
             val typeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
             if callee.hasRecv {
                 if selected.recvTypeRef == 0U64 { return false }
@@ -4156,10 +4162,13 @@ pub impl LlvmCtx {
         }
         self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-        if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
+        if callee.isAsync {
+            val slot: U64 = self.asyncEntrySlot(fi: selected.callee)
+            result = self.callValueFunction(signature: self.asyncEntryTy[slot], function: self.asyncEntryVal[slot], arguments: values)
+        } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
         else if useMethod { result = self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values) }
         else { result = self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values) }
-        if callee.hasRet {
+        if callee.hasRet || callee.isAsync {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
             llvmStore(self.b, self.midProjectCallResult(selected: selected, value: result), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
         }
@@ -4413,7 +4422,7 @@ pub impl LlvmCtx {
     // Emit the non-call portion of the canonical CFG.  `blocks` is transient
     // LLVM construction state, not an IR carrier: all semantic edges are read
     // exclusively from the canonical terminator row and its case range.
-    inout fn midCanonicalEmitNonCallTerminator(c: inout Comp, body: MidBodyNode, terminatorId: U64, blocks: Array[LLVMBasicBlockRef]) -> Bool {
+    inout fn midCanonicalEmitNonCallTerminator(c: inout Comp, body: MidBodyNode, terminatorId: U64, blocks: Array[LLVMBasicBlockRef], asyncBody: Bool = false) -> Bool {
         if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return false }
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         if term.tag == 2U64 {
@@ -4440,10 +4449,19 @@ pub impl LlvmCtx {
             }
             return true
         }
+        if term.tag == 5U64 && asyncBody {
+            self.midAsyncComplete(c: inout c, value: LLVMConstInt(self.i64ty, 0U64, 0I32))
+            return true
+        }
         if term.tag == 5U64 {
             if self.curIsMain { LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32)) }
             else if self.curRetVoid { LLVMBuildRetVoid(self.b) }
             else { LLVMBuildUnreachable(self.b) }
+            return true
+        }
+        if term.tag == 6U64 && asyncBody {
+            val result = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value)
+            self.midAsyncComplete(c: inout c, value: self.extendToI64(v: result, unsigned: false))
             return true
         }
         if term.tag == 6U64 {
@@ -4461,9 +4479,8 @@ pub impl LlvmCtx {
             return true
         }
         if term.tag == 10U64 {
-            if term.resume >= blocks.count() { return false }
-            LLVMBuildBr(self.b, blocks[term.resume])
-            return true
+            if !asyncBody || term.resume >= blocks.count() { return false }
+            return self.midAsyncSuspend(c: inout c, body: body, term: term, target: blocks[term.resume])
         }
         return false
     }
@@ -4511,7 +4528,8 @@ pub impl LlvmCtx {
         return true
     }
 
-    inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = []) -> Bool {
+    inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = [], storage: Array[LLVMValueRef] = [], initializeParameters: Bool = true) -> Bool {
+        if storage.count() != 0U64 && storage.count() != body.locals.len { return false }
         self.nLocals = 0U64
         self.locStart = []
         self.locLen = []
@@ -4531,9 +4549,11 @@ pub impl LlvmCtx {
         while local < body.locals.len {
             val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
             val ty: LLVMTypeRef = self.midCanonicalLocalTy(c: inout c, body: body, local: local)
-            mut val slot: LLVMValueRef = self.entryAlloca(ty: ty)
-            if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
-            if declaration.isParameter {
+            mut val slot: LLVMValueRef = LLVMConstNull(self.ptrty)
+            if storage.count() != 0U64 { slot = storage[local] }
+            else if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
+            else { slot = self.entryAlloca(ty: ty) }
+            if declaration.isParameter && initializeParameters {
                 val abiIndex: U64 = abiParameterStart + local
                 val value = if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give self.valueParameter(function: self.curFn, index: abiIndex) }
                 if declaration.isInout { slot = value }
@@ -4633,7 +4653,7 @@ pub impl LlvmCtx {
 // Admission callers first verify the frozen Mid body. Only successful LLVM
 // capability checks allow publication of the backend-local Ready value.
 impl LlvmCtx {
-    inout fn midVerifiedLlvmPreflight(c: inout Comp, canonical: MidCanonicalBody, abiParameterCount: U64 = 0U64) -> MidLlvmPreflight {
+    inout fn midVerifiedLlvmPreflight(c: inout Comp, canonical: MidCanonicalBody, abiParameterCount: U64 = 0U64, asyncBody: Bool = false) -> MidLlvmPreflight {
         if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidLlvmPreflight.Terminator /> }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
         if body.entry >= body.blocks.len { return <MidLlvmPreflight.Terminator /> }
@@ -4736,6 +4756,8 @@ impl LlvmCtx {
                     }
                 }
             } else if term.tag == 2U64 || term.tag == 5U64 || term.tag == 8U64 || term.tag == 9U64 {
+            } else if term.tag == 10U64 && asyncBody {
+                if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: term.value) { return <MidLlvmPreflight.Terminator /> }
             } else if term.tag == 3U64 {
                 if !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: term.discriminant) { return <MidLlvmPreflight.Switch /> }
             } else if term.tag == 6U64 || term.tag == 7U64 {
@@ -4746,7 +4768,7 @@ impl LlvmCtx {
         return <MidLlvmPreflight.Ready />
     }
 
-    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64, closureBodyId: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = []) -> Bool {
+    inout fn genLlvmPreparedMidBody(c: inout Comp, prepared: MidLlvmPrepared, abiParameterStart: U64 = 0U64, closureBodyId: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = [], localsPrepared: Bool = false, asyncBody: Bool = false) -> Bool {
         val canonical: MidCanonicalBody = match prepared {
             MidLlvmPrepared.None => { return false }
             MidLlvmPrepared.Ready(canonical: val canonical, abiParameterCount: val count) => {
@@ -4755,7 +4777,7 @@ impl LlvmCtx {
             }
         }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-        if !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart, abiParameterValues: abiParameterValues) { return false }
+        if !localsPrepared && !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart, abiParameterValues: abiParameterValues) { return false }
         if closureBodyId != 0U64 && !self.bindMidClosureCaptures(c: inout c, body: body, bodyId: closureBodyId) { return false }
         mut val blocks: Array[LLVMBasicBlockRef] = []
         mut val blockI: U64 = 0U64
@@ -4777,7 +4799,7 @@ impl LlvmCtx {
             if term.tag == 4U64 {
                 if !self.midCanonicalEmitCall(c: inout c, body: body, terminatorId: block.terminator) || term.target >= blocks.count() { return false }
                 LLVMBuildBr(self.b, blocks[term.target])
-            } else if !self.midCanonicalEmitNonCallTerminator(c: inout c, body: body, terminatorId: block.terminator, blocks: blocks) { return false }
+            } else if !self.midCanonicalEmitNonCallTerminator(c: inout c, body: body, terminatorId: block.terminator, blocks: blocks, asyncBody: asyncBody) { return false }
             blockI = blockI + 1U64
         }
         if c.emitMidCoverage {

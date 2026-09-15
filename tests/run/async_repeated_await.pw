@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+async fn answer() -> Promise[I64] {
+    await sleep(ms: 1)
+    return 21I64
+}
+
+async fn main() {
+    val pending = answer()
+    val first = await pending
+    val second = await pending
+    print(first + second)
+}

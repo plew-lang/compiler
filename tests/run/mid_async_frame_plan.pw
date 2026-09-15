@@ -78,6 +78,19 @@ fn main() {
     assert(borrowed.storedLocals[5U64])
     assert(!borrowed.storedLocals[6U64])
 
+    // Identity returns preserve a grounded ABI boundary in canonical Mid.
+    // Its operand remains a use, but a parametric boundary is not accepted.
+    val returns = [
+        <MidBlock terminator=suspend(resume: 1U64) />,
+        <MidBlock statements=[<MidStatement.Assign destination=<MidPlace local=3U64 /> value=<MidRvalue.ReturnBoundary exprId=0U64 targetTerm=1U64 operand=<MidOperand.Copy place=<MidPlace local=1U64 /> /> /> />] terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=<MidPlace local=3U64 /> /> /> />
+    ]
+    val groundedReturn = compiler.mid.store(body: <MidBody bodyInstance=1U64 locals=[local(), local(), local(), local()] blocks=returns />)
+    val returned = planCanonicalMidAsyncFrame(c: compiler, canonical: groundedReturn)
+    assert(returned.valid)
+    assert(returned.storedLocals[1U64])
+    val parametricReturn = compiler.mid.store(body: <MidBody locals=[local(), local(), local(), local()] blocks=returns />)
+    assert(!planCanonicalMidAsyncFrame(c: compiler, canonical: parametricReturn).valid)
+
     // A pre-drop scope marker cannot be mistaken for an empty operation.
     val unfinished = <MidBody locals=[local()] blocks=[<MidBlock statements=[<MidStatement.EndBinding local=0U64 />] terminator=<MidTerminator.Return /> />] />
     val unfinishedCanonical = compiler.mid.store(body: unfinished)

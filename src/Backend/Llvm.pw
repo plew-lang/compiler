@@ -56,3 +56,5 @@ part ./Llvm/StmtDeinit
 part ./Llvm/Entry
 part ./Llvm/Mid
 part ./Llvm/Async
+
+part ./Llvm/MidAsync

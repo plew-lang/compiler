@@ -2,16 +2,11 @@
 
 // ---- async lowering (spec/14): stackless state machine ----
 //
-// Mirrors Codegen/Async.pw (the C backend) in LLVM IR. Each `async fn` becomes a
-// frame struct (state + the returned `self` promise + the awaited `sub` promise +
-// every param and hoisted local, so values survive `await` suspensions), a resume
-// fn (the body, with a dispatch `switch` at entry that re-enters at the right
-// await point), and an entry fn (allocates the frame, copies params, creates
-// `self`, runs resume once, returns `self`). The promise value is a type-erased
-// i64 (scalars / () for now; struct/String results are additive). The runtime
-// (promises, FIFO ready queue, virtual-clock timers, event loop, sleep) is the
-// SAME C as the C backend, emitted by `--runtime` (external linkage so the IR
-// links against it). The state machine is the only part lowered to IR.
+// Each async function has an entry, a Mid-generated resume body, and a frame.
+// The frame holds dispatch state, its result Promise, entry parameters, and the
+// locals selected by canonical Mid liveness. Source cleanup is emitted by Mid.
+// Promise payloads retain the current scalar i64 runtime representation.
+// The runtime provides the ready queue, timers, event loop, and Promise storage.
 
 
 pub impl LlvmCtx {
@@ -46,113 +41,6 @@ pub impl LlvmCtx {
         return self.asyncFieldTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen, ty: p.ty, isArray: p.tyIsArray)
     }
 
-    // Append the LLVM types of an async body's hoisted locals (each `let` binding and
-    // each enum-match payload bind) to `tys`, in the SAME DFS order the resume codegen
-    // hands out frame fields — so field index N in the pre-pass is the N-th
-    // `asyncFrameSlot` the body pass consumes. Recurses into if/while/match.
-    inout fn collectAsyncFieldTys(c: inout Comp, blockId: U64, tys: inout Array[LLVMTypeRef]) {
-        mut val i: U64 = 0
-        while i < c.blockStmtCount(blkId: blockId) {
-            match c.arena.stmts[c.blockStmtAt(blkId: blockId, index: i)] {
-                Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                    // an `await`-initialized binding holds the type-erased value coerced
-                    // to its declared type; a normal binding holds its declared/inferred
-                    // type. Both keep the annotation's LLVM type as the field.
-                    tys.append(self.asyncFieldTy(c: inout c, tyStart: tyStart, tyLen: tyLen, ty: ty, isArray: tyIsArray))
-                }
-                Stmt.If(cond: _, val thenBlk, val elseBlk, val hasElse) => {
-                    self.collectAsyncFieldTys(c: inout c, blockId: thenBlk, tys: inout tys)
-                    if hasElse {
-                        self.collectAsyncFieldTys(c: inout c, blockId: elseBlk, tys: inout tys)
-                    }
-                }
-                Stmt.While(cond: _, val body) => {
-                    self.collectAsyncFieldTys(c: inout c, blockId: body, tys: inout tys)
-                }
-                Stmt.Match(scrut: _, val arms) => {
-                    mut val ai: U64 = 0
-                    while ai < arms.len {
-                        val a: MatchArm = c.matchArmAt(arms: arms, index: ai)
-                        if !(a.isWildcard) {
-                            if !(a.isStruct) {
-                                self.collectAsyncMatchBindTys(c: inout c, arm: a, tys: inout tys)
-                            }
-                        }
-                        self.collectAsyncFieldTys(c: inout c, blockId: a.body, tys: inout tys)
-                        ai += 1
-                    }
-                }
-                _ => {}
-            }
-            i += 1
-        }
-    }
-
-    // Append one enum-match arm's payload-bind frame-field types (mirrors
-    // bindMatchPayload's per-field type recovery: array -> {ptr,i64}, boxed -> ptr,
-    // else the field's scalar type), in bind order.
-    inout fn collectAsyncMatchBindTys(c: inout Comp, arm: MatchArm, tys: inout Array[LLVMTypeRef]) {
-        val eid: U64 = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
-        if eid >= c.arena.enumCount() {
-            return
-        }
-        val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-        val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
-        val binds: BindRange = arm.binds
-        mut val bi: U64 = 0
-        while bi < binds.len {
-            val b: Bind = c.bindAt(binds: binds, index: bi)
-            mut val fidx: U64 = fs.count()
-            mut val fj: U64 = 0
-            while fj < fs.count() {
-                if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: b.fieldStart, bLen: b.fieldLen) {
-                    fidx = fj
-                    fj = fs.count()
-                } else {
-                    fj += 1
-                }
-            }
-            mut val pty: LLVMTypeRef = self.i64ty
-            if fidx < fs.count() {
-                val fd: FieldDef = fs[fidx]
-                if arrayFieldElemRef(c: inout c, f: fd) != 0U64 {
-                    pty = self.fieldLlvmTy(c: inout c, fd: fd)
-                } else {
-                    if c.fieldIsBoxed(f: fd) {
-                        pty = self.ptrty
-                    } else {
-                        pty = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
-                    }
-                }
-            }
-            tys.append(pty)
-            bi += 1
-        }
-    }
-
-    // Build (once) an async fn's named frame struct type `{ i32 state, ptr self,
-    // ptr sub, <param fields...>, <hoisted-local fields...> }`.
-    inout fn buildAsyncFrameTy(c: inout Comp, fi: U64) -> LLVMTypeRef {
-        val f: Func = c.arena.functionAt(index: fi)
-        mut val tys: Array[LLVMTypeRef] = []
-        tys.append(self.i32ty)
-        tys.append(self.ptrty)
-        tys.append(self.ptrty)
-        mut val pi: U64 = 0
-        while pi < f.params.count() {
-            tys.append(self.asyncParamTy(c: inout c, p: c.funcParamAt(params: f.params, index: pi)))
-            pi += 1
-        }
-        self.collectAsyncFieldTys(c: inout c, blockId: f.body, tys: inout tys)
-        mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "__af".bytes())
-        appendU64Dec(into: inout nm, n: fi)
-        nm.append(0)
-        val frameTy: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-        LLVMStructSetBody(frameTy, arrayCPtr(tys), tys.count(), 0I32)
-        return frameTy
-    }
-
     // Declare every async fn: build its frame struct type + resume fn, and (for a
     // non-main async fn) its entry symbol in the fnIdx table (signature: params ->
     // PlewPromise*, so a call site `doubler(x: 21)` resolves to a promise-returning
@@ -167,7 +55,7 @@ pub impl LlvmCtx {
                 if c.arena.functionAt(index: fi).hasRecv {
                     c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
                 }
-                val frameTy: LLVMTypeRef = self.buildAsyncFrameTy(c: inout c, fi: fi)
+                val frameTy: LLVMTypeRef = self.buildMidAsyncFrameTy(c: inout c, fi: fi)
                 // resume fn: void __af<fi>_resume(void*).
                 mut val rptys: Array[LLVMTypeRef] = []
                 rptys.append(self.ptrty)
@@ -479,20 +367,15 @@ pub impl LlvmCtx {
         val frame: LLVMValueRef = self.asyncFrameAlloc(c: inout c, frameTy: frameTy)
         // __f->__state = 0
         llvmStore(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(self.b, frameTy, frame, 0U64, anon()))
-        // copy params into frame fields 3.. — an ESCAPE: the frame OWNS its copy
-        // (spec/14: no borrow crosses the async boundary — the returned Promise can
-        // outlive the caller's binding), so retain each heap-carrying param here,
-        // balancing the guaranteed (+0) arg pass. The symmetric release runs at frame
-        // teardown (asyncResolveAndReturn's dropScope walks every owned frame local,
-        // params included).
+        // Frame storage owns the entry arguments. Copy borrowed ABI values here;
+        // moved arguments transfer their existing ownership. The prepared Mid
+        // body supplies the matching parameter Drops on every normal exit.
         mut val pi: U64 = 0
         while pi < f.params.count() {
             val pv: LLVMValueRef = self.valueParameter(function: entryFn, index: pi)
-            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
+            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, self.asyncLocalSlots[slot][pi], anon()))
             val param: Param = c.funcParamAt(params: f.params, index: pi)
-            if c.arcNeedsRelease(ref: param.ty) {
-                self.valueArc(c: inout c, v: pv, typeRef: param.ty, retain: true)
-            }
+            if !param.isMove { self.valueArc(c: inout c, v: pv, typeRef: param.ty, retain: true) }
             pi += 1
         }
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a
@@ -502,7 +385,7 @@ pub impl LlvmCtx {
         if !(isMain) {
             // the to-be-returned Promise VALUE is a second owner, retained BEFORE the
             // resume call: a synchronously-completing resume releases the frame's count
-            // in asyncResolveAndReturn, and without the caller's count already held the
+            // in midAsyncComplete, and without the caller's count already held the
             // cell would be freed before this thunk returns it (UAF). Balanced by the
             // caller binding's scope-exit drop or the awaited-temp drop.
             self.rawbufRetain(c: inout c, cell: promiseSelf)
@@ -519,90 +402,7 @@ pub impl LlvmCtx {
         } else {
             LLVMBuildRet(self.b, promiseSelf)
         }
-        // ---- resume function ----
-        self.curFn = resumeFn
-        self.curIsMain = false
-        self.curRetVoid = true
-        self.curAsync = true
-        self.curFrameTy = frameTy
-        self.curFrameBase = self.valueParameter(function: resumeFn, index: 0U64)
-        self.curResumeFn = resumeFn
-        self.curAsyncState = 0
-        val rEntry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, resumeFn, cstr(s: "entry"))
-        val startBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, resumeFn, cstr(s: "async.start"))
-        LLVMPositionBuilderAtEnd(self.b, rEntry)
-        // precompute a GEP for every frame field in the entry block (dominates all
-        // resume blocks), so a field read in a switch-reachable block has a dominating
-        // pointer. Built before the switch so they dominate the default path too.
-        self.asyncSlotPtrs = []
-        val nfields: U64 = LLVMCountStructElementTypes(frameTy) as U64
-        mut val fidx: U64 = 0
-        while fidx < nfields {
-            self.asyncSlotPtrs.append(LLVMBuildStructGEP2(self.b, frameTy, self.curFrameBase, fidx, anon()))
-            fidx += 1
-        }
-        val state: LLVMValueRef = llvmLoad(self.b, self.i32ty, self.asyncSlotPtrs[0], anon())
-        self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, startBB, 8U32)
-        LLVMPositionBuilderAtEnd(self.b, startBB)
-        self.terminated = false
-        // fresh locals: params bound to frame fields 3..; lets/binds get fields after.
-        self.nLocals = 0
-        self.locStart = []
-        self.locLen = []
-        self.locPtr = []
-        self.locTy = []
-        self.locKind = []
-        self.locStructIdx = []
-        self.locIsArr = []
-        self.locElemTy = []
-        self.locElemKind = []
-        self.locTypeRef = []
-        self.locElemTypeRef = []
-        self.locOwned = []
-        self.locMoved = []
-        self.locCellHome = []
-        // The resume function emits the source body, so it consumes the same
-        // final-callable descriptor namespace as that source async function.
-        // It is not a second semantic body merely because lowering split it
-        // into an entry thunk and a resume function.  Leaving the ambient
-        // post-finalization key here made every ordinary call in an async body
-        // look unrecorded and invited backend-local re-resolution.
-        val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
-        val savedBodySelf: U64 = c.cur.bodySelfRef
-        val savedBodyItem: U64 = c.cur.bodyItemRef
-        val noBodyArgs: Array[U64] = []
-        c.cur.bodyFnIdx = fi
-        c.cur.bodyEnvironment = <InstanceEnvironment />
-        c.cur.bodyId = 0U64
-        c.cur.bodySelfRef = 0U64
-        c.cur.bodyItemRef = 0U64
-        // module-level variables (spec/15): seed them as locals (pointing at the true
-        // LLVM globals, not frame slots) before async params bind to frame fields.
-        self.seedGlobals(c: inout c)
-        // the body mark sits between the seeded globals (ambient, never dropped) and the
-        // params: unlike a sync fn's borrowed params, async params are FRAME-OWNED (the
-        // entry thunk retained them into the frame — a borrow cannot cross the async
-        // boundary, spec/14), so scope-exit drops must include them. Block-exit and
-        // resolve-time dropScope release every owned frame local through the frame slots.
-        self.curBodyMark = self.nLocals
-        mut val qi: U64 = 0
-        while qi < f.params.count() {
-            self.bindAsyncParam(c: inout c, p: c.funcParamAt(params: f.params, index: qi), fieldIdx: 3U64 + qi)
-            qi += 1
-        }
-        self.asyncFieldNext = 3U64 + f.params.count()
-        self.genLlvmBlock(c: inout c, id: f.body)
-        // fall-through end: a value-less async resolves with 0.
-        if !(self.terminated) {
-            self.asyncResolveAndReturn(c: inout c, value: LLVMConstInt(self.i64ty, 0U64, 0I32))
-        }
-        c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyEnvironment = savedBodyEnvironment
-        c.cur.bodyId = 0U64
-        c.cur.bodySelfRef = savedBodySelf
-        c.cur.bodyItemRef = savedBodyItem
-        self.curAsync = false
+        self.genLlvmMidAsyncResume(c: inout c, slot: slot)
     }
 
     // Emit entry + resume bodies for every async fn (after declareAsyncFns).
