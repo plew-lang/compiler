@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+trait Editor {
+    fn first() -> I64
+    inout fn replace(value~: I64)
+}
+struct Payload[T] { pub mut val rows: Array[Array[T]] }
+pub impl[T] Payload[T] { factory }
+struct Holder { pub mut val payload: Payload[I64] }
+pub impl Holder { factory }
+pub impl Holder as Editor {
+    fn first() -> I64 { return self.payload.rows[0U64][0U64] }
+    inout fn replace(value~: I64) { self.payload.rows[0U64][0U64] = value }
+}
+
+fn main() {
+    val source = <Holder payload=<Payload[I64] rows=[[1I64, 2I64]] /> />
+    mut val original: any Editor = source
+    mut val changed: any Editor = original
+    changed.replace(9I64)
+    print(source.first())
+    print(original.first())
+    print(changed.first())
+    original.replace(7I64)
+    print(source.first())
+    print(original.first())
+    print(changed.first())
+}

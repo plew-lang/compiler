@@ -395,40 +395,24 @@ struct LlvmCtx {
     pub mut val retWitReg: Array[U64]
     pub mut val retWitVal: Array[LLVMValueRef]
     pub mut val retWitTy: Array[LLVMTypeRef]
-    // per-struct deep-copy witnesses, keyed by struct index (parallel arrays): ONE
-    // `structTy @pwcopy<sidx>(structTy)` deep-copies that type's array fields (and
-    // recurses nested struct/enum), RETURNING the independent copy — so every
-    // construction-site copy emits a single call instead of inlining the walker.
-    // Same lifecycle/soundness as retain; only CONCRETE registered structs routed.
-    pub mut val copyWitSidx: Array[U64]
-    pub mut val copyWitVal: Array[LLVMValueRef]
-    pub mut val copyWitTy: Array[LLVMTypeRef]
-    // per-enum value-ARC witnesses, keyed by enum id (parallel arrays). Each routes ONLY
-    // the registered (concrete) enum branch of emitEnumReleaseRef / emitEnumRetainRef /
-    // deepCopyEnumRef — concrete enum fields are env-independent, so the witness body is
-    // the same tag-dispatch walker out-of-lined. A generic enum INSTANCE (genEnumSlot)
-    // stays inline (its template fields need the caller's env). release/retain are
-    // `void(ety)`, copy is `ety(ety)`. Same on-demand-declare + drain-after-pass lifecycle.
+    // Per-enum ARC witnesses. Release is keyed by the registered instance;
+    // retain witnesses handle concrete enums, with generic instances lowered
+    // through the same frozen-contract walker at their call sites.
     pub mut val enumRelWitReg: Array[U64]
     pub mut val enumRelWitVal: Array[LLVMValueRef]
     pub mut val enumRelWitTy: Array[LLVMTypeRef]
     pub mut val enumRetWitEid: Array[U64]
     pub mut val enumRetWitVal: Array[LLVMValueRef]
     pub mut val enumRetWitTy: Array[LLVMTypeRef]
-    pub mut val enumCopyWitEid: Array[U64]
-    pub mut val enumCopyWitVal: Array[LLVMValueRef]
-    pub mut val enumCopyWitTy: Array[LLVMTypeRef]
-    // persistent body-emission cursors for the 6 witness tables. The witness graphs cross
+    // persistent body-emission cursors for the 4 witness tables. The witness graphs cross
     // struct<->enum WITHIN a family (a struct-drop body releases an Array[Enum] element ->
     // enum-release witness, whose body deinits a struct field -> struct-drop witness), so a
     // single drain pass is not enough — `emitWitnessBodies` loops all 6 drains to a fixpoint,
     // and each resumes from its cursor (never re-emitting an already-emitted body).
     pub mut val dropWitDone: U64
     pub mut val retWitDone: U64
-    pub mut val copyWitDone: U64
     pub mut val enumRelWitDone: U64
     pub mut val enumRetWitDone: U64
-    pub mut val enumCopyWitDone: U64
     // provided trait methods reached (called) during emission: declared lazily (so
     // an uncalled std-trait adapter method — map/filter, whose body constructs an
     // unsupported adapter — is never emitted), then their bodies drained after the
@@ -926,7 +910,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)

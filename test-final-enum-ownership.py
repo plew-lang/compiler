@@ -11,3 +11,13 @@ for name in ('enumNeedsDeinit', 'emitEnumOwnership', 'emitEnumReleaseWitnessBodi
     for forbidden in ('arcNeedsRelease(', 'arcFieldTy(', 'fieldIsBoxed(', 'enumVariantAt(', 'setEnumEnv(', 'groundTypeRef(', 'findOrAddTypeRef('):
         assert forbidden not in body, f'{name} re-resolves payload facts through {forbidden}'
 print('PASS enum ownership consumes frozen payload facts')
+
+arrays = (Path(__file__).resolve().parent / 'src/Backend/Llvm/Arrays.pw').read_text()
+for name in ('emitRetainWitnessWalk', 'emitRetainWitnessBodies'):
+    match = re.search(r'    inout fn ' + name + r'\([^\n]+\{\n(.*?)(?=\n    inout fn |\Z)', arrays, re.S)
+    assert match, f'missing struct ownership entry: {name}'
+    for forbidden in ('arcNeedsRelease(', 'arcFieldTy(', 'fieldIsBoxed(', 'structAt(', 'setStructEnv(', 'groundTypeRef('):
+        assert forbidden not in match.group(1), f'{name} re-resolves ownership through {forbidden}'
+for retired in ('deepCopyStructValue', 'deepCopyEnumRef', 'deepCopyEnumValue', 'copyArrayValue', 'copyWitSlot', 'enumCopyWitSlot'):
+    assert retired not in source + arrays, f'retired eager-copy path returned: {retired}'
+print('PASS struct copies share frozen retain contracts')
