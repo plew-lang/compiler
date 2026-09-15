@@ -1,0 +1,269 @@
+// Suspension storage analysis consumes only closed canonical Mid. Drop is a
+// use: a value needed solely for eventual destruction still crosses suspension.
+import ../Frontend with { Comp }
+import ./Ir with { MidBodyNode, MidCanonicalBody, MidTerminatorNode }
+
+export struct MidAsyncFramePlan {
+    pub val valid: Bool = false
+    pub val storedLocals: Array[Bool] = []
+    // Body-relative block index; non-suspension blocks have an empty row.
+    pub val suspensionLocals: Array[Array[Bool]] = []
+}
+pub impl MidAsyncFramePlan { factory }
+
+fn emptyLocalSet(count: U64) -> Array[Bool] {
+    mut val result: Array[Bool] = []
+    mut val index: U64 = 0U64
+    while index < count { result.append(false)
+        index += 1U64 }
+    return result
+}
+
+fn includeLocal(locals: inout Array[Bool], local: U64) {
+    if local < locals.count() { locals.set(i: local, value: true) }
+}
+
+fn usePlace(c: Comp, locals: inout Array[Bool], placeId: U64) {
+    if placeId == 0U64 { return }
+    val place = c.mid.places[placeId - 1U64]
+    if place.rootTag == 1U64 { includeLocal(locals: inout locals, local: place.local) }
+    mut val index: U64 = 0U64
+    while index < place.projections.len {
+        val projection = c.mid.projections[place.projections.start + index]
+        if projection.tag == 2U64 { includeLocal(locals: inout locals, local: projection.indexLocal) }
+        index += 1U64
+    }
+}
+
+fn definePlace(c: Comp, body: MidBodyNode, locals: inout Array[Bool], placeId: U64) {
+    if placeId == 0U64 { return }
+    val place = c.mid.places[placeId - 1U64]
+    if place.rootTag == 1U64 && place.projections.len == 0U64 && place.local < locals.count() {
+        val declaration = c.mid.locals[body.locals.start + place.local]
+        if declaration.isCaptureCell || declaration.isInout { includeLocal(locals: inout locals, local: place.local) }
+        else { locals.set(i: place.local, value: false) }
+    } else {
+        // A projection writes through an existing owner/address. It does not
+        // define the root value or its one-time-evaluated index locals.
+        usePlace(c: c, locals: inout locals, placeId: placeId)
+    }
+}
+
+fn useOperand(c: Comp, locals: inout Array[Bool], operandId: U64) {
+    if operandId == 0U64 { return }
+    val operand = c.mid.operands[operandId - 1U64]
+    usePlace(c: c, locals: inout locals, placeId: operand.place)
+    usePlace(c: c, locals: inout locals, placeId: operand.accessPlace)
+}
+
+fn useRvalue(c: Comp, locals: inout Array[Bool], valueId: U64) -> Bool {
+    if valueId == 0U64 { return false }
+    val value = c.mid.rvalues[valueId - 1U64]
+    if value.tag == 0U64 || value.tag == 2U64 || value.tag == 7U64 || value.tag >= 20U64 { return false }
+    useOperand(c: c, locals: inout locals, operandId: value.operand)
+    usePlace(c: c, locals: inout locals, placeId: value.place)
+    mut val index: U64 = 0U64
+    while index < value.elements.len {
+        if value.tag == 19U64 {
+            useOperand(c: c, locals: inout locals, operandId: c.mid.closureCaptures[value.elements.start + index].operand)
+        } else {
+            useOperand(c: c, locals: inout locals, operandId: c.mid.aggregateElements[value.elements.start + index].operand)
+        }
+        index += 1U64
+    }
+    return true
+}
+
+fn successors(c: Comp, term: MidTerminatorNode) -> Array[U64] {
+    if term.tag == 2U64 || term.tag == 4U64 { return [term.target] }
+    if term.tag == 10U64 { return [term.resume] }
+    mut val result: Array[U64] = []
+    if term.tag == 3U64 {
+        mut val index: U64 = 0U64
+        while index < term.cases.len {
+            result.append(c.mid.switchCases[term.cases.start + index].target)
+            index += 1U64
+        }
+        result.append(term.otherwise)
+    }
+    return result
+}
+
+fn transferTerminator(c: Comp, body: MidBodyNode, locals: inout Array[Bool], term: MidTerminatorNode) -> Bool {
+    if term.tag < 2U64 || term.tag > 10U64 { return false }
+    // The destination is initialized by completion, not retained while the
+    // operation is pending. Inputs are read after killing that definition.
+    if term.tag == 4U64 || term.tag == 10U64 { definePlace(c: c, body: body, locals: inout locals, placeId: term.destination) }
+    useOperand(c: c, locals: inout locals, operandId: term.discriminant)
+    useOperand(c: c, locals: inout locals, operandId: term.value)
+    if term.callReceiver != 0U64 { useOperand(c: c, locals: inout locals, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand) }
+    mut val index: U64 = 0U64
+    while index < term.args.len {
+        useOperand(c: c, locals: inout locals, operandId: c.mid.callArguments[term.args.start + index])
+        index += 1U64
+    }
+    return true
+}
+
+fn transferStatements(c: Comp, locals: inout Array[Bool], body: MidBodyNode, blockIndex: U64) -> Bool {
+    val block = c.mid.blocks[body.blocks.start + blockIndex]
+    mut val index: U64 = block.statements.len
+    while index > 0U64 {
+        index -= 1U64
+        val statement = c.mid.statements[block.statements.start + index]
+        if statement.tag == 1U64 || statement.tag == 9U64 {
+            if statement.tag == 9U64 {
+                val destination = c.mid.places[statement.destination - 1U64]
+                if destination.rootTag == 1U64 && destination.local < locals.count() { locals.set(i: destination.local, value: false) }
+            } else { definePlace(c: c, body: body, locals: inout locals, placeId: statement.destination) }
+            if !useRvalue(c: c, locals: inout locals, valueId: statement.value) { return false }
+        } else if statement.tag == 2U64 || statement.tag == 8U64 {
+            definePlace(c: c, body: body, locals: inout locals, placeId: statement.destination)
+            usePlace(c: c, locals: inout locals, placeId: statement.source)
+        } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+            usePlace(c: c, locals: inout locals, placeId: statement.destination)
+            if statement.tag == 4U64 { includeLocal(locals: inout locals, local: statement.flag) }
+        } else if statement.tag == 5U64 {
+            if statement.flag < locals.count() { locals.set(i: statement.flag, value: false) }
+        } else if statement.tag == 13U64 {
+            mut val output: U64 = 0U64
+            while output < statement.enumDestinations.len {
+                definePlace(c: c, body: body, locals: inout locals, placeId: c.mid.enumDestinations[statement.enumDestinations.start + output].place)
+                output += 1U64
+            }
+            usePlace(c: c, locals: inout locals, placeId: statement.source)
+        } else if statement.tag != 7U64 { return false }
+    }
+    return true
+}
+
+fn unionLocals(locals: inout Array[Bool], input: Array[Bool]) -> Bool {
+    mut val changed: Bool = false
+    mut val index: U64 = 0U64
+    while index < locals.count() {
+        if input[index] && !locals[index] { locals.set(i: index, value: true)
+            changed = true }
+        index += 1U64
+    }
+    return changed
+}
+
+// Borrowed aliases retain storage dependencies even after the expression that
+// formed the alias. Keep a conservative root relation for each local; repeated
+// loop assignments may name more than one owner. This affects storage only,
+// never inserts a retain or changes the source lifetime.
+fn borrowedOwners(c: Comp, body: MidBodyNode) -> Array[Array[Bool]] {
+    mut val owners: Array[Array[Bool]] = []
+    mut val index: U64 = 0U64
+    while index < body.locals.len { owners.append(emptyLocalSet(count: body.locals.len))
+        index += 1U64 }
+    mut val blockIndex: U64 = 0U64
+    while blockIndex < body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + blockIndex]
+        index = 0U64
+        while index < block.statements.len {
+            val statement = c.mid.statements[block.statements.start + index]
+            if statement.tag == 1U64 && statement.destination != 0U64 {
+                val destination = c.mid.places[statement.destination - 1U64]
+                if destination.rootTag == 1U64 && destination.projections.len == 0U64 && destination.local < body.locals.len && c.mid.locals[body.locals.start + destination.local].isBorrowed {
+                    mut val dependencies = owners[destination.local]
+                    val valid = useRvalue(c: c, locals: inout dependencies, valueId: statement.value)
+                    owners.set(i: destination.local, value: dependencies)
+                }
+            }
+            index += 1U64
+        }
+        blockIndex += 1U64
+    }
+    return owners
+}
+
+fn includeBorrowedOwners(locals: inout Array[Bool], owners: Array[Array[Bool]]) {
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        mut val index: U64 = 0U64
+        while index < locals.count() {
+            if locals[index] {
+                if unionLocals(locals: inout locals, input: owners[index]) { changed = true }
+            }
+            index += 1U64
+        }
+    }
+}
+
+export fn planCanonicalMidAsyncFrame(c: Comp, canonical: MidCanonicalBody) -> MidAsyncFramePlan {
+    if !c.mid.isWellFormed(body: canonical) { return <MidAsyncFramePlan /> }
+    val body = c.mid.bodies[canonical.body - 1U64]
+    if body.entry >= body.blocks.len { return <MidAsyncFramePlan /> }
+    mut val incoming: Array[Array[Bool]] = []
+    mut val reachable: Array[Bool] = []
+    mut val index: U64 = 0U64
+    while index < body.blocks.len { incoming.append(emptyLocalSet(count: body.locals.len))
+        reachable.append(false)
+        index += 1U64 }
+    reachable.set(i: body.entry, value: true)
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        index = 0U64
+        while index < body.blocks.len {
+            if reachable[index] {
+                val block = c.mid.blocks[body.blocks.start + index]
+                val edges = successors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+                mut val edge: U64 = 0U64
+                while edge < edges.count() {
+                    val target = edges[edge]
+                    if target >= body.blocks.len { return <MidAsyncFramePlan /> }
+                    if !reachable[target] { reachable.set(i: target, value: true)
+                        changed = true }
+                    edge += 1U64
+                }
+            }
+            index += 1U64
+        }
+    }
+    // Backward fixed point includes loop backedges and joins. Inputs are
+    // monotone, and each transfer kills only definitions in its own block.
+    changed = true
+    while changed {
+        changed = false
+        index = body.blocks.len
+        while index > 0U64 {
+            index -= 1U64
+            if reachable[index] {
+                val block = c.mid.blocks[body.blocks.start + index]
+                val term = c.mid.terminators[block.terminator - 1U64]
+                mut val locals = emptyLocalSet(count: body.locals.len)
+                val edges = successors(c: c, term: term)
+                mut val edge: U64 = 0U64
+                while edge < edges.count() {
+                    val merged = unionLocals(locals: inout locals, input: incoming[edges[edge]])
+                    edge += 1U64
+                }
+                if !transferTerminator(c: c, body: body, locals: inout locals, term: term) || !transferStatements(c: c, locals: inout locals, body: body, blockIndex: index) { return <MidAsyncFramePlan /> }
+                mut val previous = incoming[index]
+                if unionLocals(locals: inout previous, input: locals) { changed = true }
+                incoming.set(i: index, value: previous)
+            }
+        }
+    }
+    val owners = borrowedOwners(c: c, body: body)
+    mut val stored = emptyLocalSet(count: body.locals.len)
+    mut val suspensions: Array[Array[Bool]] = []
+    index = 0U64
+    while index < body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + index]
+        val term = c.mid.terminators[block.terminator - 1U64]
+        mut val locals: Array[Bool] = []
+        if reachable[index] && term.tag == 10U64 {
+            locals = incoming[term.resume]
+            val valid = transferTerminator(c: c, body: body, locals: inout locals, term: term)
+            includeBorrowedOwners(locals: inout locals, owners: owners)
+            val merged = unionLocals(locals: inout stored, input: locals)
+        }
+        suspensions.append(locals)
+        index += 1U64
+    }
+    return <MidAsyncFramePlan valid=true storedLocals=stored suspensionLocals=suspensions />
+}

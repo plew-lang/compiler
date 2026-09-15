@@ -2,7 +2,7 @@ import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
 import /Ir with { Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
-import /Mid with { buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+import /Mid with { planCanonicalMidAsyncFrame, buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn main() {
     mut val compiler: Comp = <Comp />
@@ -47,6 +47,11 @@ fn main() {
     val dropped = elaborateCanonicalMidDrops(c: inout compiler, canonical: access.body)
     val checked = verifyCanonicalMidBody(c: inout compiler, canonical: dropped)
     match checked.error { MidVerifyError.None => {} _ => { assert(false) } }
+    val frame = planCanonicalMidAsyncFrame(c: compiler, canonical: dropped)
+    assert(frame.valid)
+    assert(frame.storedLocals[0U64])
+    assert(frame.storedLocals[1U64])
+    assert(!frame.storedLocals[2U64])
     // A Read borrow of a copyable Promise must not revive an owner that was
     // dropped before suspension. Keep the rest of the verified body unchanged.
     val finalBody = compiler.mid.bodies[dropped.body - 1U64]

@@ -19,3 +19,6 @@ export ./Mid/Access with { MidAccessError, MidAccessElaboration, MidCanonicalAcc
 
 import ./Mid/Optimize with { optimizeCanonicalMidReturns }
 export ./Mid/Optimize with { optimizeCanonicalMidReturns }
+
+import ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
+export ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }

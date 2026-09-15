@@ -1,0 +1,86 @@
+// Storage liveness fixtures: no source types or LLVM layouts are involved.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Mid with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidProjection, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBorrowCapability, planCanonicalMidAsyncFrame }
+
+fn local(borrowed: Bool = false, cell: Bool = false, flag: Bool = false) -> MidLocalDecl {
+    return <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isBorrowed=borrowed isCaptureCell=cell isDropFlag=flag />
+}
+
+fn value() -> MidRvalue {
+    return <MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=false typeTerm=0U64 /> /> />
+}
+
+fn suspend(resume: U64) -> MidTerminator {
+    return <MidTerminator.Suspend state=1U64 resume=resume exprId=0U64 promise=<MidOperand.Borrow place=<MidPlace local=0U64 /> capability=<MidBorrowCapability.Read /> /> destination=<MidPlace local=2U64 /> />
+}
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    // 0: awaited owner; 1: retained solely for Drop; 2: completion result;
+    // 3: overwritten after resume; 4: conditional-drop flag; 5: unreachable.
+    val body = <MidBody locals=[local(), local(), local(), local(), local(flag: true), local()] blocks=[
+        <MidBlock terminator=suspend(resume: 1U64) />,
+        <MidBlock statements=[
+            <MidStatement.Assign destination=<MidPlace local=3U64 /> value=value() />,
+            <MidStatement.ConditionalDrop place=<MidPlace local=1U64 /> flag=4U64 />,
+            <MidStatement.Drop place=<MidPlace local=2U64 /> />,
+            <MidStatement.Drop place=<MidPlace local=3U64 /> />,
+            <MidStatement.Drop place=<MidPlace local=0U64 /> />
+        ] terminator=<MidTerminator.Return /> />,
+        <MidBlock statements=[<MidStatement.Drop place=<MidPlace local=5U64 /> />] terminator=<MidTerminator.Return /> />
+    ] />
+    val bodyCanonical = compiler.mid.store(body: body)
+    val plan = planCanonicalMidAsyncFrame(c: compiler, canonical: bodyCanonical)
+    assert(plan.valid)
+    assert(plan.storedLocals[0U64])
+    assert(plan.storedLocals[1U64])
+    assert(!plan.storedLocals[2U64])
+    assert(!plan.storedLocals[3U64])
+    assert(plan.storedLocals[4U64])
+    assert(!plan.storedLocals[5U64])
+    assert(plan.suspensionLocals[1U64].count() == 0U64)
+    assert(plan.suspensionLocals[2U64].count() == 0U64)
+
+    // The loop condition is used only after completion and on a backedge.
+    val loop = <MidBody locals=[local(), local(), local()] blocks=[
+        <MidBlock terminator=<MidTerminator.Goto target=1U64 /> />,
+        <MidBlock terminator=suspend(resume: 2U64) />,
+        <MidBlock terminator=<MidTerminator.Switch discriminant=<MidOperand.Copy place=<MidPlace local=1U64 /> /> values=[1I64] targets=[1U64] otherwise=3U64 /> />,
+        <MidBlock terminator=<MidTerminator.Return /> />
+    ] />
+    val loopCanonical = compiler.mid.store(body: loop)
+    val repeated = planCanonicalMidAsyncFrame(c: compiler, canonical: loopCanonical)
+    assert(repeated.valid)
+    assert(repeated.suspensionLocals[1U64][0U64])
+    assert(repeated.suspensionLocals[1U64][1U64])
+    assert(!repeated.suspensionLocals[1U64][2U64])
+
+    // Alias 3 keeps owner 1's storage. Cell 4's pointer must survive even
+    // though the cell's value is overwritten after resume. Index 5 remains
+    // needed to address a projected read after resume.
+    val aliases = <MidBody locals=[local(), local(), local(), local(borrowed: true), local(cell: true), local(), local()] blocks=[
+        <MidBlock statements=[<MidStatement.Assign destination=<MidPlace local=3U64 /> value=<MidRvalue.Use operand=<MidOperand.Borrow place=<MidPlace local=1U64 /> capability=<MidBorrowCapability.Read /> /> /> />] terminator=suspend(resume: 1U64) />,
+        <MidBlock statements=[
+            <MidStatement.Assign destination=<MidPlace local=4U64 /> value=value() />,
+            <MidStatement.Assign destination=<MidPlace local=6U64 /> value=<MidRvalue.Use operand=<MidOperand.Copy place=<MidPlace local=3U64 projections=[<MidProjection.Index indexLocal=5U64 typeTerm=0U64 />] /> /> /> />
+        ] terminator=<MidTerminator.Return /> />
+    ] />
+    val aliasesCanonical = compiler.mid.store(body: aliases)
+    val borrowed = planCanonicalMidAsyncFrame(c: compiler, canonical: aliasesCanonical)
+    assert(borrowed.valid)
+    assert(borrowed.storedLocals[0U64])
+    assert(borrowed.storedLocals[1U64])
+    assert(!borrowed.storedLocals[2U64])
+    assert(borrowed.storedLocals[3U64])
+    assert(borrowed.storedLocals[4U64])
+    assert(borrowed.storedLocals[5U64])
+    assert(!borrowed.storedLocals[6U64])
+
+    // A pre-drop scope marker cannot be mistaken for an empty operation.
+    val unfinished = <MidBody locals=[local()] blocks=[<MidBlock statements=[<MidStatement.EndBinding local=0U64 />] terminator=<MidTerminator.Return /> />] />
+    val unfinishedCanonical = compiler.mid.store(body: unfinished)
+    assert(!planCanonicalMidAsyncFrame(c: compiler, canonical: unfinishedCanonical).valid)
+    print("ok")
+}
