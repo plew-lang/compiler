@@ -2408,6 +2408,8 @@ export struct Arena {
     pub mut val finalDestructions: Array[FinalDestruction] = []
     pub mut val finalDestructionIds: Array[U64] = []
     pub mut val finalDestructionHeads: Dictionary[U64, U64] = [:]
+    pub mut val finalDestructionNominalHeads: Dictionary[U64, U64] = [:]
+    pub mut val finalDestructionNominalNext: Array[U64] = []
     pub mut val finalDestructionNext: Array[U64] = []
     // Storage/writeback provenance is deliberately separate from callable
     // provenance. It is derived from final call descriptors after their

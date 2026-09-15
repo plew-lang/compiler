@@ -78,14 +78,14 @@ pub impl Comp {
         }
         // a registered struct (any arity: `Point`, `Array[I64]`, any grounded generic
         // instance). Extern structs other than the blessed three are opaque handles.
-        val sidx: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        val sidx: U64 = self.structIndexForType(ref: ref)
         if sidx < self.arena.structCount() {
             if self.arena.structAt(index: sidx).isExtern {
                 return <ArcClass.Scalar />
             }
             return <ArcClass.StructVal sidx=sidx />
         }
-        val eidx: U64 = self.enumIdxByName(start: t.nameStart, len: t.nameLen)
+        val eidx: U64 = self.enumIndexForType(ref: ref)
         if eidx < self.arena.enumCount() {
             return <ArcClass.EnumVal eidx=eidx />
         }

@@ -8,6 +8,17 @@ pub impl Comp {
             if known != 0U64 { return known }
         }
         val term = self.arena.typeTerms[typeRef]
+        if term.hasDecl && !term.isRecord {
+            mut val candidate = self.arena.finalDestructionNominalHeads.getOr(key: term.declOffset, fallback: 0U64)
+            while candidate != 0U64 {
+                if self.typeRefEq(a: self.arena.finalDestructions[candidate - 1U64].typeRef, b: typeRef) {
+                    while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
+                    self.arena.finalDestructionIds[typeRef] = candidate
+                    return candidate
+                }
+                candidate = self.arena.finalDestructionNominalNext[candidate - 1U64]
+            }
+        }
         mut val bucket = term.nameId
         if term.isRecord { bucket = 0U64 }
         mut val candidate = self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64)
@@ -33,6 +44,12 @@ pub impl Comp {
         self.arena.finalDestructions.append(<FinalDestruction typeRef=typeRef />)
         self.arena.finalDestructionNext.append(self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64))
         self.arena.finalDestructionHeads[bucket] = contract
+        mut val nominalNext = 0U64
+        if term.hasDecl && !term.isRecord {
+            nominalNext = self.arena.finalDestructionNominalHeads.getOr(key: term.declOffset, fallback: 0U64)
+            self.arena.finalDestructionNominalHeads[term.declOffset] = contract
+        }
+        self.arena.finalDestructionNominalNext.append(nominalNext)
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
         mut val fields: Array[U64] = []
