@@ -93,6 +93,7 @@ pub impl LlvmCtx {
             MidVerifyError.PartialMove => { return 2U64 }
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
+            MidVerifyError.MissingOwnershipContract => { return 12U64 }
             MidVerifyError.InvalidDropFlag => { return 5U64 }
             MidVerifyError.UninitializedDropFlag => { return 9U64 }
             MidVerifyError.UnelaboratedBindingEnd => { return 6U64 }
@@ -4822,7 +4823,7 @@ pub impl LlvmCtx {
             }
         }
         val dropped = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-        val verification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
+        val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
         match verification.error {
             MidVerifyError.None => {}
             _ => {

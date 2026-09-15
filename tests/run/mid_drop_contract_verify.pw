@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { FinalDestruction }
+import /Mid with { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "String")
+    val type = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val place: MidPlace = <MidPlace local=0U64 typeTerm=type />
+    val draft: MidBody = <MidBody locals=[<MidLocalDecl typeTerm=type sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />] blocks=[<MidBlock statements=[<MidStatement.Drop place=place />] terminator=<MidTerminator.Return /> />] />
+    val body = compiler.mid.store(body: draft)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => {}
+        _ => { assert(false) }
+    }
+    // Structurally valid ownership alone cannot authorize executable Drop.
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.MissingOwnershipContract => {}
+        _ => { assert(false) }
+    }
+    compiler.enqueueFinalDestruction(typeRef: type)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => {}
+        _ => { assert(false) }
+    }
+    val identity = compiler.finalDestructionIndex(typeRef: type)
+    // A published recursive placeholder is not an executable contract.
+    compiler.arena.finalDestructions[identity - 1U64] = <FinalDestruction typeRef=type />
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.MissingOwnershipContract => {}
+        _ => { assert(false) }
+    }
+    print("ok")
+}

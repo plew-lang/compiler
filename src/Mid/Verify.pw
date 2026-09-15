@@ -13,6 +13,7 @@ export enum MidVerifyError {
     PartialMove
     MoveUnavailable
     DropUnavailable
+    MissingOwnershipContract
     InvalidDropFlag
     UninitializedDropFlag
     UnelaboratedScopeExit
@@ -369,6 +370,34 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
         val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
         states.set(i: c.mid.places[entry.place - 1U64].local, value: <MidOwnership.Owned />)
         index += 1U64
+    }
+    return <MidVerification />
+}
+
+// Executable bodies additionally require closed ownership effects. Keep the
+// earlier structural/dataflow verifier usable before frontend finalization.
+export fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
+    val verification = verifyCanonicalMidBody(c: inout c, canonical: canonical)
+    match verification.error { MidVerifyError.None => {} _ => { return verification } }
+    val body = c.mid.bodies[canonical.body - 1U64]
+    mut val blockIndex = 0U64
+    while blockIndex < body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + blockIndex]
+        mut val statementIndex = 0U64
+        while statementIndex < block.statements.len {
+            val statement = c.mid.statements[block.statements.start + statementIndex]
+            if statement.tag == 3U64 || statement.tag == 4U64 {
+                val place = c.mid.places[statement.destination - 1U64]
+                if place.typeTerm != 0U64 {
+                    val contract = c.finalDestructionIndex(typeRef: place.typeTerm)
+                    if contract == 0U64 || !c.arena.finalDestructions[contract - 1U64].ready {
+                        return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=blockIndex local=place.local />
+                    }
+                }
+            }
+            statementIndex += 1U64
+        }
+        blockIndex += 1U64
     }
     return <MidVerification />
 }

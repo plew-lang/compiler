@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 entries="src/Backend/Llvm/Entry.pw src/Backend/Llvm/Any.pw"
 legacy='\bMidBody\b|\bMidInstantiation\b|\bMidAccessElaboration\b|\binstantiateMidBody\b|\belaborateMidAccesses\b|\belaborateMidDrops\b|\bverifyMidBody\b|\bmidInitialLlvmPreflight\b|\bgenLlvmMidBody\b'
-canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
+canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyExecutableCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
 
 if rg -n "$legacy" $entries; then
     echo "legacy Mid consumer remains in a production entry" >&2
@@ -66,7 +66,7 @@ PYABI
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a
 # second AST-to-LLVM path that happens to run before `main`.
-global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
+global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyExecutableCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
 for symbol in $global_canonical; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer Mid pipeline is missing $symbol" >&2
@@ -83,3 +83,14 @@ for symbol in recordMidMissingBodyInstance recordMidBuildError recordMidInstanti
         exit 1
     fi
 done
+
+# Executable verification must preserve the earlier ownership/dataflow pass.
+python3 - <<'PYVERIFY'
+from pathlib import Path
+source = Path('src/Mid/Verify.pw').read_text()
+body = source.split('export fn verifyExecutableCanonicalMidBody(', 1)[1].split('export fn verifyCanonicalMidBody(', 1)[0]
+assert 'verifyCanonicalMidBody(c: inout c, canonical: canonical)' in body
+assert 'MissingOwnershipContract' in body
+for path in Path('src/Backend').rglob('*.pw'):
+    assert 'verifyCanonicalMidBody(' not in path.read_text(), f'{path}: executable admission bypassed'
+PYVERIFY

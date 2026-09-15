@@ -111,7 +111,7 @@ pub impl LlvmCtx {
                             match accesses.error {
                                 MidAccessError.None => {
                                     val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyCanonicalMidBody(c: inout c, canonical: dropped)
+                                    val verification: MidVerification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
                                     match verification.error {
                                         MidVerifyError.None => {
                                             // Preflight before emission so an unsupported
@@ -236,7 +236,7 @@ pub impl LlvmCtx {
                                 }
                                 if accessReady {
                                     val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyCanonicalMidBody(c: inout c, canonical: elaborated)
+                                    val verification: MidVerification = verifyExecutableCanonicalMidBody(c: inout c, canonical: elaborated)
                                     match verification.error {
                                         MidVerifyError.None => {
                                             match self.midVerifiedLlvmPreflight(c: inout c, canonical: elaborated) {
@@ -269,6 +269,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.MissingOwnershipContract => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 _ => {}
                                             }
                                         if c.traceCodegen {
@@ -283,6 +284,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.UnelaboratedBindingEnd => { eprint(text: "binding-end") }
                                                 MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
                                                 MidVerifyError.UninstantiatedCastBoundary => { eprint(text: "cast-boundary") }
+                                                MidVerifyError.MissingOwnershipContract => { eprint(text: "ownership-contract") }
                                                 _ => { eprint(text: "unknown") }
                                             }
                                             eprint(text: " block=")
