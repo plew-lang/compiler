@@ -114,8 +114,7 @@ pub impl LlvmCtx {
                                     match verification.error {
                                         MidVerifyError.None => {
                                             // Preflight before emission so an unsupported
-                                            // Mid shape cannot leave a half-emitted global
-                                            // initializer before the legacy compatibility path.
+                                            // Mid shape cannot begin LLVM emission.
                                             val preflight: MidLlvmPreflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped)
                                             match preflight {
                                                 MidLlvmPreflight.Ready => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=0U64 />) }
@@ -135,18 +134,8 @@ pub impl LlvmCtx {
             }
         }
         if !midReady {
-            if c.requireMid {
-                c.errorAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer body is not representable in Mid")
-            } else {
-                mut val gi: U64 = 0U64
-                while gi < c.arena.globals.count() {
-                    self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
-                    val li: U64 = self.nLocals - 1U64
-                    val cur: LLVMValueRef = llvmLoad(self.b, self.gvalLty[gi], self.locPtr[li], anon())
-                    llvmStore(self.b, cur, self.gvalRef[gi])
-                    gi += 1U64
-                }
-            }
+            c.errorAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering")
+            return
         }
         LLVMBuildRetVoid(self.b)
         c.cur.bodyFnIdx = savedBodyFn
@@ -345,9 +334,9 @@ pub impl LlvmCtx {
         } else {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Globals />)
         }
-        if c.functionRequiresOwnershipCfg(fnIdx: fi) && !midReady {
+        if !midReady {
             val mainDef: Func = c.arena.functionAt(index: fi)
-            c.errorAt(offset: mainDef.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
+            c.errorAt(offset: mainDef.nameStart, msg: "internal error: main requires verified Mid lowering")
         }
         self.beginFnBody(fv: mainFn)
         // plew_set_args(argc, argv).
@@ -371,50 +360,6 @@ pub impl LlvmCtx {
             }
             return
         }
-        // fresh local scope.
-        self.nLocals = 0
-        self.locStart = []
-        self.locLen = []
-        self.locPtr = []
-        self.locTy = []
-        self.locKind = []
-        self.locStructIdx = []
-        self.locIsArr = []
-        self.locElemTy = []
-        self.locElemKind = []
-        self.locTypeRef = []
-        self.locElemTypeRef = []
-        self.locOwned = []
-        self.locMoved = []
-        self.locCellHome = []
-        self.seedGlobals(c: inout c)
-        val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
-        val savedBodyId: U64 = c.cur.bodyId
-        c.cur.bodyFnIdx = fi
-        c.cur.bodyEnvironment = <InstanceEnvironment />
-        // `finalizeCallables` closed every source call under the concrete main
-        // BodyInstance.  Legacy LLVM lowering is still allowed while a main
-        // body is outside Mid coverage, but it must consume that same frozen
-        // identity rather than intern an unrelated argless body on demand.
-        // Otherwise lookup misses the finalized descriptors and whole-module
-        // pre-scanning merely happens to hide the broken provenance.
-        c.cur.bodyId = bodyId
-        // body locals (declared from here) are released at scope exit; seeded globals are not.
-        self.curBodyMark = self.nLocals
-        if c.traceCodegen {
-            eprint(text: "[trace-codegen] legacy main body-start id=")
-            self.traceCodegenU64(n: bodyId)
-            eprint(text: "\n")
-        }
-        self.genLlvmBlock(c: inout c, id: c.arena.functionAt(index: fi).body)
-        if c.traceCodegen { eprint(text: "[trace-codegen] legacy main body-done\n") }
-        if !(self.terminated) {
-            LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
-        }
-        c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyEnvironment = savedBodyEnvironment
-        c.cur.bodyId = savedBodyId
     }
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).

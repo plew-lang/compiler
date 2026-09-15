@@ -103,3 +103,12 @@ if rg -n '\b(genLlvmExpr|genLlvmStmt|dropScope|curAsync|asyncFieldNext|asyncSlot
     echo 'async emission contains a legacy semantic path' >&2
     exit 1
 fi
+
+python3 - <<'PYENTRY'
+from pathlib import Path
+import re
+entry = Path('src/Backend/Llvm/Entry.pw').read_text()
+function = Path('src/Backend/Llvm/Any.pw').read_text().split('inout fn genLlvmFuncBody(', 1)[1]
+for source in (entry, function):
+    assert not re.search(r'\b(genLlvmBlock|genLlvmStmt|genLlvmExpr)\(', source), 'executable entry reopened an AST path'
+PYENTRY

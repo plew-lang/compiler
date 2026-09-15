@@ -740,7 +740,6 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: fi)
             eprint(text: "\n")
         }
-        val requiresOwnershipCfg: Bool = c.functionRequiresOwnershipCfg(fnIdx: fi)
         // Coverage identifies the frontend's concrete body instance before any
         // Mid stage runs.  The stages below must not substitute a source-level
         // function identity or spelling when a frozen instance is unavailable.
@@ -1016,13 +1015,10 @@ pub impl LlvmCtx {
                 MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 15U64) }
                 MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 16U64) }
             }
-        } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
-        if !midReady && bodyId != 0U64 && c.arena.bodyInstanceAt(index: bodyId - 1U64).adapterTargetBodyId != 0U64 {
-            c.errorAt(offset: f.nameStart, msg: "internal error: newtype adapter requires verified Mid lowering")
+        } else { if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
+        if !midReady {
+            c.errorAt(offset: f.nameStart, msg: "internal error: function requires verified Mid lowering")
             return
-        }
-        if requiresOwnershipCfg && !midReady {
-            c.errorAt(offset: f.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
         }
         self.beginFnBody(fv: fv)
         if midReady {
@@ -1058,191 +1054,6 @@ pub impl LlvmCtx {
             }
             return
         }
-        // fresh local scope; bind each param into an alloca (so it reads/writes
-        // uniformly with locals).
-        self.nLocals = 0
-        self.locStart = []
-        self.locLen = []
-        self.locPtr = []
-        self.locTy = []
-        self.locKind = []
-        self.locStructIdx = []
-        self.locIsArr = []
-        self.locElemTy = []
-        self.locElemKind = []
-        self.locTypeRef = []
-        self.locElemTypeRef = []
-        self.locOwned = []
-        self.locMoved = []
-        self.locCellHome = []
-        // module-level variables (spec/15) are visible everywhere: seed them as locals
-        // (before self/params, so a same-named local shadows the global).
-        self.seedGlobals(c: inout c)
-        // method receiver: bind `self` as a local pointing at the struct storage —
-        // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
-        // fresh alloca (so mutations stay local). Field access then GEPs locPtr
-        // uniformly. Params follow self at index 1.
-        mut val base: U64 = 0
-        if f.hasRecv {
-            // a generic method's receiver is its instantiation (curRecvInstRef): its
-            // LLVM type / struct-index / env come from the instance, not the bare head
-            // name (which `llvmScalarTy` can't resolve to a registered generic type).
-            mut val recvTy: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen)
-            mut val recvSidx: U64 = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
-            mut val recvRef: U64 = 0
-            if self.curRecvInstRef != 0U64 {
-                recvRef = self.curRecvInstRef
-                recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
-                val gs: U64 = self.genStructSlot(c: inout c, ref: self.curRecvInstRef)
-                if gs < self.genStructRefs.count() {
-                    recvSidx = self.genStructDefs[gs]
-                } else {
-                    // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
-                    // NOT generic): keep the receiver-name's struct so `self.a` resolves.
-                    recvSidx = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
-                }
-            }
-            // `curRecvInstRef` selects the ABI layout, but is not necessarily
-            // the semantic receiver: a provided body can carry a normalized
-            // trait/view proof on the same concrete layout.  Preserve Mono's
-            // exact BodyInstance receiver for nested CallResolution lookup.
-            if environment.receiverRef != 0U64 {
-                recvRef = environment.receiverRef
-            }
-            // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
-            // `{ptr}` array value, bound as an array so `self.get`/`self.count()` resolve.
-            mut val selfIsArr: Bool = false
-            mut val selfElemTy: LLVMTypeRef = self.i64ty
-            if self.curRecvInstRef != 0U64 {
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: self.curRecvInstRef).nameStart, len: c.arena.typeAt(index: self.curRecvInstRef).nameLen, kw: "Array") {
-                    recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
-                    selfIsArr = true
-                    if c.arena.typeAt(index: self.curRecvInstRef).args.count() > 0U64 {
-                        selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: self.curRecvInstRef).args[0])
-                    }
-                    // Array's `{ptr}` value IS `struct Array[T] { data: Buffer[T] }` (Buffer
-                    // is a bare ptr — buffer-floor.md §6), so its sole field `data` is field 0.
-                    // Pin recvSidx to Array's arena struct def (Array is NOT backend-registered
-                    // as a normal struct, so localStructIdxFor/genStructSlot may miss it), so a
-                    // method body's `self.data.count()` resolves the field → Buffer[T] and
-                    // dispatches the floor method (collections.md E2b). Mirrors the layout match.
-                    recvSidx = c.structDefByNameAny(start: f.recvStart, len: f.recvLen)
-                }
-            }
-            // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
-            // bare `match self` / `self == …` in the body recovers the enum. Tested
-            // against the DECLARATION (concreteEnumIdxByName), not the registered
-            // instances — registration is demand-driven, so a method emitted before any
-            // construction of the enum would leave `self` ref-less. Mirrors bindOneParam.
-            if recvRef == 0U64 {
-                if recvSidx >= c.arena.structCount() {
-                    if c.concreteEnumIdxByName(start: f.recvStart, len: f.recvLen) < c.arena.enumCount() {
-                        recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-                    }
-                }
-            }
-            // TOTAL-REF: a bare (non-generic) struct receiver (`impl Point { fn m() }`). Track
-            // its TypeRef so `self` and `self.field` recover the struct-idx from the ref uniformly
-            // (formerly left 0, recovered via recvSidx classifier — the dominant Ident gap). Set
-            // before the extension-view layering below so `self#Ext` still wraps this ref's args.
-            if recvRef == 0U64 {
-                if recvSidx < c.arena.structCount() {
-                    recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-                }
-            }
-            mut val selfPtr: LLVMValueRef = self.valueParameter(function: fv, index: 0U64)
-            if !(f.selfInout) {
-                selfPtr = self.entryAlloca(ty: recvTy)
-                llvmStore(self.b, self.valueParameter(function: fv, index: 0U64), selfPtr)
-            }
-            // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
-            // `self.m()` in the body resolves through the same extension (so it is
-            // recursion, not a call to a shadowed bare method); reach the shadowed
-            // method with `self#!Ext.m()`.
-            // layer the self view onto recvRef when it carries none yet — recvRef==0 (the old
-            // pf path) OR a no-view instance ref (B3-2: the gm path sets recvRef from
-            // curRecvInstRef, so the view must be applied on top of it, preserving its args).
-            if f.extId != 0U64 {
-                if recvRef == 0U64 || (c.arena.typeAt(index: recvRef).viewExtId == 0U64 && c.arena.typeAt(index: recvRef).viewIds.count() == 0U64) {
-                    if recvRef != 0U64 {
-                        val selectedView: Array[U64] = [f.extId]
-                        recvRef = c.typeRefWithViews(ref: recvRef, viewExtId: f.extId, viewIds: selectedView)
-                    }
-                }
-            }
-            self.pushLocalR(nameStart: self.selfStart, nameLen: self.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
-            // keep the front-end `self` type in lockstep with the bound self local's ref: the
-            // backend reads this local's typeRef (recvRef), exprType's `self` branch reads
-            // cur.selfRef — set from the SAME value so the two type-recovery engines agree for
-            // `self` in every emission path (restored from savedSelfFB on body exit).
-            if recvRef != 0U64 {
-                c.cur.selfRef = recvRef
-            }
-            // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
-            // `borrow fn` self is a borrow the caller owns.
-            self.setLocalOwned(owned: f.selfMove)
-            base = 1U64
-        }
-        mut val pi: U64 = 0
-        while pi < f.params.count() {
-            val param: Param = c.funcParamAt(params: f.params, index: pi)
-            self.bindOneParam(c: inout c, p: param, fv: fv, argIdx: pi + base, typeRef: c.arena.bodySignature(bodyId: bodyId).parameterTypes[pi])
-            // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
-            self.setLocalOwned(owned: param.isMove)
-            pi += 1
-        }
-        // snapshot the BODY instance env for the typed-IR read path (groundedTypeOf):
-        // taken after the emitters (emitOneGenFn/emitOneGenMethod) set the instance's
-        // typeParams/typeArgs and after the self-local bound cur.selfRef above, so a
-        // read during this body grounds under THIS env even while call resolution
-        // transiently swaps cur.typeParams/selfRef to a callee's.
-        val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
-        val savedBodyS: U64 = c.cur.bodySelfRef
-        val savedBodyI: U64 = c.cur.bodyItemRef
-        val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedBodyId: U64 = c.cur.bodyId
-        c.cur.bodySelfRef = c.cur.selfRef
-        c.cur.bodyItemRef = c.cur.itemRef
-        // `finalizeCallables` is the sole producer of semantic body identities.
-        // LLVM must consume the frozen key it found above, never call
-        // `enterBodyInstance`: interning here would create an unscanned body
-        // whose CallResolution table is necessarily empty.  Whole-module
-        // finalization used to mask that violation by happening to scan every
-        // source body before codegen.
-        if bodyId == 0U64 {
-            c.errorAt(offset: f.nameStart, msg: "internal error: LLVM attempted to emit a body outside the finalized callable closure")
-        }
-        c.cur.bodyFnIdx = fi
-        c.cur.bodyEnvironment = environment
-        c.cur.bodyId = bodyId
-        // Consume the same canonical body-instance receiver that Mono used to
-        // populate CallResolution. This is a key projection only; LLVM never
-        // resolves a call or infers a source from it.
-        self.curBodyMark = self.nLocals
-        self.genLlvmBlock(c: inout c, id: f.body)
-        c.cur.bodyEnvironment = savedBodyEnvironment
-        c.cur.bodySelfRef = savedBodyS
-        c.cur.bodyItemRef = savedBodyI
-        c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyId = savedBodyId
-        if !(self.terminated) {
-            // fall-through: the body block dropped its body locals; now drop owned
-            // params (a `move` param / `move fn` self the callee deinits).
-            self.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
-            // checkReturns guarantees a non-() function diverges on every path, so a
-            // fall-through here is a () function: return void.
-            if self.curRetVoid {
-                LLVMBuildRetVoid(self.b)
-            } else {
-                LLVMBuildUnreachable(self.b)
-            }
-        }
-        if didSelf {
-            c.clearSelfItemEnv()
-        }
-        // restore the Self/Item env captured on entry (covers the self-local's cur.selfRef set
-        // above, so it never leaks past this body).
-        c.cur.selfRef = savedSelfFB
-        c.cur.itemRef = savedItemFB
+
     }
 }
