@@ -66,10 +66,14 @@ if rg -q 'c\.enterBodyInstance\(' src/Backend/Llvm; then
     echo "LLVM backend creates a BodyInstance after finalization" >&2
     exit 1
 fi
-if ! rg -q 'LLVM attempted to emit a body outside the finalized callable closure' src/Backend/Llvm/Any.pw; then
-    echo "LLVM backend does not reject missing frozen body identities" >&2
-    exit 1
-fi
+python3 - <<'PYBODY'
+from pathlib import Path
+import re
+body = Path('src/Backend/Llvm/Any.pw').read_text().split('inout fn genLlvmFuncBody(', 1)[1]
+assert 'recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)' in body
+assert re.search(r'if !midReady\s*\{\s*c\.errorAt\([^\n]+\)\s*return\s*\}', body), 'unprepared body is not rejected'
+assert 'genLlvmBlock(' not in body, 'missing frozen body can fall back to source emission'
+PYBODY
 
 # Free functions must obey the same rule.  The older `FnInst` table duplicated
 # `(Func,args)` beside the frozen body identity and allowed LLVM to reopen a
