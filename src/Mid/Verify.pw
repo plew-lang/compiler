@@ -124,6 +124,9 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
 fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, executable: Bool) -> MidVerification {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    if executable && value.tag == 6U64 && !canonicalMidConversionContractsAreReady(c: inout c, proofId: value.conversion) {
+        return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
+    }
     // These operations obtain an owned payload without a Copy operand.
     if executable && (value.tag == 12U64 || value.tag == 14U64 || value.tag == 17U64) {
         if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: value.resultTerm) {
@@ -137,6 +140,10 @@ fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: ino
     if value.tag >= 3U64 && value.tag <= 5U64 {
         mut val elementI: U64 = 0U64
         while elementI < value.elements.len {
+            val conversion = c.mid.aggregateElements[value.elements.start + elementI].conversion
+            if executable && !c.conversionProofIsIdentity(id: conversion) && !canonicalMidConversionContractsAreReady(c: inout c, proofId: conversion) {
+                return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
+            }
             val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block, executable: executable)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             elementI = elementI + 1U64
@@ -407,6 +414,35 @@ fn canonicalMidOwnershipContractIsReady(c: inout Comp, typeTerm: U64) -> Bool {
     if contract == 0U64 || !c.arena.finalDestructions[contract - 1U64].ready { return false }
     val call = c.arena.finalDestructions[contract - 1U64].deinitCall
     return call.bodyId == 0U64 || call.ready
+}
+
+// Structural repacks borrow each source element and obtain a fresh owned
+// destination, including identity leaves. These copies have no Mid operand.
+// Freeze publishes children before parents, so every edge must point backward;
+// malformed cycles are rejected without recursive searches of semantic types.
+fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool {
+    if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
+    val proof = c.arena.conversionProofs[proofId - 1U64]
+    if proof.tag == 0U64 { return true }
+    if proof.tag < 2U64 || proof.tag > 4U64 || proof.sourceRef == 0U64 || proof.targetRef == 0U64 { return false }
+    if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: proof.sourceRef) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: proof.targetRef) { return false }
+    if proof.tag == 2U64 { return true }
+    if proof.tag == 3U64 {
+        val source = c.arena.typeAt(index: proof.sourceRef)
+        val target = c.arena.typeAt(index: proof.targetRef)
+        if source.args.count() != 1U64 || target.args.count() != 1U64 || proof.element >= proofId { return false }
+        if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: source.args[0U64]) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: target.args[0U64]) { return false }
+        return canonicalMidConversionContractsAreReady(c: inout c, proofId: proof.element)
+    }
+    if proof.payloads > c.arena.conversionPayloadPool.count() || proof.payloadCount > c.arena.conversionPayloadPool.count() - proof.payloads { return false }
+    mut val index = 0U64
+    while index < proof.payloadCount {
+        val payload = c.arena.conversionPayloadPool[proof.payloads + index]
+        if payload.conversion >= proofId || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: payload.sourceRef) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: payload.targetRef) { return false }
+        if !canonicalMidConversionContractsAreReady(c: inout c, proofId: payload.conversion) { return false }
+        index += 1U64
+    }
+    return true
 }
 
 fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, executable: Bool) -> MidVerification {

@@ -1,0 +1,44 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { FieldDef, EnumDef, Variant, ValueConversionProof, EnumPayloadConversion, FinalDestruction, FrozenEnumPayloadConversion }
+import /Mid with { MidBody, MidBlock, MidStatement, MidRvalue, MidOperand, MidTerminator, MidPlace, MidLocalDecl, MidVerifyError, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+
+fn envelope(compiler: inout Comp, name: String, payload: U64) -> U64 {
+    val label = compiler.internBytes(s: name)
+    val fieldName = compiler.internBytes(s: "value")
+    val field = <FieldDef nameStart=fieldName.nameStart nameLen=fieldName.nameLen nameId=fieldName.nameId tyStart=0U64 tyLen=0U64 tyNameId=0U64 tyIsArray=false ty=payload isMut=false hasDefault=false defaultVal=0U64 />
+    compiler.arena.registerEnum(<EnumDef nameStart=label.nameStart nameLen=label.nameLen nameId=label.nameId typeParams=[] variants=[<Variant nameStart=0U64 nameLen=0U64 fields=[field] />] />)
+    return compiler.simpleTypeRef(nameStart: label.nameStart, nameLen: label.nameLen)
+}
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "String")
+    val payload = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val inner = envelope(compiler: inout compiler, name: "Inner", payload: payload)
+    val outer = envelope(compiler: inout compiler, name: "Outer", payload: inner)
+    // A redundant but valid structural copy isolates nested identity leaves:
+    // no conformance or source-language conversion selection is under test.
+    val child = <ValueConversionProof.EnumRepack sourceRef=inner targetRef=inner enumIdx=0U64 payloads=[<EnumPayloadConversion sourceRef=payload targetRef=payload conversion=<ValueConversionProof.Identity /> />] />
+    val conversion = compiler.freezeValueConversionProof(proof: <ValueConversionProof.EnumRepack sourceRef=outer targetRef=outer enumIdx=1U64 payloads=[<EnumPayloadConversion sourceRef=inner targetRef=inner conversion=child />] />)
+    compiler.enqueueFinalDestruction(typeRef: outer)
+    val source = <MidPlace local=0U64 typeTerm=outer />
+    val destination = <MidPlace local=1U64 typeTerm=outer />
+    // Abort prevents a subsequent Drop from detecting the corrupted leaf in
+    // place of the conversion that actually requires the ownership contract.
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=outer sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=outer sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=[<MidStatement.Assign destination=destination value=<MidRvalue.Convert operand=<MidOperand.Copy place=source /> conversion=conversion /> />] terminator=<MidTerminator.Abort /> />] />)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    val identity = compiler.finalDestructionIndex(typeRef: payload)
+    val saved = compiler.arena.finalDestructions[identity - 1U64]
+    compiler.arena.finalDestructions[identity - 1U64] = <FinalDestruction typeRef=payload />
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
+    compiler.arena.finalDestructions[identity - 1U64] = saved
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
+    val root = compiler.arena.conversionProofs[conversion - 1U64]
+    compiler.arena.conversionPayloadPool[root.payloads] = <FrozenEnumPayloadConversion sourceRef=inner targetRef=inner conversion=conversion />
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
+    print("ok")
+}
