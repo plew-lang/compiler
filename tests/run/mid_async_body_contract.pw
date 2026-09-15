@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { Block, Func, Param, TypeRef }
+import /Mid with { buildParametricMidBody, MidBuildError }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val promiseName = compiler.internBytes(s: "Promise")
+    val promise = compiler.pushType(t: <TypeRef nameStart=promiseName.nameStart nameLen=promiseName.nameLen args=[integer] />)
+    val parameterName = compiler.internBytes(s: "value")
+    val parameters = compiler.pushFuncParams(params: [<Param nameStart=parameterName.nameStart nameLen=parameterName.nameLen tyStart=integerName.nameStart tyLen=integerName.nameLen tyIsArray=false ty=integer isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0U64 />])
+    compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=0U64 />)
+    // Identical public results have different logical body results. Empty
+    // value-returning bodies deliberately exercise the missing-return path.
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=true retStart=promiseName.nameStart retLen=promiseName.nameLen retIsArray=false retTy=promise body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />)
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=true retStart=promiseName.nameStart retLen=promiseName.nameLen retIsArray=false retTy=promise body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />)
+    assert(compiler.semanticBodyReturnTerm(fnIdx: 0U64) == integer)
+    assert(compiler.semanticBodyReturnTerm(fnIdx: 1U64) == promise)
+    assert(compiler.semanticBodyReturnTerm(fnIdx: 2U64) == 0U64)
+    assert(compiler.arena.functionAt(index: 0U64).retTy == promise)
+    val asynchronous = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
+    match asynchronous.error { MidBuildError.MissingTerminator => {} _ => { assert(false) } }
+    assert(asynchronous.body.locals[0U64].ownsAtEntry)
+    assert(asynchronous.body.locals[1U64].isReturnPlace)
+    assert(asynchronous.body.locals[1U64].typeTerm == integer)
+    val synchronous = buildParametricMidBody(c: inout compiler, fnIdx: 1U64)
+    match synchronous.error { MidBuildError.MissingTerminator => {} _ => { assert(false) } }
+    assert(!synchronous.body.locals[0U64].ownsAtEntry)
+    assert(synchronous.body.locals[1U64].typeTerm == promise)
+    val completion = buildParametricMidBody(c: inout compiler, fnIdx: 2U64)
+    match completion.error { MidBuildError.None => {} _ => { assert(false) } }
+    assert(completion.body.locals.count() == 1U64)
+    assert(completion.body.locals[0U64].ownsAtEntry)
+    print("ok")
+}

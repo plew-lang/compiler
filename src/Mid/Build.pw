@@ -2467,6 +2467,10 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     if f.hasRecv && receiverTerm == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
+    val resultTerm: U64 = c.semanticBodyReturnTerm(fnIdx: fnIdx)
+    if f.hasRet && resultTerm == 0U64 {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.MissingSemanticType /> />
+    }
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=fnIdx />
     if f.hasRecv {
         // `self` is the first ABI parameter exactly like an ordinary source
@@ -2474,14 +2478,17 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // place supplied by the caller, not a copied value or a special LLVM
         // side channel.  `midPrepareLocals` binds this declaration directly to
         // ABI parameter zero when `isInout` is true.
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: receiverTerm, isUnique: midTermIsUnique(c: inout c, term: receiverTerm), isParameter: true, ownsAtEntry: f.isAsync || f.selfMove, isInout: f.selfInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: identSelfTarget()))
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
         val param: Param = c.funcParamAt(params: f.params, index: paramI)
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: param.nameStart))
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: f.isAsync || param.isMove, isInout: param.isInout, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: fnIdx, bindingTarget: param.nameStart))
         paramI += 1U64
     }
+    // Async activations own their argument snapshots across suspension. Entry
+    // lowering supplies these by copy or move; synchronous borrowed arguments
+    // retain their existing caller-owned lifetime.
     // Scope zero is the lifetime of receiver/parameters only. Its range must
     // be sealed before body scope creation so a return can elaborate their
     // move-owned drops without swallowing function-local declarations.
@@ -2491,10 +2498,10 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     // cleanup until the ReturnValue terminator transfers ownership to caller.
     if f.hasRet {
         val resultLocal: U64 = state.locals.count()
-        state.locals.append(<MidLocalDecl typeTerm=f.retTy sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: f.retTy) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
+        state.locals.append(<MidLocalDecl typeTerm=resultTerm sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: resultTerm) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
         state.hasReturnPlace = true
         state.returnPlace = resultLocal
-        state.returnTypeTerm = f.retTy
+        state.returnTypeTerm = resultTerm
     }
     val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: f.body)
     match result {

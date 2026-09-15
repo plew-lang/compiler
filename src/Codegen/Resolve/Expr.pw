@@ -366,10 +366,21 @@ pub impl Comp {
         return 18446744073709551615U64
     }
 
-    // Source bodies, including closures, expose their own declared result.
+    // Source bodies expose their logical result, distinct from the async
+    // callable boundary. Promise wrapping belongs to entry/completion lowering.
     // Closure facts are published before walking the nested body in Record.
     inout fn semanticBodyReturnTerm(fnIdx: U64) -> U64 {
-        if fnIdx < self.arena.functionCount() { return self.arena.functionAt(index: fnIdx).retTy }
+        if fnIdx < self.arena.functionCount() {
+            val function: Func = self.arena.functionAt(index: fnIdx)
+            if !function.hasRet { return 0U64 }
+            if function.isAsync && function.retTy != 0U64 && function.retTy < self.arena.typeCount() {
+                val result: TypeRef = self.arena.typeAt(index: function.retTy)
+                if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 {
+                    return result.args[0U64]
+                }
+            }
+            return function.retTy
+        }
         mut val index: U64 = 0U64
         while index < self.decls.semanticClosures.count() {
             val closure: SemanticClosure = self.decls.semanticClosures[index]
