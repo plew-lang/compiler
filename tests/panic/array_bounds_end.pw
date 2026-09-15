@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+fn main() {
+    val values = [4I64]
+    print(values[1U64])
+}

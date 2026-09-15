@@ -1449,13 +1449,42 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, endBB)
     }
 
-    // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
+    // A physical guard, shared by all index projections. Keep the runtime's
+    // signed predicate and panic text, while allowing LLVM to inline the check.
+    inout fn boundsCheckFunction(c: inout Comp, signature: LLVMTypeRef) -> LLVMValueRef {
+        val function = self.getOrDeclare(c: inout c, name: "pw_bounds", fnTy: signature)
+        if LLVMCountBasicBlocks(function) != 0U32 { return function }
+        LLVMSetLinkage(function, 8U32)
+        val panicParameters: Array[LLVMTypeRef] = [self.ptrty, self.i64ty]
+        val panicType = LLVMFunctionType(self.voidty, arrayCPtr(panicParameters), 2U64, 0I32)
+        val panicFunction = self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: panicType)
+        val builder = LLVMCreateBuilderInContext(self.ctx)
+        val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
+        val failed = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "failed"))
+        val done = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "done"))
+        LLVMPositionBuilderAtEnd(builder, entry)
+        val index = LLVMGetParam(function, 0U64)
+        val count = LLVMGetParam(function, 1U64)
+        val negative = LLVMBuildICmp(builder, llvmIntSlt(), index, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val pastEnd = LLVMBuildICmp(builder, llvmIntSge(), index, count, anon())
+        LLVMBuildCondBr(builder, LLVMBuildOr(builder, negative, pastEnd, anon()), failed, done)
+        LLVMPositionBuilderAtEnd(builder, failed)
+        val message = LLVMBuildGlobalStringPtr(builder, cstr(s: "index out of bounds"), anon())
+        val arguments: Array[LLVMValueRef] = [message, LLVMConstInt(self.i64ty, 19U64, 0I32)]
+        LLVMBuildCall2(builder, panicType, panicFunction, arrayCPtr(arguments), 2U64, anon())
+        LLVMBuildUnreachable(builder)
+        LLVMPositionBuilderAtEnd(builder, done)
+        LLVMBuildRetVoid(builder)
+        LLVMDisposeBuilder(builder)
+        return function
+    }
+
     inout fn emitBoundsCheck(c: inout Comp, idx: LLVMValueRef, count: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_bounds", fnTy: fty)
+        val callee: LLVMValueRef = self.boundsCheckFunction(c: inout c, signature: fty)
         mut val av: Array[LLVMValueRef] = []
         av.append(idx)
         av.append(count)

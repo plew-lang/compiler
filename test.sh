@@ -526,6 +526,12 @@ else
     fail=$((fail + 1)); failed="$failed existential-mid-bodies"
 fi
 
+if python3 ./test-bounds-lowering.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed bounds-lowering"
+fi
+
 if python3 ./test-value-abi.py; then
     :
 else
