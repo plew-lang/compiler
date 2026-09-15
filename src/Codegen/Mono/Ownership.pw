@@ -1,6 +1,34 @@
 // Close destruction alongside authored calls. LLVM consumes these facts;
 // it may memoize semantic aliases, but never selects a destructor or field type.
 pub impl Comp {
+    inout fn finalDestructorCallIsValid(call: FinalDestructorCall) -> Bool {
+        if call.bodyId == 0U64 || call.bodyId > self.arena.bodyInstanceCount() || call.receiverType == 0U64 { return false }
+        match call.receiverPassing { CallReceiverPassing.Borrow => {} _ => { return false } }
+        val body = self.arena.bodyInstanceAt(index: call.bodyId - 1U64)
+        if body.fnIdx >= self.arena.functionCount() || !self.arena.bodyIsCallable(bodyId: call.bodyId) { return false }
+        val function = self.arena.functionAt(index: body.fnIdx)
+        if !function.hasRecv || function.selfMove || function.selfInout || function.isAsync || function.isExtern || function.body == 0U64 || function.params.count() != 0U64 || function.hasRet { return false }
+        val signature = self.arena.bodySignature(bodyId: call.bodyId)
+        return signature.ready && signature.parameterTypes.count() == 0U64 && signature.resultType == 0U64 && self.typeRefEq(a: call.receiverType, b: body.environment.receiverRef)
+    }
+
+    inout fn finalizeDestructorCalls() {
+        mut val index = 0U64
+        while index < self.arena.finalDestructions.count() {
+            val contract = self.arena.finalDestructions[index]
+            val call = contract.deinitCall
+            if call.bodyId != 0U64 {
+                if !self.finalDestructorCallIsValid(call: call) {
+                    self.errorAt(offset: self.arena.typeAt(index: contract.typeRef).nameStart, msg: "internal error: destructor requires a finalized borrowed receiver and a nullary Unit body")
+                    return
+                }
+                val finalized = <FinalDestructorCall bodyId=call.bodyId receiverType=call.receiverType receiverPassing=call.receiverPassing ready=true />
+                self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
+            }
+            index += 1U64
+        }
+    }
+
     inout fn finalDestructionIndex(typeRef: U64) -> U64 {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return 0U64 }
         if typeRef < self.arena.finalDestructionIds.count() {
@@ -93,7 +121,7 @@ pub impl Comp {
                     _ => { needs[index] = true }
                 }
                 if aggregate {
-                    if contract.deinitBodyId != 0U64 { needs[index] = true }
+                    if contract.deinitCall.bodyId != 0U64 { needs[index] = true }
                     mut val field = 0U64
                     while field < contract.fieldTypes.count() {
                         if contract.fieldBoxed[field] { needs[index] = true }
@@ -129,7 +157,7 @@ pub impl Comp {
                 releases.append(contract.fieldBoxed[field] || self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs))
                 field += 1U64
             }
-            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitBodyId=contract.deinitBodyId underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
+            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
             index += 1U64
         }
     }
@@ -255,6 +283,6 @@ pub impl Comp {
             self.collectFinalDestruction(typeRef: fields[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass deinitBodyId=destructor underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
     }
 }

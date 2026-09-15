@@ -124,7 +124,7 @@ pub impl LlvmCtx {
                 self.emitFinalDropValue(c: inout c, v: v, typeRef: contract.underlying)
                 return
             }
-            if contract.ready && contract.deinitBodyId == 0U64 && contract.fieldTypes.count() == 1U64 {
+            if contract.ready && contract.deinitCall.bodyId == 0U64 && contract.fieldTypes.count() == 1U64 {
                 match contract.ownershipClass {
                     ArcClass.StructVal(sidx: val index) => {
                         val declaration = c.arena.structAt(index: index)
@@ -157,8 +157,13 @@ pub impl LlvmCtx {
             return
         }
         self.arcPush(sidx: sidx)
-        if contract.deinitBodyId != 0U64 {
-            val slot = self.ensureFinalGenMethodBody(c: inout c, bodyId: contract.deinitBodyId)
+        if contract.deinitCall.bodyId != 0U64 {
+            if !contract.deinitCall.ready {
+                c.errorAt(offset: declaration.defOffset, msg: "internal error: destructor call contract is not finalized")
+                self.arcPop()
+                return
+            }
+            val slot = self.ensureFinalGenMethodBody(c: inout c, bodyId: contract.deinitCall.bodyId)
             if slot >= self.genMethK.count() {
                 c.errorAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body")
                 self.arcPop()

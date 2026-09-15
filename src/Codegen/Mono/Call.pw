@@ -4917,6 +4917,7 @@ pub impl Comp {
             self.retainSelectedGlobals()
             self.globalCallTemplatesClosed = true
         }
+        self.finalizeDestructorCalls()
         self.verifyFinalCallResolutions()
         self.freezeFinalAccesses()
         // Do not leak the last scanned generic body's substitution environment

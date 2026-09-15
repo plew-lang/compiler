@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { Func, BodyInstance, InstanceEnvironment, FinalDestructorCall, CallReceiverPassing }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Receiver")
+    val receiver = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    val otherName = compiler.internBytes(s: "Other")
+    val other = compiler.simpleTypeRef(nameStart: otherName.nameStart, nameLen: otherName.nameLen)
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=1U64 hasRecv=true recvStart=name.nameStart recvLen=name.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    val body = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment receiverRef=receiver /> />)
+    val call = <FinalDestructorCall bodyId=body receiverType=receiver receiverPassing=<CallReceiverPassing.Borrow /> />
+    assert(!compiler.finalDestructorCallIsValid(call: call))
+    compiler.arena.setBodySignature(bodyId: body, parameters: [], result: 0U64)
+    assert(compiler.finalDestructorCallIsValid(call: call))
+    assert(!compiler.finalDestructorCallIsValid(call: <FinalDestructorCall bodyId=body receiverType=other receiverPassing=<CallReceiverPassing.Borrow /> />))
+    assert(!compiler.finalDestructorCallIsValid(call: <FinalDestructorCall bodyId=body receiverType=receiver receiverPassing=<CallReceiverPassing.Move /> />))
+    assert(!compiler.finalDestructorCallIsValid(call: <FinalDestructorCall bodyId=body receiverType=receiver receiverPassing=<CallReceiverPassing.Inout /> />))
+    compiler.arena.setBodySignature(bodyId: body, parameters: [receiver], result: 0U64)
+    assert(!compiler.finalDestructorCallIsValid(call: call))
+    compiler.arena.setBodySignature(bodyId: body, parameters: [], result: receiver)
+    assert(!compiler.finalDestructorCallIsValid(call: call))
+    assert(!compiler.finalDestructorCallIsValid(call: <FinalDestructorCall />))
+    print("ok")
+}

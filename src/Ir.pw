@@ -3062,12 +3062,22 @@ pub impl MonoWork { factory }
 
 // Final destruction facts are shared by semantically equal TypeRef rows.
 // Zero is a missing contract; a published placeholder closes recursive types.
+// A destructor borrows the complete value and returns Unit with no arguments.
+// Publication waits until the selected body's signature is finalized.
+export struct FinalDestructorCall {
+    pub val bodyId: U64 = 0U64
+    pub val receiverType: U64 = 0U64
+    pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
+    pub val ready: Bool = false
+}
+pub impl FinalDestructorCall { factory }
+
 export struct FinalDestruction {
     pub val needsRelease: Bool = false
     pub val typeRef: U64
     pub val ownershipClass: ArcClass = <ArcClass.Scalar />
     pub val ready: Bool = false
-    pub val deinitBodyId: U64 = 0U64
+    pub val deinitCall: FinalDestructorCall = <FinalDestructorCall />
     pub val underlying: U64 = 0U64
     pub val fieldTypes: Array[U64] = []
     pub val fieldBoxed: Array[Bool] = []

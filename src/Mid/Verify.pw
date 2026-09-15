@@ -393,7 +393,9 @@ export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> 
 fn canonicalMidOwnershipContractIsReady(c: inout Comp, typeTerm: U64) -> Bool {
     if typeTerm == 0U64 { return true }
     val contract = c.finalDestructionIndex(typeRef: typeTerm)
-    return contract != 0U64 && c.arena.finalDestructions[contract - 1U64].ready
+    if contract == 0U64 || !c.arena.finalDestructions[contract - 1U64].ready { return false }
+    val call = c.arena.finalDestructions[contract - 1U64].deinitCall
+    return call.bodyId == 0U64 || call.ready
 }
 
 fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, executable: Bool) -> MidVerification {
