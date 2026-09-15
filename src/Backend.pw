@@ -428,21 +428,12 @@ struct LlvmCtx {
     // identical to the C runtime's PlewPromise (the resume continuation `k` is a
     // void(*)(void*); `kframe` is its frame). Awaited promises are PlewPromise*.
     pub mut val promiseTy: LLVMTypeRef
-    // emitting an async fn's resume body? When set, `let`/match-bind storage is a
-    // frame field (survives `await` suspensions) not an alloca, `return` resolves
-    // `__self`, and a head `await` suspends.
-    pub mut val curAsync: Bool
-    // the current resume fn's frame pointer (void* arg 0, used as the frame base),
-    // its named struct type `{i32 state, ptr self, ptr sub, <params>, <locals>}`,
-    // the resume fn value (stored as a suspended promise's continuation), the entry
-    // dispatch `switch` (await points add a `case state -> resume block`), the await
-    // state counter (1-based), and the next frame field index to hand a `let`/bind.
+    // Physical state of the Mid-generated async resume: frame layout, callback,
+    // and dispatch switch. Suspension states and storage come from canonical Mid.
     pub mut val curFrameBase: LLVMValueRef
     pub mut val curFrameTy: LLVMTypeRef
     pub mut val curResumeFn: LLVMValueRef
     pub mut val curAsyncSwitch: LLVMValueRef
-    pub mut val curAsyncState: U64
-    pub mut val asyncFieldNext: U64
     // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
     // resume fn value, so the entry/resume/await sites all agree on the layout.
     pub mut val asyncFnIdx: Array[U64]
@@ -458,11 +449,6 @@ struct LlvmCtx {
     pub mut val asyncEntryIdx: Array[U64]
     pub mut val asyncEntryVal: Array[LLVMValueRef]
     pub mut val asyncEntryTy: Array[LLVMTypeRef]
-    // the current resume fn's per-field frame-slot GEPs, ALL built in the resume
-    // entry block (which dominates every resume block reached via the dispatch
-    // switch) — caching them there avoids "instruction does not dominate all uses"
-    // when a field GEP built mid-body is read in a switch-reachable resume block.
-    pub mut val asyncSlotPtrs: Array[LLVMValueRef]
     // loop break/continue target blocks (a stack — innermost loop on top), so a
     // `break` branches to the enclosing loop's end and `continue` to its
     // header/step. Pushed by while/for codegen, popped at the loop's end. The
@@ -778,13 +764,6 @@ fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
     return c.arena.functionAt(index: fi).isAsync
 }
 
-fn exprIsAwaitLL(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Await(operand: _) => { return true }
-        _ => { return false }
-    }
-}
-
 fn llvmIntEq() -> U32 { return 32U32 }
 
 fn llvmIntNe() -> U32 { return 33U32 }
@@ -913,11 +892,11 @@ export fn emitLlvm(c: inout Comp) {
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 provEmit=[] genMethEmit=[]
-        promiseTy=promiseTy curAsync=false
+        promiseTy=promiseTy
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+        asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.arena.bytes.count()

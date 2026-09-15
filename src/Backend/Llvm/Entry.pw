@@ -70,7 +70,6 @@ pub impl LlvmCtx {
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = true
-        self.curAsync = false
         val savedBodyFn: U64 = c.cur.bodyFnIdx
         val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
         c.cur.bodyFnIdx = 18446744073709551615U64

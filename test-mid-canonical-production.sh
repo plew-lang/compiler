@@ -95,3 +95,11 @@ assert 'MissingOwnershipContract' in source
 for path in Path('src/Backend').rglob('*.pw'):
     assert 'verifyCanonicalMidBody(' not in path.read_text(), f'{path}: executable admission bypassed'
 PYVERIFY
+
+# Async semantic bodies must stay on canonical Mid. Runtime frame/Promise glue
+# may emit LLVM directly, but must never evaluate source expressions or clean up
+# source scopes itself.
+if rg -n '\b(genLlvmExpr|genLlvmStmt|dropScope|curAsync|asyncFieldNext|asyncSlotPtrs)\b' src/Backend/Llvm/Async.pw src/Backend/Llvm/MidAsync.pw; then
+    echo 'async emission contains a legacy semantic path' >&2
+    exit 1
+fi
