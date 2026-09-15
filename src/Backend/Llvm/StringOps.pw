@@ -88,14 +88,6 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
-    // AST callers retain this convenience wrapper.  Mid callers already have
-    // a closed String value and must use emitStrSinkValue directly so the
-    // backend does not reopen expression semantics after frontend freeze.
-    inout fn emitStrSink(c: inout Comp, rtName: String, argExpr: U64) -> LLVMValueRef {
-        val value: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: argExpr)
-        return self.emitStrSinkValue(c: inout c, rtName: rtName, value: value)
-    }
-
     // A path-taking runtime intrinsic (`readFile`/`readFileBytes`/`fileExists`): the
     // path is a {ptr,i64} value (String or Array[U8], same layout) passed as two args;
     // returns `retTy` (strty for the file readers, i64 for fileExists).
@@ -111,48 +103,4 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
-    inout fn emitPathStrIntrinsic(c: inout Comp, rtName: String, retTy: LLVMTypeRef, pathExpr: U64) -> LLVMValueRef {
-        return self.emitPathStrIntrinsicValue(c: inout c, rtName: rtName, retTy: retTy, path: self.genBorrowedArg(c: inout c, argExpr: pathExpr))
-    }
-
-    // Call a 1-arg i64 runtime sink (`plew_print_i64` / `plew_print_u64` /
-    // `plew_print_bool`) with an already-i64 value.
-    inout fn emitI64Sink(c: inout Comp, rtName: String, v: LLVMValueRef) -> LLVMValueRef {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(v)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-
-    // The c.arena.enums index of an expression's enum type, or c.arena.enumCount(). A JSX enum
-    // construction (`<Kind.LParen />`) carries the enum name directly; otherwise the
-    // typed-AST cache supplies a named type (kind 2). (Opaque extern LLVMTypeRefs
-    // can't be `==`-compared in Plew, so detection is via the AST, not the value type.)
-    inout fn exprEnumIdx(c: inout Comp, id: U64) -> U64 {
-        match c.arena.exprs[id] {
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
-                if isEnum {
-                    return c.enumIdxByName(start: typeStart, len: typeLen)
-                }
-            }
-            _ => {}
-        }
-        // an enum local carries a bare enum TypeRef on locTypeRef (typeOf can't see it).
-        val tr: U64 = self.exprTypeRef(c: inout c, id: id)
-        if tr != 0U64 {
-            val tt: TypeRef = c.arena.typeAt(index: tr)
-            val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)
-            if ei < c.arena.enumCount() {
-                return ei
-            }
-        }
-        val t: TypeInfo = c.typeOf(id: id)
-        if t.kind == 2 {
-            return c.enumIdxByName(start: t.nameStart, len: t.nameLen)
-        }
-        return c.arena.enumCount()
-    }
 }

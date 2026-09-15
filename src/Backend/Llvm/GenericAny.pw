@@ -8,25 +8,6 @@
 
 pub impl LlvmCtx {
 
-    // If expression `recv` has an existential `any P` type, the trait def index of P;
-    // else c.decls.traitCount(). (Resolved later than refIsAny so the forward reference to
-    // findTraitIdxByName is fine — the module is one compilation unit.)
-    inout fn anyRecvTraitIdx(c: inout Comp, recv: U64) -> U64 {
-        val r: U64 = self.exprTypeRef(c: inout c, id: recv)
-        return self.anyRecvTraitIdxForRef(c: inout c, ref: r)
-    }
-
-    inout fn anyRecvTraitIdxForRef(c: inout Comp, ref: U64) -> U64 {
-        val r: U64 = ref
-        if refIsAny(c: inout c, ref: r) {
-            return c.findTraitIdxByName(start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen)
-        }
-        return c.decls.traitCount()
-    }
-}
-
-pub impl LlvmCtx {
-
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
         if c.arena.typeAt(index: ref).isRecord {
             val layoutIndex: U64 = c.recordStructIndex(ref: ref)
@@ -127,14 +108,6 @@ pub impl LlvmCtx {
         return LLVMBuildSExt(self.b, v, target, anon())
     }
 
-    // Coerce an int value to the integer type named by a type span, unless that type
-    // is String (kind 1) — then pass through (no width concept).
-    inout fn coerceIntTo(c: inout Comp, v: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
-        if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) == 1U64 {
-            return v
-        }
-        return self.coerceInt(v: v, target: self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen), unsigned: isUnsignedName(c: inout c, start: tyStart, len: tyLen))
-    }
 }
 
 pub impl LlvmCtx {
@@ -153,120 +126,4 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
-    // Emit `id` as a double: a float value is already double; an integer value (e.g. a
-    // literal `2` in `1.5 + 2`) is converted with sitofp/uitofp.
-    inout fn coerceToF64(c: inout Comp, id: U64) -> LLVMValueRef {
-        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: id)
-        if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-            // an integer operand: signed-int-to-float (unsigned uses uitofp — rare in
-            // mixed float expressions; signed covers the literal case).
-            return LLVMBuildSIToFP(self.b, v, self.f64ty, anon())
-        }
-        return v
-    }
-
-    // The grounded primitive (int / float) type-name span of an operator operand `id`, or
-    // nameLen 0 if it isn't a primitive. Recovers the operand's TypeRef and grounds it
-    // through the active instance env: a generic-body operand `a: T` carries the ungrounded
-    // `T`, so `a + b` in a `where T: Add` body emitted at F64 must ground `T -> F64` to reach
-    // `impl F64 as Add` — exactly the witness a concrete `1.5 + 2.5` (a literal, recovered by
-    // typeOf) uses. This routes generic AND concrete primitive operators through the one std
-    // witness (spec/12, O6); the built-in open-code path in Expr.pw is only a last resort.
-    inout fn primOperandName(c: inout Comp, id: U64) -> Bind {
-        val r: U64 = self.exprTypeRef(c: inout c, id: id)
-        if r != 0U64 {
-            val g: U64 = c.groundTypeRef(ref: r)
-            if g < c.arena.typeCount() {
-                val gt: TypeRef = c.arena.typeAt(index: g)
-                if gt.nameLen != 0U64 {
-                    if isPrimIntName(c: inout c, start: gt.nameStart, len: gt.nameLen) || c.isFloatType(start: gt.nameStart, len: gt.nameLen) {
-                        return <Bind nameStart=gt.nameStart nameLen=gt.nameLen fieldStart=0U64 fieldLen=0U64 />
-                    }
-                }
-            }
-        }
-        val pti: TypeInfo = c.typeOf(id: id)
-        if pti.nameLen != 0U64 {
-            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) || c.isFloatType(start: pti.nameStart, len: pti.nameLen) {
-                return <Bind nameStart=pti.nameStart nameLen=pti.nameLen fieldStart=0U64 fieldLen=0U64 />
-            }
-        }
-        return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
-    }
-
-    // Operator syntax has no AST Call node, but Mono records its selected
-    // associated witness under the Binary expression just like an ordinary
-    // final callable.  LLVM must not reconstruct overload selection from its
-    // local value environment.
-    inout fn binWitnessFn(c: inout Comp, callId: U64) -> U64 {
-        return c.bodyCallee(exprId: callId)
-    }
-
-    // The c.arena.funcs index of the `Eq` witness `T.eq(lhs:rhs:)` for the `==`/`!=`
-    // operand `lhs` (a registered struct/enum, or the String lang-item detected by
-    // value-kind), or c.arena.functionCount() when the operand carries no Eq witness (a
-    // scalar — compared by `icmp` directly — or a non-`@[Eq]` enum — tag-compared).
-    // Comparison is trait sugar like arithmetic (spec/12), but `Eq.eq` has a fixed
-    // selector, so this resolves by name rather than via `binTraitMethodName`.
-    inout fn eqWitnessFn(c: inout Comp, callId: U64) -> U64 {
-        return c.bodyCallee(exprId: callId)
-    }
-
-    // The c.arena.funcs index of the `Ord` witness `T.compare(lhs:rhs:)` for the ordering
-    // operand `lhs` (a registered struct/enum with a compare witness, or a primitive whose
-    // `impl I8 as Ord` lives in std/Core/Num.pw), or c.arena.functionCount() when none — the
-    // caller then keeps the structural/built-in ordering. `< <= > >=` are `Ord` sugar
-    // (spec/12); routing through this witness honors a user/derived `compare`.
-    inout fn ordWitnessFn(c: inout Comp, callId: U64) -> U64 {
-        // `<`/`<=`/`>`/`>=` are source-level calls to Ord.compare.  Mono records
-        // the selected witness under the containing Binary expression, so LLVM
-        // consumes that decision instead of rediscovering a receiver by shape.
-        return c.bodyCallee(exprId: callId)
-    }
-
-    // Unary syntax follows the same final-callable contract as Binary syntax.
-    inout fn unaryWitnessFn(c: inout Comp, callId: U64) -> U64 {
-        return c.bodyCallee(exprId: callId)
-    }
-
-    // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
-    // unary: just lhs). The witness is its own 0-type-arg `gf` instance, declared lazily
-    // through its already-frozen body; a missing slot is a loud finalization error.
-    inout fn emitWitnessCall(c: inout Comp, callId: U64, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
-        val af: Func = c.arena.functionAt(index: fi)
-        mut val av: Array[LLVMValueRef] = []
-        // operator operands are view-blind (operators dispatch on the underlying type;
-        // the `#Ext` view only adds methods) — `self * 2` in an `impl I64` extension must
-        // not trip the arg view-invariance check against the plain-typed witness param.
-        val lhsParam: Param = c.funcParamAt(params: af.params, index: 0U64)
-        av.append(self.genArgValueV(c: inout c, argExpr: lhs, p: lhsParam, parameterTypeRef: lhsParam.ty, checkView: false))
-        if binary {
-            val rhsParam: Param = c.funcParamAt(params: af.params, index: 1U64)
-            av.append(self.genArgValueV(c: inout c, argExpr: rhs, p: rhsParam, parameterTypeRef: rhsParam.ty, checkView: false))
-        }
-        // Source-level operator syntax is no exception: Mono fixed both the
-        // witness subject and every generic substitution in its final-callee
-        // record.  Re-inferring from operands here used an identity-impl
-        // assumption and could silently choose a different instantiation.
-        val recvInst: U64 = c.bodyCalleeReceiverRef(exprId: callId)
-        val targs: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
-        if af.typeParams.count() > 0U64 {
-            if targs.count() != af.typeParams.count() || !(c.fnArgsAllGround(args: targs)) {
-                c.errorAt(offset: c.exprOffset(id: lhs), msg: "internal error: final operator callable is missing grounded type arguments")
-                return LLVMConstInt(self.i64ty, 0U64, 0I32)
-            }
-        }
-        val gslot: U64 = self.ensureFinalGenFnBody(c: inout c, bodyId: c.bodyCalleeBodyId(exprId: callId))
-        if gslot < self.genFnK.count() {
-            val raw: LLVMValueRef = self.callValueFunction(signature: self.genFnTy[gslot], function: self.genFnVal[gslot], arguments: av)
-            return self.projectFinalCallResult(c: inout c, callId: callId, value: raw)
-        }
-        val aslot: U64 = self.userFnSlot(idx: fi)
-        if aslot >= self.fnIdx.count() {
-            c.errorAt(offset: c.exprOffset(id: lhs), msg: "LLVM backend: operator witness not emittable yet")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val raw: LLVMValueRef = self.callValueFunction(signature: self.fnTy[aslot], function: self.fnVal[aslot], arguments: av)
-        return self.projectFinalCallResult(c: inout c, callId: callId, value: raw)
-    }
 }

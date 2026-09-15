@@ -146,25 +146,6 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // Re-register every module-level variable as a local pointing at its LLVM global, so
-    // reads (`x`), writes (`x = …` for a `mut val` global), and all type-recovery
-    // (`x.field`, `x[i]`, method dispatch) resolve through the normal local machinery
-    // (findLocal). Called at the start of each function/closure/async body AFTER the local
-    // reset and BEFORE params/captures — so a same-named param or local shadows the global
-    // (findLocal returns the most-recently pushed match).
-    inout fn seedGlobals(c: inout Comp) {
-        mut val gi: U64 = 0
-        while gi < self.gvalRef.count() {
-            self.pushLocalR(nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: self.gvalRef[gi], ty: self.gvalLty[gi], kind: self.gvalKind[gi], structIdx: self.gvalSidx[gi], isArr: self.gvalIsArr[gi], elemTy: self.gvalElemTy[gi], elemKind: self.gvalElemKind[gi], typeRef: self.gvalTref[gi])
-            // a seeded global is a BORROW of the module-lifetime owner — the ownership
-            // flag says so honestly (the scope-exit drop reads locOwned, not a position
-            // gate), so no body ever releases it.
-            self.setLocalOwned(owned: false)
-            self.setLocalElemTypeRef(ref: self.gvalElemTypeRef[gi])
-            gi += 1
-        }
-    }
-
     // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
     inout fn genLlvmMain(c: inout Comp, fi: U64) {
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args

@@ -38,9 +38,6 @@ pub impl LlvmCtx {
         return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
     }
 
-    // Every backend capture comes from a checked, frozen closure signature.
-    inout fn captureArcRef(c: inout Comp, cap: CaptureEntry) -> U64 { return cap.ty }
-
     // Register only. Emission must not overwrite the enclosing body's locals.
     inout fn declareClosureEnvironmentDrop(c: inout Comp, closureSlot: U64) -> LLVMValueRef {
         val closure = self.closures[closureSlot]

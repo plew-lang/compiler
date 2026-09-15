@@ -7,18 +7,15 @@ cd "$(dirname "$0")"
 python3 - <<'PY'
 from pathlib import Path
 
-sources = [
-    Path("src/Backend/Llvm/CallGeneric.pw"),
-    Path("src/Backend/Llvm/CallMethod.pw"),
-    Path("src/Backend/Llvm/StmtFor.pw"),
-]
-
-for source in sources:
-    text = source.read_text()
-    if "ensureGenMethodDeclared(" in text:
-        raise SystemExit(f"AST emitter reconstructs a generic-method key: {source}")
-    if "ensureFinalGenMethodBody(" not in text:
-        raise SystemExit(f"no canonical generic-method body call inspected: {source}")
+mid = Path("src/Backend/Llvm/Mid.pw").read_text()
+start = mid.index("inout fn midCanonicalEmitDirectCall(")
+end = mid.index("\n    inout fn ", start + 1)
+call = mid[start:end]
+for required in ["bodyId: selected.calleeBodyId", "instRef: selected.recvTypeRef", "selected.calleeTypeArgs"]:
+    if required not in call:
+        raise SystemExit(f"Mid call does not preserve the finalized method contract: {required}")
+if "findBodyInstance(" in call or "enterBodyInstance(" in call:
+    raise SystemExit("Mid call reconstructs the finalized body identity")
 
 methods = Path("src/Backend/Llvm/GenMethods.pw").read_text()
 if "inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64)" not in methods:

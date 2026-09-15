@@ -312,56 +312,6 @@ pub impl LlvmCtx {
         }
     }
 
-    // The grounded TypeRef of expression `id` — THE typed-IR read: the frontend's
-    // parametric store substituted under the emitted body's instance env
-    // (groundedTypeOf). This RETIRED the backend's 24-arm per-form re-derivation
-    // (rustc model: the frontend is the sole type authority; the backend only
-    // substitutes the instance's type args). Kept as the backend-side name so its
-    // many call sites read naturally.
-    inout fn exprTypeRef(c: inout Comp, id: U64) -> U64 {
-        // A call expression's result is part of its final callable descriptor, not
-        // a property LLVM may reconstruct from the caller's parametric AST type.
-        // In a generic/provided body that AST can still say the receiver's `T` (or
-        // even a surrounding collection) while Mono selected a concrete result.
-        // Every consumer — temporary ARC homes included — must therefore read the
-        // completed descriptor first.  This is the same authority used for LLVM
-        // call signatures and prevents a `Buffer[Point].get()` temporary from being
-        // classified as a Buffer and raw-buffer-dropped.
-        match c.arena.exprs[id] {
-            Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                val result: U64 = c.bodyCalleeResultRef(exprId: id)
-                if result != 0U64 { return result }
-            }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                val result: U64 = c.bodyCalleeResultRef(exprId: id)
-                if result != 0U64 { return result }
-            }
-            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                val result: U64 = c.bodyCalleeResultRef(exprId: id)
-                if result != 0U64 { return result }
-            }
-            _ => {}
-        }
-        // A backend local is not a second type resolver: it is the physical
-        // home selected from the frontend's already-grounded semantic term.
-        // Prefer that term for an identifier while the legacy emitter still
-        // owns lexical slots. In particular, a match payload bind can spell a
-        // declaration-level `T` while its field term is `Array[U8]` or
-        // `String`; an escaping read must retain according to the latter.
-        // Mid removes this compatibility lookup by carrying the same term on
-        // every Place directly.
-        match c.arena.exprs[id] {
-            Expr.Ident(start: val start, len: val len) => {
-                val local: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if local < self.nLocals && self.locTypeRef[local] != 0U64 {
-                    return self.locTypeRef[local]
-                }
-            }
-            _ => {}
-        }
-        return c.groundedTypeOf(id: id)
-    }
-
 }
 
 pub impl LlvmCtx {
@@ -401,58 +351,6 @@ pub impl LlvmCtx {
             }
         }
         return false
-    }
-
-    // If `ref` is a generic struct instance, set the substitution env to it (so a
-    // destructured field of type `T` grounds to the instance's concrete arg). Returns
-    // whether it set the env (caller restores). Mirrors setEnumEnv for structs.
-    inout fn setStructEnv(c: inout Comp, ref: U64) -> Bool {
-        if ref == 0U64 {
-            return false
-        }
-        val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-        if gs < self.genStructRefs.count() {
-            c.cur.typeParams = c.arena.structAt(index: self.genStructDefs[gs]).typeParams
-            c.cur.typeArgs = c.arena.typeAt(index: ref).args
-            return true
-        }
-        return false
-    }
-
-    // If `ref` is a reference-cell instance, set the substitution env from the
-    // (opaque extern) def's type param to the instance's concrete arg — so a method's
-    // `Optional[Ref[T]]` return (`WeakRef.upgrade`) grounds T to the pointee. Ref cells
-    // are opaque externs, so they have no genStruct/genEnum slot and setStructEnv/setEnumEnv
-    // miss them; the def (with its typeParams) is still in arena.structs.
-    inout fn setRefLikeEnv(c: inout Comp, ref: U64) -> Bool {
-        if ref == 0U64 {
-            return false
-        }
-        if c.isStrongRefInst(ref: ref) || c.isWeakRefLikeInst(ref: ref) {
-            val t: TypeRef = c.arena.typeAt(index: ref)
-            val di: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if di < c.arena.structCount() {
-                c.cur.typeParams = c.arena.structAt(index: di).typeParams
-                c.cur.typeArgs = t.args
-                return true
-            }
-        }
-        return false
-    }
-
-    // Set the substitution env from ANY generic instance `ref` — struct, enum, or the opaque
-    // Ref/WeakRef wrappers — to their concrete args. The single env-setup so callers that ground a
-    // method/field result under "the receiver's instance" don't each re-implement the kind
-    // cascade and drift (the lesson from the retired per-form resolvers). Returns whether
-    // it set the env (caller restores).
-    inout fn setInstanceEnv(c: inout Comp, ref: U64) -> Bool {
-        if self.setStructEnv(c: inout c, ref: ref) {
-            return true
-        }
-        if self.setEnumEnv(c: inout c, ref: ref) {
-            return true
-        }
-        return self.setRefLikeEnv(c: inout c, ref: ref)
     }
 
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.

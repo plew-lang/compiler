@@ -33,11 +33,17 @@ end = mono.index("inout fn bodyCalleeResultRef", start)
 if "callTemplate" in mono[start:end]:
     raise SystemExit("backend argument adapter reopens CallTemplate")
 
-llvm = Path("src/Backend/Llvm/Expr.pw").read_text()
-if llvm.count("c.bodyCalleeArgumentRange(exprId: id)") != 3:
-    raise SystemExit("direct/method LLVM calls do not all use the final evaluation plan")
-if "callArgumentRangeForCurrentBody(exprId: id" in llvm:
-    raise SystemExit("LLVM expression lowering reopens parametric call arguments")
+llvm = Path("src/Backend/Llvm/Mid.pw").read_text()
+start = llvm.index("inout fn midCanonicalEmitDirectCall(")
+end = llvm.index("\n    inout fn ", start + 1)
+call = llvm[start:end]
+for required in ["c.mid.callArguments[term.args.start + argumentI]", "selected.parameterTypeRefs", "selected.argumentPassings"]:
+    if required not in call:
+        raise SystemExit(f"Mid call does not consume the frozen argument contract: {required}")
+for path in Path("src/Backend").rglob("*.pw"):
+    text = path.read_text()
+    if "bodyCalleeArgumentRange(" in text or "callArgumentRangeForCurrentBody(" in text:
+        raise SystemExit(f"LLVM reopens source expression arguments: {path}")
 
 print("PASS final-call-evaluation-plan")
 PY

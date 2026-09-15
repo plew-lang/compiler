@@ -36,25 +36,6 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // TOTAL-REF: when the caller knows the result STRUCT (struct-idx) but carries no ref — a
-    // bare non-generic struct, the old struct-idx-only partition — synthesize the ref from the
-    // struct's name so exprTypeRef is total and exprStructIdx can derive the idx from the ref.
-    // Guarded by a round-trip (structIdxOfRef(synth) == si): the ref is adopted only when it
-    // resolves back to the same struct, so a generic-head-without-instance case (where the bare
-    // name would not round-trip) is left at 0 rather than silently mis-resolved.
-    inout fn structFallbackRef(c: inout Comp, tr: U64, si: U64) -> U64 {
-        if tr != 0U64 {
-            return tr
-        }
-        if si < c.arena.structCount() {
-            val syn: U64 = c.simpleTypeRef(nameStart: c.arena.structAt(index: si).nameStart, nameLen: c.arena.structAt(index: si).nameLen)
-            if self.structIdxOfRef(c: inout c, ref: syn) == si {
-                return syn
-            }
-        }
-        return tr
-    }
-
     // TOTAL-REF: the struct def index a (grounded) TypeRef denotes, or the sentinel
     // (structs.count()) for a non-struct ref. The single ref→struct-idx map that
     // exprStructIdx derives from. An `Array`/`String` head resolves to that registered def
@@ -97,72 +78,6 @@ pub impl LlvmCtx {
             return c.arena.structCount()
         }
         return self.localStructIdxFor(c: inout c, start: t.nameStart, len: t.nameLen)
-    }
-
-    // The owning struct index of an expression, or c.arena.structCount() (the sentinel) for a
-    // non-struct value. TOTAL-REF single source: derive it from the expr's TypeRef via
-    // structIdxOfRef — the one ref→struct-idx map — so the ref is the sole authority and no
-    // per-form classifier can drift from it. The old per-form classifier (exprStructIdxRaw) was
-    // RETIRED: a shadow over the self-compile + the whole corpus found ZERO exprs it resolved
-    // that the ref-path missed — every value form now carries a real ref (see exprTypeRef). The
-    // only residue is a REFLESS Array/String value (an indirect closure-call result, or any
-    // Array/String value whose ref didn't populate): resolved via the frontend type, tied to
-    // Array/String's representation pinning (collections.md §3-付録3), NOT a per-form fallback.
-    // (The `inCollection` guard is vestigial — exprStructIdx is only reachable during emission,
-    // where inCollection is always false; kept as a cheap invariant marker.)
-    inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
-        // Method bodies already carry their concrete receiver instance in the
-        // body cursor. Prefer it for `self`: re-deriving an identifier's type can
-        // lose a view-erased generic instance and make field lookup disagree with
-        // the method ABI.
-        match c.arena.exprs[id] {
-            Expr.Ident(start: val selfStart, len: val selfLen) => {
-                if rangeEquals(bytes: c.arena.bytes, start: selfStart, len: selfLen, kw: "self") && c.cur.selfRef != 0U64 {
-                    return self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: c.cur.selfRef))
-                }
-                // LLVM's own local table is authoritative during emission:
-                // match payload binds are introduced here (not into Comp.cur).
-                val emittedLi: U64 = self.findLocal(c: inout c, start: selfStart, len: selfLen)
-                if emittedLi < self.nLocals && self.locTypeRef[emittedLi] != 0U64 {
-                    val emittedStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: self.locTypeRef[emittedLi]))
-                    if emittedStruct < c.arena.structCount() { return emittedStruct }
-                }
-                // Match/destructure binds are locals too.  Their concrete
-                // payload type is installed by the active body environment;
-                // do not re-derive an Ident's shared AST type and lose a
-                // generic enum's substituted field instance.
-                val li: U64 = c.localIndexByName(start: selfStart, len: selfLen)
-                if li < c.cur.locals.count() {
-                    val localRef: U64 = c.groundTypeRef(ref: c.cur.locals[li].ty)
-                    val localStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: localRef))
-                    if localStruct < c.arena.structCount() { return localStruct }
-                }
-            }
-            _ => {}
-        }
-        if !(c.inCollection) {
-            val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
-            if nw < c.arena.structCount() {
-                return nw
-            }
-        }
-        // a refless `Array` value (an array field / array-returning call / nested-array element
-        // whose ref didn't resolve above) is an `Array` value — resolve to the Array generic def
-        // so a direct index / method on it dispatches the Index / generic-method witness (Array is
-        // gen-instance pinned, found arena-wide).
-        if self.exprIsArray(c: inout c, id: id) {
-            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-            return c.structDefByNameAny(start: ab.nameStart, len: ab.nameLen)
-        }
-        // a refless `String` value (a concat / indirect-closure-call result whose ref didn't
-        // resolve above) is a `String` struct value — resolve to the registered String struct so
-        // its methods / `==` / `+` ride the uniform exprStructIdx→findMethod witness path. String's
-        // value rep is pinned to strty (representation residue) but its DISPATCH is structural.
-        if self.valueKind(c: inout c, id: id) == 1U64 {
-            val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-            return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
-        }
-        return c.arena.structCount()
     }
 
     // The LLVM type for a declared type span, honoring array-ness: an array is the

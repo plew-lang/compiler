@@ -3,9 +3,7 @@
 // ---- local environment ----
 
 pub impl LlvmCtx {
-    inout fn pushLocal(nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64) {
-        self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: ptr, ty: ty, kind: kind, structIdx: structIdx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: 0U64)
-    }
+
     inout fn pushLocalR(nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64, typeRef: U64) {
         if self.nLocals < self.locStart.count() {
             self.locStart[self.nLocals] = nameStart
@@ -76,59 +74,6 @@ pub impl LlvmCtx {
         return a
     }
 
-    // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
-    // the live count). Break/Continue branch to the top of this stack.
-    // Push a loop's (break, continue) target blocks plus `unwindMark` — the local mark at
-    // the START of the per-iteration scope (everything declared at/after it is dropped by a
-    // `break`/`continue`, mirroring the body's fall-through). For while/range that is the
-    // body-entry mark (nLocals at the call); for the iterator loops it is the mark BEFORE the
-    // loop variable, so a heap-owning loop var is released on every iteration exit. Persistent
-    // loop state (range counter, iterator slot) sits below the mark and is untouched here.
-    inout fn pushLoop(breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef, unwindMark: U64) {
-        if self.loopDepth < self.loopBreakBB.count() {
-            self.loopBreakBB[self.loopDepth] = breakBB
-            self.loopContBB[self.loopDepth] = contBB
-            self.loopUnwindMark[self.loopDepth] = unwindMark
-        } else {
-            self.loopBreakBB.append(breakBB)
-            self.loopContBB.append(contBB)
-            self.loopUnwindMark.append(unwindMark)
-        }
-        self.loopDepth = self.loopDepth + 1U64
-    }
-
-    inout fn popLoop() {
-        if self.loopDepth > 0U64 {
-            self.loopDepth = self.loopDepth - 1U64
-        }
-    }
-
-    // Set the just-pushed array local's element TypeRef (a Ref / nested-array element).
-    inout fn setLocalElemTypeRef(ref: U64) {
-        if self.nLocals > 0U64 {
-            self.locElemTypeRef[self.nLocals - 1U64] = ref
-        }
-    }
-
-    // Set the just-pushed local's own TypeRef (e.g. an array bind whose value is `Array[E]`
-    // — so `exprTypeRef`/`exprStructIdx` resolve it through the uniform generic path). Call
-    // right after a `pushLocal` that could not supply the ref inline.
-    inout fn setLocalTypeRef(ref: U64) {
-        if self.nLocals > 0U64 {
-            self.locTypeRef[self.nLocals - 1U64] = ref
-        }
-    }
-
-    // Mark the just-pushed local's storage as an rc'd rawbuf CELL (a `mut val`
-    // heap-boxed for closure capture, or a closure body's bound capture cell): scope
-    // exit drops one cell owner instead of releasing the pointee value directly, and
-    // a capturing closure's env creation retains it.
-    inout fn setLocalCellHome() {
-        if self.nLocals > 0U64 {
-            self.locCellHome[self.nLocals - 1U64] = true
-        }
-    }
-
     // Set the just-pushed local's ownership (false = a borrow/inout param the caller
     // owns, so it is not deinit'd here).
     inout fn setLocalOwned(owned: Bool) {
@@ -137,112 +82,4 @@ pub impl LlvmCtx {
         }
     }
 
-    // Mark the local named (start,len) as moved-out (ownership handed off): it is not
-    // deinit'd at this scope's exit.
-    inout fn markLocalMoved(c: inout Comp, start: U64, len: U64) {
-        val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-        if li < self.nLocals {
-            self.locMoved[li] = true
-        }
-    }
-
-    inout fn localIsUnique(c: inout Comp, li: U64) -> Bool {
-        if li >= self.nLocals {
-            return false
-        }
-        if self.locTypeRef[li] != 0U64 {
-            if self.locTypeRef[li] < c.arena.typeCount() {
-                val tr: TypeRef = c.arena.typeAt(index: self.locTypeRef[li])
-                if c.typeIsUnique(start: tr.nameStart, len: tr.nameLen) {
-                    return true
-                }
-            }
-        }
-        if self.locStructIdx[li] < c.arena.structCount() {
-            return c.arena.structAt(index: self.locStructIdx[li]).isUnique
-        }
-        return false
-    }
-
-    // Shadowing cliff (spec/03): after a let initializer has been evaluated but before
-    // the new binding is pushed, the previous owned `unique` binding with this name
-    // loses its last accessible owner. Drop it now and mark it moved so scope exit does
-    // not release it again. Copyable shadows intentionally keep their old scope-exit
-    // lifetime.
-    inout fn dropShadowedUnique(c: inout Comp, nameStart: U64, nameLen: U64) {
-        val li: U64 = self.findLocal(c: inout c, start: nameStart, len: nameLen)
-        if li >= self.nLocals {
-            return
-        }
-        if !(self.locOwned[li]) {
-            return
-        }
-        if self.locMoved[li] {
-            return
-        }
-        if self.localIsUnique(c: inout c, li: li) {
-            self.emitDeinitCall(c: inout c, li: li)
-            self.locMoved[li] = true
-        }
-    }
-}
-
-pub impl LlvmCtx {
-
-    // The value-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned, 4 float) of an
-    // expression — a pure PROJECTION of the typed-IR store (exprTypeRef = the frontend's
-    // recorded type grounded under the body's instance env), the same single type
-    // authority every other backend read uses. This RETIRED a ~245-line per-form
-    // re-derivation (the twin of the deleted exprTypeRefArm): the store projection was
-    // validated corpus-wide as a drop-in (normalized IR byte-identical on every run/panic
-    // test and the self-compile), while the per-form arm mis-kinded several forms the
-    // projection gets right (a for-binding over a signed range tagged unsigned,
-    // `xs.removeLast()` element results tagged int).
-    inout fn valueKind(c: inout Comp, id: U64) -> U64 {
-        mut val r: U64 = self.exprTypeRef(c: inout c, id: id)
-        if r == 0U64 {
-            return 0U64
-        }
-        if r >= c.arena.typeCount() {
-            return 0U64
-        }
-        // arrays carry their ELEMENT's kind (kind-3 span convention: an array
-        // local/param kind tags the element for element ops)
-        if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: r).nameStart, len: c.arena.typeAt(index: r).nameLen, kw: "Array") {
-            if c.arena.typeAt(index: r).args.count() == 1U64 {
-                r = c.arena.typeAt(index: r).args[0]
-            }
-        }
-        return kindFromTySpan(c: inout c, tyStart: c.arena.typeAt(index: r).nameStart, tyLen: c.arena.typeAt(index: r).nameLen)
-    }
-
-    // Index of the live local matching (start,len) by content, searched from the most
-    // recent so a shadowing declaration wins. Returns st.nLocals if not found.
-    inout fn findLocal(c: inout Comp, start: U64, len: U64) -> U64 {
-        mut val i: U64 = self.nLocals
-        while i > 0 {
-            i -= 1
-            if spansEqual(c: inout c, aStart: self.locStart[i], aLen: self.locLen[i], bStart: start, bLen: len) {
-                return i
-            }
-        }
-        return self.nLocals
-    }
-
-    // Locate the local whose DECLARATION source offset is `declStart` — the resolver-decided
-    // binding (recordIdent records this unique per-declaration key in typeCache.identTarget).
-    // The local's locStart IS its declaration's nameStart (pushLocal stores it), so this
-    // resolves to exactly the declaration the name-resolution pass chose, independent of
-    // shadowing by same-named locals. Reverse scan (innermost first), matching findLocal.
-    // Returns nLocals if absent (e.g. a global not in this frame) — the caller falls back.
-    inout fn findLocalByDeclStart(declStart: U64) -> U64 {
-        mut val i: U64 = self.nLocals
-        while i > 0 {
-            i -= 1
-            if self.locStart[i] == declStart {
-                return i
-            }
-        }
-        return self.nLocals
-    }
 }

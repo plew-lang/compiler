@@ -112,3 +112,10 @@ function = Path('src/Backend/Llvm/Any.pw').read_text().split('inout fn genLlvmFu
 for source in (entry, function):
     assert not re.search(r'\b(genLlvmBlock|genLlvmStmt|genLlvmExpr)\(', source), 'executable entry reopened an AST path'
 PYENTRY
+
+# No source expression/statement interpreter or draft Mid LLVM emitter remains.
+# This covers helper files as well as the public executable entry points.
+if rg -n '\b(genLlvmExpr|genLlvmStmt|genLlvmBlock|genLlvmMidBody|dropScope)\s*\(' src/Backend; then
+    echo 'legacy semantic LLVM consumer remains' >&2
+    exit 1
+fi

@@ -1,29 +1,5 @@
-// Part of the Plew compiler module (root: _.pw). The code-emission backend: walk
-// the analyzed arena `runFrontend()` produces and build a real LLVM module in
-// process through libLLVM-C (spec/15 FFI). The compiler links libLLVM (only this
-// part references it) and emits the module as text via LLVMPrintModuleToString ->
-// stdout, linked against a small C runtime emitted by `plewc --runtime`
-// (PlewString / plew_* are the ABI the generated IR targets).
-//
-// COVERAGE: the entry module's `main` + plain free functions (params, returns,
-// recursion, default args, lexical scope/shadowing); width-accurate integers
-// (i8/i16/i32/i64 with sext/zext/trunc coercion at typed sinks — literal width
-// from the suffix or the checker's semantic expression literal context; add/sub/mul/div/rem/neg are
-// overflow- and div-by-zero-checked via the `plew_<w><Op>` runtime floor, loud
-// (wrapping is opt-in via wrapping* methods); the
-// full operator set (arithmetic / bitwise / shift / unary / comparison; >> is
-// arithmetic, a logical-shift-on-unsigned TODO); Bool; String (value `{ptr,i64}`,
-// literals, ==/!=); `if`/`while`; and the intrinsics exit / write / eprint /
-// print / panic (print dispatches by the arg's type-kind to a runtime formatter).
-// A per-local type-kind tag (int/String/Bool/uint) drives String-vs-int and
-// signed-vs-unsigned decisions without c.cur.locals (which the backend doesn't
-// populate). NOT yet: structs/enums, arrays, generics, methods, closures, async,
-// ARC, multi-module user code (only module 0 is emitted). Anything unsupported is
-// rejected loudly (no silent miscompile — acceptance soundness).
-
-//
-// The emitter is split across `Llvm/` for readability (one concern per file);
-// all parts share the module scope, so the split is purely organizational.
+// LLVM emission consumes verified canonical Mid bodies and finalized physical
+// layout/call contracts. Parts own physical lowering and runtime ABI support.
 
 part ./Llvm/ValueAbi
 part ./Llvm/Types
@@ -34,24 +10,17 @@ part ./Llvm/GenericAny
 part ./Llvm/Locals
 part ./Llvm/StringOps
 part ./Llvm/Arith
-part ./Llvm/Expr
-part ./Llvm/ExprControl
 part ./Llvm/Arrays
 part ./Llvm/ArrayOps
-part ./Llvm/Iter
 part ./Llvm/CallBasic
 part ./Llvm/CallExt
-part ./Llvm/CallMethod
 part ./Llvm/CallGeneric
 part ./Llvm/AssocFns
 part ./Llvm/ProvidedFns
 part ./Llvm/GenMethods
 part ./Llvm/Closures
-part ./Llvm/Thunks
 part ./Llvm/Any
-part ./Llvm/Stmt
 part ./Llvm/StmtMatch
-part ./Llvm/StmtFor
 part ./Llvm/StmtDeinit
 part ./Llvm/Entry
 part ./Llvm/Mid

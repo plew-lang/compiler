@@ -377,9 +377,6 @@ struct LlvmCtx {
     pub mut val closures: Array[LlvmClosure]
     // Legacy named-function-value thunks. Kept empty in v1: a named function declaration is
     // not a value, so first-class functions must be explicit closure literals.
-    pub mut val thunkIdx: Array[U64]
-    pub mut val thunkVal: Array[LLVMValueRef]
-    pub mut val thunkTy: Array[LLVMTypeRef]
     // per-struct drop (deinit) witnesses, keyed by struct index (parallel arrays):
     // ONE `void @pwdrop<sidx>(structVal)` function emits the recursive destruction
     // (own deinit + field walk) for that struct type, so every drop site emits a
@@ -622,22 +619,6 @@ extern(c) {
 
 part ./Backend/Llvm
 
-// ---- relocated free helpers (were in parts; kept at module root so parts are impl-only) ----
-
-fn paramLabelsEqual(c: inout Comp, a: FuncParamRange, b: FuncParamRange) -> Bool {
-    if a.count() != b.count() {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count() {
-        if c.funcParamAt(params: a, index: i).nameId != c.funcParamAt(params: b, index: i).nameId {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
 // ---- checked arithmetic (overflow / divide-by-zero panic) ----
 //
 // add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
@@ -660,15 +641,6 @@ fn checkedOpName(op: I64) -> Array[U8] {
     if op == opMul() { return "Mul".bytes() }
     if op == opDiv() { return "Div".bytes() }
     return "Rem".bytes()
-}
-
-// 0..4 op index for a checked binary op (Add/Sub/Mul/Div/Rem), for nameId.
-fn checkedOpIdx(op: I64) -> U64 {
-    if op == opAdd() { return 0U64 }
-    if op == opSub() { return 1U64 }
-    if op == opMul() { return 2U64 }
-    if op == opDiv() { return 3U64 }
-    return 4U64
 }
 
 // "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
@@ -702,64 +674,6 @@ fn checkedFnName(op: I64, unsigned: Bool, wi: U64) -> String {
     return stringFromBytesUnchecked(b)
 }
 
-// A stable, collision-free getOrDeclare id for a checked helper (base 9000;
-// op*8 + sign*? + width keeps the 48 binop slots distinct; Neg uses 9100+wi).
-fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
-    mut val sgn: U64 = 0U64
-    if unsigned { sgn = 4U64 }
-    return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
-}
-
-// Whether an expression's value ALIASES existing storage (reads a live place) —
-// vs producing a freshly-owned value. THE single aliasing gate for the ARC copy
-// cluster (consumeIntoOwned and friends): copying an aliasing value must make the
-// new owner independent (retain / CoW-share / deep-copy); a fresh value (literal,
-// call/append result, construction) already owns itself and must NOT be re-owned.
-//
-// This is deliberately a DIFFERENT question from the frontend's `exprIsPlace`
-// (lvalue-ness for inout/assignment targets): a cast `x as T` or a view `x#Ext`
-// is not an assignable place, but its VALUE is the same storage as `x` — a
-// representation no-op must be transparent to ownership. Conversely `move x`
-// transfers ownership (the source's drop is suppressed), so the moved value is
-// fresh by construction. Replaces the three drifted per-class siblings
-// (any/array/structExprIsPlace: Ident/Field[/Index] only — the missing
-// Arrow/Deref/Cast arms were live UAF/double-free classes, review/12 §1).
-fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        // a field projection is a place ONLY when its base is: `s.name` aliases the
-        // binding's storage, but `f().name` / `xs[i].name` projects out of an owned
-        // TEMPORARY — the emission homes the temp and retains the projected value
-        // (Expr.Field arm), so the consumer must treat it as owned, not borrowed.
-        Expr.Field(val base, nameStart: _, nameLen: _) => { return exprAliasesPlace(c: inout c, id: base) }
-        // an element READ `outer[i]` is NOT a place alias: it routes through the
-        // `index`/`get`/`at` witness (spec/12, collections.md E3), whose return
-        // already RETAINED an ARC element (buffer-floor.md §4) — the value arrives
-        // as an owned (+1) temporary. Answering `true` here (the pre-witness raw-
-        // load era) made every consumer treat it as a borrow: a bind/store retained
-        // a SECOND count and a sink arg homed nothing — one leaked count per read.
-        // (Index as a WRITE place goes through placePtrStrict, not this predicate.)
-        Expr.Index(base: _, index: _) => { return false }
-        // pointee reads through a Ref cell: the value lives in the cell — a second
-        // owner must retain/copy it (binding `r->xs` without a copy was a UAF).
-        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
-        Expr.Deref(base: _) => { return true }
-        // representation no-ops: the value IS the operand's storage.
-        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return exprAliasesPlace(c: inout c, id: operand) }
-        Expr.ExtView(val recv, source: _, strip: _) => { return exprAliasesPlace(c: inout c, id: recv) }
-        // `borrow x` is BY DEFINITION an alias of x's storage (a non-consuming view —
-        // classifying it as a temporary gave a borrowed unique arg a second owner =
-        // double deinit); `move x` transfers a fresh-owned value (the source dies).
-        Expr.Move(val operand, val isBorrow) => {
-            if isBorrow {
-                return exprAliasesPlace(c: inout c, id: operand)
-            }
-            return false
-        }
-        _ => { return false }
-    }
-}
-
 fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
     return c.arena.functionAt(index: fi).isAsync
 }
@@ -783,71 +697,6 @@ fn llvmIntUle() -> U32 { return 37U32 }
 fn llvmIntUgt() -> U32 { return 34U32 }
 
 fn llvmIntUge() -> U32 { return 35U32 }
-
-// Whether two parameter lists have the same type-name heads (ignoring views) —
-// i.e. they are the same overload signature differing only by a `#Ext` view.
-fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count() != b.count() {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count() {
-        if a[i].tyNameId != b[i].tyNameId {
-            return false
-        }
-        if a[i].tyIsArray != b[i].tyIsArray {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
-// Emit a call argument for a parameter `p`: an array-literal arg is built with the
-// parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
-// i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
-// Whether (start,len) names a concrete value type (struct / enum / newtype /
-// primitive) — as opposed to a bare generic type parameter. A generic parameter
-// absorbs a `#`-view argument via inference (`T` binds to `S#P`), so the view-
-// invariance check below must not fire on it.
-fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
-    if c.isPrimType(start: start, len: len) {
-        return true
-    }
-    if c.structIndexByName(start: start, len: len) < c.arena.structCount() {
-        return true
-    }
-    if c.isEnumName(start: start, len: len) {
-        return true
-    }
-    val qid: U64 = intern(c: inout c, start: start, len: len)
-    mut val nti: U64 = 0
-    while nti < c.arena.newtypeCount() {
-        if c.arena.newtypeAt(index: nti).nameId == qid {
-            return true
-        }
-        nti += 1
-    }
-    return false
-}
-
-// Whether the local named (start,len) is captured by some closure as a boxed
-// (`mut val`, shared-cell) capture — so its storage must be a heap cell that
-// outlives the declaring scope (Swift-style reference capture).
-fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count() {
-        if c.monoWork.captures[i].boxed {
-            if spansEqual(c: inout c, aStart: c.monoWork.captures[i].nameStart, aLen: c.monoWork.captures[i].nameLen, bStart: start, bLen: len) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
-
 
 export fn emitLlvm(c: inout Comp) {
     tracePhase(c: inout c, label: "backend:emit:start")
@@ -891,7 +740,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[] genMethOwnArgs=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
@@ -986,7 +835,6 @@ export fn emitLlvm(c: inout Comp) {
     // lambda-lifted closure bodies. Named-function-value thunks stay empty in v1 because
     // named declarations are not first-class values.
     st.emitClosures(c: inout c)
-    st.emitThunks(c: inout c)
     tracePhase(c: inout c, label: "backend:closures-thunks:done")
     // provided trait methods + lazily-declared std/generic methods reached during
     // the passes above. Both queues can grow as bodies emit (a provided body calls
@@ -1097,212 +945,11 @@ fn globalSymbol(idx: U64) -> String {
     return stringFromBytesUnchecked(s)
 }
 
-// If field `f` is of array type — declared `Array[E]`, or a type param that
-// grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
-// Whether field `f` is a `Buffer[T]` (the rc-managed storage floor) held by value — a
-// struct field of Buffer type (C2: Dictionary/Set hold their dense/index buffers this way).
-// A Buffer field is NOT `tyIsArray` (its declared type is `Buffer[...]`, not `Array[...]`),
-// so the array-field ARC paths must check this in parallel. The grounded type is consulted
-// so a generic field param grounding to `Buffer` (under the active env) is recognized too.
-fn fieldIsBufferType(c: inout Comp, f: FieldDef) -> Bool {
-    if f.tyIsArray {
-        return false
-    }
-    if f.ty == 0U64 {
-        return false
-    }
-    // a name check on the DECLARED type (no grounding): a Buffer field is declared
-    // `Buffer[...]` (name "Buffer") directly — Dict/Set hold `Buffer[K]` etc. explicitly,
-    // never via a bare type param. Crucially this avoids calling groundTypeRef from the
-    // hot, recursive structNeedsDeinit (which can re-enter type resolution and overflow).
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "Buffer")
-}
-
-// A strong reference-cell field: declared `Ref[...]` or `MutableRef[...]` directly. Its cell carries a strong
-// rc that must be released at the owning struct's drop (the cell is an extern opaque
-// pointer, so the struct field-recursion in structNeedsDeinit / the drop witness can't
-// descend into it — reference cells are handled explicitly, like Buffer). Name check on the DECLARED
-// type (no grounding) to stay safe inside the recursive structNeedsDeinit.
-fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
-    if f.tyIsArray {
-        return false
-    }
-    if f.ty == 0U64 {
-        return false
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "Ref") {
-        return true
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "MutableRef")
-}
-
-// A weak reference-cell field: declared `WeakRef[...]` or `WeakMutableRef[...]` directly. It owns one WEAK
-// count on its shared cell, released (weak--; free iff strong also 0) at the owning struct's
-// drop. Like Ref, the cell is an extern opaque pointer the struct field-recursion can't
-// descend into, so it is handled explicitly. A name check (no grounding) keeps it safe inside
-// the recursive structNeedsDeinit, and weakRelease needs only the cell (no pointee type).
-fn fieldIsWeakRefType(c: inout Comp, f: FieldDef) -> Bool {
-    if f.tyIsArray {
-        return false
-    }
-    if f.ty == 0U64 {
-        return false
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "WeakRef") {
-        return true
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.typeAt(index: f.ty).nameStart, len: c.arena.typeAt(index: f.ty).nameLen, kw: "WeakMutableRef")
-}
-
-// The (grounded) `Ref[T]` instance TypeRef of a Ref field — for emitRefRelease's pointee
-// deinit dispatch. Grounds under the active env so a `Ref[T]` field in a generic struct
-// resolves its concrete pointee. 0 if the field is not a Ref.
-fn refFieldTypeRef(c: inout Comp, f: FieldDef) -> U64 {
-    if !(fieldIsRefType(c: inout c, f: f)) {
-        return 0U64
-    }
-    if c.cur.typeParams.count() > 0U64 {
-        return c.groundTypeRef(ref: f.ty)
-    }
-    return f.ty
-}
-
-// The grounded `Ref[T]` instance TypeRef of a field IF it grounds to a Ref under the active
-// env, else 0 — unlike fieldIsRefType / refFieldTypeRef (which name-check the DECLARED type
-// first), this GROUNDS first, so a generic enum/struct payload declared as a bare type param
-// (`Optional.Some(v: T)` with T -> Ref[Cell]) is recognised. Used by the enum ARC walks so a
-// `Ref` payload reached only through a type-param grounding is retained/released exactly.
-fn fieldGroundedRefTy(c: inout Comp, f: FieldDef) -> U64 {
-    if f.tyIsArray {
-        return 0U64
-    }
-    if f.ty == 0U64 {
-        return 0U64
-    }
-    mut val g: U64 = f.ty
-    if c.cur.typeParams.count() > 0U64 {
-        g = c.groundTypeRef(ref: f.ty)
-    }
-    if c.isStrongRefInst(ref: g) {
-        return g
-    }
-    return 0U64
-}
-
-// Like fieldGroundedRefTy but for `WeakRef[T]`: grounds the field type (so a type-param
-// payload `v: T` in `Optional[WeakRef[Cell]]` resolves to its concrete WeakRef instance)
-// and returns it if a WeakRef instance, else 0. Used by the enum-payload WeakRef ARC walks.
-fn fieldGroundedWeakTy(c: inout Comp, f: FieldDef) -> U64 {
-    if f.tyIsArray {
-        return 0U64
-    }
-    if f.ty == 0U64 {
-        return 0U64
-    }
-    mut val g: U64 = f.ty
-    if c.cur.typeParams.count() > 0U64 {
-        g = c.groundTypeRef(ref: f.ty)
-    }
-    if c.isWeakRefLikeInst(ref: g) {
-        return g
-    }
-    return 0U64
-}
-
-// The element TypeRef of a `Buffer[T]` field (T), or 0 — for the element-cascade in the
-// field ARC paths (Array and Buffer fields are rep-identical, so they share the cascade).
-fn bufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
-    if !(fieldIsBufferType(c: inout c, f: f)) {
-        return 0U64
-    }
-    mut val g: U64 = f.ty
-    if c.cur.typeParams.count() > 0U64 {
-        g = c.groundTypeRef(ref: f.ty)
-    }
-    val t: TypeRef = c.arena.typeAt(index: g)
-    if t.args.count() > 0U64 {
-        return t.args[0]
-    }
-    return 0U64
-}
-
-// The element ref for a field that owns an rc-managed buffer — an `Array[E]` field or a
-// `Buffer[E]` field (both are a single rawbuf pointer). 0 if the field owns no such buffer.
-// The companion gate is `f.tyIsArray || fieldIsBufferType(f)` (the buffer is released/
-// retained even when E is a scalar, i.e. when this returns 0 for a scalar element).
-fn arrayOrBufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
-    val ae: U64 = arrayFieldElemRef(c: inout c, f: f)
-    if ae != 0U64 {
-        return ae
-    }
-    return bufferFieldElemRef(c: inout c, f: f)
-}
-
-fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
-    // A syntactic Array[T] field still belongs to its owner's instance.
-    // Classifying the declaration's bare T would skip element destruction.
-    val grounded: U64 = c.arcFieldTy(f: f)
-    if grounded == 0U64 || grounded >= c.arena.typeCount() { return 0U64 }
-    val fieldType: TypeRef = c.arena.typeAt(index: grounded)
-    if fieldType.args.count() != 1U64 { return 0U64 }
-    if f.tyIsArray || rangeEquals(bytes: c.arena.bytes, start: fieldType.nameStart, len: fieldType.nameLen, kw: "Array") { return fieldType.args[0U64] }
-    return 0U64
-}
-
-// (diagnostic) A source span as a String — for the "unsupported" error messages
-// (exprFormName) that name the offending identifier/field/call.
-fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
-    mut val nm: Array[U8] = []
-    mut val j: U64 = start
-    while j < start + len {
-        nm.append(c.arena.bytes[j])
-        j += 1
-    }
-    return stringFromBytesUnchecked(nm)
-}
-
-// (diagnostic) The name of an expression's arena variant.
-fn exprFormName(c: inout Comp, id: U64) -> String {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: val s, len: val l) => { return dbgSpan(c: inout c, start: s, len: l) }
-        Expr.Field(base: _, val nameStart, val nameLen) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
-        Expr.Call(val nameStart, val nameLen, args: _) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
-        _ => { return exprFormName2(c: inout c, id: id) }
-    }
-}
-
-fn exprFormName2(c: inout Comp, id: U64) -> String {
-    match c.arena.exprs[id] {
-        Expr.Index(base: _, index: _) => { return "Index" }
-        Expr.Array(elems: _) => { return "Array" }
-        Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
-        Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
-        Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return "IfExpr" }
-        Expr.OptChain(base: _, cont: _) => { return "OptChain" }
-        Expr.ChainHole => { return "ChainHole" }
-        Expr.Try(expr: _) => { return "Try" }
-        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return "Arrow" }
-        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return "Closure" }
-        Expr.Move(operand: _, isBorrow: _) => { return "Move" }
-        Expr.Await(operand: _) => { return "Await" }
-        _ => { return "other" }
-    }
-}
-
 fn refIsAny(c: inout Comp, ref: U64) -> Bool {
     if ref < c.arena.typeCount() {
         return c.arena.typeAt(index: ref).isAny
     }
     return false
-}
-
-// Is this type name a fixed-width primitive integer (the operator-witness owners).
-fn isPrimIntName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
-    return isUnsignedName(c: inout c, start: start, len: len)
 }
 
 // Is this type name an unsigned integer (for choosing signed vs unsigned ops /
@@ -1313,38 +960,6 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
     return false
-}
-
-// The declared index of field (start,len) in struct sidx, or sd.fields.count().
-fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
-    val sd: StructDef = c.arena.structAt(index: sidx)
-    mut val i: U64 = 0
-    while i < sd.fields.count() {
-        if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
-            return i
-        }
-        i += 1
-    }
-    return sd.fields.count()
-}
-
-// If field `fld` is a (non-array) generic-instance type by value, its grounded
-// instance TypeRef (under the active env), else 0. Used at assignment sites to set
-// st.expectedTy so an un-suffixed RHS construction (`b.a = <Optional.Some v=9 />`)
-// infers the instance's type args, mirroring genFieldValue at construction.
-// Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
-// nested generic construct's env onto the enclosing one — e.g. building
-// `<Optional.Some v=self.f(x:v) />` inside a monomorphized `MapIter.next`: the
-// field type `T` resolves via Optional's params while the payload sub-expression
-// `self.f` resolves via MapIter's (the outer env). Disjoint names, so first-match
-// in groundTypeRef picks the right one; same length so args pair 1:1.
-fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
-    mut val r: Array[Bind] = []
-    mut val i: U64 = 0
-    while i < add.count() { r.append(add[i])  i += 1 }
-    mut val j: U64 = 0
-    while j < base.count() { r.append(base[j])  j += 1 }
-    return r
 }
 
 fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
@@ -1677,8 +1292,6 @@ fn anon() -> CPtr[U8] {
     return cString("")
 }
 
-
-
 // ---- string literals ----
 //
 // Decode one C-style escape (the byte after a backslash) to its actual byte.
@@ -1766,7 +1379,6 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
     out.append(0)
     return out
 }
-
 
 // Whether a struct is registerable as a named LLVM value type in this increment:
 // non-generic, non-extern, non-unique, and every field is either an array (the
