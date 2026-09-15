@@ -714,7 +714,7 @@ fn instantiateCanonicalNonCallTerminator(c: inout Comp, bodyId: U64, terminatorI
         7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.value, environment: environment, itemRef: itemRef) />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
-        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=source.state resume=source.resume />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=source.state resume=source.resume exprId=source.exprId value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.value, environment: environment, itemRef: itemRef) destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, itemRef: itemRef) />) }
         _ => { return false }
     }
     return true
@@ -1041,7 +1041,30 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
         7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.value, environment: environment, itemRef: itemRef) />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
-        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalRemapTarget(targets: targets, target: term.resume) />) }
+        10U64 => {
+            val awaitIndex: U64 = c.finalAwaitIndex(bodyId: bodyId, exprId: term.exprId)
+            if awaitIndex >= c.arena.finalAwaits.count() {
+                error = <MidInstantiateError.MissingFinalResolution />
+                return false
+            }
+            val fact = c.arena.finalAwaits[awaitIndex]
+            val promise: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: term.value, environment: environment, itemRef: itemRef)
+            val destination: U64 = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: term.destination, environment: environment, itemRef: itemRef)
+            if promise == 0U64 || destination == 0U64 {
+                error = <MidInstantiateError.InvalidFinalResolution />
+                return false
+            }
+            val operand = c.mid.operands[promise - 1U64]
+            if operand.tag != 3U64 || operand.capability != 1U64 || operand.place == 0U64 {
+                error = <MidInstantiateError.InvalidFinalResolution />
+                return false
+            }
+            if !c.typeRefEq(a: c.mid.places[operand.place - 1U64].typeTerm, b: fact.promiseTypeRef) || !c.typeRefEq(a: c.mid.places[destination - 1U64].typeTerm, b: fact.resultTypeRef) {
+                error = <MidInstantiateError.InvalidFinalResolution />
+                return false
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalRemapTarget(targets: targets, target: term.resume) exprId=term.exprId value=promise destination=destination />)
+        }
         _ => { return false }
     }
     return true
@@ -1841,7 +1864,7 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         MidTerminator.Panic(message: val message) => { return <MidTerminator.Panic message=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: message, environment: environment, itemRef: itemRef) /> }
         MidTerminator.Unreachable => { return <MidTerminator.Unreachable /> }
         MidTerminator.Abort => { return <MidTerminator.Abort /> }
-        MidTerminator.Suspend(state: val state, resume: val resume) => { return <MidTerminator.Suspend state=state resume=resume /> }
+        MidTerminator.Suspend(state: val state, resume: val resume, exprId: val exprId, promise: val promise, destination: val destination) => { return <MidTerminator.Suspend state=state resume=resume exprId=exprId promise=instantiateMidOperand(c: inout c, bodyId: bodyId, operand: promise, environment: environment, itemRef: itemRef) destination=instantiateMidPlace(c: inout c, bodyId: bodyId, place: destination, environment: environment, itemRef: itemRef) /> }
     }
 }
 

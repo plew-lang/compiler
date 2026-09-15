@@ -419,7 +419,7 @@ fn canonicalAccessCopyTerminator(c: inout Comp, body: MidBodyNode, terminatorId:
         7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=term.value />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
-        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalAccessRemapTarget(c: c, body: body, target: term.resume) />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalAccessRemapTarget(c: c, body: body, target: term.resume) exprId=term.exprId value=term.value destination=term.destination />) }
         _ => { return 0U64 }
     }
     return c.mid.terminators.count()

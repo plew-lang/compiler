@@ -559,7 +559,7 @@ fn midBlockHasIncoming(state: MidBuildState, target: U64) -> Bool {
                 if okTarget == target || errTarget == target { return true }
             }
             MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val edge) => { if edge == target { return true } }
-            MidTerminator.Suspend(state: _, resume: val edge) => { if edge == target { return true } }
+            MidTerminator.Suspend(state: _, resume: val edge, exprId: _, promise: _, destination: _) => { if edge == target { return true } }
             _ => {}
         }
         block += 1U64
@@ -1125,6 +1125,26 @@ fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U6
 // tag/payload read, and an explicit conversion call edge.  Instantiation is
 // the sole point that reads FinalTryResolution to select the concrete Result
 // slots and either resolve `from` or erase the identity conversion.
+// Evaluation creates an owned Promise home before the suspension edge. The
+// completion copy initializes its own result home; neither operation consumes
+// the caller's Promise binding. Ordinary scope cleanup owns both temporaries.
+fn materializeMidAwait(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
+    val promiseTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
+    if promiseTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    val input = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: operandExpr, typeTerm: promiseTerm, allowAccessMarker: false)
+    match input.error { MidBuildError.None => {} _ => { return input } }
+    if !midCurrentBlockIsOpen(state: state) { return input }
+    val promiseLocal: U64 = addMidTemporary(state: inout state, typeTerm: promiseTerm)
+    val promise: MidPlace = <MidPlace local=promiseLocal typeTerm=promiseTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=promise value=<MidRvalue.Use operand=input.operand /> />)
+    val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: resultTerm)
+    val result: MidPlace = <MidPlace local=resultLocal typeTerm=resultTerm />
+    val resume: U64 = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Suspend state=resume resume=resume exprId=exprId promise=<MidOperand.Borrow place=promise capability=<MidBorrowCapability.Read /> /> destination=result />)
+    state.currentBlock = resume
+    return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
+}
+
 fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, operandExpr: U64, resultTerm: U64) -> MidOperandBuild {
     val operandResultTerm: U64 = c.semanticExprTerm(exprId: operandExpr)
     if operandResultTerm == 0U64 || operandResultTerm >= c.arena.typeCount() || resultTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=resultTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
@@ -1334,6 +1354,9 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                 MidBuildError.None => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> /> }
                 _ => { return <MidOperandBuild operand=<MidOperand.Copy place=resultPlace /> error=lowered /> }
             }
+        }
+        Expr.Await(operand: val operandExpr) => {
+            return materializeMidAwait(c: inout c, state: inout state, exprId: exprId, operandExpr: operandExpr, resultTerm: typeTerm)
         }
         Expr.Try(expr: val operandExpr) => {
             return materializeMidTry(c: inout c, state: inout state, exprId: exprId, operandExpr: operandExpr, resultTerm: typeTerm)

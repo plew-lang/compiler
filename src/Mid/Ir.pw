@@ -212,7 +212,7 @@ export struct MidTerminatorNode {
     pub val destination: U64 = 0U64
     pub val state: U64 = 0U64
     pub val resume: U64 = 0U64
-    // ReturnValue and Panic use this one-based operand ID.  Keeping it named
+    // ReturnValue, Panic, and Suspend use this one-based operand ID.  Keeping it named
     // avoids overloading Switch's discriminant with an unrelated role.
     pub val value: U64 = 0U64
     // Canonical call identities are owner-specific pools, not an enum payload
@@ -673,7 +673,10 @@ export enum MidTerminator {
     Panic(message: MidOperand)
     Unreachable
     Abort
-    Suspend(state: U64, resume: U64)
+    // Borrow the retained Promise and initialize destination with a copy of
+    // its completion result on the resume edge. exprId selects frozen await
+    // facts; suspension itself never transfers the Promise owner.
+    Suspend(state: U64, resume: U64, exprId: U64, promise: MidOperand, destination: MidPlace)
 }
 
 export struct MidBlock {
@@ -1067,7 +1070,7 @@ fn midFreezeTerminator(arena: inout MidCanonicalArena, callArgumentProjections: 
         MidTerminator.Panic(message: val message) => { arena.terminators.append(<MidTerminatorNode tag=7U64 value=midFreezeOperand(arena: inout arena, operand: message) />) }
         MidTerminator.Unreachable => { arena.terminators.append(<MidTerminatorNode tag=8U64 />) }
         MidTerminator.Abort => { arena.terminators.append(<MidTerminatorNode tag=9U64 />) }
-        MidTerminator.Suspend(state: val state, resume: val resume) => { arena.terminators.append(<MidTerminatorNode tag=10U64 state=state resume=resume />) }
+        MidTerminator.Suspend(state: val state, resume: val resume, exprId: val exprId, promise: val promise, destination: val destination) => { arena.terminators.append(<MidTerminatorNode tag=10U64 state=state resume=resume exprId=exprId value=midFreezeOperand(arena: inout arena, operand: promise) destination=midFreezePlace(arena: inout arena, place: destination) />) }
     }
     return arena.terminators.count()
 }
@@ -1253,6 +1256,11 @@ export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanoni
         if terminator.callTarget != 0U64 && terminator.callTarget > arena.callTargets.count() { return false }
         if terminator.callReceiver != 0U64 && terminator.callReceiver > arena.callReceivers.count() { return false }
         if terminator.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: terminator.destination) { return false }
+        if terminator.tag == 10U64 {
+            if terminator.value == 0U64 || terminator.destination == 0U64 || terminator.resume >= node.blocks.len { return false }
+            val promise = arena.operands[terminator.value - 1U64]
+            if promise.tag != 3U64 || promise.capability != 1U64 { return false }
+        }
         if terminator.tag == 11U64 || terminator.tag == 12U64 {
             if !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.discriminant) || terminator.target >= node.blocks.len || terminator.otherwise >= node.blocks.len { return false }
         } else if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }

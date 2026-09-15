@@ -627,7 +627,19 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             }
             if !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         }
-        if term.tag == 10U64 && !canonicalMidTargetIsValid(body: body, target: term.resume) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+        if term.tag == 10U64 {
+            if !canonicalMidTargetIsValid(body: body, target: term.resume) || term.value == 0U64 || term.value > c.mid.operands.count() || term.destination == 0U64 || term.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+            val promise = c.mid.operands[term.value - 1U64]
+            if promise.tag != 3U64 || promise.capability != 1U64 || promise.place == 0U64 || promise.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
+            val owner = c.mid.places[promise.place - 1U64]
+            if owner.rootTag != 1U64 || owner.projections.len != 0U64 || owner.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
+            match states[owner.local] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=owner.local /> } }
+            val destination = c.mid.places[term.destination - 1U64]
+            if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= states.count() || destination.local == owner.local { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+            match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> } }
+            if executable && (!canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: owner.typeTerm) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: destination.typeTerm)) { return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=blockI /> }
+            states.set(i: destination.local, value: <MidOwnership.Owned />)
+        }
         if term.tag == 6U64 || term.tag == 7U64 {
             val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.value, block: blockI, executable: executable)
             match result.error { MidVerifyError.None => {} _ => { return result } }
@@ -1029,7 +1041,19 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 }
                 if !(midTargetIsValid(body: body, target: target)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
-            MidTerminator.Suspend(state: _, resume: val resume) => {
+            MidTerminator.Suspend(state: _, resume: val resume, exprId: _, promise: val promise, destination: val destination) => {
+                match promise {
+                    MidOperand.Borrow(place: val owner, capability: _) => {
+                        if owner.rootTag != 1U64 || owner.projections.count() != 0U64 || owner.local >= states.count() || owner.local == destination.local { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi /> }
+                        match states[owner.local] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=owner.local /> } }
+                    }
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi /> }
+                }
+                val result = midVerifyConsumeOperand(body: body, states: inout states, operand: promise, block: bi)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+                if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || destination.local >= states.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+                match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=destination.local /> } }
+                states.set(i: destination.local, value: <MidOwnership.Owned />)
                 if !(midTargetIsValid(body: body, target: resume)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
             MidTerminator.ReturnValue(value: val value) => {

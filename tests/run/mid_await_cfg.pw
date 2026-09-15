@@ -1,0 +1,72 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
+import /Mid with { buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val promiseName = compiler.internBytes(s: "Promise")
+    val promise = compiler.pushType(t: <TypeRef nameStart=promiseName.nameStart nameLen=promiseName.nameLen args=[integer] />)
+    val parameterName = compiler.internBytes(s: "value")
+    val parameters = compiler.pushFuncParams(params: [<Param nameStart=parameterName.nameStart nameLen=parameterName.nameLen tyStart=integerName.nameStart tyLen=integerName.nameLen tyIsArray=false ty=promise isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0U64 />])
+    compiler.arena.exprs.append(<Expr.Ident start=parameterName.nameStart len=parameterName.nameLen />)
+    compiler.arena.exprs.append(<Expr.Await operand=0U64 />)
+    compiler.arena.semanticExprTypes.append(<SemanticExprType term=promise />)
+    compiler.arena.semanticExprTypes.append(<SemanticExprType term=integer />)
+    compiler.typeCache.identBind.append(identValueCode())
+    compiler.typeCache.identTarget.append(parameterName.nameStart)
+    compiler.arena.stmts.append(<Stmt.ExprStmt expr=1U64 />)
+    compiler.arena.blockStmtPool.append(0U64)
+    compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />)
+    val built = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
+    match built.error { MidBuildError.None => {} _ => { assert(false) } }
+    val node = compiler.mid.bodies[built.canonical.body - 1U64]
+    assert(node.blocks.len == 2U64)
+    val suspend = compiler.mid.terminators[compiler.mid.blocks[node.blocks.start].terminator - 1U64]
+    assert(suspend.tag == 10U64)
+    assert(suspend.resume == 1U64)
+    assert(suspend.exprId == 1U64)
+    val borrowed = compiler.mid.operands[suspend.value - 1U64]
+    assert(borrowed.tag == 3U64)
+    assert(compiler.mid.places[borrowed.place - 1U64].local != 0U64)
+    val bodyId = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    compiler.arena.setBodySignature(bodyId: bodyId, parameters: [promise], result: 0U64)
+    // A correctly typed-looking local is not a substitute for the frozen fact.
+    val missing = instantiateCanonicalMidBody(c: inout compiler, body: built.canonical, bodyId: bodyId)
+    match missing.error { MidInstantiateError.MissingFinalResolution => {} _ => { assert(false) } }
+    compiler.putFinalAwait(fact: <FinalAwaitResolution bodyId=bodyId exprId=1U64 operandExprId=0U64 promiseTypeRef=promise resultTypeRef=integer />)
+    val grounded = instantiateCanonicalMidBody(c: inout compiler, body: built.canonical, bodyId: bodyId)
+    match grounded.error { MidInstantiateError.None => {} _ => { assert(false) } }
+    val access = elaborateCanonicalMidAccesses(c: inout compiler, canonical: grounded.body)
+    match access.error { MidAccessError.None => {} _ => { assert(false) } }
+    val dropped = elaborateCanonicalMidDrops(c: inout compiler, canonical: access.body)
+    val checked = verifyCanonicalMidBody(c: inout compiler, canonical: dropped)
+    match checked.error { MidVerifyError.None => {} _ => { assert(false) } }
+    // A Read borrow of a copyable Promise must not revive an owner that was
+    // dropped before suspension. Keep the rest of the verified body unchanged.
+    val finalBody = compiler.mid.bodies[dropped.body - 1U64]
+    val original = compiler.mid.blocks[finalBody.blocks.start]
+    val waiting = compiler.mid.terminators[original.terminator - 1U64]
+    val owner = compiler.mid.operands[waiting.value - 1U64].place
+    val start: U64 = compiler.mid.statements.count()
+    mut val index: U64 = 0U64
+    while index < original.statements.len {
+        compiler.mid.statements.append(compiler.mid.statements[original.statements.start + index])
+        index += 1U64
+    }
+    compiler.mid.statements.append(<MidStatementNode tag=3U64 destination=owner />)
+    compiler.mid.blocks.set(i: finalBody.blocks.start, value: <MidBlockNode statements=<MidRange start=start len=original.statements.len + 1U64 /> terminator=original.terminator />)
+    val consumed = verifyCanonicalMidBody(c: inout compiler, canonical: dropped)
+    match consumed.error { MidVerifyError.MoveUnavailable => {} _ => { assert(false) } }
+    compiler.mid.blocks.set(i: finalBody.blocks.start, value: original)
+    // Wrong completion type must not silently change the destination's type.
+    compiler.putFinalAwait(fact: <FinalAwaitResolution bodyId=bodyId exprId=1U64 operandExprId=0U64 promiseTypeRef=promise resultTypeRef=promise />)
+    val wrong = instantiateCanonicalMidBody(c: inout compiler, body: built.canonical, bodyId: bodyId)
+    match wrong.error { MidInstantiateError.InvalidFinalResolution => {} _ => { assert(false) } }
+    print("ok")
+}

@@ -139,7 +139,7 @@ fn canonicalMidTransferBlock(c: Comp, body: MidBodyNode, block: MidBlockNode, in
     val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
     if term.discriminant != 0U64 { canonicalMidConsumeOperand(c: c, states: inout out, operandId: term.discriminant) }
     if term.value != 0U64 { canonicalMidConsumeOperand(c: c, states: inout out, operandId: term.value) }
-    if term.tag == 4U64 {
+    if term.tag == 4U64 || term.tag == 10U64 {
         if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
             val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
             if receiver.tag == 2U64 { canonicalMidConsumeOperand(c: c, states: inout out, operandId: receiver.operand) }
@@ -334,7 +334,7 @@ fn canonicalMidAccessibilityTransfer(c: Comp, body: MidBodyNode, block: MidBlock
     val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
     if term.discriminant != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.discriminant) }
     if term.value != 0U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: term.value) }
-    if term.tag == 4U64 {
+    if term.tag == 4U64 || term.tag == 10U64 {
         if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
             val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
             if receiver.tag == 2U64 { canonicalMidMakeOperandUnavailable(c: c, states: inout out, operandId: receiver.operand) }
@@ -801,7 +801,7 @@ fn canonicalMidCopyIdentityTerminator(c: inout Comp, terminatorId: U64) -> U64 {
         7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=term.value />) }
         8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
-        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=term.resume />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=term.resume exprId=term.exprId value=term.value destination=term.destination />) }
         _ => { return 0U64 }
     }
     return c.mid.terminators.count()
@@ -1010,7 +1010,7 @@ export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody)
 
         if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
             val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
-            if term.tag == 4U64 {
+            if term.tag == 4U64 || term.tag == 10U64 {
                 if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
                     val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
                     val moved: U64 = canonicalMidMovedRoot(c: c, operandId: receiver.operand)
@@ -1280,6 +1280,10 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
         }
         MidTerminator.ForBranch(discriminant: val discriminant, stmtId: _, someTarget: _, noneTarget: _) => { midConsumeOperand(states: inout out, operand: discriminant) }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: _, errTarget: _) => { midConsumeOperand(states: inout out, operand: discriminant) }
+        MidTerminator.Suspend(state: _, resume: _, exprId: _, promise: val promise, destination: val destination) => {
+            midConsumeOperand(states: inout out, operand: promise)
+            if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
+        }
         MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
             midConsumeReceiver(states: inout out, receiver: receiver)
             mut val ai: U64 = 0U64
@@ -1326,7 +1330,7 @@ export fn midSuccessors(term: MidTerminator) -> Array[U64] {
         MidTerminator.TryBranch(discriminant: _, exprId: _, okTarget: val okTarget, errTarget: val errTarget) => { return [okTarget, errTarget] }
         MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
         MidTerminator.NormalizedCall(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
-        MidTerminator.Suspend(state: _, resume: val resume) => { return [resume] }
+        MidTerminator.Suspend(state: _, resume: val resume, exprId: _, promise: _, destination: _) => { return [resume] }
         _ => { return [] }
     }
 }
@@ -1541,6 +1545,10 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
         }
         MidTerminator.ForBranch(discriminant: val discriminant, stmtId: _, someTarget: _, noneTarget: _) => { midMakeOperandUnavailable(states: inout out, operand: discriminant) }
         MidTerminator.TryBranch(discriminant: val discriminant, exprId: _, okTarget: _, errTarget: _) => { midMakeOperandUnavailable(states: inout out, operand: discriminant) }
+        MidTerminator.Suspend(state: _, resume: _, exprId: _, promise: val promise, destination: val destination) => {
+            midMakeOperandUnavailable(states: inout out, operand: promise)
+            if midIsLocalRoot(place: destination) && destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
+        }
         MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
             match receiver { MidCallReceiver.Value(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } _ => {} }
             mut val ai: U64 = 0U64
