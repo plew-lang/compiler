@@ -26,7 +26,7 @@ ROOT=$(cd "$(dirname "$self")" && pwd)
 PLEWC="$ROOT/plewc"
 CC=${CC:-clang}
 
-[ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./bootstrap.sh first" >&2; exit 1; }
+[ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 
 usage() {
     echo "usage: plew <file.pw> [-o <out>]   |   plew build <file.pw> [-o <out>]" >&2

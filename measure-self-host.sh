@@ -1,5 +1,3 @@
 #!/bin/sh
-# Verify adjacent generations, then measure the fixed-point compiler.
-set -eu
-cd "$(dirname "$0")"
-exec python3 ./measure-self-host.py
+# Stable entry point; implementation lives with its role.
+exec sh "$(dirname "$0")/scripts/diagnostics/measure-self-host.sh" "$@"
