@@ -11,19 +11,24 @@ mid = Path("src/Backend/Llvm/Mid.pw").read_text()
 start = mid.index("inout fn midCanonicalEmitDirectCall(")
 end = mid.index("\n    inout fn ", start + 1)
 call = mid[start:end]
-for required in ["bodyId: selected.calleeBodyId", "instRef: selected.recvTypeRef", "selected.calleeTypeArgs"]:
-    if required not in call:
-        raise SystemExit(f"Mid call does not preserve the finalized method contract: {required}")
-if "findBodyInstance(" in call or "enterBodyInstance(" in call:
-    raise SystemExit("Mid call reconstructs the finalized body identity")
+if "ensureFinalGenMethodBody(c: inout c, bodyId: selected.calleeBodyId)" not in call:
+    raise SystemExit("Mid call does not consume the finalized method body")
+for forbidden in ["recvParamCount(", "copyFinalCalleeTypeArgs(", "findBodyInstance(", "enterBodyInstance("]:
+    if forbidden in call:
+        raise SystemExit(f"Mid call reconstructs the finalized body identity: {forbidden}")
 
 methods = Path("src/Backend/Llvm/GenMethods.pw").read_text()
-if "inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64)" not in methods:
-    raise SystemExit("missing canonical generic-method BodyInstance entrypoint")
-if "val ownArgs: Array[U64] = self.finalBodyMethodOwnArgs(c: inout c, f: f, environment: body.environment)" not in methods:
-    raise SystemExit("canonical generic-method entrypoint does not derive own args from BodyInstance")
-if "val instRef: U64 = body.environment.receiverRef" not in methods:
-    raise SystemExit("canonical generic-method entrypoint does not derive receiver from BodyInstance")
+for forbidden in ["bodyInstanceEnvironment(", "findBodyInstance(", "recvParamCount(", "ensureGenMethodDeclared(", "genMethOwn", "finalBodyMethodOwnArgs"]:
+    if forbidden in methods:
+        raise SystemExit(f"Method emission reconstructs specialization state: {forbidden}")
+for required in ["self.genMethBody[slot] == bodyId", "body.environment.params", "body.environment.args",
+                 "bodyId: bodyId, fv: self.genMethVal[slot]", "bodyId: bodyId, index: pi"]:
+    if required not in methods:
+        raise SystemExit(f"Method emission lost the frozen body contract: {required}")
+ordinary = Path("src/Backend/Llvm/Any.pw").read_text().split("inout fn genLlvmFuncBody(", 1)[1]
+if "findBodyInstance(" in ordinary:
+    raise SystemExit("Function emission re-queries an already selected body")
+
 if ('appendBytes(into: inout nm, from: "_b".bytes())' not in methods or
         'appendU64Dec(into: inout nm, n: bodyId)' not in methods):
     raise SystemExit("generic-method LLVM symbol omits finalized BodyInstance identity")

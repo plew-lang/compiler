@@ -46,7 +46,7 @@ fi
 # Declaring a method from every genInst recreates unfinalized bodies after Mono
 # has closed the graph, so this must iterate the same BodyInstance table.
 methods='src/Backend/Llvm/GenMethods.pw'
-if ! rg -q 'while bodyIndex < c\.arena\.bodyInstanceCount\(\)' "$methods"; then
+if ! rg -q 'while [A-Za-z_][A-Za-z_0-9]* < c\.monoWork\.bodyInstances\.count\(\)' "$methods"; then
     echo "generic-method declaration is not driven by final body instances" >&2
     exit 1
 fi
@@ -54,7 +54,7 @@ if rg -q 'while gi < c\.monoWork\.genInsts\.count\(\)' "$methods"; then
     echo "generic-method declaration still treats every generic layout as executable" >&2
     exit 1
 fi
-if ! rg -q 'f\.hasRecv && !\(f\.isExtern\) && !\(f\.isProvided\) && !\(c\.methodRecvIsTrait' "$methods"; then
+if ! rg -q 'f\.hasRecv && !f\.isExtern && !f\.isProvided && !c\.methodRecvIsTrait' "$methods"; then
     echo "ordinary method table accepts proof-carrying provided bodies" >&2
     exit 1
 fi

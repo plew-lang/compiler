@@ -154,7 +154,7 @@ pub impl LlvmCtx {
                 return
             }
             val slot = self.ensureFinalGenMethodBody(c: inout c, bodyId: contract.deinitCall.bodyId)
-            if slot >= self.genMethK.count() {
+            if slot >= self.genMethBody.count() {
                 c.errorAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body")
                 self.arcPop()
                 return

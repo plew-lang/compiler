@@ -314,7 +314,12 @@ pub impl LlvmCtx {
 
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active
     // substitution env, if any — used for both plain functions and generic instances).
-    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, environment: InstanceEnvironment) {
+    inout fn genLlvmFuncBody(c: inout Comp, bodyId: U64, fv: LLVMValueRef) {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
+            c.errorAt(offset: 0U64, msg: "internal error: function emission requires a finalized body")
+            return
+        }
+        val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         val f: Func = c.arena.functionAt(index: fi)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-entry name=")
@@ -339,7 +344,6 @@ pub impl LlvmCtx {
         if didSelf {
             c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
         }
-        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
         self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: f)
         self.curRetTyStart = f.retStart
         self.curRetTyLen = f.retLen

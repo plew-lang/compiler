@@ -2197,23 +2197,13 @@ pub impl LlvmCtx {
         val callee: Func = c.arena.functionAt(index: selected.callee)
         mut val externalSlot: U64 = self.declId.count()
         if callee.isExtern { externalSlot = self.declareResolvedCFunction(c: inout c, selected: selected) }
-        mut val methodSlot: U64 = self.genMethK.count()
+        mut val methodSlot: U64 = self.genMethBody.count()
         mut val freeSlot: U64 = self.genFnK.count()
         mut val useMethod: Bool = false
         if !callee.isExtern && !callee.isAsync {
-            val typeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
             if callee.hasRecv {
-                if selected.recvTypeRef == 0U64 { return false }
-                val receiverType: TypeRef = c.arena.typeAt(index: selected.recvTypeRef)
-                val receiverArgCount: U64 = c.recvParamCount(nameStart: receiverType.nameStart, nameLen: receiverType.nameLen)
-                mut val ownArgs: Array[U64] = []
-                mut val typeArgI: U64 = receiverArgCount
-                while typeArgI < typeArgs.count() {
-                    ownArgs.append(typeArgs[typeArgI])
-                    typeArgI = typeArgI + 1U64
-                }
-                methodSlot = self.ensureGenMethodDeclared(c: inout c, mfi: selected.callee, instRef: selected.recvTypeRef, ownArgs: ownArgs, bodyId: selected.calleeBodyId)
-                if methodSlot >= self.genMethK.count() { return false }
+                methodSlot = self.ensureFinalGenMethodBody(c: inout c, bodyId: selected.calleeBodyId)
+                if methodSlot >= self.genMethBody.count() { return false }
                 useMethod = true
             } else {
                 freeSlot = self.ensureFinalGenFnBody(c: inout c, bodyId: selected.calleeBodyId)
