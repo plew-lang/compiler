@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+
+trait Source {
+    type Item
+    fn get() -> Item
+}
+
+pub impl Source {
+    fn pair(value: Item) -> Array[Item] { return [self.get(), value] }
+    // This method binder shadows the associated member with the same spelling.
+    fn echo[Item](value: Item) -> Item { return value }
+}
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+pub impl[T] Box[T] as Source {
+    type Item = T
+    fn get() -> T { return self.value }
+}
+
+fn main() {
+    val integers = <Box[I64] value=11I64 />
+    val texts = <Box[String] value="a" />
+    val numbers = integers.pair(value: 22I64)
+    val strings = texts.pair(value: "b")
+    print(numbers[0])
+    print(numbers[1])
+    print(strings[0])
+    print(strings[1])
+    print(integers.echo(value: "independent"))
+    print(texts.echo(value: 33I64))
+}

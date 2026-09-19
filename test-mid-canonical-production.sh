@@ -225,3 +225,9 @@ if rg -n 'tyRefIsGround' src/Mid; then
     echo "Mid closed-type checks must be structural" >&2
     exit 1
 fi
+
+# Associated names are lexical projections before Mid; no Item-name query.
+if rg -n 'bodyProvidedItemTerm' src/Mid; then
+    echo "Mid must consume lexical associated-type terms" >&2
+    exit 1
+fi
