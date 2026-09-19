@@ -255,7 +255,7 @@ if rg -n 'c\.cur\.|setSelfItemEnv|clearSelfItemEnv' src/Backend; then
 fi
 
 # Closed nominal and dynamic-call contracts must not reopen name lookup.
-if rg -n 'newtypeUnderRef' src/Mid; then
+if rg -n 'newtypeUnderRef|typeIsUnique' src/Mid; then
     echo "Mid newtype boundaries must use selected declaration identity" >&2
     exit 1
 fi

@@ -1,6 +1,21 @@
 // Close destruction alongside authored calls. LLVM consumes these facts;
 // it may memoize semantic aliases, but never selects a destructor or field type.
 pub impl Comp {
+    // Ownership is a property of the selected nominal declaration. Spelling
+    // cannot identify a declaration across modules or generic binders.
+    fn typeTermIsUnique(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.typeTerms.count() { return false }
+        val term = self.arena.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 || term.isRecord || term.isAny || !term.hasDecl { return false }
+        val underlying = self.arena.newtypeUnderlyingByOffset(offset: term.declOffset)
+        if underlying != 0U64 { return self.typeTermIsUnique(ref: underlying) }
+        val structure = self.arena.structIndexByOffset(offset: term.declOffset)
+        if structure < self.arena.structCount() { return self.arena.structAt(index: structure).isUnique }
+        val enumeration = self.arena.enumIndexByOffset(offset: term.declOffset)
+        if enumeration < self.arena.enumCount() { return self.arena.enumAt(index: enumeration).isUnique }
+        return false
+    }
+
     // Synthetic control-flow values need the same finalized ownership facts
     // as authored values, before Mid starts constructing bodies.
     inout fn finalizeDiscriminantType() {

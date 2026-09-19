@@ -1,14 +1,14 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { StructDef, Expr, Stmt, SemanticExprType, identValueCode }
+import /Ir with { StructDef, TypeRef, Expr, Stmt, SemanticExprType, identValueCode }
 import /Mid with { MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
 
 fn main() {
     mut val c: Comp = <Comp />
     c.arena.reserveTypeSentinel()
     val typeName = c.internBytes(s: "File")
-    c.arena.registerStruct(<StructDef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId typeParams=[] fields=[] isUnique=true isExtern=false />)
-    val valueTerm = c.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
+    c.arena.registerStruct(<StructDef nameStart=typeName.nameStart nameLen=typeName.nameLen nameId=typeName.nameId typeParams=[] fields=[] isUnique=true isExtern=false defOffset=100U64 />)
+    val valueTerm = c.pushType(t: <TypeRef nameStart=typeName.nameStart nameLen=typeName.nameLen args=[] hasDecl=true declOffset=100U64 />)
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val firstLocal = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val secondLocal = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
@@ -75,7 +75,7 @@ fn main() {
     match letResult { MidBuildError.None => { letBuilt = true } _ => {} }
     mut val moveBuilt: Bool = false
     match moveResult { MidBuildError.None => { moveBuilt = true } _ => {} }
-    if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 1U64 && !absentPlace.found && letBuilt && moveBuilt && input == 0U64 && letState.locals.count() == 3U64 && hasAssign && hasMove {
+    if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 1U64 && !absentPlace.found && letBuilt && moveBuilt && input == 0U64 && letState.locals.count() == 3U64 && hasAssign && hasMove && letState.locals[1U64].isUnique && letState.locals[2U64].isUnique {
         write(s: "binding-identity\n")
     } else {
         write(s: "wrong-binding\n")

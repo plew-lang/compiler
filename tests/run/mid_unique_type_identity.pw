@@ -1,0 +1,41 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { StructDef, EnumDef, NewtypeDef, TypeRef }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Resource")
+    // Two modules can export the same spelling with different ownership.
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=100U64 />)
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=true isExtern=false defOffset=200U64 />)
+    val copyable = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val resource = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    assert(!compiler.typeTermIsUnique(ref: copyable))
+    assert(compiler.typeTermIsUnique(ref: resource))
+    // An alias changes spelling, but keeps the selected declaration.
+    val alias = compiler.internBytes(s: "Handle")
+    val aliased = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    assert(compiler.typeTermIsUnique(ref: aliased))
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=1U64 />)
+    assert(!compiler.typeTermIsUnique(ref: parameter))
+    val unresolved = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    assert(!compiler.typeTermIsUnique(ref: unresolved))
+    compiler.arena.registerEnum(<EnumDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] variants=[] isUnique=true defOffset=300U64 />)
+    val enumeration = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=300U64 />)
+    assert(compiler.typeTermIsUnique(ref: enumeration))
+    // Newtype edges retain identity even when every declaration is homonymous.
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId underStart=name.nameStart underLen=name.nameLen underRef=resource defOffset=400U64 />)
+    val wrapper = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=400U64 />)
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId underStart=name.nameStart underLen=name.nameLen underRef=wrapper defOffset=500U64 />)
+    val nested = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=500U64 />)
+    assert(compiler.typeTermIsUnique(ref: wrapper))
+    assert(compiler.typeTermIsUnique(ref: nested))
+    compiler.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId underStart=name.nameStart underLen=name.nameLen underRef=copyable defOffset=600U64 />)
+    val copyableWrapper = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=600U64 />)
+    assert(!compiler.typeTermIsUnique(ref: copyableWrapper))
+    assert(!compiler.typeTermIsUnique(ref: 0U64))
+    assert(!compiler.typeTermIsUnique(ref: compiler.arena.typeCount()))
+    print("ok")
+}

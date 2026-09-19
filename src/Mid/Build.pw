@@ -1785,11 +1785,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             mut val term: U64 = declaredTerm
             if term == 0U64 { term = c.semanticExprTerm(exprId: init) }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
-            mut val isUnique: Bool = false
-            if term < c.arena.typeCount() {
-                val t: TypeRef = c.arena.typeAt(index: term)
-                isUnique = c.typeIsUnique(start: t.nameStart, len: t.nameLen)
-            }
+            val isUnique = c.typeTermIsUnique(ref: term)
             val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(c: c, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;
@@ -2446,9 +2442,7 @@ export fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
 }
 
 fn midTermIsUnique(c: inout Comp, term: U64) -> Bool {
-    if term >= c.arena.typeCount() { return false }
-    val t: TypeRef = c.arena.typeAt(index: term)
-    return c.typeIsUnique(start: t.nameStart, len: t.nameLen)
+    return c.typeTermIsUnique(ref: term)
 }
 
 // A unique aggregate owns either its own nominal representation or one of
