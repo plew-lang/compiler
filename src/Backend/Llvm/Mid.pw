@@ -298,6 +298,7 @@ pub impl LlvmCtx {
             MidInstantiateError.InvalidTryResolution => { return 15U64 }
             MidInstantiateError.MissingSemanticClosure => { return 16U64 }
             MidInstantiateError.InvalidSemanticClosure => { return 17U64 }
+            MidInstantiateError.MissingTypeResolution => { return 18U64 }
         }
     }
 
@@ -321,6 +322,7 @@ pub impl LlvmCtx {
             15U64 => { eprint(text: "invalid-try-resolution") }
             16U64 => { eprint(text: "missing-semantic-closure") }
             17U64 => { eprint(text: "invalid-semantic-closure") }
+            18U64 => { eprint(text: "missing-type-resolution") }
             _ => { eprint(text: "unknown") }
         }
     }

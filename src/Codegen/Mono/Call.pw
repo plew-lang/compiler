@@ -230,7 +230,7 @@ pub impl Comp {
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return 0U64 }
         val kind: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].kind
         if kind == 1U64 {
-            return self.groundTermForBody(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].term, environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef)
+            return self.groundAndRecordBodyType(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].term, environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)
         }
         if kind == 2U64 {
             val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: self.arena.semanticTypeRecipes[recipeId - 1U64].callSite)
@@ -244,7 +244,7 @@ pub impl Comp {
             mut val args: Array[U64] = []
             mut val i: U64 = 0U64
             while i < self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs.count() {
-                args.append(self.groundTermForBody(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs[i], environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef))
+                args.append(self.groundAndRecordBodyType(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].traitArgs[i], environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId))
                 i += 1U64
             }
             return self.assocBindingFor(baseRef: receiver, traitId: self.arena.semanticTypeRecipes[recipeId - 1U64].traitId, traitOwner: self.arena.semanticTypeRecipes[recipeId - 1U64].traitOwner, traitArgs: args, assocId: self.arena.semanticTypeRecipes[recipeId - 1U64].assocId)
@@ -588,7 +588,7 @@ pub impl Comp {
             CallTemplateKind.Protocol(val receiver) => {
                 match receiver {
                     CallTemplateReceiver.Term(val term) => {
-                        return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        return self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                     }
                     CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
                         return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)
@@ -631,7 +631,7 @@ pub impl Comp {
             CallTemplateReceiver.None => { return 0U64 }
             CallTemplateReceiver.Opaque => { return 0U64 }
             CallTemplateReceiver.Term(val term) => {
-                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                return self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             }
             CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
                 return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
@@ -1467,7 +1467,7 @@ pub impl Comp {
     // `from` factory from the two Result spellings.
     inout fn registerTryConversion(exprId: U64, operand: U64) {
         val operandRef: U64 = self.groundedTypeOf(id: operand)
-        val returnRef: U64 = self.groundTermForBody(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val returnRef: U64 = self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
         val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
         if operandErr == 0U64 || returnErr == 0U64 || operandRef >= self.arena.typeCount() || returnRef >= self.arena.typeCount() { return }
@@ -1539,16 +1539,16 @@ pub impl Comp {
     inout fn groundCallArgumentSource(source: CallArgumentSource) -> U64 {
         match source {
             CallArgumentSource.Term(exprId: _, val term) => {
-                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                return self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             }
             CallArgumentSource.Local(exprId: _, localIndex: val localIndex, term: val term) => {
                 if localIndex < self.cur.locals.count() {
                     val local: Local = self.cur.locals[localIndex]
                     if local.ty != 0U64 {
-                        return self.groundTermForBody(ref: local.ty, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        return self.groundAndRecordBodyType(ref: local.ty, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                     }
                 }
-                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                return self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             }
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
                 return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
@@ -1559,7 +1559,7 @@ pub impl Comp {
                 // without reopening syntax or inferring from the callee ABI.
                 val term: U64 = self.semanticExprTerm(exprId: exprId)
                 if term != 0U64 {
-                    return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    return self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 }
                 return self.typedIrRefOfInfo(ti: info)
             }
@@ -1695,7 +1695,7 @@ pub impl Comp {
         // case; never fall back to Mono's AST/type-cache recovery.
         mut val expectedResultRef: U64 = 0U64
         if template.expectedResultTerm != 0U64 {
-            expectedResultRef = self.groundTermForBody(ref: template.expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            expectedResultRef = self.groundAndRecordBodyType(ref: template.expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         }
         mut val operandRefs: Array[U64] = []
         mut val oi: U64 = 0U64
@@ -1724,7 +1724,7 @@ pub impl Comp {
         }
         mut val selectedResultRef: U64 = 0U64
         if resultTerm != 0U64 {
-            selectedResultRef = self.groundTermForBody(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            selectedResultRef = self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         }
         if selectedResultRef == 0U64 { selectedResultRef = expectedResultRef }
         // `Ord.compare` is the carrier selected for ordering syntax, but the
@@ -2893,7 +2893,7 @@ pub impl Comp {
         val template = self.callTemplateForSourceBody(fnIdx: body.fnIdx, exprId: exprId)
         match template.kind {
             CallTemplateKind.Pending => {
-                return self.groundTermForBody(ref: term, environment: body.environment, selfRef: selfRef, itemRef: itemRef)
+                return self.groundAndRecordBodyType(ref: term, environment: body.environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)
             }
             _ => {
                 return self.groundSemanticTypeRecipeForBody(recipeId: template.resultTypeRecipe, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef)
@@ -2910,7 +2910,7 @@ pub impl Comp {
     inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64, shadowedBindingTarget: U64 = 0U64) {
         if self.currentBodyInstanceId() == 0U64 { return }
         val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val targetRef: U64 = self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         val conversion: ValueConversionProof = self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef shadowedBindingTarget=shadowedBindingTarget conversion=self.freezeValueConversionProof(proof: conversion) />)
     }
@@ -3186,7 +3186,7 @@ pub impl Comp {
         // The completed operand type carries the instantiated Promise payload;
         // a parametric await expression may still refer to its source binder.
         val promiseType = self.arena.typeAt(index: promise)
-        mut val result = self.groundTermForBody(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val result = self.groundAndRecordBodyType(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         if promiseType.args.count() == 1U64 { result = promiseType.args[0U64] }
         self.enqueueFinalDestruction(typeRef: promise)
         self.enqueueFinalDestruction(typeRef: result)
@@ -3338,12 +3338,12 @@ pub impl Comp {
         while i < aggregate.elements.count() {
             val element: SemanticAggregateElement = aggregate.elements[i]
             val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: element.exprId, term: element.term, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-            val targetRef: U64 = self.groundTermForBody(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            val targetRef: U64 = self.groundAndRecordBodyType(ref: element.targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             targets.append(targetRef)
             conversions.append(self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
             i += 1U64
         }
-        self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=self.groundTermForBody(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) elementTargetRefs=targets elementConversions=conversions />)
+        self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=self.groundAndRecordBodyType(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId) elementTargetRefs=targets elementConversions=conversions />)
     }
 
     fn finalMatchHash(bodyId: U64, matchSource: MatchSource) -> U64 {
@@ -3424,12 +3424,12 @@ pub impl Comp {
             SemanticMatchKind.Wildcard => {}
             SemanticMatchKind.Enum(enumIndex: _) => {}
             SemanticMatchKind.Struct(layoutTerm: val term) => {
-                val layout = self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                val layout = self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if layout == 0U64 { return }
                 kind = <SemanticMatchKind.Struct layoutTerm=layout />
             }
         }
-        val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val scrutineeTypeRef: U64 = self.groundAndRecordBodyType(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         if scrutineeTypeRef == 0U64 { return }
         val armStart: U64 = self.arena.finalMatchArms.count()
         mut val armIndex: U64 = 0U64
@@ -3439,7 +3439,7 @@ pub impl Comp {
             mut val payloadIndex: U64 = 0U64
             while payloadIndex < sourceArm.payloads.count() {
                 val sourcePayload: SemanticMatchPayload = sourceArm.payloads[payloadIndex]
-                val fieldTypeRef: U64 = self.groundTermForBody(ref: sourcePayload.fieldTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                val fieldTypeRef: U64 = self.groundAndRecordBodyType(ref: sourcePayload.fieldTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if fieldTypeRef == 0U64 { return }
                 self.arena.finalMatchPayloads.append(<FinalMatchPayloadResolution isDiscard=sourcePayload.isDiscard isBoxed=sourcePayload.isBoxed bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
                 payloadIndex += 1U64
@@ -3458,7 +3458,7 @@ pub impl Comp {
         val bodyId: U64 = self.currentBodyInstanceId()
         if bodyId == 0U64 { return }
         val targetTerm: U64 = self.semanticBodyReturnTerm(fnIdx: self.cur.bodyFnIdx)
-        val targetRef: U64 = self.groundTermForBody(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val targetRef: U64 = self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         mut val sourceRef: U64 = self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         // A direct record aggregate in return position has one ABI authority:
         // the declared return TypeTerm.  Its parametric aggregate carrier owns
@@ -3940,7 +3940,7 @@ pub impl Comp {
         val noCallee: U64 = self.arena.functionCount()
         match target {
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val bindingDeclStart, fnTypeTerm: val fnTypeTerm) => {
-                val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                val fnTypeRef: U64 = self.groundAndRecordBodyType(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-local template did not ground to a function")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
@@ -3951,7 +3951,7 @@ pub impl Comp {
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ClosureField(fieldIndex: val fieldIndex, fnTypeTerm: val fnTypeTerm) => {
-                val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                val fnTypeRef: U64 = self.groundAndRecordBodyType(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-field template did not ground to a function")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected />
@@ -4133,7 +4133,7 @@ pub impl Comp {
         val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        mut val resultRef: U64 = self.groundTermForBody(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val resultRef: U64 = self.groundAndRecordBodyType(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         if resultRef == 0U64 { resultRef = expected }
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
@@ -4535,14 +4535,14 @@ pub impl Comp {
         mut val pi: U64 = 0U64
         while pi < f.params.count() {
             val p: Param = self.funcParamAt(params: f.params, index: pi)
-            signatureParameters.append(self.groundTermForBody(ref: p.ty, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+            signatureParameters.append(self.groundAndRecordBodyType(ref: p.ty, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
             self.scanType(ref: signatureParameters[pi])
             pi += 1U64
         }
         mut val signatureResult: U64 = 0U64
         if f.hasRet {
-            signatureResult = self.groundTermForBody(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            signatureResult = self.groundAndRecordBodyType(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
             self.scanType(ref: signatureResult)
         }
         self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx))
@@ -4909,7 +4909,7 @@ pub impl Comp {
         self.arena.finalDestructionNominalHeads = noDestructionHeads
         self.arena.finalDestructionNominalNext = []
         self.arena.finalDestructionNext = []
-        self.arena.clearBodyTypeRecipeResults()
+        self.arena.clearBodyTypeResults()
         self.arena.finalCallees = []
         self.arena.finalCalleeIndexSlots = []
         self.arena.finalAggregates = []
@@ -5225,7 +5225,7 @@ pub impl Comp {
         if index >= self.decls.semanticClosures.count() { return }
         val closure = self.decls.semanticClosures[index]
         val environment = self.cur.bodyEnvironment
-        val functionType = self.groundTermForBody(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val functionType = self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return }
         val signature = self.arena.typeAt(index: functionType)
         if signature.args.count() != closure.parameters.count() + 1U64 { return }
@@ -5243,7 +5243,7 @@ pub impl Comp {
         mut val captureI: U64 = 0U64
         while captureI < closure.captures.count() {
             val capture = closure.captures[captureI]
-            val type = self.groundTermForBody(ref: capture.typeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            val type = self.groundAndRecordBodyType(ref: capture.typeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             if type == 0U64 || !self.tyRefIsGround(ref: type) { return }
             captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget typeTerm=type mode=capture.mode />)
             captureI += 1U64

@@ -166,6 +166,42 @@ pub impl Comp {
         return true
     }
 
+    // Only the frontend normalizes projections. Record the original term,
+    // never the fresh IDs allocated by substitution or projection rebuilding.
+    inout fn groundAndRecordBodyType(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, bodyId: U64) -> U64 {
+        val published = self.arena.bodyTypeTermResult(bodyId: bodyId, typeTerm: ref)
+        if published.bodyId != 0U64 { return published.resultType }
+        val result = self.groundTermForBody(ref: ref, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        self.recordBodyTypeTermResult(bodyId: bodyId, source: ref, result: result)
+        return result
+    }
+
+    inout fn recordBodyTypeTermResult(bodyId: U64, source: U64, result: U64) {
+        if bodyId == 0U64 || source == 0U64 || source >= self.arena.typeTerms.count() || self.typeTermIsClosed(ref: source) || !self.typeTermIsClosed(ref: result) { return }
+        self.arena.setBodyTypeTermResult(bodyId: bodyId, typeTerm: source, resultType: result)
+        val term = self.arena.typeTerms[source]
+        if result == 0U64 || term.paramId != 0U64 || term.assocNameId != 0U64 { return }
+        val concrete = self.arena.typeTerms[result]
+        if term.isRecord && concrete.isRecord && term.recordFieldTerms.len == concrete.recordFieldTerms.len {
+            mut val index = 0U64
+            while index < term.recordFieldTerms.len {
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeRecordFieldPool[term.recordFieldTerms.start + index], result: self.arena.typeRecordFieldPool[concrete.recordFieldTerms.start + index])
+                index += 1U64
+            }
+        } else if !term.isRecord && !concrete.isRecord && term.args.len == concrete.args.len && term.assocTraitArgs.len == concrete.assocTraitArgs.len {
+            mut val index = 0U64
+            while index < term.args.len {
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeArgumentPool[term.args.start + index], result: self.arena.typeArgumentPool[concrete.args.start + index])
+                index += 1U64
+            }
+            index = 0U64
+            while index < term.assocTraitArgs.len {
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: self.arena.typeAssocArgumentPool[term.assocTraitArgs.start + index], result: self.arena.typeAssocArgumentPool[concrete.assocTraitArgs.start + index])
+                index += 1U64
+            }
+        }
+    }
+
     // Ground a body-owned semantic term through the caller-supplied immutable
     // environment. `selfRef`/`itemRef` are derived conveniences rather than
     // key fields, but are explicit here so a semantic read never silently

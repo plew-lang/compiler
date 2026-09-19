@@ -1,0 +1,48 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, InstanceEnvironment, SemanticTypeRecipe }
+import /Mid with { MidBody, MidBlock, MidScope, MidLocalDecl, MidTerminator, MidInstantiateError, instantiateCanonicalMidBody }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val firstName = compiler.internBytes(s: "First")
+    val secondName = compiler.internBytes(s: "Second")
+    val unitBodyName = compiler.internBytes(s: "UnitBody")
+    val traitName = compiler.internBytes(s: "Source")
+    val memberName = compiler.internBytes(s: "Output")
+    val firstType = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen args=[] />)
+    val secondType = compiler.pushType(t: <TypeRef nameStart=secondName.nameStart nameLen=secondName.nameLen args=[] />)
+    val unitBodyType = compiler.pushType(t: <TypeRef nameStart=unitBodyName.nameStart nameLen=unitBodyName.nameLen args=[] />)
+    val projection = compiler.pushType(t: <TypeRef nameStart=firstName.nameStart nameLen=firstName.nameLen args=[] projectionReceiver=firstType assocTraitStart=traitName.nameStart assocTraitLen=traitName.nameLen assocTraitId=traitName.nameId assocNameStart=memberName.nameStart assocNameLen=memberName.nameLen assocNameId=memberName.nameId />)
+    val firstBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=firstType />)
+    val secondBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=secondType />)
+    val unitBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment receiverRef=unitBodyType />)
+    val missingBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    compiler.recordBodyTypeTermResult(bodyId: firstBody, source: projection, result: firstType)
+    compiler.recordBodyTypeTermResult(bodyId: secondBody, source: projection, result: secondType)
+    compiler.recordBodyTypeTermResult(bodyId: unitBody, source: projection, result: 0U64)
+    // The same integer in the recipe namespace must not overwrite a type fact.
+    while compiler.arena.semanticTypeRecipes.count() < projection {
+        compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=1U64 term=secondType />)
+    }
+    compiler.arena.setBodyTypeRecipeResult(bodyId: firstBody, recipeId: projection, resultType: secondType)
+    assert(compiler.arena.bodyTypeRecipeResult(bodyId: firstBody, recipeId: projection) == secondType)
+    val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=projection sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    val bodyIds = [firstBody, secondBody, unitBody]
+    val expected = [firstType, secondType, 0U64]
+    mut val index = 0U64
+    while index < bodyIds.count() {
+        compiler.cur.bodyId = missingBody
+        val result = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: bodyIds[index])
+        match result.error { MidInstantiateError.None => {} _ => { panic "published type result rejected" } }
+        val local = compiler.mid.bodies[result.body.body - 1U64].locals.start
+        assert(compiler.mid.locals[local].typeTerm == expected[index])
+        index += 1U64
+    }
+    val missing = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: missingBody)
+    match missing.error { MidInstantiateError.MissingTypeResolution => {} _ => { panic "missing projection result became Unit" } }
+    assert(compiler.mid.locals[compiler.mid.bodies[source.body - 1U64].locals.start].typeTerm == projection)
+    print("ok")
+}

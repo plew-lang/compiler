@@ -231,3 +231,9 @@ if rg -n 'bodyProvidedItemTerm' src/Mid; then
     echo "Mid must consume lexical associated-type terms" >&2
     exit 1
 fi
+
+# Projection normalization and proof selection are frontend-only operations.
+if rg -n 'groundTermForBody|closeBodyProjectionTerms|concreteConformanceProof' src/Mid; then
+    echo "Mid must consume published projection results" >&2
+    exit 1
+fi
