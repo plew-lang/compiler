@@ -155,36 +155,10 @@ pub impl Comp {
             }
         }
         val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
-        // Substitution alone does not close `T#Trait.Output`: the projection
-        // receiver may now be concrete, but only a static conformance proof
-        // owns the associated output.  Do this before the legacy Cursor
-        // bridge, and recurse through every TypeTerm child, so a projection
-        // nested in `Array[...]` or a record field follows the same rule.
-        val closed: U64 = self.closeBodyProjectionTerms(ref: explicit, environment: environment, selfRef: selfRef, itemRef: itemRef)
-        if closed != explicit { return closed }
-        if explicit != ref { return explicit }
-        // ParamId-stamped terms are fully decided by the immutable map above.
-        // Only old zero-ParamId terms retain the temporary compatibility path
-        // while lowering is migrated; it is entered under the same body env,
-        // never the incidental callee environment.
-        if t.paramId != 0U64 { return ref }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedS: U64 = self.cur.selfRef
-        val savedI: U64 = self.cur.itemRef
-        val savedR: U64 = self.cur.recvInstRef
-        self.cur.typeParams = environment.params
-        self.cur.typeArgs = environment.args
-        self.cur.selfRef = selfRef
-        self.cur.itemRef = itemRef
-        self.cur.recvInstRef = environment.receiverRef
-        val legacy: U64 = self.groundTypeRef(ref: ref)
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedS
-        self.cur.itemRef = savedI
-        self.cur.recvInstRef = savedR
-        return legacy
+        // Projection closure consumes this same explicitly selected environment.
+        // Never retry unchanged terms through the ambient Cursor: an unchanged
+        // term is either already concrete or lacks a binding in this instance.
+        return self.closeBodyProjectionTerms(ref: explicit, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
     // Close every associated-type projection in an already body-substituted
