@@ -88,8 +88,10 @@ echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 trace resolver-compile ./plewc0 --trace-phases resolve/_.pw > plew-resolve.ll
 ./plewc0 --runtime > plew-resolve.runtime.c
 link resolver-link plew-resolve.ll plew-resolve.runtime.c plew-resolve
-./plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
+python3 ./watch-command.py -- ./plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
 rm -f plew-resolve.ll plew-resolve.runtime.c
+
+python3 ./validation-checkpoint.py
 
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
 trace compiler-compile ./plewc0 --trace-phases "$PW" > plewc.ll

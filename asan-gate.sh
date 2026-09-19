@@ -130,14 +130,14 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/run/$name.out" ] || { echo "FAIL $f: missing golden output"; exit 0; }
     ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
-    "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
+    python3 ./watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     extra_c=""; [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
-    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     run_exit=0
     infile="tests/run/$name.in"
-    if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
-    else ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" > /dev/null 2>"$err" || run_exit=$?; fi
+    if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 python3 ./watch-command.py -- "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
+    else ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 python3 ./watch-command.py -- "$bin" > /dev/null 2>"$err" || run_exit=$?; fi
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     elif grep -q "LeakSanitizer: detected memory leaks" "$err"; then
@@ -179,13 +179,13 @@ d_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/panic/$name.panic" ] || { echo "FAIL $f: missing panic expectation"; exit 0; }
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
-    "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
-    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
+    python3 ./watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     want=$(cat "tests/panic/$name.panic")
     code=0
     # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
-    sh -c "ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:handle_abort=0 \"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$err" 2>/dev/null || code=$?
+    sh -c "ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:handle_abort=0 python3 ./watch-command.py -- \"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$err" 2>/dev/null || code=$?
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     elif [ "$code" -ne 134 ] || ! grep -qF "$want" "$err"; then

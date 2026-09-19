@@ -96,7 +96,7 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw); out="tests/run/$name.out"
     [ -f "$out" ] || exit 0
     ll="/tmp/t_$name.ll"; bin="/tmp/t_$name"
-    if ! "$PLEWC" "$f" > "$ll" 2>/dev/null; then echo "FAIL $name(reject)"; exit 0; fi
+    if ! python3 ./watch-command.py -- "$PLEWC" "$f" > "$ll" 2>/dev/null; then echo "FAIL $name(reject)"; exit 0; fi
     # A run test may pin a backend-facing invariant whose observable runtime
     # behaviour is intentionally identical to an older lowering.  `.ll.expect`
     # contains one stable literal required in the generated LLVM; normal run
@@ -110,11 +110,11 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     fi
     extra_c=""
     [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
-    if ! clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
+    if ! python3 ./watch-command.py -- clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
     infile="tests/run/$name.in"
     status=0
-    if [ -f "$infile" ]; then got=$("$bin" < "$infile" 2>/dev/null) || status=$?
-    else got=$("$bin" 2>/dev/null) || status=$?; fi
+    if [ -f "$infile" ]; then got=$(python3 ./watch-command.py -- "$bin" < "$infile" 2>/dev/null) || status=$?
+    else got=$(python3 ./watch-command.py -- "$bin" 2>/dev/null) || status=$?; fi
     if [ "$status" -ne 0 ]; then echo "FAIL $name(exit:$status)"; exit 0; fi
     if [ "$got" = "$(cat "$out")" ]; then echo "PASS $name"; else echo "FAIL $name"; fi
 ' sh | progress_stream run "$run_total")
@@ -966,13 +966,13 @@ panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     name=$(basename "$pw" .pw)
     want=$(cat "tests/panic/$name.panic")
     ll="/tmp/t_panic_$name.ll"; bin="/tmp/t_panic_$name"; perr="/tmp/t_panic_$name.err"
-    if ! "$PLEWC" "$pw" > "$ll" 2>/dev/null; then echo "FAIL panic/$name(reject)"; exit 0; fi
-    if ! clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
+    if ! python3 ./watch-command.py -- "$PLEWC" "$pw" > "$ll" 2>/dev/null; then echo "FAIL panic/$name(reject)"; exit 0; fi
+    if ! python3 ./watch-command.py -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
     code=0
     # nested sh: the shell that reaps a SIGABRT child prints "Abort trap" on
     # ITS stderr — run the binary one shell deeper so that note is droppable
     # without touching the binary own stderr capture ($perr).
-    sh -c "\"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$perr" 2>/dev/null || code=$?
+    sh -c "python3 ./watch-command.py -- \"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 134 ] && grep -qF "$want" "$perr"; then echo "PASS panic/$name"; else echo "FAIL panic/$name(exit=$code)"; fi
 ' sh | progress_stream panic "$panic_total")
 ppass=$(printf '%s\n' "$panic_results" | grep -c '^PASS' || true)
@@ -992,9 +992,10 @@ reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     want="tests/reject/$name.err"
     perr="/tmp/t_reject_$name.err"
     code=0
-    sh -c "\"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
+    sh -c "python3 ./watch-command.py -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 0 ]; then echo "FAIL reject/$name(accepted)"
     elif [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
+    elif [ "$code" -ne 1 ]; then echo "FAIL reject/$name(exit=$code)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL reject/$name(diagnostic)"
     else echo "PASS reject/$name"; fi
 ' sh | progress_stream reject "$reject_total")
@@ -1012,10 +1013,10 @@ part_results=$(printf '%s\n' tests/part/*/Main.pw tests/part/Main.pw | xargs -P 
     dir=$(dirname "$main")
     name=$(basename "$dir")
     ll="/tmp/t_part_$name.ll"; bin="/tmp/t_part_$name"
-    if ! "$PLEWC" "$main" > "$ll" 2>/dev/null; then echo "FAIL part/$name(reject)"; exit 0; fi
-    if ! clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
+    if ! python3 ./watch-command.py -- "$PLEWC" "$main" > "$ll" 2>/dev/null; then echo "FAIL part/$name(reject)"; exit 0; fi
+    if ! python3 ./watch-command.py -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
     status=0
-    got=$("$bin" 2>/dev/null) || status=$?
+    got=$(python3 ./watch-command.py -- "$bin" 2>/dev/null) || status=$?
     if [ "$status" -ne 0 ]; then echo "FAIL part/$name(exit:$status)"; exit 0; fi
     if [ "$got" = "$(cat "$dir/Main.out")" ]; then echo "PASS part/$name"; else echo "FAIL part/$name"; fi
 ' sh | progress_stream part "$part_total")
@@ -1035,9 +1036,10 @@ pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh
     want="$(dirname "$main")/Main.err"
     perr="/tmp/t_partreject_$name.err"
     code=0
-    sh -c "\"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$main" "$perr" 2>/dev/null || code=$?
+    sh -c "python3 ./watch-command.py -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$main" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 0 ]; then echo "FAIL partreject/$name(accepted)"
     elif [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
+    elif [ "$code" -ne 1 ]; then echo "FAIL partreject/$name(exit=$code)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL partreject/$name(diagnostic)"
     else echo "PASS partreject/$name"; fi
 ' sh | progress_stream partreject "$partreject_total")
