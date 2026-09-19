@@ -41,12 +41,13 @@ pub impl LlvmCtx {
                         c.setSelfItemEnvForBody(f: f, environment: body.environment)
                     }
                     mut val ptys: Array[LLVMTypeRef] = []
+                    val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
                     mut val pi: U64 = 0
-                    while pi < c.arena.bodySignature(bodyId: bodyId).parameterTypes.count() {
+                    while pi < parameterCount {
                         ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi))
                         pi += 1
                     }
-                    val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: f), arrayCPtr(ptys), ptys.count(), 0I32)
+                    val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId), arrayCPtr(ptys), ptys.count(), 0I32)
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)

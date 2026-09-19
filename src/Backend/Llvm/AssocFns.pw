@@ -9,13 +9,9 @@ pub impl LlvmCtx {
         return signature.resultType
     }
 
-    inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64, f: Func) -> LLVMTypeRef {
+    inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64) -> LLVMTypeRef {
         val result = self.bodyResultType(c: inout c, bodyId: bodyId)
-        if !f.hasRet { return self.voidty }
-        if result == 0U64 {
-            c.errorAt(offset: f.nameStart, msg: "internal error: finalized body result type is missing")
-            return self.voidty
-        }
+        if result == 0U64 { return self.voidty }
         return self.llvmTypeOfRef(c: inout c, ref: result)
     }
 

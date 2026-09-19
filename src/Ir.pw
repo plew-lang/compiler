@@ -1984,6 +1984,8 @@ pub impl ClosureSignature { factory }
 
 export struct BodySignature {
     pub val ready: Bool = false
+    pub val receiverType: U64 = 0U64
+    pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
     pub val parameterTypes: Array[U64] = []
     pub val parameterPassings: Array[CallArgumentPassing] = []
     pub val resultType: U64 = 0U64

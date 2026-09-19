@@ -4431,7 +4431,7 @@ pub impl Comp {
             self.scanType(ref: signature.parameterTypes[parameter])
             parameter += 1U64
         }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: member.parameterTypes, passings: member.argumentPassings, result: member.resultType)
+        self.arena.setBodySignature(bodyId: bodyId, parameters: member.parameterTypes, passings: member.argumentPassings, result: member.resultType, receiverType: resolution.sourceRef, receiverPassing: member.receiverPassing)
         self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: member.receiverPassing, argumentPassings: member.argumentPassings, calleeBodyId: member.bodyId, generatedSite: <CallSiteKey ownerFnIdx=target.fnIdx originKind=2U64 originSerial=bodyId />)
         mut val members = resolution.members
         members[memberIndex] = <FinalExistentialMember bodyId=member.bodyId adapterBodyId=bodyId callResolution=self.finalCalleeCount() receiverPassing=member.receiverPassing parameterTypes=member.parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType sourceResultType=member.sourceResultType resultConversion=member.resultConversion />
@@ -4527,7 +4527,7 @@ pub impl Comp {
             signatureResult = self.groundTermForBody(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             self.scanType(ref: signatureResult)
         }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult)
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx))
         if instance.adapterTargetBodyId != 0U64 {
             self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { self.scanBlockInsts(blkId: f.body) }

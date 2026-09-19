@@ -37,8 +37,8 @@ pub impl Arena {
         return self.bodySignatures[bodyId - 1U64]
     }
 
-    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64) {
-        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters parameterPassings=passings resultType=result />
+    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64, receiverType: U64 = 0U64, receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />) {
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true receiverType=receiverType receiverPassing=receiverPassing parameterTypes=parameters parameterPassings=passings resultType=result />
     }
 
     fn closureSignature(bodyId: U64) -> ClosureSignature {

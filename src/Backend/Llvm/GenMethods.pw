@@ -108,17 +108,27 @@ pub impl LlvmCtx {
         val mf = c.arena.functionAt(index: mfi)
         self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef, bodyId: bodyId)
         mut val ptys: Array[LLVMTypeRef] = []
-        if mf.selfInout {
-            ptys.append(self.ptrty)
-        } else {
-            ptys.append(self.llvmTypeOfRef(c: inout c, ref: instRef))
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        if !signature.ready || signature.receiverType == 0U64 {
+            c.errorAt(offset: mf.nameStart, msg: "internal error: method receiver ABI was not finalized")
+            return
         }
+        match signature.receiverPassing {
+            CallReceiverPassing.Inout => { ptys.append(self.ptrty) }
+            CallReceiverPassing.Borrow => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
+            CallReceiverPassing.Move => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
+            CallReceiverPassing.None => {
+                c.errorAt(offset: mf.nameStart, msg: "internal error: method ABI has no receiver passing")
+                return
+            }
+        }
+        val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
         mut val pi: U64 = 0
-        while pi < c.arena.bodySignature(bodyId: bodyId).parameterTypes.count() {
+        while pi < parameterCount {
             ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "gm".bytes())
         appendU64Dec(into: inout nm, n: mfi)

@@ -336,7 +336,7 @@ pub impl LlvmCtx {
         val savedItemFB: U64 = c.cur.itemRef
         self.curFn = fv
         self.curIsMain = false
-        self.curRetVoid = !f.hasRet
+        self.curRetVoid = self.bodyResultType(c: inout c, bodyId: bodyId) == 0U64
         // a plain method's `Self` resolves to the receiver type, so `-> Self` / a `Self`
         // param / `return self` ground (the generic-method path sets this via its
         // instantiation elsewhere; here it covers a non-generic method on a plain type).
@@ -344,7 +344,7 @@ pub impl LlvmCtx {
         if didSelf {
             c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
         }
-        self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: f)
+        self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)
         self.curRetTyStart = f.retStart
         self.curRetTyLen = f.retLen
         // ground the return ref under any active generic env (a monomorphized method
@@ -556,8 +556,12 @@ pub impl LlvmCtx {
                                     }
                                     match verification.error {
                                         MidVerifyError.None => {
-                                        mut val abiParameterCount: U64 = f.params.count()
-                                        if f.hasRecv { abiParameterCount += 1U64 }
+                                        val signature = c.arena.bodySignature(bodyId: bodyId)
+                                        mut val abiParameterCount: U64 = signature.parameterTypes.count()
+                                        match signature.receiverPassing {
+                                            CallReceiverPassing.None => {}
+                                            _ => { abiParameterCount += 1U64 }
+                                        }
                                         if c.traceCodegen {
                                             eprint(text: "[trace-codegen] Mid function preflight name=")
                                             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
