@@ -2,17 +2,10 @@
 
 // ---- generic struct instances ----
 
-// Register each concrete generic-struct instantiation (from c.monoWork.genInsts) as a named
-// LLVM type with its type parameters substituted (env curTypeParams->curTypeArgs).
-// Split into a NAMES pass and a BODIES pass (called separately by the backend init)
-// so EVERY named type — plain structs/enums AND all generic instances — exists
-// before any body is set; a body may then reference a generic-instance member type
-// (`struct Pair { a: Optional[I64] }`) regardless of registration order, since
-// LLVMStructSetBody only records element-type *references* (sizes resolve later, at
-// emission, by which point all bodies are set).
+// Named layouts consume the closed frontend type contracts.
 
 pub impl LlvmCtx {
-    // All struct instances enter through this method, including demand registration.
+    // All finalized struct instances enter through this method.
     // Publish the slot before any recursive body construction can query it.
     inout fn registerStructInstance(c: inout Comp, typeRef: U64, llvmType: LLVMTypeRef, structIndex: U64) {
         val slot: U64 = self.genStructRefs.count()
@@ -39,73 +32,64 @@ pub impl LlvmCtx {
         return self.genStructRefs.count()
     }
 
-    inout fn registerGenStructNames(c: inout Comp) {
-        // create every instance's NAMED struct type (opaque, body unset) and record its
-        // def. Bodies are set later (registerGenStructBodies) so a field of generic-
-        // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
-        // an explicit `Optional[I64]` member) resolves to the already-created named type.
-        mut val k: U64 = 0
-        while k < c.monoWork.genInsts.count() {
-            val ref: U64 = c.monoWork.genInsts[k]
-            if c.isGenericInst(ref: ref) {
-                val t: TypeRef = c.arena.typeAt(index: ref)
-                val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-                // an extern generic struct (`Buffer[T]`) is an OPAQUE intrinsic represented
-                // as a pointer — it has no struct layout, so register no `%gs` type for it
-                // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
-                if defIdx < c.arena.structCount() && !(c.arena.structAt(index: defIdx).isExtern) {
-                    // De-pin: `Array[E]` is an ordinary generic-struct instance — it gets its
-                    // own fresh named `%gsN` (body `{ptr}` from its single `data: Buffer[E]`
-                    // field, set in the body pass). No name->arrayTy representation pin; every
-                    // array site resolves the per-instance type via llvmTypeOfRef/arrayInstTy.
-                    mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "gs".bytes())
-                    appendU64Dec(into: inout nm, n: k)
-                    nm.append(0)
-                    self.registerStructInstance(c: inout c, typeRef: ref, llvmType: LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)), structIndex: defIdx)
+    // Only finalized reachable types can enter LLVM. Publish all names before
+    // filling any struct body so mutually recursive boxed layouts are valid.
+    inout fn registerFinalLayoutNames(c: inout Comp) {
+        mut val index = 0U64
+        while index < c.arena.finalDestructions.count() {
+            val contract = c.arena.finalDestructions[index]
+            if !contract.ready {
+                c.errorAt(offset: 0U64, msg: "internal error: LLVM layout registration requires a finalized type contract")
+                return
+            }
+            if contract.underlying == 0U64 {
+                if contract.structLayout != 0U64 {
+                    mut val name: Array[U8] = []
+                    appendBytes(into: inout name, from: "st".bytes())
+                    appendU64Dec(into: inout name, n: index)
+                    name.append(0U8)
+                    self.registerStructInstance(c: inout c, typeRef: contract.typeRef, llvmType: LLVMStructCreateNamed(self.ctx, arrayCPtr(name)), structIndex: contract.structLayout - 1U64)
+                } else {
+                    match contract.ownershipClass {
+                        ArcClass.EnumVal(eidx: val declaration) => {
+                            mut val name: Array[U8] = []
+                            appendBytes(into: inout name, from: "en".bytes())
+                            appendU64Dec(into: inout name, n: index)
+                            name.append(0U8)
+                            val type = LLVMStructCreateNamed(self.ctx, arrayCPtr(name))
+                            mut val fields: Array[LLVMTypeRef] = []
+                            fields.append(self.i64ty)
+                            fields.append(LLVMArrayType2(self.i64ty, self.enumPayloadWords(c: inout c, typeRef: contract.typeRef)))
+                            LLVMStructSetBody(type, arrayCPtr(fields), fields.count(), 0I32)
+                            self.genEnumRefs.append(contract.typeRef)
+                            self.genEnumTys.append(type)
+                            self.genEnumDefs.append(declaration)
+                        }
+                        _ => {}
+                    }
                 }
             }
-            k += 1
+            index += 1U64
         }
     }
 
-    // Set each struct instance's body (field types under its substitution env; a
-    // generic-instance field resolves via fieldLlvmTy -> llvmTypeOfRef to the named type
-    // created in registerGenStructNames/registerStructNames). Run after ALL names (plain +
-    // generic). A non-generic struct's 0-type-arg instance is bodied here too — its empty env
-    // is a no-op, so its fields resolve exactly as a standalone non-generic pass would.
-    inout fn registerGenStructBodies(c: inout Comp) {
-        // snapshot the count: a body's field lookup can DEMAND-register a nested
-        // instance (ensureGenInstRegistered appends a slot WITH its body already
-        // set) — re-reading count() would visit it and LLVMStructSetBody a second
-        // time (an LLVM assert on a non-opaque struct).
-        val n: U64 = self.genStructRefs.count()
-        mut val s: U64 = 0
-        while s < n {
-            val ref: U64 = self.genStructRefs[s]
-            val sd: StructDef = c.arena.structAt(index: self.genStructDefs[s])
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = sd.typeParams
-            c.cur.typeArgs = c.arena.typeAt(index: ref).args
-            mut val elems: Array[LLVMTypeRef] = []
-            mut val fi: U64 = 0
-            while fi < sd.fields.count() {
-                // a boxed (recursive) field is a heap pointer — matching the value built in
-                // genFieldValue. Required for a
-                // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
-                // the inline layout disagrees with the boxed (ptr) construction value.
-                if c.fieldIsBoxed(f: sd.fields[fi]) {
-                    elems.append(self.ptrty)
-                } else {
-                    elems.append(self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
-                }
-                fi += 1
+    inout fn registerFinalStructBodies(c: inout Comp) {
+        mut val slot = 0U64
+        while slot < self.genStructRefs.count() {
+            val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: self.genStructRefs[slot]) - 1U64]
+            if contract.fieldTypes.count() != contract.fieldBoxed.count() {
+                c.errorAt(offset: 0U64, msg: "internal error: finalized struct layout has inconsistent fields")
+                return
             }
-            LLVMStructSetBody(self.genStructTys[s], arrayCPtr(elems), sd.fields.count(), 0I32)
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-            s += 1
+            mut val fields: Array[LLVMTypeRef] = []
+            mut val field = 0U64
+            while field < contract.fieldTypes.count() {
+                if contract.fieldBoxed[field] { fields.append(self.ptrty) }
+                else { fields.append(self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field])) }
+                field += 1U64
+            }
+            LLVMStructSetBody(self.genStructTys[slot], arrayCPtr(fields), fields.count(), 0I32)
+            slot += 1U64
         }
     }
 
@@ -134,13 +118,7 @@ pub impl LlvmCtx {
         return self.arrayTy
     }
 
-    // Index into st.genStruct* for the registered instance structurally equal to `ref`,
-    // or st.genStructRefs.count(). On a miss, tries DEMAND registration first
-    // (ensureGenInstRegistered): the collection pass's discovery walks are an
-    // enumeration and cannot be proven complete (audit-5 M — every historical miss
-    // was one more enumeration line), so emission is allowed to register a ground
-    // instance it reaches; when collection was complete this never fires and the
-    // emitted module is byte-identical.
+    // Lookup never discovers new semantic types during LLVM emission.
     inout fn genStructSlot(c: inout Comp, ref: U64) -> U64 {
         // A top-level view selects a method surface, never a physical layout.
         // Preserve views inside type arguments: those belong to the instance.
@@ -148,9 +126,6 @@ pub impl LlvmCtx {
         val i: U64 = self.genStructSlotRaw(c: inout c, ref: storageRef)
         if i < self.genStructRefs.count() {
             return i
-        }
-        if self.ensureGenInstRegistered(c: inout c, ref: storageRef) {
-            return self.genStructSlotRaw(c: inout c, ref: storageRef)
         }
         return self.genStructRefs.count()
     }
@@ -165,159 +140,12 @@ pub impl LlvmCtx {
         }
         return self.genStructRefs.count()
     }
-
-    // Demand-register a GROUND generic struct/enum instance that collection never saw:
-    // record it mono-side through the same canonical entry collection uses (scanType —
-    // so nested instances, array elements and fn typedefs register too), then create
-    // its named LLVM type exactly like the init passes. The slot is appended BEFORE
-    // the body is set, so a nested field that resolves back to this instance finds the
-    // slot instead of recursing. Returns whether `ref` now has a %gs/%ge slot.
-    inout fn ensureGenInstRegistered(c: inout Comp, ref: U64) -> Bool {
-        if self.genStructSlotRaw(c: inout c, ref: ref) < self.genStructRefs.count() {
-            return true
-        }
-        if self.genEnumSlotRaw(c: inout c, ref: ref) < self.genEnumRefs.count() {
-            return true
-        }
-        if !(c.isGenericInst(ref: ref)) {
-            return false
-        }
-        if !(c.tyRefIsGround(ref: ref)) {
-            return false
-        }
-        c.scanType(ref: ref)
-        // scanType declined to record it (a gen-mode derive target) — leave it alone.
-        mut val k: U64 = c.monoWork.genInsts.count()
-        mut val gi: U64 = 0
-        while gi < c.monoWork.genInsts.count() {
-            if c.typeRefEq(a: c.monoWork.genInsts[gi], b: ref) {
-                k = gi
-                gi = c.monoWork.genInsts.count()
-            } else {
-                gi += 1
-            }
-        }
-        if k >= c.monoWork.genInsts.count() {
-            return false
-        }
-        val t: TypeRef = c.arena.typeAt(index: ref)
-        val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if defIdx < c.arena.structCount() {
-            val sd: StructDef = c.arena.structAt(index: defIdx)
-            // an extern generic (`Buffer[T]` / `StrongRefCell[T]` / `WeakRefCell[T]`) is an
-            // opaque pointer — no `%gs`. Public Ref-family wrappers are normal generic structs.
-            if sd.isExtern {
-                return false
-            }
-            mut val nm: Array[U8] = []
-            appendBytes(into: inout nm, from: "gs".bytes())
-            appendU64Dec(into: inout nm, n: k)
-            nm.append(0)
-            val sty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-            self.registerStructInstance(c: inout c, typeRef: ref, llvmType: sty, structIndex: defIdx)
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = sd.typeParams
-            c.cur.typeArgs = t.args
-            mut val elems: Array[LLVMTypeRef] = []
-            mut val fi: U64 = 0
-            while fi < sd.fields.count() {
-                if c.fieldIsBoxed(f: sd.fields[fi]) {
-                    elems.append(self.ptrty)
-                } else {
-                    elems.append(self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
-                }
-                fi += 1
-            }
-            LLVMStructSetBody(sty, arrayCPtr(elems), sd.fields.count(), 0I32)
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-            return true
-        }
-        val eIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if eIdx < c.arena.enumCount() {
-            // genInstWords sizes a generic-enum instance as 1 (tag) + maxWords under its
-            // own env — the same sizing registerGenEnums computes inline.
-            val words: U64 = self.genInstWords(c: inout c, ref: ref)
-            mut val maxWords: U64 = 0
-            if words > 0U64 {
-                maxWords = words - 1U64
-            }
-            mut val nm: Array[U8] = []
-            appendBytes(into: inout nm, from: "ge".bytes())
-            appendU64Dec(into: inout nm, n: k)
-            nm.append(0)
-            val ety: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-            mut val elems: Array[LLVMTypeRef] = []
-            elems.append(self.i64ty)
-            elems.append(LLVMArrayType2(self.i64ty, maxWords))
-            LLVMStructSetBody(ety, arrayCPtr(elems), 2U64, 0I32)
-            self.genEnumRefs.append(ref)
-            self.genEnumTys.append(ety)
-            self.genEnumDefs.append(eIdx)
-            return true
-        }
-        return false
-    }
-
-    // Register each concrete generic-enum instantiation as a named tagged-union type
-    // `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
-    inout fn registerGenEnums(c: inout Comp) {
-        mut val k: U64 = 0
-        while k < c.monoWork.genInsts.count() {
-            val ref: U64 = c.monoWork.genInsts[k]
-            if c.isGenericInst(ref: ref) {
-                val t: TypeRef = c.arena.typeAt(index: ref)
-                val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-                if defIdx < c.arena.enumCount() {
-                    val e: EnumDef = c.arena.enumAt(index: defIdx)
-                    val savedP: Array[Bind] = c.cur.typeParams
-                    val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = e.typeParams
-                    c.cur.typeArgs = t.args
-                    mut val maxWords: U64 = 0
-                    mut val vi: U64 = 0
-                    while vi < e.variants.count() {
-                        val fs: Array[FieldDef] = e.variants[vi].fields
-                        mut val w: U64 = 0
-                        mut val fj: U64 = 0
-                        while fj < fs.count() {
-                            // fieldWordsF (not fieldWords) so a boxed / array / nested
-                            // generic-instance payload field is sized correctly under the env.
-                            w = w + self.fieldWordsF(c: inout c, f: fs[fj])
-                            fj += 1
-                        }
-                        if w > maxWords {
-                            maxWords = w
-                        }
-                        vi += 1
-                    }
-                    mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "ge".bytes())
-                    appendU64Dec(into: inout nm, n: k)
-                    nm.append(0)
-                    val ty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-                    mut val elems: Array[LLVMTypeRef] = []
-                    elems.append(self.i64ty)
-                    elems.append(LLVMArrayType2(self.i64ty, maxWords))
-                    LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                    self.genEnumRefs.append(ref)
-                    self.genEnumTys.append(ty)
-                    self.genEnumDefs.append(defIdx)
-                }
-            }
-            k += 1
-        }
-    }
-
 }
 
 pub impl LlvmCtx {
 
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.
-    // Demand-registers on a miss, like genStructSlot.
+    // A miss does not extend the frontend reachability closure.
     inout fn genEnumSlot(c: inout Comp, ref: U64) -> U64 {
         // A top-level view selects a method surface, never a physical layout.
         // Preserve views inside type arguments: those belong to the instance.
@@ -325,9 +153,6 @@ pub impl LlvmCtx {
         val i: U64 = self.genEnumSlotRaw(c: inout c, ref: storageRef)
         if i < self.genEnumRefs.count() {
             return i
-        }
-        if self.ensureGenInstRegistered(c: inout c, ref: storageRef) {
-            return self.genEnumSlotRaw(c: inout c, ref: storageRef)
         }
         return self.genEnumRefs.count()
     }

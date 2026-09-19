@@ -143,3 +143,18 @@ for forbidden in ['groundUnderInst(', 'groundTypeRef(', 'enumVariantAt(', 'field
 mid = Path('src/Backend/Llvm/Mid.pw').read_text()
 assert 'c.cur.typeParams =' not in mid and 'c.cur.typeArgs =' not in mid, 'Mid LLVM emitter installs a semantic substitution environment'
 PYENUM
+
+# Layout registration consumes the same closed field graph as ownership.
+# Neither registration nor sizing can enter frontend discovery/substitution.
+python3 - <<'PYLAYOUT'
+from pathlib import Path
+layout = Path('src/Backend/Llvm/GenericStruct.pw').read_text()
+sizing = Path('src/Backend/Llvm/Enums.pw').read_text().split('inout fn variantPayloadTy(', 1)[0]
+assert 'c.arena.finalDestructions.count()' in layout
+assert 'contract.structLayout' in layout
+for source in (layout, sizing):
+    for forbidden in ['c.scanType(', 'c.groundTypeRef(', 'c.cur.typeParams =', 'c.cur.typeArgs =', 'c.monoWork.genInsts', 'fieldWordsF(', 'fieldLlvmTy(']:
+        assert forbidden not in source, f'layout reopens semantic collection: {forbidden}'
+for required in ['contract.fieldTypes', 'contract.fieldBoxed']:
+    assert required in layout and required in sizing
+PYLAYOUT

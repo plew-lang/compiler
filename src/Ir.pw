@@ -3091,6 +3091,8 @@ export struct FinalDestruction {
     pub val ownershipClass: ArcClass = <ArcClass.Scalar />
     pub val ready: Bool = false
     pub val deinitCall: FinalDestructorCall = <FinalDestructorCall />
+    // One-based finalized struct layout; zero for scalar, opaque, enum or newtype.
+    pub val structLayout: U64 = 0U64
     pub val underlying: U64 = 0U64
     pub val fieldTypes: Array[U64] = []
     pub val fieldBoxed: Array[Bool] = []

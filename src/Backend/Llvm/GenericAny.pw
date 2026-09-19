@@ -26,7 +26,7 @@ pub impl LlvmCtx {
         if c.isGenericInst(ref: ref) {
             // a generic OPAQUE intrinsic (`Buffer[T]`): its representation is a single
             // pointer (like Array/Ref), NOT a struct layout — so it gets no `%gs` type
-            // (registerGenStructNames skips it). Ask the representation question once here.
+            // (finalized layout registration skips it). Ask the representation question once here.
             val gat: TypeRef = c.arena.typeAt(index: ref)
             val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
             if gxi < c.arena.structCount() {
@@ -42,12 +42,7 @@ pub impl LlvmCtx {
             if ge < self.genEnumRefs.count() {
                 return self.genEnumTys[ge]
             }
-            // both slots missed AND demand registration declined. For a GROUND instance
-            // whose head is a registered non-extern generic struct/enum this used to fall
-            // through to the i64 scalar default — a silent-miscompile seed (the value's
-            // aggregate is treated as one word). Make it loud instead; ensure fires for
-            // every registrable case, so this is an internal-invariant marker. (gen mode
-            // legitimately declines instances over to-be-derived types — spec/16.)
+            // A reachable concrete aggregate must already have a registered layout.
             if !(c.genMode) {
                 if c.tyRefIsGround(ref: ref) {
                     val lt: TypeRef = c.arena.typeAt(index: ref)
@@ -62,7 +57,7 @@ pub impl LlvmCtx {
                         isKnownDef = true
                     }
                     if isKnownDef {
-                        c.errorAt(offset: lt.nameStart, msg: "internal error (compiler bug): a ground generic instance reached emission unregistered and demand registration declined — please report this")
+                        c.errorAt(offset: lt.nameStart, msg: "internal error (compiler bug): a ground generic instance reached emission without a finalized registered layout")
                     }
                 }
             }
