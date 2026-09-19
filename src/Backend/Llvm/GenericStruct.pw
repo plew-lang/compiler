@@ -316,43 +316,6 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // If `ref` is a generic enum instance, set the substitution env to it and return
-    // the saved-params (so the caller restores). Returns an empty saved env otherwise.
-    // Pairs with restoreEnv. Encoded via the inout saved arrays.
-    inout fn setEnumEnv(c: inout Comp, ref: U64) -> Bool {
-        if ref == 0U64 {
-            return false
-        }
-        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-        if ge < self.genEnumRefs.count() {
-            c.cur.typeParams = c.arena.enumAt(index: self.genEnumDefs[ge]).typeParams
-            c.cur.typeArgs = c.arena.typeAt(index: ref).args
-            return true
-        }
-        // An enum instance's semantic substitution belongs to the TypeRef and
-        // its declaration, not to whether this backend has already emitted a
-        // named LLVM layout for that instance.  Match-payload lowering needs
-        // the environment even for a signature-only `Optional[any P]`; making
-        // it depend on `genEnumRefs` silently falls back to the template field
-        // type (`T` as i64) while the actual payload is the existential fat
-        // value.  The resulting LLVM type mismatch can crash the C API.
-        //
-        // The migration target is a resolved TypeTerm owner query.  Until that
-        // carrier is complete, use the generic enum declaration selected by
-        // this TypeRef as the semantic fallback; layout registration remains a
-        // separate backend concern.
-        if ref < c.arena.typeCount() {
-            val t: TypeRef = c.arena.typeAt(index: ref)
-            val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-            if ei < c.arena.enumCount() {
-                c.cur.typeParams = c.arena.enumAt(index: ei).typeParams
-                c.cur.typeArgs = t.args
-                return true
-            }
-        }
-        return false
-    }
-
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.
     // Demand-registers on a miss, like genStructSlot.
     inout fn genEnumSlot(c: inout Comp, ref: U64) -> U64 {

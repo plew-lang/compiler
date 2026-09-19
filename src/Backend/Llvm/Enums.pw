@@ -276,34 +276,28 @@ pub impl LlvmCtx {
         }
     }
 
-    // The LLVM struct type of a variant's payload (its fields in declared order).
-    inout fn variantPayloadTy(c: inout Comp, eid: U64, vi: U64, instanceRef: U64 = 0U64) -> LLVMTypeRef {
-        val fs: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: eid, variantIndex: vi).fields
-        mut val elems: Array[LLVMTypeRef] = []
-        mut val i: U64 = 0
-        while i < fs.count() {
-            // a boxed (recursive) field is a heap pointer; otherwise fieldLlvmTy resolves
-            // the array ({ptr,i64}), existential (fat ptr), generic-instance (its named
-            // tagged-union / struct type), or scalar type — matching the value built in
-            // buildEnumValue, so insertvalue types agree.
-            if c.fieldIsBoxed(f: fs[i]) {
-                elems.append(self.ptrty)
-            } else if instanceRef != 0U64 {
-                // A payload belongs to one selected enum instance, not to the
-                // ambient body frame.  This matters for nested uses of the
-                // same generic declaration: `Optional[Optional[I32]]` has an
-                // outer `T -> Optional[I32]` and an inner `T -> I32`.  Ground
-                // through the instance so the inner payload is I32 in both its
-                // LLVM layout and the value built below.
-                val fieldRef: U64 = c.groundUnderInst(instRef: instanceRef, tyRef: fs[i].ty)
-                elems.append(self.llvmTypeOfRef(c: inout c, ref: fieldRef))
-            } else {
-                elems.append(self.fieldLlvmTy(c: inout c, fd: fs[i]))
-            }
-            i += 1
+    // Payload layout consumes the same concrete field contract as ownership.
+    inout fn variantPayloadTy(c: inout Comp, instanceRef: U64, vi: U64) -> LLVMTypeRef {
+        val storage = c.fieldStorageTypeRef(receiverRef: instanceRef)
+        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: storage) - 1U64]
+        if vi + 1U64 >= contract.variantFieldStarts.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
+            c.errorAt(offset: 0U64, msg: "internal error: enum payload has an incomplete field contract")
+            return self.voidty
         }
-        val layout: LLVMTypeRef = LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
-        return layout
+        val start = contract.variantFieldStarts[vi]
+        val end = contract.variantFieldStarts[vi + 1U64]
+        if start > end || end > contract.fieldTypes.count() {
+            c.errorAt(offset: 0U64, msg: "internal error: enum payload has an invalid field range")
+            return self.voidty
+        }
+        mut val elements: Array[LLVMTypeRef] = []
+        mut val field = start
+        while field < end {
+            if contract.fieldBoxed[field] { elements.append(self.ptrty) }
+            else { elements.append(self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field])) }
+            field += 1U64
+        }
+        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elements), elements.count(), 0I32)
     }
 
     // ---- enum value ARC (tag-dispatch over the active variant's payload) ----
@@ -561,16 +555,8 @@ pub impl LlvmCtx {
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
-            // instance env so a type-param `Ref` payload grounds (see emitEnumReleaseRef).
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            val didSet: Bool = self.setEnumEnv(c: inout c, ref: ref)
             if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[ge]) {
                 self.emitEnumRetain(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge], typeRef: self.genEnumRefs[ge])
-            }
-            if didSet {
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
             }
             return true
         }
@@ -596,12 +582,12 @@ pub impl LlvmCtx {
     // already-computed LLVM payload values (vs. buildEnumValue which evaluates expr
     // ids). Used by the `?.` / `try` desugar where the payload is an extracted SSA
     // value. The payload value types must match the variant's payload struct.
-    inout fn buildEnumFromValues(c: inout Comp, eid: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
+    inout fn buildEnumFromValues(c: inout Comp, instanceRef: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         llvmStore(self.b, LLVMConstNull(ety), slot)
         llvmStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         if payloadVals.count() > 0U64 {
-            val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
+            val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, instanceRef: instanceRef, vi: vi)
             mut val agg: LLVMValueRef = LLVMGetUndef(payloadTy)
             mut val j: U64 = 0
             while j < payloadVals.count() {

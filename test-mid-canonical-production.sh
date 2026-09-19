@@ -130,3 +130,16 @@ assert 'arena.stmts' not in storage and 'semanticExprTerm(' not in storage
 initializer = entry.split('inout fn genLlvmInitGlobals(', 1)[1].split('inout fn genLlvmMain(', 1)[0]
 assert 'LLVMBuildRetVoid(' not in initializer, 'Mid already emits the initializer terminator'
 PYGLOBAL
+
+# Enum payload layout is already concrete; emission cannot reopen binders.
+python3 - <<'PYENUM'
+from pathlib import Path
+source = Path('src/Backend/Llvm/Enums.pw').read_text()
+layout = source.split('inout fn variantPayloadTy(', 1)[1].split('inout fn ', 1)[0]
+for required in ['requireFinalDestruction(', 'variantFieldStarts', 'fieldBoxed', 'fieldTypes']:
+    assert required in layout, f'payload layout lost its frozen contract: {required}'
+for forbidden in ['groundUnderInst(', 'groundTypeRef(', 'enumVariantAt(', 'fieldLlvmTy(']:
+    assert forbidden not in layout, f'payload layout reopens semantic fields: {forbidden}'
+mid = Path('src/Backend/Llvm/Mid.pw').read_text()
+assert 'c.cur.typeParams =' not in mid and 'c.cur.typeArgs =' not in mid, 'Mid LLVM emitter installs a semantic substitution environment'
+PYENUM

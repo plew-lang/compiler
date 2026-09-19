@@ -748,8 +748,6 @@ pub impl LlvmCtx {
         val sourcePayloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, sourceLlvmType, sourceSlotPtr, 1U64, anon())
         val resultSlot: LLVMValueRef = self.entryAlloca(ty: targetLlvmType)
         val end: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.end"))
-        val savedParams: Array[Bind] = c.cur.typeParams
-        val savedArgs: Array[U64] = c.cur.typeArgs
         mut val payloadIndex: U64 = 0U64
         mut val variant: U64 = 0U64
         while variant < c.arena.enumAt(index: enumIdx).variants.count() {
@@ -760,12 +758,8 @@ pub impl LlvmCtx {
             val fields: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
             mut val values: Array[LLVMValueRef] = []
             if fields.count() > 0U64 {
-                c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
-                c.cur.typeArgs = sourceType.args
-                val sourcePayloadType: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIdx, vi: variant)
+                val sourcePayloadType: LLVMTypeRef = self.variantPayloadTy(c: inout c, instanceRef: sourceRef, vi: variant)
                 val payload: LLVMValueRef = llvmLoad(self.b, sourcePayloadType, sourcePayloadPtr, anon())
-                c.cur.typeParams = savedParams
-                c.cur.typeArgs = savedArgs
                 mut val field: U64 = 0U64
                 while field < fields.count() {
                     if payloadIndex >= payloadCount { return LLVMConstNull(targetLlvmType) }
@@ -775,11 +769,7 @@ pub impl LlvmCtx {
                     field += 1U64
                 }
             }
-            c.cur.typeParams = c.arena.enumAt(index: enumIdx).typeParams
-            c.cur.typeArgs = targetType.args
-            llvmStore(self.b, self.buildEnumFromValues(c: inout c, eid: enumIdx, ety: targetLlvmType, vi: variant, payloadVals: values), resultSlot)
-            c.cur.typeParams = savedParams
-            c.cur.typeArgs = savedArgs
+            llvmStore(self.b, self.buildEnumFromValues(c: inout c, instanceRef: targetRef, ety: targetLlvmType, vi: variant, payloadVals: values), resultSlot)
             LLVMBuildBr(self.b, end)
             LLVMPositionBuilderAtEnd(self.b, next)
             variant += 1U64
@@ -2342,11 +2332,6 @@ pub impl LlvmCtx {
         }
         if value.tag == 4U64 {
             if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return LLVMConstNull(self.ptrty) }
-            val result: TypeRef = c.arena.typeAt(index: value.resultTerm)
-            val savedParams: Array[Bind] = c.cur.typeParams
-            val savedArgs: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = c.arena.enumAt(index: value.enumIndex).typeParams
-            c.cur.typeArgs = result.args
             mut val elements: Array[LLVMValueRef] = []
             mut val elementI: U64 = 0U64
             while elementI < value.elements.len {
@@ -2356,9 +2341,7 @@ pub impl LlvmCtx {
                 elements.append(child)
                 elementI = elementI + 1U64
             }
-            val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: value.enumIndex, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: elements)
-            c.cur.typeParams = savedParams
-            c.cur.typeArgs = savedArgs
+            val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, instanceRef: value.resultTerm, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: elements)
             return built
         }
         return LLVMConstNull(self.ptrty)
@@ -2373,7 +2356,7 @@ pub impl LlvmCtx {
             val tagPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, enumTy, enumSlot, 0U64, anon())
             return llvmLoad(self.b, self.i64ty, tagPtr, anon())
         }
-        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: value.enumIndex, vi: value.variantIndex, instanceRef: place.typeTerm)
+        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, instanceRef: place.typeTerm, vi: value.variantIndex)
         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: enumSlot, instanceRef: place.typeTerm)
         val payload: LLVMValueRef = llvmLoad(self.b, payloadTy, payloadPtr, anon())
         val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, value.fieldIndex, anon())
@@ -2387,16 +2370,9 @@ pub impl LlvmCtx {
     // LLVM receives no source-level type or trait lookup responsibility.
     inout fn midCanonicalEmitTryErrResult(c: inout Comp, body: MidBodyNode, destination: MidPlaceNode, value: MidRvalueNode) -> LLVMValueRef {
         if value.operand == 0U64 || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return LLVMConstNull(self.ptrty) }
-        val result: TypeRef = c.arena.typeAt(index: value.resultTerm)
-        val savedParams: Array[Bind] = c.cur.typeParams
-        val savedArgs: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = c.arena.enumAt(index: value.enumIndex).typeParams
-        c.cur.typeArgs = result.args
         mut val payloads: Array[LLVMValueRef] = []
         payloads.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: value.operand))
-        val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: value.enumIndex, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: payloads)
-        c.cur.typeParams = savedParams
-        c.cur.typeArgs = savedArgs
+        val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, instanceRef: value.resultTerm, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: payloads)
         return built
     }
 
@@ -2428,7 +2404,7 @@ pub impl LlvmCtx {
         val source = c.mid.places[statement.source - 1U64]
         val enumTy = self.midCanonicalPlaceTy(c: inout c, body: body, place: source)
         val slot = self.midCanonicalPlacePtr(c: inout c, body: body, place: source)
-        val payloadTy = self.variantPayloadTy(c: inout c, eid: statement.enumIndex, vi: statement.variantIndex, instanceRef: source.typeTerm)
+        val payloadTy = self.variantPayloadTy(c: inout c, instanceRef: source.typeTerm, vi: statement.variantIndex)
         val payloadSlot = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: slot, instanceRef: source.typeTerm)
         val payload = llvmLoad(self.b, payloadTy, payloadSlot, anon())
         mut val index: U64 = 0U64
