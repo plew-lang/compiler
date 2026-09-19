@@ -73,7 +73,7 @@ fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
 fn instantiateMidType(c: inout Comp, typeTerm: U64, typeRecipe: U64, bodyId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
     if typeRecipe != 0U64 {
         if typeTerm != 0U64 { return 0U64 }
-        return c.groundSemanticTypeRecipeForBody(recipeId: typeRecipe, bodyId: bodyId, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        return c.arena.bodyTypeRecipeResult(bodyId: bodyId, recipeId: typeRecipe)
     }
     return c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
 }

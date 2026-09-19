@@ -219,6 +219,14 @@ pub impl Comp {
     // caller's Cursor. Call dependencies are keyed by the explicit body and
     // recorded semantic site, including statement-owned protocol sites.
     inout fn groundSemanticTypeRecipeForBody(recipeId: U64, bodyId: U64, selfRef: U64, itemRef: U64) -> U64 {
+        val result = self.evaluateSemanticTypeRecipeForBody(recipeId: recipeId, bodyId: bodyId, selfRef: selfRef, itemRef: itemRef)
+        self.arena.setBodyTypeRecipeResult(bodyId: bodyId, recipeId: recipeId, resultType: result)
+        return result
+    }
+
+    // This producer belongs to frontend finalization. Mid reads the published
+    // body-specific result and never evaluates a recipe or selects its proof.
+    inout fn evaluateSemanticTypeRecipeForBody(recipeId: U64, bodyId: U64, selfRef: U64, itemRef: U64) -> U64 {
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return 0U64 }
         val kind: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].kind
         if kind == 1U64 {
@@ -253,11 +261,15 @@ pub impl Comp {
     // Record owns one immutable source recipe for every non-range `for`.
     // This lookup is deliberately keyed by the statement navigation id, while
     // a nested CallResult recipe retains its own CallSiteKey identity.
-    inout fn forItemTypeRecipe(stmtId: U64) -> U64 {
+    inout fn finalizeForTypeRecipes(stmtId: U64) -> U64 {
         mut val i: U64 = 0U64
         while i < self.decls.forTypeRecipes.count() {
             val recipe: ForTypeRecipe = self.decls.forTypeRecipes[i]
-            if recipe.stmtId == stmtId { return recipe.itemRecipe }
+            if recipe.stmtId == stmtId {
+                self.groundSemanticTypeRecipe(recipeId: recipe.iteratorRecipe)
+                self.groundSemanticTypeRecipe(recipeId: recipe.nextRecipe)
+                return self.groundSemanticTypeRecipe(recipeId: recipe.itemRecipe)
+            }
             i += 1U64
         }
         return 0U64
@@ -1977,6 +1989,12 @@ pub impl Comp {
             indexSlot = (indexSlot + 1U64) % capacity
         }
         self.arena.finalCalleeIndexSlots.set(i: indexSlot, value: self.finalCalleeCount())
+        // A call's result recipe is part of the selected call contract, even
+        // when no surrounding frontend expression asks for its concrete type.
+        val templateIndex = self.callTemplateIndex(siteKey: siteKey)
+        if templateIndex < self.decls.callTemplates.count() {
+            self.arena.setBodyTypeRecipeResult(bodyId: bodyId, recipeId: self.decls.callTemplates[templateIndex].resultTypeRecipe, resultType: resultTypeRef)
+        }
     }
 
     // Publish a dynamic or no-callable resolution exactly once.  Static calls
@@ -4891,6 +4909,7 @@ pub impl Comp {
         self.arena.finalDestructionNominalHeads = noDestructionHeads
         self.arena.finalDestructionNominalNext = []
         self.arena.finalDestructionNext = []
+        self.arena.clearBodyTypeRecipeResults()
         self.arena.finalCallees = []
         self.arena.finalCalleeIndexSlots = []
         self.arena.finalAggregates = []
@@ -6178,14 +6197,9 @@ pub impl Comp {
                     // changed the concrete iterator type.
                     mut val semanticItem: U64 = 0U64
                     if useProtocolTemplate {
-                        val itemRecipe: U64 = self.forItemTypeRecipe(stmtId: stmtId)
-                        if itemRecipe == 0U64 {
-                            self.errorAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe was not recorded")
-                        } else {
-                            semanticItem = self.groundSemanticTypeRecipe(recipeId: itemRecipe)
-                            if semanticItem == 0U64 {
-                                self.errorAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground")
-                            }
+                        semanticItem = self.finalizeForTypeRecipes(stmtId: stmtId)
+                        if semanticItem == 0U64 {
+                            self.errorAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground")
                         }
                     } else {
                         // Provisional collection has no Record contract yet.

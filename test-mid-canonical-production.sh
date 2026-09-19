@@ -213,3 +213,9 @@ if rg -n 'isGenericInst|structSlotForSidx|enumRegSlot|genStructSlot|genEnumSlot|
     echo "ownership emission must use finalized instance witnesses" >&2
     exit 1
 fi
+
+# Recipe evaluation selects associated-type proofs and belongs to frontend.
+if rg -n 'groundSemanticTypeRecipe|evaluateSemanticTypeRecipe' src/Mid; then
+    echo "Mid must consume frontend-published body recipe results" >&2
+    exit 1
+fi

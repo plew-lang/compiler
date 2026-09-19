@@ -56,6 +56,69 @@ pub impl Arena {
         self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters parameterPassings=passings resultType=result closureSignatureId=index />
     }
 
+    inout fn clearBodyTypeRecipeResults() {
+        self.bodyTypeRecipeResults = []
+        self.bodyTypeRecipeIndexSlots = []
+    }
+
+    fn bodyTypeRecipeHash(bodyId: U64, recipeId: U64) -> U64 {
+        // Normalize before mixing: U64 arithmetic is checked, not wrapping.
+        val modulus = 4294967291U64
+        return ((bodyId % modulus) * 65537U64 + recipeId % modulus) % modulus
+    }
+
+    fn bodyTypeRecipeSlot(bodyId: U64, recipeId: U64) -> U64 {
+        val capacity = self.bodyTypeRecipeIndexSlots.count()
+        mut val slot = self.bodyTypeRecipeHash(bodyId: bodyId, recipeId: recipeId) % capacity
+        while self.bodyTypeRecipeIndexSlots[slot] != 0U64 {
+            val row = self.bodyTypeRecipeResults[self.bodyTypeRecipeIndexSlots[slot] - 1U64]
+            if row.bodyId == bodyId && row.recipeId == recipeId { return slot }
+            slot = (slot + 1U64) % capacity
+        }
+        return slot
+    }
+
+    inout fn ensureBodyTypeRecipeIndex() {
+        val count = self.bodyTypeRecipeResults.count() + 1U64
+        val previous = self.bodyTypeRecipeIndexSlots.count()
+        if previous != 0U64 && count * 2U64 < previous { return }
+        val capacity = if previous == 0U64 { give 64U64 } else { give previous * 2U64 }
+        self.bodyTypeRecipeIndexSlots = []
+        mut val slot = 0U64
+        while slot < capacity {
+            self.bodyTypeRecipeIndexSlots.append(0U64)
+            slot += 1U64
+        }
+        mut val index = 0U64
+        while index < self.bodyTypeRecipeResults.count() {
+            val row = self.bodyTypeRecipeResults[index]
+            val target = self.bodyTypeRecipeSlot(bodyId: row.bodyId, recipeId: row.recipeId)
+            self.bodyTypeRecipeIndexSlots[target] = index + 1U64
+            index += 1U64
+        }
+    }
+
+    inout fn setBodyTypeRecipeResult(bodyId: U64, recipeId: U64, resultType: U64) {
+        if bodyId == 0U64 || bodyId > self.bodyInstances.count() || recipeId == 0U64 { return }
+        self.ensureBodyTypeRecipeIndex()
+        val slot = self.bodyTypeRecipeSlot(bodyId: bodyId, recipeId: recipeId)
+        val entry = self.bodyTypeRecipeIndexSlots[slot]
+        val row = <BodyTypeRecipeResult bodyId=bodyId recipeId=recipeId resultType=resultType />
+        if entry != 0U64 { self.bodyTypeRecipeResults[entry - 1U64] = row }
+        else {
+            self.bodyTypeRecipeResults.append(row)
+            self.bodyTypeRecipeIndexSlots[slot] = self.bodyTypeRecipeResults.count()
+        }
+    }
+
+    fn bodyTypeRecipeResult(bodyId: U64, recipeId: U64) -> U64 {
+        if bodyId == 0U64 || bodyId > self.bodyInstances.count() || recipeId == 0U64 || self.bodyTypeRecipeIndexSlots.count() == 0U64 { return 0U64 }
+        val slot = self.bodyTypeRecipeSlot(bodyId: bodyId, recipeId: recipeId)
+        val entry = self.bodyTypeRecipeIndexSlots[slot]
+        if entry == 0U64 { return 0U64 }
+        return self.bodyTypeRecipeResults[entry - 1U64].resultType
+    }
+
     fn firstBodyInstanceForFunction(functionIndex: U64) -> U64 {
         return self.bodyFunctionHeads.getOr(key: functionIndex, fallback: 0U64)
     }

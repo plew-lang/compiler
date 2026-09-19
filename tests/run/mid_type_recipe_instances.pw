@@ -23,6 +23,9 @@ fn main() {
     // Navigation is deliberately unrelated to the stored semantic call site.
     compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=site />)
     compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=4U64 input=1U64 />)
+    // Frontend closes each dependency before Mid consumes the body facts.
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: firstBody, selfRef: firstType, itemRef: 0U64) != firstType { panic "first recipe producer failed" }
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: secondBody, selfRef: secondType, itemRef: 0U64) != secondType { panic "second recipe producer failed" }
     val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=2U64 sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.ReturnValue value=<MidOperand.Copy place=<MidPlace local=0U64 projections=[] typeTerm=0U64 typeRecipe=2U64 /> /> /> />] />)
     val sourceLocal = compiler.mid.bodies[source.body - 1U64].locals.start
     // Cursor points at the other instance during each instantiation.
@@ -41,6 +44,9 @@ fn main() {
     if compiler.mid.locals[firstLocal].typeRecipe != 0U64 || compiler.mid.locals[secondLocal].typeRecipe != 0U64 { panic "ground result retained recipe" }
     if compiler.mid.locals[sourceLocal].typeTerm != 0U64 || compiler.mid.locals[sourceLocal].typeRecipe != 2U64 { panic "source recipe mutated" }
     val missingBody = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    // Even an available call dependency cannot replace an unpublished result.
+    compiler.cur.bodyId = missingBody
+    compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 2U64, recvTypeRef: firstType, resultTypeRef: firstOptional)
     val missing = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: missingBody)
     match missing.error { MidInstantiateError.InvalidLocalResultType => {} _ => { panic "missing dependency accepted" } }
     write(s: "mid-type-recipe-instances-ok\n")

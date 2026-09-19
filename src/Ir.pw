@@ -1993,6 +1993,15 @@ export struct BodySignature {
 }
 pub impl BodySignature { factory }
 
+// Frontend-published recipe results, indexed within one concrete body.
+// Scalar rows keep reading a fact independent of recipe/AST ownership.
+export struct BodyTypeRecipeResult {
+    pub val bodyId: U64
+    pub val recipeId: U64
+    pub val resultType: U64
+}
+pub impl BodyTypeRecipeResult { factory }
+
 export enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
 
 export struct BodyInstance {
@@ -2439,6 +2448,8 @@ export struct Arena {
     mut val bodyInstances: Array[BodyInstance] = []
     mut val bodyOrigins: Array[BodyOrigin] = []
     mut val bodySignatures: Array[BodySignature] = []
+    mut val bodyTypeRecipeIndexSlots: Array[U64] = []
+    mut val bodyTypeRecipeResults: Array[BodyTypeRecipeResult] = []
     mut val closureSignatures: Array[ClosureSignature] = []
     mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]
     mut val bodyFunctionTails: Dictionary[U64, U64] = [:]
