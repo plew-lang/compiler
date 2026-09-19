@@ -30,10 +30,18 @@ if ! rg -q 'mut val isEntry: Bool = self\.nameIsMain\(f: f\)' "$finalizer"; then
     echo "final callable construction has no explicit executable entry root" >&2
     exit 1
 fi
-# Ordinary async state machines remain roots until their backend is fully
-# demand-driven. Generation must not root unrelated application async bodies.
-if ! rg -Fq 'if isEntry || (f.isAsync && !self.genMode) {' "$finalizer"; then
-    echo "final callable construction does not isolate generation from application async roots" >&2
+# Async now uses the same reachable body queue as synchronous functions.
+# Root only the selected entry; generation excludes the application main.
+if ! rg -Fq 'if isEntry {' "$finalizer" || rg -q 'if isEntry \|\|' "$finalizer"; then
+    echo "final callable construction must root only the selected entry" >&2
+    exit 1
+fi
+if ! rg -Fq 'if self.genMode && isEntry && fi != self.genMainIdx {' "$finalizer"; then
+    echo "generation must exclude the application entry" >&2
+    exit 1
+fi
+if ! rg -q 'while bodyIndex < c\.monoWork\.bodyInstances\.count\(\)' src/Backend/Llvm/Async.pw; then
+    echo "async declarations must consume the reachable body queue" >&2
     exit 1
 fi
 
