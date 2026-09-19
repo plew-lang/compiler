@@ -33,8 +33,24 @@ def exit_status(code):
     return code if code >= 0 else 128 - code
 
 
+class ProgressEvents:
+    """Coalesce notifications without changing the local progress deadline."""
+    def __init__(self, identifier, interval=1.0):
+        self.identifier = identifier
+        self.interval = interval
+        self.sent = 0
+        self.last_sent = float('-inf')
+
+    def flush(self, counter, now, final=False):
+        if counter > self.sent and (final or now - self.last_sent >= self.interval):
+            event(self.identifier, 'progress', counter=counter)
+            self.sent = counter
+            self.last_sent = now
+
+
 def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
     identifier = uuid.uuid4().hex
+    notifications = ProgressEvents(identifier, interval=min(1.0, idle_seconds / 4))
     process = None
     requested = [None]
     handlers = {}
@@ -65,6 +81,7 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
         state = 'running'
         while selector.get_map() or process.poll() is None:
             now = time.monotonic()
+            notifications.flush(count, now)
             if stop_at is None and (requested[0] or now - last >= idle_seconds):
                 state = 'interrupted' if requested[0] else 'stalled'
                 stop_at = now
@@ -98,7 +115,6 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                     if progress:
                         last = time.monotonic()
                         count += 1
-                        event(identifier, 'progress', counter=count)
                     if phase:
                         last_phase = line
                     llvm_detail = line.startswith(b'Clearing all analysis results for:') or (line.startswith(b'[') and any(marker in line for marker in (b" Freeing Pass '", b" Made Modification '")))
@@ -137,6 +153,7 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
         selector.close()
         for number, handler in handlers.items():
             signal.signal(number, handler)
+        notifications.flush(count, time.monotonic(), final=True)
         event(identifier, 'end', state=state, exit_code=code, error=error)
     if traced or state != 'exited':
         print(f'trace-command: state={state} exit={code} events={count} log={log_path}' + (f' error={error}' if error else ''), file=sys.stderr, flush=True)
