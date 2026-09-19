@@ -135,6 +135,37 @@ pub impl Comp {
         return ref
     }
 
+    // Closedness is structural evidence, not an opportunity to resolve a
+    // projection or reinterpret a spelling in an ambient generic scope.
+    // Unit is the zero type term (including a function result child).
+    fn typeTermIsClosed(ref: U64) -> Bool {
+        if ref == 0U64 { return true }
+        if ref >= self.arena.typeTerms.count() { return false }
+        val term = self.arena.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
+        if !term.isAny && rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Self") { return false }
+        if term.isRecord {
+            if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
+            mut val index = 0U64
+            while index < term.recordFieldTerms.len {
+                if !self.typeTermIsClosed(ref: self.arena.typeRecordFieldPool[term.recordFieldTerms.start + index]) { return false }
+                index += 1U64
+            }
+            return true
+        }
+        mut val index = 0U64
+        while index < term.args.len {
+            if !self.typeTermIsClosed(ref: self.arena.typeArgumentPool[term.args.start + index]) { return false }
+            index += 1U64
+        }
+        index = 0U64
+        while index < term.assocTraitArgs.len {
+            if !self.typeTermIsClosed(ref: self.arena.typeAssocArgumentPool[term.assocTraitArgs.start + index]) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
     // Ground a body-owned semantic term through the caller-supplied immutable
     // environment. `selfRef`/`itemRef` are derived conveniences rather than
     // key fields, but are explicit here so a semantic read never silently

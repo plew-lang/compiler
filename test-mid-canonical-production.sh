@@ -219,3 +219,9 @@ if rg -n 'groundSemanticTypeRecipe|evaluateSemanticTypeRecipe' src/Mid; then
     echo "Mid must consume frontend-published body recipe results" >&2
     exit 1
 fi
+
+# Closedness at a Mid boundary must not trigger name/proof resolution.
+if rg -n 'tyRefIsGround' src/Mid; then
+    echo "Mid closed-type checks must be structural" >&2
+    exit 1
+fi

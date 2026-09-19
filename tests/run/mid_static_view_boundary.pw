@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
-import /Ir with { TypeRef, InstanceEnvironment }
+import /Ir with { TypeRef, InstanceEnvironment, Bind, Func }
 import /Mid with { MidBody, MidBlock, MidScope, MidLocalDecl, MidPlace, MidOperand, MidBorrowCapability, MidRvalue, MidStatement, MidTerminator, MidInstantiateError, instantiateCanonicalMidBody, verifyCanonicalMidBody }
 import /Mid/Verify with { MidVerifyError }
 
@@ -48,5 +48,16 @@ fn main() {
     check(compiler: inout compiler, sourceType: plainContainer, targetType: outerView, valid: true)
     check(compiler: inout compiler, sourceType: plainContainer, targetType: innerView, valid: false)
     check(compiler: inout compiler, sourceType: source, targetType: viewed, valid: false, borrowed: true)
+    // A closed nominal spelling is independent of another declaration's binder.
+    val parameters = compiler.pushFuncBinds(binds: [<Bind nameStart=first.nameStart nameLen=first.nameLen nameId=first.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
+    compiler.arena.registerFunction(<Func nameStart=0U64 nameLen=0U64 typeParams=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    assert(compiler.arena.hasTypeParameterName(nameId: first.nameId))
+    check(compiler: inout compiler, sourceType: source, targetType: viewed, valid: true)
+    val parameter = compiler.pushType(t: <TypeRef nameStart=first.nameStart nameLen=first.nameLen paramId=71U64 args=[] />)
+    val openContainer = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[parameter] />)
+    val openExistential = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[parameter] isAny=true />)
+    check(compiler: inout compiler, sourceType: parameter, targetType: parameter, valid: false)
+    check(compiler: inout compiler, sourceType: openContainer, targetType: openContainer, valid: false)
+    check(compiler: inout compiler, sourceType: openExistential, targetType: openExistential, valid: false)
     print("ok")
 }
