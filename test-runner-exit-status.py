@@ -6,6 +6,11 @@ import re
 import subprocess
 import tempfile
 
+def install_supervisors(root):
+    # Isolated workers must run the production supervisors and their shared module.
+    for name in ('watch-command.py', 'trace-command.py', 'process_watch.py'):
+        (root / name).write_bytes(Path(__file__).with_name(name).read_bytes())
+
 source = Path(__file__).with_name('test.sh').read_text()
 workers = {}
 for phase in ('run', 'part'):
@@ -15,6 +20,7 @@ for phase in ('run', 'part'):
 
 with tempfile.TemporaryDirectory(prefix='plew-runner-status-') as directory:
     root = Path(directory)
+    install_supervisors(root)
     tools = root / 'tools'
     tools.mkdir()
     compiler = tools / 'compiler'
@@ -112,6 +118,7 @@ worker = asan.split('    run_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = '    run_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
     root = Path(directory)
+    install_supervisors(root)
     (root/'tests/run').mkdir(parents=True)
     binary = root/'app'
     for name, body, expected_pass in cases:
@@ -136,7 +143,7 @@ worker = asan.split('    compile_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = 'compile_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
     root = Path(directory)
-    (root/'trace-command.py').write_bytes(Path(__file__).with_name('trace-command.py').read_bytes())
+    install_supervisors(root)
     compiler = root/'plewc_asan'
     for reject in (False, True):
         for code in (0, 1, 7, 143):
@@ -162,13 +169,14 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
 asan = Path(__file__).with_name('asan-gate.sh').read_text()
 with tempfile.TemporaryDirectory(prefix='plew-asan-preparation-') as directory:
     root = Path(directory)
+    install_supervisors(root)
     guards = [line for line in asan.splitlines()
               if 'diagnostic: $err.' in line and 'exit 0;' in line]
     assert len(guards) == 6, guards
     for index, guard in enumerate(guards):
         script = ('PLEWC=false; OPT=false; CLANG=false; f=fixture; '
                   'll=$1/input.ll; err=$1/error; bin=$1/binary; RT=; extra_c=; PLEW_LD=\n' + guard)
-        result = subprocess.run(['sh','-c',script,'sh',str(root)],capture_output=True,text=True)
+        result = subprocess.run(['sh','-c',script,'sh',str(root)],cwd=root,capture_output=True,text=True)
         assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
         assert 'diagnostic:' in result.stdout, result
         print(f'PASS asan-preparation/{index}', flush=True)
