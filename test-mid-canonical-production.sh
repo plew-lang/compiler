@@ -253,3 +253,13 @@ if rg -n 'c\.cur\.|setSelfItemEnv|clearSelfItemEnv' src/Backend; then
     echo "LLVM emission must not depend on frontend Cursor state" >&2
     exit 1
 fi
+
+# Closed nominal and dynamic-call contracts must not reopen name lookup.
+if rg -n 'newtypeUnderRef' src/Mid; then
+    echo "Mid newtype boundaries must use selected declaration identity" >&2
+    exit 1
+fi
+if rg -n 'isGenericEnumInst|reqUsesSelfInInput|reqRetSelfErasable' src/Backend; then
+    echo "LLVM must consume finalized enum and existential call contracts" >&2
+    exit 1
+fi

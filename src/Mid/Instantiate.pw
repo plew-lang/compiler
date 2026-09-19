@@ -347,8 +347,8 @@ fn instantiateCanonicalCastBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, e
     }
     val source: TypeRef = c.arena.typeAt(index: sourceRef)
     val target: TypeRef = c.arena.typeAt(index: targetRef)
-    val sourceUnderlying: U64 = c.newtypeUnderRef(start: source.nameStart, len: source.nameLen)
-    val targetUnderlying: U64 = c.newtypeUnderRef(start: target.nameStart, len: target.nameLen)
+    val sourceUnderlying: U64 = c.newtypeUnderlyingTypeRef(ref: sourceRef)
+    val targetUnderlying: U64 = c.newtypeUnderlyingTypeRef(ref: targetRef)
     if sourceUnderlying != 0U64 && c.typeRefEq(a: sourceUnderlying, b: targetRef) {
         c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=targetRef />)
         return c.mid.rvalues.count()
@@ -1643,8 +1643,8 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             // Newtype wrap/unwrap is the spec's explicit zero-cost exception.
             // It is closed by the selected nominal types, rather than a backend
             // check of the authored cast spelling.
-            val sourceUnderlying: U64 = c.newtypeUnderRef(start: source.nameStart, len: source.nameLen)
-            val targetUnderlying: U64 = c.newtypeUnderRef(start: target.nameStart, len: target.nameLen)
+            val sourceUnderlying: U64 = c.newtypeUnderlyingTypeRef(ref: sourceRef)
+            val targetUnderlying: U64 = c.newtypeUnderlyingTypeRef(ref: targetRef)
             if sourceUnderlying != 0U64 && c.typeRefEq(a: sourceUnderlying, b: targetRef) {
                 return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=targetRef />
             }

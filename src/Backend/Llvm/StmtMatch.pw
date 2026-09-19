@@ -1,25 +1,7 @@
-// Part of the LLVM backend (root: _.pw): match-statement emission and payload / struct pattern binding.
-
-// Lower `match scrut { Pat => block, ... }` on a registered enum: store the
-// scrutinee, switch on its tag through a chain of compare/branch blocks, and in
-// each arm bind the variant's payload fields (extracted from the payload area)
-// before emitting its body. Exhaustiveness is guaranteed by the front-end; a
-// wildcard `_` arm is the catch-all.
-
+// Physical address of an enum payload. All enum layouts are registered from
+// FinalDestruction as { tag: I64, payload: [word] }, regardless of genericity.
 pub impl LlvmCtx {
-    // The generic-enum ABI is fixed as `{ tag: I64, payload: [word] }`.
-    // Its payload is subsequently interpreted under the selected variant's
-    // semantic field layout.  Address the word storage through that ABI rather
-    // than re-applying a concrete struct-field projection to an opaque LLVM
-    // pointer: the latter couples the place calculation to whichever
-    // semantically-equal TypeRef happened to register the named layout.
-    inout fn enumMatchPayloadStorage(c: inout Comp, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, instanceRef: U64) -> LLVMValueRef {
-        if c.isGenericEnumInst(ref: instanceRef) {
-            mut val wordIndex: Array[LLVMValueRef] = []
-            wordIndex.append(LLVMConstInt(self.i64ty, 1U64, 0I32))
-            return LLVMBuildGEP2(self.b, self.i64ty, scrutSlot, arrayCPtr(wordIndex), 1U64, anon())
-        }
+    inout fn enumMatchPayloadStorage(scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) -> LLVMValueRef {
         return LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, 1U64, anon())
     }
-
 }

@@ -1896,7 +1896,10 @@ pub impl LlvmCtx {
                 if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <MidCallPreflight.Callee /> }
                 val requirement: Func = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
                 if requirement.isAsync { return <MidCallPreflight.Async /> }
-                if requirement.isAssoc || c.reqUsesSelfInInput(req: requirement) || !c.reqRetSelfErasable(req: requirement) { return <MidCallPreflight.Callee /> }
+                // Final call publication has already checked erased Self input
+                // and result admissibility. Preflight validates the selected ABI;
+                // it must not reopen requirement type/name resolution.
+                if requirement.isAssoc { return <MidCallPreflight.Callee /> }
                 if selected.recvTypeRef == 0U64 || selected.recvTypeRef >= c.arena.typeCount() || !c.arena.typeAt(index: selected.recvTypeRef).isAny { return <MidCallPreflight.Receiver /> }
                 // Thunks borrow their box or mutate its privatized storage.
                 // Consuming receivers require a distinct box-ownership ABI.
@@ -2366,7 +2369,7 @@ pub impl LlvmCtx {
             return llvmLoad(self.b, self.i64ty, tagPtr, anon())
         }
         val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, instanceRef: place.typeTerm, vi: value.variantIndex)
-        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: enumSlot, instanceRef: place.typeTerm)
+        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(scrutTy: enumTy, scrutSlot: enumSlot)
         val payload: LLVMValueRef = llvmLoad(self.b, payloadTy, payloadPtr, anon())
         val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, value.fieldIndex, anon())
         if value.tag == 14U64 || value.tag == 15U64 { return llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: value.resultTerm), field, anon()) }
@@ -2414,7 +2417,7 @@ pub impl LlvmCtx {
         val enumTy = self.midCanonicalPlaceTy(c: inout c, body: body, place: source)
         val slot = self.midCanonicalPlacePtr(c: inout c, body: body, place: source)
         val payloadTy = self.variantPayloadTy(c: inout c, instanceRef: source.typeTerm, vi: statement.variantIndex)
-        val payloadSlot = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: slot, instanceRef: source.typeTerm)
+        val payloadSlot = self.enumMatchPayloadStorage(scrutTy: enumTy, scrutSlot: slot)
         val payload = llvmLoad(self.b, payloadTy, payloadSlot, anon())
         mut val index: U64 = 0U64
         while index < statement.enumDestinations.len {

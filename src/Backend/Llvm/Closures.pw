@@ -280,7 +280,6 @@ pub impl LlvmCtx {
         while slot < self.closures.count() {
             val closure: LlvmClosure = self.closures[slot]
             val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
-            val instance: BodyInstance = c.arena.bodyInstanceAt(index: closure.bodyId - 1U64)
             val signature: TypeRef = c.arena.typeAt(index: closure.functionTypeTerm)
             self.curFn = closure.function
             self.curIsMain = false
