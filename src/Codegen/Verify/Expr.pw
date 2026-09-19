@@ -83,7 +83,7 @@ pub impl Comp {
                 self.cur.retTy = sRT
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                self.verifyFieldReadVis(base: base, nameStart: nameStart, nameLen: nameLen)
+                self.verifyFieldReadVis(exprId: id, base: base, nameStart: nameStart, nameLen: nameLen)
                 self.verifyExpr(id: base)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -271,7 +271,13 @@ pub impl Comp {
                 }
                 // A construction owns its selected type even outside a typed
                 // Let/return/argument. Check generic field values here too.
-                self.tcCheckMakeFields(expectedRef: self.parametricExprTerm(exprId: id), makeId: id)
+                val selectedMakeType = self.parametricExprTerm(exprId: id)
+                if !isEnum && (selectedMakeType == 0U64 || self.arena.typeAt(index: selectedMakeType).args.count() == 0U64) {
+                    if self.genericStructIndex(nameStart: typeStart, nameLen: typeLen) < self.arena.structCount() {
+                        self.errorAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
+                    }
+                }
+                self.tcCheckMakeFields(expectedRef: selectedMakeType, makeId: id)
                 // a NON-GENERIC struct's field value whose category disagrees with the
                 // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
                 // — reject (same reliable-value discipline as the let-annotation check).
@@ -360,6 +366,7 @@ pub impl Comp {
                     // escape hatch.
                     val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
+                    self.verifySelectedFieldExists(exprId: id, receiverTerm: inst.args[0], nameStart: nameStart, nameLen: nameLen, message: "no such field on this Ref's pointee type (check the field name)")
                     if pt.kind == 2 {
                         self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                     }

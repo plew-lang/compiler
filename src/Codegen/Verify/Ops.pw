@@ -323,7 +323,41 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyFieldReadVis(base: U64, nameStart: U64, nameLen: U64) {
+    inout fn verifySelectedFieldExists(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, message: String) {
+        if exprId < self.arena.semanticExprTypes.count() && self.arena.semanticExprTypes[exprId].hasFieldProjection { return }
+        val storage = self.fieldStorageTypeRef(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm))
+        if storage == 0U64 { return }
+        val storageType = self.arena.typeAt(index: storage)
+        mut val fieldCount: U64 = 0U64
+        if storageType.isRecord {
+            fieldCount = storageType.recordFieldLabels.count()
+        } else {
+            val structIndex = self.structIndexForType(ref: storage)
+            if structIndex >= self.arena.structCount() { return }
+            fieldCount = self.arena.structAt(index: structIndex).fields.count()
+        }
+        // Missing recording is not evidence of an absent field (for example,
+        // a Unit field has no nonzero result term). Check the declaration.
+        if self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: nameStart, fieldLen: nameLen) >= fieldCount {
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: message)
+        }
+    }
+
+    // Write capability belongs to the nearest dereference, not to every
+    // reference used to obtain its handle. A MutableRef stored inside a Ref
+    // can still mutate its own referent.
+    inout fn placeHasReadOnlyReference(id: U64) -> Bool {
+        match self.arena.exprs[id] {
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.placeHasReadOnlyReference(id: base) }
+            Expr.Index(val base, index: _) => { return self.placeHasReadOnlyReference(id: base) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.placeHasReadOnlyReference(id: operand) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.isRefInst(ref: self.typeOf(id: base).ref) }
+            Expr.Deref(val base) => { return self.isRefInst(ref: self.typeOf(id: base).ref) }
+            _ => { return false }
+        }
+    }
+
+    inout fn verifyFieldReadVis(exprId: U64, base: U64, nameStart: U64, nameLen: U64) {
         match self.arena.exprs[base] {
             Expr.Ident(val start, val len) => {
                 if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount()) {
@@ -356,6 +390,7 @@ pub impl Comp {
                     self.errorAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
                 }
             }
+            self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
             self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
@@ -373,6 +408,9 @@ pub impl Comp {
                 // value that is immediately discarded — spec/03).
                 if self.arena.functionAt(index: mf).selfInout {
                     val receiverPlace: U64 = self.materializablePlace(id: recv)
+                    if self.placeHasReadOnlyReference(id: receiverPlace) {
+                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot use read-only Ref as an inout place; expected MutableRef")
+                    }
                     if !(self.exprIsPlace(id: receiverPlace)) {
                         self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                     }

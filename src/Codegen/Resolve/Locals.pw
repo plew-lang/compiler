@@ -566,6 +566,9 @@ pub impl Comp {
             Expr.ExtView(val recv, source: _, strip: _) => {
                 return self.placeIsMutable(id: recv)
             }
+            Expr.Deref(val base) => {
+                return self.isMutableRefInst(ref: self.typeOf(id: base).ref)
+            }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 // A MutableRef's pointee is writable through a `val` MutableRef BINDING — the
                 // exception waives only the binding's val/mut (sharing is the MutableRef's
