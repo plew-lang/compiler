@@ -1,0 +1,38 @@
+import @Std/Io with { print }
+
+trait Named { fn label() -> String }
+struct Person { pub val name: String }
+pub impl Person { factory }
+pub impl Person as Named { fn label() -> String { return self.name } }
+
+fn person() -> Optional[Person] {
+    return <Optional[Person].Some v=<Person name="Ada" /> />
+}
+
+// The global storage type differs from its initializer's result. Both a
+// direct aggregate and a call must use the frozen storage conversion.
+val direct: any Named = <Person name="Grace" />
+mut val converted: Optional[any Named] = person()
+val original: Optional[Person] = person()
+val copied: Optional[any Named] = original
+
+fn describe(value~: Optional[any Named]) {
+    match value {
+        Optional.Some(v: val item) => { print(item.label()) }
+        Optional.None => { print("none") }
+    }
+}
+
+fn main() {
+    print(direct.label())
+    describe(converted)
+    describe(copied)
+    match original {
+        Optional.Some(v: val item) => { print(item.name) }
+        Optional.None => { print("unexpected") }
+    }
+    val empty: Optional[Person] = <Optional[Person].None />
+    converted = empty
+    describe(converted)
+    describe(copied)
+}

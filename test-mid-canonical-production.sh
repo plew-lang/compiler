@@ -119,3 +119,14 @@ if rg -n '\b(genLlvmExpr|genLlvmStmt|genLlvmBlock|genLlvmMidBody|dropScope)\s*\(
     echo 'legacy semantic LLVM consumer remains' >&2
     exit 1
 fi
+
+# Global storage consumes the frozen Let contract; Mid owns its terminator.
+python3 - <<'PYGLOBAL'
+from pathlib import Path
+entry = Path('src/Backend/Llvm/Entry.pw').read_text()
+storage = entry.split('inout fn declareGlobalStorage(', 1)[1].split('inout fn genLlvmInitGlobals(', 1)[0]
+assert 'finalStorageIndex(' in storage and '.targetTypeRef' in storage
+assert 'arena.stmts' not in storage and 'semanticExprTerm(' not in storage
+initializer = entry.split('inout fn genLlvmInitGlobals(', 1)[1].split('inout fn genLlvmMain(', 1)[0]
+assert 'LLVMBuildRetVoid(' not in initializer, 'Mid already emits the initializer terminator'
+PYGLOBAL

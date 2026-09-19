@@ -2657,32 +2657,28 @@ export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
         val global = c.arena.globals[globalI]
         if global.letStmt >= c.arena.stmts.count() { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
         match c.arena.stmts[global.letStmt] {
-            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, mutable: _) => {
-                val term: U64 = c.semanticExprTerm(exprId: init)
+            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init, mutable: _) => {
+                val sourceTerm: U64 = c.semanticExprTerm(exprId: init)
+                mut val term: U64 = declaredTerm
+                if term == 0U64 { term = sourceTerm }
                 if term == 0U64 { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingSemanticType /> /> }
                 val evaluation: U64 = midOpenScope(state: inout state)
                 val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
                 val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
-                mut val result: MidBuildError = <MidBuildError.None />
-                if midExprIsCall(c: c, exprId: init) {
-                    result = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: temporary)
-                } else {
-                    val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
-                    mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
-                    if aggregate.found { operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate) }
-                    else { operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: term, allowAccessMarker: false) }
-                    match operand.error {
-                        MidBuildError.None => { midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.Use operand=operand.operand /> />) }
-                        _ => { result = operand.error }
-                    }
-                }
-                match result {
+                // Apply the same frozen storage conversion as a local Let,
+                // then transfer the converted owner to process-lifetime storage.
+                val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
+                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=sourceTerm /> /> />
+                if aggregate.found { operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate) }
+                else { operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: sourceTerm, allowAccessMarker: false) }
+                match operand.error {
                     MidBuildError.None => {
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=global.letStmt targetTerm=term operand=midReturnOperand(c: inout c, operand: operand.operand, typeTerm: sourceTerm) /> />)
                         val destination: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=global.nameStart globalMutable=global.mutable typeTerm=term />
                         midAppendStatement(state: inout state, statement: <MidStatement.InitializeGlobal destination=destination source=temporary />)
                         midFinishEvaluationScope(state: inout state, scope: evaluation)
                     }
-                    _ => { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }
+                    _ => { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=operand.error /> }
                 }
             }
             _ => { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }

@@ -11,45 +11,21 @@ pub impl LlvmCtx {
     // its initializer body runs.  This is the same separation as a local
     // alloca from the value later stored into it: backend storage metadata is
     // not an observation made by legacy expression emission.
-    inout fn declareGlobalStorage(c: inout Comp) -> Bool {
+    inout fn declareGlobalStorage(c: inout Comp, bodyId: U64) -> Bool {
+        if bodyId == 0U64 { return false }
         mut val gi: U64 = 0U64
         while gi < c.arena.globals.count() {
             val global = c.arena.globals[gi]
-            if global.letStmt >= c.arena.stmts.count() { return false }
-            mut val term: U64 = 0U64
-            match c.arena.stmts[global.letStmt] {
-                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => { term = c.semanticExprTerm(exprId: init) }
-                _ => { return false }
-            }
+            val storage = c.finalStorageIndex(bodyId: bodyId, stmtId: global.letStmt)
+            if storage >= c.arena.finalStorages.count() { return false }
+            val term = c.arena.finalStorages[storage].targetTypeRef
             if term == 0U64 || term >= c.arena.typeCount() { return false }
-            val typeRef = c.arena.typeAt(index: term)
             val lty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: term)
             val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
             LLVMSetInitializer(gv, LLVMConstNull(lty))
-            mut val isArray: Bool = rangeEquals(bytes: c.arena.bytes, start: typeRef.nameStart, len: typeRef.nameLen, kw: "Array") && typeRef.args.count() == 1U64
-            mut val elementTerm: U64 = 0U64
-            if isArray { elementTerm = typeRef.args[0U64] }
-            mut val elementTy: LLVMTypeRef = self.i64ty
-            mut val elementKind: U64 = 0U64
-            if elementTerm != 0U64 && elementTerm < c.arena.typeCount() {
-                elementTy = self.llvmTypeOfRef(c: inout c, ref: elementTerm)
-                elementKind = kindFromTySpan(c: inout c, tyStart: c.arena.typeAt(index: elementTerm).nameStart, tyLen: c.arena.typeAt(index: elementTerm).nameLen)
-            }
-            mut val structIndex: U64 = self.localStructIdxFor(c: inout c, start: typeRef.nameStart, len: typeRef.nameLen)
-            if c.isGenericInst(ref: term) {
-                val genericSlot: U64 = self.genStructSlot(c: inout c, ref: term)
-                if genericSlot < self.genStructDefs.count() { structIndex = self.genStructDefs[genericSlot] }
-            }
             self.gvalRef.append(gv)
             self.gvalLty.append(lty)
-            if isArray { self.gvalKind.append(elementKind) }
-            else { self.gvalKind.append(kindFromTySpan(c: inout c, tyStart: typeRef.nameStart, tyLen: typeRef.nameLen)) }
-            self.gvalSidx.append(structIndex)
-            self.gvalIsArr.append(isArray)
-            self.gvalElemTy.append(elementTy)
-            self.gvalElemKind.append(elementKind)
             self.gvalTref.append(term)
-            self.gvalElemTypeRef.append(elementTerm)
             gi += 1U64
         }
         return self.gvalRef.count() == c.arena.globals.count()
@@ -91,9 +67,9 @@ pub impl LlvmCtx {
         self.locOwned = []
         self.locMoved = []
         self.locCellHome = []
-        val storageReady: Bool = self.declareGlobalStorage(c: inout c)
         val globalOwner: U64 = 18446744073709551615U64
         val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
+        val storageReady: Bool = self.declareGlobalStorage(c: inout c, bodyId: bodyId)
         mut val midReady: Bool = false
         if !storageReady {
             self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: <MidLlvmPreflight.Terminator />)
@@ -137,7 +113,6 @@ pub impl LlvmCtx {
             c.errorAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering")
             return
         }
-        LLVMBuildRetVoid(self.b)
         c.cur.bodyFnIdx = savedBodyFn
         c.cur.bodyEnvironment = savedBodyEnvironment
         c.cur.bodyId = 0U64

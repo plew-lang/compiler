@@ -341,13 +341,7 @@ struct LlvmCtx {
     // declaration order, by `plew_init_globals`.
     pub mut val gvalRef: Array[LLVMValueRef] = []
     pub mut val gvalLty: Array[LLVMTypeRef] = []
-    pub mut val gvalKind: Array[U64] = []
-    pub mut val gvalSidx: Array[U64] = []
-    pub mut val gvalIsArr: Array[Bool] = []
-    pub mut val gvalElemTy: Array[LLVMTypeRef] = []
-    pub mut val gvalElemKind: Array[U64] = []
     pub mut val gvalTref: Array[U64] = []
-    pub mut val gvalElemTypeRef: Array[U64] = []
     // struct indices currently on the value-ARC emit stack (emitDeinitValue / emitStructRetain),
     // so a self-referential type (`struct S { items: Array[S] }`) does not recurse forever at
     // codegen — a struct already being emitted is skipped. Only the INLINE walk must
