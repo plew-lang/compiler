@@ -93,31 +93,6 @@ pub impl LlvmCtx {
         }
     }
 
-    // The per-instance LLVM type of `Array[<elemRef>]` — the registered `%gs` of the array
-    // instance whose single element arg is structurally equal to `elemRef` (a SOUND full-ref
-    // match, not element-name). Falls back to the shared arrayTy `{ptr}` when that instance
-    // was not registered (no Array literal/local/field of it reached mono) — harmless since
-    // every Array `%gs` is the same `{ptr}` layout. De-pin: array CONSTRUCTION sites resolve
-    // their value's aggregate type through here so it matches the per-instance type used by
-    // fields/params/returns (llvmTypeOfRef -> genStructSlot).
-    inout fn arrayInstTy(c: inout Comp, elemRef: U64) -> LLVMTypeRef {
-        if elemRef != 0U64 {
-            // Resolve through the SAME canonical genStructSlot match (full-ref typeRefEq) the
-            // type sites use (llvmTypeOfRef -> genStructSlot), so a constructed array VALUE and
-            // its field/param/return TYPE pick the identical `%gs` even when the same `Array[E]`
-            // was registered more than once (element-only matching could pick a different dup).
-            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-            mut val aargs: Array[U64] = []
-            aargs.append(elemRef)
-            val aref: U64 = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-            val gs: U64 = self.genStructSlot(c: inout c, ref: aref)
-            if gs < self.genStructRefs.count() {
-                return self.genStructTys[gs]
-            }
-        }
-        return self.arrayTy
-    }
-
     // Lookup never discovers new semantic types during LLVM emission.
     inout fn genStructSlot(c: inout Comp, ref: U64) -> U64 {
         // A top-level view selects a method surface, never a physical layout.

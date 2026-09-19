@@ -186,11 +186,6 @@ struct LlvmCtx {
     pub val f64ty: LLVMTypeRef
     pub val voidty: LLVMTypeRef
     pub val ptrty: LLVMTypeRef
-    // String / Array value type (C1): a single rawbuf data pointer; count + cap live in the
-    // heap header [cap@-3][count@-2][rc@-1] (== ptrty). Both alias ptrty; see Backend init.
-    pub val strty: LLVMTypeRef
-    // Array value type: { ptr data, i64 count } (element behind the pointer).
-    pub val arrayTy: LLVMTypeRef
     // Closure / function-value type: { ptr fn, ptr env } — a lambda-lifted function
     // pointer plus its captured-environment pointer (NULL for non-capturing). Every
     // `fn(...) -> ...` value is this fat pointer; the callee ABI takes env first.
@@ -677,17 +672,6 @@ export fn emitLlvm(c: inout Comp) {
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
     val i64ty: LLVMTypeRef = LLVMInt64TypeInContext(ctx)
-    // Array A (de-collapse): String / Array VALUE = a real one-field aggregate `{ptr}`
-    // wrapping the rawbuf data pointer, so Array/String are ordinary structs riding the
-    // generic-struct machinery (collections.md §3-付録3 case A; was C1's bare pointer). The
-    // live count + capacity live in the heap header [cap@-3][count@-2][rc@-1] before the
-    // data, read via plew_rawbuf_count/cap. The VALUE seam (arrValData/arrValMake/arrValWrap)
-    // wraps/unwraps the `{ptr}`; the SLOT seam (arrStoragePtr GEPs field 0 → the inner buffer
-    // ptr*, so cowArraySlot/arrSlot* stay uniform with the bare-ptr Buffer floor).
-    mut val wrapElems: Array[LLVMTypeRef] = []
-    wrapElems.append(ptrty)
-    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(wrapElems), 1U64, 0I32)
-    val strty: LLVMTypeRef = arrayTy
     mut val cloelems: Array[LLVMTypeRef] = []
     cloelems.append(ptrty)
     cloelems.append(ptrty)
@@ -709,7 +693,7 @@ export fn emitLlvm(c: inout Comp) {
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
-        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethVal=[] genMethTy=[] genMethBody=[]

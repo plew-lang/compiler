@@ -5636,6 +5636,8 @@ pub impl Comp {
                 // cross a call or storage boundary that would root its type.
                 self.collectRecordedValueLayout(exprId: exprId)
             }
+            Expr.Str(start: _, len: _) => { self.collectRecordedValueLayout(exprId: exprId) }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Ident(val start, val len) => {
                 self.selectReferencedGlobal(exprId: exprId)
                 // capture detection: inside a closure, an identifier that resolves to

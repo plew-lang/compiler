@@ -1,17 +1,10 @@
 // Part of the LLVM backend (root: _.pw): array literal / index / append / set emission and short-circuit ops.
 
-// Build an array literal `[e0, e1, ...]` of element type `elemTy` (provided by the
-// caller from the annotation, or inferred from the first element) as a
-// `{ ptr data, i64 count }` value.
-
 pub impl LlvmCtx {
-    // Mid's array construction has already evaluated, typed, and ownership-
-    // classified its operands. Keep this value-based entry separate from the
-    // source ExprRange entry above it: it cannot accidentally reopen source
-    // expression/type recovery during backend lowering.
-    inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, elemRef: U64) -> LLVMValueRef {
+    // Operands and the result layout are already selected by canonical Mid.
+    inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, type: LLVMTypeRef) -> LLVMValueRef {
         if values.count() == 0U64 {
-            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
+            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: type)
         }
         val data: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32))
         mut val i: U64 = 0U64
@@ -19,7 +12,7 @@ pub impl LlvmCtx {
             llvmStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1U64
         }
-        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
+        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: type)
     }
 
     // `Buffer.new()`: a fresh empty buffer (header-only, cap=0 — the first append grows

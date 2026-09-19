@@ -32,14 +32,14 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // Build a String value (strty `{i8*, i64}`) from a literal. The bytes live in a
+    // Build a literal with the physical type selected by canonical Mid. The bytes live in a
     // rawbuf-SHAPED global `[i64 cap][i64 rc][bytes…]` (the same layout plew_rawbuf_alloc
     // produces) with rc = a huge sentinel, and the String's pointer is at the bytes
     // (offset 16). This unifies String buffers onto rawbuf so `.bytes()` views and the
     // scope-exit drop (plew_rawbuf_drop: dec rc, free at 0) work uniformly — the sentinel
     // rc means a literal is never freed (program-lifetime), and the header is invisible to
     // String ops (which read only {ptr,len}). The global is mutable so rc is writable.
-    inout fn genLlvmStr(c: inout Comp, start: U64, len: U64) -> LLVMValueRef {
+    inout fn genLlvmStr(c: inout Comp, start: U64, len: U64, type: LLVMTypeRef) -> LLVMValueRef {
         mut val bytes: Array[U8] = strDecodeBytes(c: inout c, start: start, len: len)
         val n: U64 = bytes.count() - 1
         val i8ty: LLVMTypeRef = LLVMInt8TypeInContext(self.ctx)
@@ -67,7 +67,7 @@ pub impl LlvmCtx {
         // the data pointer at offset 24 is the String buffer (count is baked in the header
         // above); wrap it into the `{ptr}` String/Array VALUE aggregate (Array A).
         val data: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
-        return self.arrValWrap(c: inout c, data: data, aggTy: self.stringLlvmTy(c: inout c))
+        return self.arrValWrap(c: inout c, data: data, aggTy: type)
     }
 
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink
@@ -90,7 +90,7 @@ pub impl LlvmCtx {
 
     // A path-taking runtime intrinsic (`readFile`/`readFileBytes`/`fileExists`): the
     // path is a {ptr,i64} value (String or Array[U8], same layout) passed as two args;
-    // returns `retTy` (strty for the file readers, i64 for fileExists).
+    // returns the selected physical `retTy`.
     inout fn emitPathStrIntrinsicValue(c: inout Comp, rtName: String, retTy: LLVMTypeRef, path: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)

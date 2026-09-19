@@ -1,4 +1,4 @@
-// Physical primitive widths and runtime String representation.
+// Physical primitive widths. Aggregate layouts come from finalized contracts.
 
 pub impl LlvmCtx {
     // Primitive language-item widths are a physical lowering decision.
@@ -21,25 +21,4 @@ pub impl LlvmCtx {
         return self.i64ty
     }
 
-    // The genStruct* slot for a registered struct named (start,len) — its 0-type-arg
-    // instance — or st.genStructRefs.count() if not registered (B2: the one `%gs` mechanism).
-    inout fn structRegSlot(c: inout Comp, start: U64, len: U64) -> U64 {
-        val sidx: U64 = c.structIndexByName(start: start, len: len)
-        if sidx < c.arena.structCount() {
-            return self.structSlotForSidx(structIndex: sidx)
-        }
-        return self.genStructRefs.count()
-    }
-
-    // The registered LLVM struct type of `String` — an ordinary one-`Buffer` aggregate
-    // `{ptr}` resolved STRUCTURALLY via its registered named `%st` type (de-pin: no
-    // name->strty representation pin). Falls back to strty only before registration runs.
-    inout fn stringLlvmTy(c: inout Comp) -> LLVMTypeRef {
-        val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-        val reg: U64 = self.structRegSlot(c: inout c, start: sb.nameStart, len: sb.nameLen)
-        if reg < self.genStructRefs.count() {
-            return self.genStructTys[reg]
-        }
-        return self.strty
-    }
 }

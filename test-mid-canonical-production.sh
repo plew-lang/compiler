@@ -199,3 +199,9 @@ if grep -E '^define.*(__af|@pf)' "$async_directory/input.ll"; then
     exit 1
 fi
 echo "PASS async emission consumes only reachable body contracts" >&2
+
+# Literal, aggregate and runtime-call results already carry their selected type.
+if rg -n 'stringLlvmTy|arrayInstTy|structRegSlot|\bstrty\b|\barrayTy\b' src/Backend.pw src/Backend/Llvm; then
+    echo "LLVM value construction must consume finalized result layouts" >&2
+    exit 1
+fi

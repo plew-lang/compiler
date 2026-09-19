@@ -571,7 +571,7 @@ pub impl LlvmCtx {
             return self.midIntegerConstant(c: inout c, value: operand.integerValue, negative: operand.integerNegative, isBool: operand.integerBool, typeTerm: operand.typeTerm)
         }
         if operand.tag == 6U64 {
-            return self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen)
+            return self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen, type: self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm))
         }
         if operand.tag == 7U64 {
             return LLVMConstRealOfStringAndSize(self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm), floatTextCPtr(c: inout c, start: operand.stringStart, len: operand.stringLen), floatTextLen(c: inout c, start: operand.stringStart, len: operand.stringLen))
@@ -726,7 +726,7 @@ pub impl LlvmCtx {
         llvmStore(self.b, LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), indexSlot)
         LLVMBuildBr(self.b, condition)
         LLVMPositionBuilderAtEnd(self.b, done)
-        return self.arrValMake(c: inout c, data: targetData, count: count, aggTy: self.arrayInstTy(c: inout c, elemRef: targetElementRef))
+        return self.arrValMake(c: inout c, data: targetData, count: count, aggTy: self.llvmTypeOfRef(c: inout c, ref: targetRef))
     }
 
     // Rebuild an enum from its physical payload proof range.  The range is in
@@ -1249,11 +1249,11 @@ pub impl LlvmCtx {
                                 LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_writeByte", fnTy: signature), arrayCPtr(values), 1U64, anon())
                             }
                             IoIntrinsic.ReadStdin => {
-                                val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_readStdin", resultType: self.stringLlvmTy(c: inout c))
+                                val result: LLVMValueRef = self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_readStdin", resultType: self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef))
                                 llvmStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
-                            IoIntrinsic.ReadFile => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
-                            IoIntrinsic.ReadFileBytes => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFileBytes", retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            IoIntrinsic.ReadFile => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFile", retTy: self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            IoIntrinsic.ReadFileBytes => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_readFileBytes", retTy: self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
                             IoIntrinsic.FileExists => {
                                 val raw: LLVMValueRef = self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_fileExists", retTy: self.i64ty, path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)))
                                 llvmStore(self.b, LLVMBuildICmp(self.b, llvmIntNe(), raw, LLVMConstInt(self.i64ty, 0U64, 0I32), anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
@@ -1269,12 +1269,12 @@ pub impl LlvmCtx {
                             ProcessIntrinsic.ArgAt => {
                                 mut val parameters: Array[LLVMTypeRef] = []
                                 parameters.append(self.i64ty)
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), arrayCPtr(parameters), 1U64, 0I32)
                                 mut val values: Array[LLVMValueRef] = []
                                 values.append(self.extendToI64(v: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)), unsigned: false))
                                 llvmStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_argAt", fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
-                            ProcessIntrinsic.ExecOut => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_execOut", retTy: self.stringLlvmTy(c: inout c), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                            ProcessIntrinsic.ExecOut => { llvmStore(self.b, self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_execOut", retTy: self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), path: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64))), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
                             ProcessIntrinsic.ExecCode => {
                                 llvmStore(self.b, self.emitRuntimeCallWithoutArguments(c: inout c, name: "plew_execCode", resultType: self.i64ty), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
@@ -1343,13 +1343,13 @@ pub impl LlvmCtx {
                                 val array: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)
                                 val arrayTerm: U64 = self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: argument)
                                 if arrayTerm != 0U64 && arrayTerm < c.arena.typeCount() && c.finalNeedsRelease(typeRef: arrayTerm) { self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true) }
-                                val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.stringLlvmTy(c: inout c))
+                                val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef))
                                 llvmStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
                             }
                             CoreStringIntrinsic.FloatToString => {
                                 mut val parameters: Array[LLVMTypeRef] = []
                                 parameters.append(self.f64ty)
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), arrayCPtr(parameters), 1U64, 0I32)
                                 mut val values: Array[LLVMValueRef] = []
                                 values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument))
                                 llvmStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
@@ -1381,7 +1381,7 @@ pub impl LlvmCtx {
                             FfiIntrinsic.StringFromCString => {
                                 mut val parameters: Array[LLVMTypeRef] = []
                                 parameters.append(self.ptrty)
-                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef), arrayCPtr(parameters), 1U64, 0I32)
                                 mut val values: Array[LLVMValueRef] = []
                                 values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument))
                                 llvmStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_stringFromCString", fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
@@ -2328,7 +2328,7 @@ pub impl LlvmCtx {
                 elements.append(self.midCanonicalEmitAggregateElement(c: inout c, body: body, element: c.mid.aggregateElements[value.elements.start + elementI]))
                 elementI = elementI + 1U64
             }
-            return self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, elemRef: elementRef)
+            return self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, type: self.llvmTypeOfRef(c: inout c, ref: value.resultTerm))
         }
         if value.tag == 4U64 {
             if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return LLVMConstNull(self.ptrty) }
