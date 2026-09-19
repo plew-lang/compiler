@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
-import /Ir with { Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
+import /Ir with { CallArgumentPassing, Block, Func, Param, TypeRef, Expr, Stmt, SemanticExprType, FinalAwaitResolution, InstanceEnvironment, identValueCode }
 import /Mid with { planCanonicalMidAsyncFrame, buildParametricMidBody, MidBuildError, MidInstantiateError, MidVerifyError, MidRange, MidBlockNode, MidStatementNode, MidAccessError, elaborateCanonicalMidAccesses, instantiateCanonicalMidBody, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
     assert(borrowed.tag == 3U64)
     assert(compiler.mid.places[borrowed.place - 1U64].local != 0U64)
     val bodyId = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
-    compiler.arena.setBodySignature(bodyId: bodyId, parameters: [promise], result: 0U64)
+    compiler.arena.setBodySignature(bodyId: bodyId, parameters: [promise], passings: [<CallArgumentPassing.Borrow />], result: 0U64)
     // A correctly typed-looking local is not a substitute for the frozen fact.
     val missing = instantiateCanonicalMidBody(c: inout compiler, body: built.canonical, bodyId: bodyId)
     match missing.error { MidInstantiateError.MissingFinalResolution => {} _ => { assert(false) } }

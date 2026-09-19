@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+unique struct Resource {
+    pub val number: I64
+    deinit { print(99I64) }
+}
+pub impl Resource { factory }
+
+async fn useResource(resource: move Resource, text: String) -> Promise[I64] {
+    await sleep(ms: 1)
+    print(text)
+    return resource.number
+}
+
+async fn main() {
+    val resource = <Resource number=7I64 />
+    val text = "copied" + " argument"
+    val pending = useResource(resource: move resource, text: text)
+    print(text)
+    val number = await pending
+    print(number)
+}

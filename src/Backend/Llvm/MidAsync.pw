@@ -3,8 +3,8 @@
 import ../../Mid with { planCanonicalMidAsyncFrame }
 
 pub impl LlvmCtx {
-    inout fn prepareAsyncMidCanonical(c: inout Comp, fi: U64) -> MidCanonicalBody {
-        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: <InstanceEnvironment />)
+    inout fn prepareAsyncMidCanonical(c: inout Comp, bodyId: U64) -> MidCanonicalBody {
+        val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         val built = buildMidBodyForInstance(c: inout c, fnIdx: fi, bodyId: bodyId)
         match built.error {
             MidBuildError.None => {}
@@ -36,8 +36,9 @@ pub impl LlvmCtx {
         return dropped
     }
 
-    inout fn buildMidAsyncFrameTy(c: inout Comp, fi: U64) -> LLVMTypeRef {
-        val canonical = self.prepareAsyncMidCanonical(c: inout c, fi: fi)
+    inout fn buildMidAsyncFrameTy(c: inout Comp, bodyId: U64) -> LLVMTypeRef {
+        val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
+        val canonical = self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId)
         val plan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
         if !plan.valid {
             if c.traceCodegen {

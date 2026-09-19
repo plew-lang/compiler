@@ -4431,7 +4431,7 @@ pub impl Comp {
             self.scanType(ref: signature.parameterTypes[parameter])
             parameter += 1U64
         }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: member.parameterTypes, result: member.resultType)
+        self.arena.setBodySignature(bodyId: bodyId, parameters: member.parameterTypes, passings: member.argumentPassings, result: member.resultType)
         self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: member.receiverPassing, argumentPassings: member.argumentPassings, calleeBodyId: member.bodyId, generatedSite: <CallSiteKey ownerFnIdx=target.fnIdx originKind=2U64 originSerial=bodyId />)
         mut val members = resolution.members
         members[memberIndex] = <FinalExistentialMember bodyId=member.bodyId adapterBodyId=bodyId callResolution=self.finalCalleeCount() receiverPassing=member.receiverPassing parameterTypes=member.parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType sourceResultType=member.sourceResultType resultConversion=member.resultConversion />
@@ -4527,7 +4527,7 @@ pub impl Comp {
             signatureResult = self.groundTermForBody(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             self.scanType(ref: signatureResult)
         }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, result: signatureResult)
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult)
         if instance.adapterTargetBodyId != 0U64 {
             self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { self.scanBlockInsts(blkId: f.body) }
@@ -4929,8 +4929,8 @@ pub impl Comp {
             self.scanStmtInsts(stmtId: self.arena.globals[gi].letStmt)
             gi += 1U64
         }
-        // Main is the normal synchronous root.  Async declarations are emitted
-        // as state machines by the current backend, so include their bodies too.
+        // Only the selected entry is a root. Sync and async callees both
+        // join the executable closure through their finalized call sites.
         mut val fi: U64 = 0U64
         while fi < self.arena.functionCount() {
             tracePhaseProgress(c: inout self, label: "finalize-callables:function-root", count: fi, stride: 64U64)
@@ -4951,7 +4951,7 @@ pub impl Comp {
                 if self.genMode && isEntry && fi != self.genMainIdx {
                     isEntry = false
                 }
-                if isEntry || (f.isAsync && !self.genMode) {
+                if isEntry {
                     self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64)
                 }
             }
@@ -5235,15 +5235,26 @@ pub impl Comp {
             val instance = self.arena.bodyInstanceAt(index: closureBodyId - 1U64)
             dropBodyId = self.arena.registerBodyInstance(<BodyInstance fnIdx=instance.fnIdx environment=instance.environment />, origin: <BodyOrigin.ClosureEnvironmentDrop closureBodyId=closureBodyId />)
             mut val captureTypes: Array[U64] = []
+            mut val capturePassings: Array[CallArgumentPassing] = []
             mut val captureIndex = 0U64
             while captureIndex < captures.count() {
                 captureTypes.append(captures[captureIndex].typeTerm)
+                capturePassings.append(<CallArgumentPassing.Move />)
                 captureIndex += 1U64
             }
-            self.arena.setBodySignature(bodyId: dropBodyId, parameters: captureTypes, result: 0U64)
+            self.arena.setBodySignature(bodyId: dropBodyId, parameters: captureTypes, passings: capturePassings, result: 0U64)
             self.monoWork.bodyInstances.append(dropBodyId)
         }
-        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, result: signature.args[0U64], closure: <ClosureSignature environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
+        mut val passings: Array[CallArgumentPassing] = []
+        mut val parameterIndex = 0U64
+        while parameterIndex < closure.parameters.count() {
+            val parameter = closure.parameters[parameterIndex]
+            if parameter.isInout { passings.append(<CallArgumentPassing.Inout />) }
+            else if parameter.isMove { passings.append(<CallArgumentPassing.Move />) }
+            else { passings.append(<CallArgumentPassing.Borrow />) }
+            parameterIndex += 1U64
+        }
+        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, passings: passings, result: signature.args[0U64], closure: <ClosureSignature environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
         typeI = 0U64
         while typeI < signature.args.count() { self.scanType(ref: signature.args[typeI]) typeI += 1U64 }
         captureI = 0U64

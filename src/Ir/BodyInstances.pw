@@ -37,8 +37,8 @@ pub impl Arena {
         return self.bodySignatures[bodyId - 1U64]
     }
 
-    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], result: U64) {
-        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters resultType=result />
+    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64) {
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters parameterPassings=passings resultType=result />
     }
 
     fn closureSignature(bodyId: U64) -> ClosureSignature {
@@ -47,13 +47,13 @@ pub impl Arena {
         return self.closureSignatures[signature.closureSignatureId - 1U64]
     }
 
-    inout fn setClosureSignature(bodyId: U64, parameters: Array[U64], result: U64, closure: ClosureSignature) {
+    inout fn setClosureSignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64, closure: ClosureSignature) {
         mut val index = self.bodySignatures[bodyId - 1U64].closureSignatureId
         if index == 0U64 {
             self.closureSignatures.append(closure)
             index = self.closureSignatures.count()
         } else { self.closureSignatures[index - 1U64] = closure }
-        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters resultType=result closureSignatureId=index />
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters parameterPassings=passings resultType=result closureSignatureId=index />
     }
 
     fn firstBodyInstanceForFunction(functionIndex: U64) -> U64 {

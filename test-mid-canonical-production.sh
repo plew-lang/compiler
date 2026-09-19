@@ -171,3 +171,31 @@ query = Path('src/Backend/Llvm/GenericQuery.pw').read_text()
 assert 'requireFinalDestruction(' in query
 assert 'localStructIdxFor(' not in query and 'runtimeTypeRef(' not in query
 PYPHYSICAL
+
+# Async uses the same reachable body identities and frozen parameter contracts.
+# Source declaration flags may select the supported async kind, never rebuild
+# its parameter ABI or the copy/move handoff into an activation frame.
+if rg -n 'while .*functionCount|funcParamAt|\.params\b|asyncParamTy|findBodyInstance' src/Backend/Llvm/Async.pw src/Backend/Llvm/MidAsync.pw; then
+    echo "async emission must consume reachable bodies and frozen signatures" >&2
+    exit 1
+fi
+for symbol in 'monoWork.bodyInstances' 'bodySignature' 'parameterPassings'; do
+    if ! grep -F "$symbol" src/Backend/Llvm/Async.pw >/dev/null; then
+        echo "async finalized entry contract is missing $symbol" >&2
+        exit 1
+    fi
+done
+
+# An unused async declaration is not an executable root, just like an unused
+# synchronous function. This must hold in emitted LLVM, not just the scanner.
+async_directory=$(mktemp -d "${TMPDIR:-/tmp}/plew-mid-async-roots.XXXXXX")
+trap 'rm -f "$async_directory/input.ll" "$async_directory/diagnostics"; rmdir "$async_directory"' EXIT HUP INT TERM
+"${PLEWC:-./plewc}" --require-mid tests/run/async_unreachable.pw >"$async_directory/input.ll" 2>"$async_directory/diagnostics" || {
+    cat "$async_directory/diagnostics" >&2
+    exit 1
+}
+if grep -E '^define.*(__af|@pf)' "$async_directory/input.ll"; then
+    echo "unused async declaration reached LLVM emission" >&2
+    exit 1
+fi
+echo "PASS async emission consumes only reachable body contracts" >&2

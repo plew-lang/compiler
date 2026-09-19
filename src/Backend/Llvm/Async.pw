@@ -10,27 +10,31 @@
 
 pub impl LlvmCtx {
 
-    // Async source parameters carry resolved TypeTerms; the shared physical
-    // mapper consumes their finalized contracts without span reconstruction.
-    inout fn asyncParamTy(c: inout Comp, p: Param) -> LLVMTypeRef {
-        return self.llvmTypeOfRef(c: inout c, ref: p.ty)
-    }
-
-    // Declare every async fn: build its frame struct type + resume fn, and (for a
+    // Declare each reachable async body: build its frame struct type + resume fn, and (for a
     // non-main async fn) its entry symbol in the fnIdx table (signature: params ->
     // PlewPromise*, so a call site `doubler(x: 21)` resolves to a promise-returning
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
     inout fn declareAsyncFns(c: inout Comp) {
-        mut val fi: U64 = 0
-        while fi < c.arena.functionCount() {
+        mut val bodyIndex = 0U64
+        while bodyIndex < c.monoWork.bodyInstances.count() {
+            val bodyId = c.monoWork.bodyInstances[bodyIndex]
+            bodyIndex += 1U64
+            if !c.arena.bodyIsCallable(bodyId: bodyId) { continue }
+            val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+            val fi = instance.fnIdx
+            if fi >= c.arena.functionCount() { continue }
             if isAsyncFn(c: inout c, fi: fi) {
+                val signature = c.arena.bodySignature(bodyId: bodyId)
+                if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() {
+                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry requires a finalized parameter contract")
+                }
                 if c.arena.functionAt(index: fi).typeParams.count() > 0U64 {
                     c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: generic `async fn` is not yet supported")
                 }
                 if c.arena.functionAt(index: fi).hasRecv {
                     c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
                 }
-                val frameTy: LLVMTypeRef = self.buildMidAsyncFrameTy(c: inout c, fi: fi)
+                val frameTy: LLVMTypeRef = self.buildMidAsyncFrameTy(c: inout c, bodyId: bodyId)
                 // resume fn: void __af<fi>_resume(void*).
                 mut val rptys: Array[LLVMTypeRef] = []
                 rptys.append(self.ptrty)
@@ -46,11 +50,14 @@ pub impl LlvmCtx {
                 self.asyncResumeFn.append(resumeFn)
                 // entry symbol (non-main): params -> ptr (Promise).
                 if !(c.nameIsMain(f: c.arena.functionAt(index: fi))) {
-                    val entry: Func = c.arena.functionAt(index: fi)
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
-                    while pi < entry.params.count() {
-                        ptys.append(self.asyncParamTy(c: inout c, p: c.funcParamAt(params: entry.params, index: pi)))
+                    while pi < signature.parameterTypes.count() {
+                        match signature.parameterPassings[pi] {
+                            CallArgumentPassing.Inout => { c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry does not support inout parameters") }
+                            _ => {}
+                        }
+                        ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[pi]))
                         pi += 1
                     }
                     val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), ptys.count(), 0I32)
@@ -64,7 +71,6 @@ pub impl LlvmCtx {
                     self.asyncEntryTy.append(fty)
                 }
             }
-            fi += 1
         }
     }
 
@@ -165,12 +171,18 @@ pub impl LlvmCtx {
         // Frame storage owns the entry arguments. Copy borrowed ABI values here;
         // moved arguments transfer their existing ownership. The prepared Mid
         // body supplies the matching parameter Drops on every normal exit.
+        val canonical = self.asyncMidBodies[slot]
+        val body = c.mid.bodies[canonical.body - 1U64]
+        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
         mut val pi: U64 = 0
-        while pi < f.params.count() {
+        while pi < signature.parameterTypes.count() {
             val pv: LLVMValueRef = self.valueParameter(function: entryFn, index: pi)
             llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, self.asyncLocalSlots[slot][pi], anon()))
-            val param: Param = c.funcParamAt(params: f.params, index: pi)
-            if !param.isMove { self.valueArc(c: inout c, v: pv, typeRef: param.ty, retain: true) }
+            match signature.parameterPassings[pi] {
+                CallArgumentPassing.Borrow => { self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
+                CallArgumentPassing.Move => {}
+                CallArgumentPassing.Inout => { c.errorAt(offset: c.fnAnchor(f: f), msg: "async entry does not support inout parameters") }
+            }
             pi += 1
         }
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a
@@ -200,14 +212,12 @@ pub impl LlvmCtx {
         self.genLlvmMidAsyncResume(c: inout c, slot: slot)
     }
 
-    // Emit entry + resume bodies for every async fn (after declareAsyncFns).
+    // Declaration fixes the reachable set and prepares each Mid body once.
     inout fn emitAsyncFns(c: inout Comp) {
-        mut val fi: U64 = 0
-        while fi < c.arena.functionCount() {
-            if isAsyncFn(c: inout c, fi: fi) {
-                self.genLlvmAsyncFunc(c: inout c, fi: fi)
-            }
-            fi += 1
+        mut val slot = 0U64
+        while slot < self.asyncFnIdx.count() {
+            self.genLlvmAsyncFunc(c: inout c, fi: self.asyncFnIdx[slot])
+            slot += 1U64
         }
     }
 }

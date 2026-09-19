@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+async fn unused(value: String) -> Promise[I64] {
+    await sleep(ms: 1)
+    print(value)
+    return 17I64
+}
+fn main() { print("ok") }
