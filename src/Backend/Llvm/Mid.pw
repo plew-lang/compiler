@@ -734,8 +734,8 @@ pub impl LlvmCtx {
     // only for layout and never infers a conversion from generic arguments.
     inout fn midCanonicalEmitEnumRepack(c: inout Comp, source: LLVMValueRef, sourceRef: U64, targetRef: U64, enumIdx: U64, payloadStart: U64, payloadCount: U64) -> LLVMValueRef {
         if sourceRef == 0U64 || sourceRef >= c.arena.typeCount() || targetRef == 0U64 || targetRef >= c.arena.typeCount() || enumIdx >= c.arena.enumCount() || payloadStart > c.arena.conversionPayloadPool.count() || payloadCount > c.arena.conversionPayloadPool.count() - payloadStart { return LLVMConstNull(self.ptrty) }
-        val sourceSlot: U64 = self.genEnumSlot(c: inout c, ref: sourceRef)
-        val targetSlot: U64 = self.genEnumSlot(c: inout c, ref: targetRef)
+        val sourceSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: sourceRef)
+        val targetSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: targetRef)
         if sourceSlot >= self.genEnumRefs.count() || targetSlot >= self.genEnumRefs.count() || self.genEnumDefs[sourceSlot] != enumIdx || self.genEnumDefs[targetSlot] != enumIdx { return LLVMConstNull(self.ptrty) }
         val sourceType: TypeRef = c.arena.typeAt(index: sourceRef)
         val targetType: TypeRef = c.arena.typeAt(index: targetRef)
@@ -934,7 +934,7 @@ pub impl LlvmCtx {
             if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() { return false }
             val place: MidPlaceNode = c.mid.places[value.place - 1U64]
             if place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-            val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+            val enumSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: place.typeTerm)
             if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
             if value.tag == 11U64 { return true }
             val declaration = c.arena.enumAt(index: value.enumIndex)
@@ -948,7 +948,7 @@ pub impl LlvmCtx {
             if value.place == 0U64 || value.place > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) || value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() { return false }
             val place: MidPlaceNode = c.mid.places[value.place - 1U64]
             if place.typeTerm == 0U64 || place.typeTerm >= c.arena.typeCount() { return false }
-            val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+            val enumSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: place.typeTerm)
             if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
             if value.tag == 16U64 { return true }
             // The field declaration may mention the enum's generic parameter;
@@ -965,7 +965,7 @@ pub impl LlvmCtx {
             val declaration = c.arena.enumAt(index: value.enumIndex)
             val variant = declaration.variants[value.variantIndex]
             if variant.fields.count() != 1U64 { return false }
-            val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: value.resultTerm)
+            val enumSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: value.resultTerm)
             return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == value.enumIndex && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm)
         }
         return false
