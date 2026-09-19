@@ -114,8 +114,8 @@ pub impl LlvmCtx {
             ptys.append(self.llvmTypeOfRef(c: inout c, ref: instRef))
         }
         mut val pi: U64 = 0
-        while pi < mf.params.count() {
-            ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi, p: c.funcParamAt(params: mf.params, index: pi)))
+        while pi < c.arena.bodySignature(bodyId: bodyId).parameterTypes.count() {
+            ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi))
             pi += 1
         }
         val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)

@@ -19,13 +19,17 @@ pub impl LlvmCtx {
         return self.llvmTypeOfRef(c: inout c, ref: result)
     }
 
-    inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64, p: Param) -> LLVMTypeRef {
+    inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64) -> LLVMTypeRef {
         val signature = c.arena.bodySignature(bodyId: bodyId)
-        if !signature.ready || index >= signature.parameterTypes.count() {
-            c.errorAt(offset: p.nameStart, msg: "internal error: finalized body parameter type is missing")
+        if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() || index >= signature.parameterTypes.count() {
+            c.errorAt(offset: 0U64, msg: "internal error: finalized body parameter type is missing")
             return self.voidty
         }
-        if p.isInout { return self.ptrty }
+        match signature.parameterPassings[index] {
+            CallArgumentPassing.Inout => { return self.ptrty }
+            CallArgumentPassing.Borrow => {}
+            CallArgumentPassing.Move => {}
+        }
         return self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])
     }
 
