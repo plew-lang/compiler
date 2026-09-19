@@ -67,7 +67,6 @@ pub impl LlvmCtx {
             self.curFn = witness.function
             self.curIsMain = false
             self.curRetVoid = member.resultType == 0U64
-            self.curRetRef = member.resultType
             self.curRetTy = self.voidty
             if member.resultType != 0U64 { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
             val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64)
@@ -345,12 +344,6 @@ pub impl LlvmCtx {
             c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
         }
         self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)
-        self.curRetTyStart = f.retStart
-        self.curRetTyLen = f.retLen
-        // ground the return ref under any active generic env (a monomorphized method
-        // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
-        // can infer the concrete instance.
-        self.curRetRef = self.bodyResultType(c: inout c, bodyId: bodyId)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-metadata-ready name=")
             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)

@@ -937,11 +937,12 @@ pub impl LlvmCtx {
             val enumSlot: U64 = self.requireEnumLayoutSlot(c: inout c, typeRef: place.typeTerm)
             if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != value.enumIndex { return false }
             if value.tag == 11U64 { return true }
-            val declaration = c.arena.enumAt(index: value.enumIndex)
-            if value.variantIndex >= declaration.variants.count() { return false }
-            val variant = declaration.variants[value.variantIndex]
-            if value.fieldIndex >= variant.fields.count() { return false }
-            if value.tag == 12U64 && c.fieldIsBoxed(f: variant.fields[value.fieldIndex]) { return false }
+            val layout = c.arena.finalDestructions[self.physicalLayoutContract(c: inout c, typeRef: place.typeTerm) - 1U64]
+            if layout.variantFieldStarts.count() == 0U64 || value.variantIndex >= layout.variantFieldStarts.count() - 1U64 { return false }
+            val start = layout.variantFieldStarts[value.variantIndex]
+            val end = layout.variantFieldStarts[value.variantIndex + 1U64]
+            if start > end || end > layout.fieldBoxed.count() || value.fieldIndex >= end - start { return false }
+            if value.tag == 12U64 && layout.fieldBoxed[start + value.fieldIndex] { return false }
             return true
         }
         if value.tag == 16U64 || value.tag == 17U64 {
@@ -2649,12 +2650,18 @@ impl LlvmCtx {
                     }
                 } else if statement.tag == 13U64 {
                     if statement.source == 0U64 || statement.source > c.mid.places.count() || !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: statement.source) || statement.enumIndex >= c.arena.enumCount() || statement.variantIndex >= c.arena.enumAt(index: statement.enumIndex).variants.count() { return <MidLlvmPreflight.UnsupportedRvalue /> }
-                    val variant = c.arena.enumVariantAt(enumIndex: statement.enumIndex, variantIndex: statement.variantIndex)
-                    if variant.fields.count() != statement.enumDestinations.len { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    val source = c.mid.places[statement.source - 1U64]
+                    val slot = self.requireEnumLayoutSlot(c: inout c, typeRef: source.typeTerm)
+                    if slot >= self.genEnumRefs.count() || self.genEnumDefs[slot] != statement.enumIndex { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    val layout = c.arena.finalDestructions[self.physicalLayoutContract(c: inout c, typeRef: source.typeTerm) - 1U64]
+                    if layout.variantFieldStarts.count() == 0U64 || statement.variantIndex >= layout.variantFieldStarts.count() - 1U64 { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                    val start = layout.variantFieldStarts[statement.variantIndex]
+                    val end = layout.variantFieldStarts[statement.variantIndex + 1U64]
+                    if start > end || end > layout.fieldBoxed.count() || end - start != statement.enumDestinations.len { return <MidLlvmPreflight.UnsupportedRvalue /> }
                     mut val index: U64 = 0U64
                     while index < statement.enumDestinations.len {
                         val destination = c.mid.enumDestinations[statement.enumDestinations.start + index]
-                        if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: destination.place) || destination.isBoxed != c.fieldIsBoxed(f: variant.fields[index]) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                        if !self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: destination.place) || destination.isBoxed != layout.fieldBoxed[start + index] { return <MidLlvmPreflight.UnsupportedRvalue /> }
                         index += 1U64
                     }
                 } else if statement.tag == 2U64 || statement.tag == 8U64 {

@@ -77,7 +77,6 @@ pub impl LlvmCtx {
             self.curFn = queued.function
             self.curIsMain = false
             self.curRetVoid = true
-            self.curRetRef = 0U64
             self.curRetTy = self.voidty
             val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: queued.bodyId, fnIdx: body.fnIdx, parameterCount: closure.captures.count())
             match prepared {
@@ -301,12 +300,8 @@ pub impl LlvmCtx {
             self.curFn = closure.function
             self.curIsMain = false
             self.curRetVoid = !fact.hasReturn
-            self.curRetRef = signature.args[0U64]
-            val result: TypeRef = c.arena.typeAt(index: self.curRetRef)
-            self.curRetTyStart = result.nameStart
-            self.curRetTyLen = result.nameLen
             self.curRetTy = self.voidty
-            if fact.hasReturn { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: self.curRetRef) }
+            if fact.hasReturn { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: signature.args[0U64]) }
             val prepared: MidLlvmPrepared = self.prepareClosureMidBody(c: inout c, closure: closure)
             match prepared {
                 MidLlvmPrepared.None => {

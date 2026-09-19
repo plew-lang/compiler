@@ -29,17 +29,6 @@ pub impl LlvmCtx {
                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
                         eprint(text: "\n")
                     }
-                    val savedP: Array[Bind] = c.cur.typeParams
-                    val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = body.environment.params
-                    c.cur.typeArgs = body.environment.args
-                    val savedSelf: U64 = c.cur.selfRef
-                    val savedItem: U64 = c.cur.itemRef
-                    val savedRecv: U64 = self.curRecvInstRef
-                    self.curRecvInstRef = body.environment.receiverRef
-                    if f.isAssoc || f.isProvided {
-                        c.setSelfItemEnvForBody(f: f, environment: body.environment)
-                    }
                     mut val ptys: Array[LLVMTypeRef] = []
                     val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
                     mut val pi: U64 = 0
@@ -53,11 +42,6 @@ pub impl LlvmCtx {
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
                     val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                    c.cur.selfRef = savedSelf
-                    c.cur.itemRef = savedItem
-                    self.curRecvInstRef = savedRecv
                     self.genFnK.append(bodyId)
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
