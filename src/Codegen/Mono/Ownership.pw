@@ -1,6 +1,21 @@
 // Close destruction alongside authored calls. LLVM consumes these facts;
 // it may memoize semantic aliases, but never selects a destructor or field type.
 pub impl Comp {
+    // Synthetic control-flow values need the same finalized ownership facts
+    // as authored values, before Mid starts constructing bodies.
+    inout fn finalizeDiscriminantType() {
+        self.arena.loweringDiscriminantType = 0U64
+        val name = self.internBytes(s: "I64")
+        val term = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+        match self.arcClassOfRef(ref: term) {
+            ArcClass.Scalar => {
+                self.enqueueFinalDestruction(typeRef: term)
+                self.arena.loweringDiscriminantType = term
+            }
+            _ => { self.errorAt(offset: name.nameStart, msg: "internal error: discriminant requires a primitive scalar type") }
+        }
+    }
+
     inout fn finalDestructorCallIsValid(call: FinalDestructorCall) -> Bool {
         if call.bodyId == 0U64 || call.bodyId > self.arena.bodyInstanceCount() || call.receiverType == 0U64 { return false }
         match call.receiverPassing { CallReceiverPassing.Borrow => {} _ => { return false } }

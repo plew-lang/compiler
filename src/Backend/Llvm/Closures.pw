@@ -63,17 +63,11 @@ pub impl LlvmCtx {
     }
 
     inout fn emitClosureEnvironmentDrops(c: inout Comp) {
-        val savedFn = c.cur.bodyFnIdx
-        val savedEnvironment = c.cur.bodyEnvironment
-        val savedBody = c.cur.bodyId
         while self.closureEnvironmentDropsEmitted < self.closureEnvironmentDrops.count() {
             val queued = self.closureEnvironmentDrops[self.closureEnvironmentDropsEmitted]
             val closure = self.closures[queued.closureSlot]
             val body = c.arena.bodyInstanceAt(index: queued.bodyId - 1U64)
             val offset = c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId)
-            c.cur.bodyFnIdx = body.fnIdx
-            c.cur.bodyEnvironment = body.environment
-            c.cur.bodyId = queued.bodyId
             self.curFn = queued.function
             self.curIsMain = false
             self.curRetVoid = true
@@ -101,9 +95,6 @@ pub impl LlvmCtx {
             self.closureEnvironmentDropsEmitted += 1U64
             tracePhaseProgress(c: inout c, label: "backend:closure-environment-drop", count: self.closureEnvironmentDropsEmitted, stride: 16U64)
         }
-        c.cur.bodyFnIdx = savedFn
-        c.cur.bodyEnvironment = savedEnvironment
-        c.cur.bodyId = savedBody
     }
 
     // Release one owner of a closure value's env: decrement the env cell's rc, and at
@@ -285,17 +276,11 @@ pub impl LlvmCtx {
     }
 
     inout fn emitClosures(c: inout Comp) {
-        val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
-        val savedBodyId: U64 = c.cur.bodyId
         mut val slot: U64 = 0U64
         while slot < self.closures.count() {
             val closure: LlvmClosure = self.closures[slot]
             val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
             val instance: BodyInstance = c.arena.bodyInstanceAt(index: closure.bodyId - 1U64)
-            c.cur.bodyFnIdx = instance.fnIdx
-            c.cur.bodyEnvironment = instance.environment
-            c.cur.bodyId = closure.bodyId
             val signature: TypeRef = c.arena.typeAt(index: closure.functionTypeTerm)
             self.curFn = closure.function
             self.curIsMain = false
@@ -325,8 +310,5 @@ pub impl LlvmCtx {
             }
             slot += 1U64
         }
-        c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyEnvironment = savedEnvironment
-        c.cur.bodyId = savedBodyId
     }
 }

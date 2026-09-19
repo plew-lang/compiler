@@ -4923,6 +4923,7 @@ pub impl Comp {
         self.arena.finalTryIndexSlots = []
         self.arena.finalFors = []
         self.arena.finalForIndexSlots = []
+        self.finalizeDiscriminantType()
         self.monoWork.bodyInstances = []
         // `collectFnInsts` is provisional layout discovery. Its source-shaped
         // instances are not executable identities and must not cross this

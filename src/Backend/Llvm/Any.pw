@@ -54,16 +54,10 @@ pub impl LlvmCtx {
     }
 
     inout fn emitExistentialWitnesses(c: inout Comp) {
-        val savedFn = c.cur.bodyFnIdx
-        val savedEnvironment = c.cur.bodyEnvironment
-        val savedBody = c.cur.bodyId
         while self.existentialWitnessesEmitted < self.existentialWitnesses.count() {
             val witness = self.existentialWitnesses[self.existentialWitnessesEmitted]
             val member = c.arena.finalExistentials[witness.resolution].members[witness.member]
             val body = c.arena.bodyInstanceAt(index: member.adapterBodyId - 1U64)
-            c.cur.bodyFnIdx = body.fnIdx
-            c.cur.bodyEnvironment = body.environment
-            c.cur.bodyId = member.adapterBodyId
             self.curFn = witness.function
             self.curIsMain = false
             self.curRetVoid = member.resultType == 0U64
@@ -95,9 +89,6 @@ pub impl LlvmCtx {
             self.existentialWitnessesEmitted += 1U64
             tracePhaseProgress(c: inout c, label: "backend:existential-witness", count: self.existentialWitnessesEmitted, stride: 16U64)
         }
-        c.cur.bodyFnIdx = savedFn
-        c.cur.bodyEnvironment = savedEnvironment
-        c.cur.bodyId = savedBody
     }
 
     // Privatize the existential box. The new box owns a logical copy of the
@@ -311,8 +302,8 @@ pub impl LlvmCtx {
         return agg
     }
 
-    // Emit function `fi`'s body into the LLVM function value `fv` (under the active
-    // substitution env, if any — used for both plain functions and generic instances).
+    // Emit a finalized body identity with explicit type/ownership contracts.
+    // Ordinary and generic bodies share this path without an ambient environment.
     inout fn genLlvmFuncBody(c: inout Comp, bodyId: U64, fv: LLVMValueRef) {
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
             c.errorAt(offset: 0U64, msg: "internal error: function emission requires a finalized body")
@@ -327,22 +318,9 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: fi)
             eprint(text: "\n")
         }
-        // save the Self/Item env so this body fully restores it on exit — the body binds `self`
-        // and sets cur.selfRef from the receiver ref (see the self-local binding below), which
-        // must not leak into the next body (a pf-drain / free-fn emission has no per-call
-        // save/restore around genLlvmFuncBody).
-        val savedSelfFB: U64 = c.cur.selfRef
-        val savedItemFB: U64 = c.cur.itemRef
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = self.bodyResultType(c: inout c, bodyId: bodyId) == 0U64
-        // a plain method's `Self` resolves to the receiver type, so `-> Self` / a `Self`
-        // param / `return self` ground (the generic-method path sets this via its
-        // instantiation elsewhere; here it covers a non-generic method on a plain type).
-        val didSelf: Bool = f.hasRecv && self.curRecvInstRef == 0U64 && c.cur.selfRef == 0U64
-        if didSelf {
-            c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
-        }
         self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-metadata-ready name=")
@@ -657,9 +635,6 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            if didSelf { c.clearSelfItemEnv() }
-            c.cur.selfRef = savedSelfFB
-            c.cur.itemRef = savedItemFB
             if c.traceCodegen {
                 eprint(text: "[trace-codegen] Mid function return name=")
                 self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)

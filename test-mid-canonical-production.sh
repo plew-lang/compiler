@@ -237,3 +237,19 @@ if rg -n 'groundTermForBody|closeBodyProjectionTerms|concreteConformanceProof' s
     echo "Mid must consume published projection results" >&2
     exit 1
 fi
+
+# Ownership and synthetic primitive contracts must be closed by frontend.
+if rg -n 'enqueueFinalDestruction|arcClassOfRef' src/Mid; then
+    echo "Mid must read finalized ownership contracts" >&2
+    exit 1
+fi
+if rg -n 'fnArgsAllGround|tyRefIsGround' src/Backend; then
+    echo "LLVM admission must check closed types without semantic resolution" >&2
+    exit 1
+fi
+
+# Backend consumes body IDs; installing frontend Cursor state hides missing facts.
+if rg -n 'c\.cur\.|setSelfItemEnv|clearSelfItemEnv' src/Backend; then
+    echo "LLVM emission must not depend on frontend Cursor state" >&2
+    exit 1
+fi

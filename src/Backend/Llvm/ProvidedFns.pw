@@ -54,26 +54,14 @@ pub impl LlvmCtx {
         }
     }
 
-    // Emit one frozen free-function body.  Its complete environment is installed directly;
-    // rebuilding it from a partial generic argument vector would resurrect the old parallel
-    // identity and can lose a provided body's proof.
+    // The frozen body ID carries the complete specialization and proof identity.
+    // Emission never installs a parallel ambient substitution environment.
     inout fn emitOneGenFn(c: inout Comp, slot: U64) {
         val bodyId: U64 = self.genFnK[slot]
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         if body.fnIdx >= c.arena.functionCount() { return }
         val f: Func = c.arena.functionAt(index: body.fnIdx)
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        val savedR: U64 = self.curRecvInstRef
-        val savedSelf: U64 = c.cur.selfRef
-        val savedItem: U64 = c.cur.itemRef
-        c.cur.typeParams = body.environment.params
-        c.cur.typeArgs = body.environment.args
-        self.curRecvInstRef = body.environment.receiverRef
-        if f.isAssoc || f.isProvided {
-            c.setSelfItemEnvForBody(f: f, environment: body.environment)
-        }
         if c.traceCodegen {
             eprint(text: "[trace-codegen] generic fn body-start index=")
             self.traceCodegenU64(n: body.fnIdx)
@@ -91,11 +79,6 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: slot)
             eprint(text: "\n")
         }
-        c.cur.typeParams = savedP
-        c.cur.typeArgs = savedA
-        self.curRecvInstRef = savedR
-        c.cur.selfRef = savedSelf
-        c.cur.itemRef = savedItem
     }
 
 }

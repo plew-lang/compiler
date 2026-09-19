@@ -2429,6 +2429,8 @@ export struct Arena {
     pub mut val finalMatchPayloads: Array[FinalMatchPayloadResolution] = []
     pub mut val finalMatchIndexSlots: Array[U64] = []
     pub mut val recordTypeByLayout: Dictionary[U64, U64] = [:]
+    // Frozen primitive used by synthetic enum/try/iterator discriminants.
+    pub mut val loweringDiscriminantType: U64 = 0U64
     pub mut val finalDestructions: Array[FinalDestruction] = []
     pub mut val finalDestructionIds: Array[U64] = []
     pub mut val finalDestructionHeads: Dictionary[U64, U64] = [:]

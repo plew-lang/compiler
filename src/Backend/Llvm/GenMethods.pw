@@ -151,22 +151,7 @@ pub impl LlvmCtx {
         val bodyId = self.genMethBody[slot]
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         self.traceGenMethod(c: inout c, event: "emit", mfi: body.fnIdx, instRef: body.environment.receiverRef, bodyId: bodyId)
-        val savedP = c.cur.typeParams
-        val savedA = c.cur.typeArgs
-        val savedR = self.curRecvInstRef
-        val savedSelf = c.cur.selfRef
-        val savedItem = c.cur.itemRef
-        c.cur.typeParams = body.environment.params
-        c.cur.typeArgs = body.environment.args
-        self.curRecvInstRef = body.environment.receiverRef
-        c.cur.selfRef = body.environment.receiverRef
-        c.cur.itemRef = 0U64
         self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genMethVal[slot])
-        c.cur.typeParams = savedP
-        c.cur.typeArgs = savedA
-        self.curRecvInstRef = savedR
-        c.cur.selfRef = savedSelf
-        c.cur.itemRef = savedItem
     }
 
     inout fn emitGenMethods(c: inout Comp) {

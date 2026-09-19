@@ -3,23 +3,16 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { ArcClass, BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
 import ./Ir with { MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
-// Synthetic discriminants are Mid-owned values, even when the source never
-// mentions I64. Publish their primitive ownership contract at construction;
-// this scalar cannot introduce executable destruction dependencies.
-fn midDiscriminantType(c: inout Comp) -> U64 {
-    val name = c.kwSpan(kw: "I64", kwLen: 3U64)
-    val term = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-    match c.arcClassOfRef(ref: term) {
-        ArcClass.Scalar => { c.enqueueFinalDestruction(typeRef: term) }
-        _ => { c.errorAt(offset: name.nameStart, msg: "internal error: Mid discriminant requires a primitive scalar type") }
-    }
-    return term
+// The frontend owns synthetic primitive identity and ownership classification.
+// A missing contract is a build error, never a request to rediscover a type.
+fn midDiscriminantType(c: Comp) -> U64 {
+    return c.arena.loweringDiscriminantType
 }
 
 export struct MidSourceBinding {
@@ -1183,7 +1176,7 @@ fn materializeMidTry(c: inout Comp, state: inout MidBuildState, exprId: U64, ope
     val inputLocal: U64 = addMidTemporary(state: inout state, typeTerm: operandResultTerm)
     val inputPlace: MidPlace = <MidPlace local=inputLocal typeTerm=operandResultTerm />
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=inputPlace value=<MidRvalue.Use operand=input.operand /> />)
-    val tagTerm: U64 = midDiscriminantType(c: inout c)
+    val tagTerm: U64 = midDiscriminantType(c: c)
     if tagTerm == 0U64 {
         midCloseScope(state: inout state, scope: evaluation)
         state.callValues = parentCalls
@@ -2174,7 +2167,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                     return buildMidIrrefutablePattern(c: inout c, state: inout state, semantic: semantic, sourceArms: sourceArms, scrutinee: scrutinee.place, hasScrutineeScope: hasScrutineeScope, scrutineeScope: scrutineeScope, hasGiveDestination: hasGiveDestination, giveDestination: giveDestination)
                 }
             }
-            val tagTerm: U64 = midDiscriminantType(c: inout c)
+            val tagTerm: U64 = midDiscriminantType(c: c)
             if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)
             val tagPlace: MidPlace = <MidPlace local=tagLocal typeTerm=tagTerm />
@@ -2420,7 +2413,8 @@ export fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             val afterNext: U64 = midNewBlock(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.ForProtocol stmtId=stmtId slot=2U64 /> receiver=<MidCallReceiver.Value operand=<MidOperand.Copy place=iterator /> /> args=[] destination=next target=afterNext />)
             state.currentBlock = afterNext
-            val tagTerm: U64 = midDiscriminantType(c: inout c)
+            val tagTerm: U64 = midDiscriminantType(c: c)
+            if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val tag: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: tagTerm) typeTerm=tagTerm />
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tag value=<MidRvalue.ForTag place=next stmtId=stmtId resultTerm=tagTerm /> />)
             val some: U64 = midNewBlock(state: inout state)

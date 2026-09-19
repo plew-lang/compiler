@@ -1139,7 +1139,13 @@ pub impl LlvmCtx {
         } else if !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.Receiver /> }
         if callee.isExtern && !self.resolvedCCallSupported(c: inout c, selected: selected) { return <MidCallPreflight.Extern /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.len { return <MidCallPreflight.GenericArguments /> }
-        if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs))) { return <MidCallPreflight.GenericArguments /> }
+        if selected.calleeTypeArgs.start > c.arena.finalCalleeTypeArgPool.count() || selected.calleeTypeArgs.len > c.arena.finalCalleeTypeArgPool.count() - selected.calleeTypeArgs.start { return <MidCallPreflight.GenericArguments /> }
+        mut val typeArgument = 0U64
+        while typeArgument < selected.calleeTypeArgs.len {
+            val term = c.finalCalleeTypeArgAt(args: selected.calleeTypeArgs, index: typeArgument)
+            if term == 0U64 || !c.typeTermIsClosed(ref: term) { return <MidCallPreflight.GenericArguments /> }
+            typeArgument += 1U64
+        }
         if term.args.len != callee.params.count() || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <MidCallPreflight.ArgumentShape /> }
         if callee.hasRet {
             if term.destination == 0U64 || term.destination > c.mid.places.count() || c.mid.places[term.destination - 1U64].projections.len != 0U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Result /> }
