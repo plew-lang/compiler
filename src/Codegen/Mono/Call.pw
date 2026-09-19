@@ -883,10 +883,28 @@ pub impl Comp {
             // parameters. Bind that exact vector by ParamId; lexicalFunction
             // owns source lookup, not the positions in this argument list.
             val f: Func = self.arena.functionAt(index: fnIdx)
+            // Receiver-pattern binders are structural, not positional:
+            // Packed[Array[T]] at Packed[Array[Yes]] binds T to Yes.
+            // Preserve method-owned arguments, replacing only ParamIds
+            // established by the selected receiver's directional match.
+            mut val receiverBindings = <WitnessMatch />
+            if f.typeParams.count() > 0U64 && canonicalRecv != 0U64 {
+                receiverBindings = self.methodReceiverEnvironment(f: f, instRef: canonicalRecv)
+            }
             mut val i: U64 = 0U64
             while i < f.typeParams.count() && i < args.count() {
-                params.append(self.funcBindAt(binds: f.typeParams, index: i))
-                values.append(args[i])
+                val parameter = self.funcBindAt(binds: f.typeParams, index: i)
+                mut val value = args[i]
+                mut val binding = 0U64
+                while binding < receiverBindings.binds.count() {
+                    val matched = receiverBindings.binds[binding]
+                    if (matched.paramId != 0U64 && matched.paramId == parameter.paramId) || (matched.paramId == 0U64 && matched.binder == i) {
+                        value = matched.term
+                    }
+                    binding += 1U64
+                }
+                params.append(parameter)
+                values.append(value)
                 i += 1U64
             }
             // The selected proof is part of a provided body's semantic

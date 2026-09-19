@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+trait Label {}
+struct Yes { pub val number: I64 }
+pub impl Yes { factory }
+pub impl Yes as Label {}
+
+struct Packed[T] { pub val value: T }
+pub impl Packed { factory }
+
+pub impl[T] Packed[Array[T]] {
+    fn first() -> T where T: Label {
+        return self.value[0U64]
+    }
+}
+
+fn main() {
+    val packed = <Packed[Array[Yes]] value=[<Yes number=42I64 />] />
+    val first: Yes = packed.first()
+    print(first.number)
+    print(packed.value[0U64].number)
+}
