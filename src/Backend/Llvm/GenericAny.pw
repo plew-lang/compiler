@@ -1,69 +1,33 @@
-// Part of the LLVM backend (root: _.pw): existential `any` handling within generic instances.
-
-// The LLVM type of a structured TypeRef: a generic struct/enum instance resolves
-// to its registered instance type; otherwise the head name (array refs are
-// handled by the isArray flag at declaration sites, not here).
-// Is TypeRef `ref` an existential `any P` (spec/08)? Its runtime value is the fat
-// pointer st.anyTy, regardless of the trait it names.
+// Physical LLVM types and existential value operations.
 
 pub impl LlvmCtx {
 
+    // Layout selection consumes a closed type contract. Type spelling is
+    // consulted only for the physical widths of primitive language items.
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
-        if c.arena.typeAt(index: ref).isRecord {
-            val layoutIndex: U64 = c.recordStructIndex(ref: ref)
-            if layoutIndex < c.arena.structCount() {
-                val slot: U64 = self.structSlotForSidx(structIndex: layoutIndex)
-                if slot < self.genStructTys.count() { return self.genStructTys[slot] }
-            }
-            c.errorAt(offset: c.arena.typeAt(index: ref).nameStart, msg: "internal error (compiler bug): record LLVM type requires a registered layout matching its semantic field types")
+        if ref == 0U64 { return self.i64ty }
+        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: ref) - 1U64]
+        if contract.underlying != 0U64 { return self.llvmTypeOfRef(c: inout c, ref: contract.underlying) }
+        if contract.isOpaquePointer { return self.ptrty }
+        if contract.structLayout != 0U64 {
+            val slot = self.genStructSlotRaw(c: inout c, ref: contract.typeRef)
+            if slot < self.genStructTys.count() { return self.genStructTys[slot] }
+            c.errorAt(offset: 0U64, msg: "internal error: finalized struct type has no registered LLVM layout")
             return self.i64ty
         }
-        // an existential `any P`: the fat pointer { data, vtable }, not the named
-        // trait's (nonexistent) own layout.
-        if refIsAny(c: inout c, ref: ref) {
-            return self.anyTy
+        match contract.ownershipClass {
+            ArcClass.AnyBox => { return self.anyTy }
+            ArcClass.ClosureVal => { return self.closureTy }
+            ArcClass.EnumVal(eidx: _) => {
+                val slot = self.genEnumSlotRaw(c: inout c, ref: contract.typeRef)
+                if slot < self.genEnumTys.count() { return self.genEnumTys[slot] }
+                c.errorAt(offset: 0U64, msg: "internal error: finalized enum type has no registered LLVM layout")
+                return self.i64ty
+            }
+            _ => {}
         }
-        if c.isGenericInst(ref: ref) {
-            // a generic OPAQUE intrinsic (`Buffer[T]`): its representation is a single
-            // pointer (like Array/Ref), NOT a struct layout — so it gets no `%gs` type
-            // (finalized layout registration skips it). Ask the representation question once here.
-            val gat: TypeRef = c.arena.typeAt(index: ref)
-            val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
-            if gxi < c.arena.structCount() {
-                if c.arena.structAt(index: gxi).isExtern {
-                    return self.ptrty
-                }
-            }
-            val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-            if gs < self.genStructRefs.count() {
-                return self.genStructTys[gs]
-            }
-            val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-            if ge < self.genEnumRefs.count() {
-                return self.genEnumTys[ge]
-            }
-            // A reachable concrete aggregate must already have a registered layout.
-            if !(c.genMode) {
-                if c.tyRefIsGround(ref: ref) {
-                    val lt: TypeRef = c.arena.typeAt(index: ref)
-                    mut val isKnownDef: Bool = false
-                    val lsi: U64 = c.genericStructIndex(nameStart: lt.nameStart, nameLen: lt.nameLen)
-                    if lsi < c.arena.structCount() {
-                        if !(c.arena.structAt(index: lsi).isExtern) {
-                            isKnownDef = true
-                        }
-                    }
-                    if c.genericEnumIndex(nameStart: lt.nameStart, nameLen: lt.nameLen) < c.arena.enumCount() {
-                        isKnownDef = true
-                    }
-                    if isKnownDef {
-                        c.errorAt(offset: lt.nameStart, msg: "internal error (compiler bug): a ground generic instance reached emission without a finalized registered layout")
-                    }
-                }
-            }
-        }
-        val t: TypeRef = c.arena.typeAt(index: ref)
-        return self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
+        val type = c.arena.typeAt(index: contract.typeRef)
+        return self.llvmPrimitiveTy(c: inout c, tyStart: type.nameStart, tyLen: type.nameLen)
     }
 
     // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit

@@ -73,8 +73,8 @@ pub impl LlvmCtx {
 
     // Payload layout consumes the same concrete field contract as ownership.
     inout fn variantPayloadTy(c: inout Comp, instanceRef: U64, vi: U64) -> LLVMTypeRef {
-        val storage = c.fieldStorageTypeRef(receiverRef: instanceRef)
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: storage) - 1U64]
+        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: instanceRef) - 1U64]
+        if contract.underlying != 0U64 { return self.variantPayloadTy(c: inout c, instanceRef: contract.underlying, vi: vi) }
         if vi + 1U64 >= contract.variantFieldStarts.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
             c.errorAt(offset: 0U64, msg: "internal error: enum payload has an incomplete field contract")
             return self.voidty

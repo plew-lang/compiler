@@ -10,34 +10,10 @@
 
 pub impl LlvmCtx {
 
-    // The LLVM type of an async frame field (a param or a hoisted local): a `Promise`
-    // is a pointer (PlewPromise*), an array its {ptr,i64} value, a generic instance /
-    // enum / scalar its normal type. Type-erased await values are i64, but a binding
-    // keeps its declared type (the coerce happens at the store).
-    inout fn asyncFieldTy(c: inout Comp, tyStart: U64, tyLen: U64, ty: U64, isArray: Bool) -> LLVMTypeRef {
-        if isArray {
-            // de-pin: resolve the per-instance `%gs` via the full `Array[E]` ref when present.
-            if c.isGenericInst(ref: ty) {
-                return self.llvmTypeOfRef(c: inout c, ref: ty)
-            }
-            return self.arrayTy
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
-            return self.ptrty
-        }
-        if c.isGenericInst(ref: ty) {
-            return self.llvmTypeOfRef(c: inout c, ref: ty)
-        }
-        if c.isStrongRefInst(ref: ty) || c.isWeakRefLikeInst(ref: ty) {
-            return self.ptrty
-        }
-        return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
-    }
-
-    // One async param's frame-field type (Promise -> ptr; otherwise the param's
-    // normal LLVM type, array-aware).
+    // Async source parameters carry resolved TypeTerms; the shared physical
+    // mapper consumes their finalized contracts without span reconstruction.
     inout fn asyncParamTy(c: inout Comp, p: Param) -> LLVMTypeRef {
-        return self.asyncFieldTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen, ty: p.ty, isArray: p.tyIsArray)
+        return self.llvmTypeOfRef(c: inout c, ref: p.ty)
     }
 
     // Declare every async fn: build its frame struct type + resume fn, and (for a

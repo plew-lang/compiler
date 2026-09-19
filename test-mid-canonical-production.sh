@@ -158,3 +158,16 @@ for source in (layout, sizing):
 for required in ['contract.fieldTypes', 'contract.fieldBoxed']:
     assert required in layout and required in sizing
 PYLAYOUT
+
+# Physical type conversion cannot reopen a frontend substitution environment.
+python3 - <<'PYPHYSICAL'
+from pathlib import Path
+source = Path('src/Backend/Llvm/GenericAny.pw').read_text().split('inout fn llvmTypeOfRef(', 1)[1].split('inout fn extendToI64(', 1)[0]
+for required in ['requireFinalDestruction(', 'contract.underlying', 'contract.structLayout', 'contract.isOpaquePointer']:
+    assert required in source
+for forbidden in ['genericStructIndex(', 'genericEnumIndex(', 'recordStructIndex(', 'c.cur.typeParams', 'c.genMode']:
+    assert forbidden not in source
+query = Path('src/Backend/Llvm/GenericQuery.pw').read_text()
+assert 'requireFinalDestruction(' in query
+assert 'localStructIdxFor(' not in query and 'runtimeTypeRef(' not in query
+PYPHYSICAL

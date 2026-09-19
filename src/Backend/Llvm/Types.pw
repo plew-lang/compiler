@@ -1,112 +1,23 @@
-// Part of the LLVM backend (root: _.pw): scalar / struct type mapping and struct registration.
-
-// ---- type mapping ----
-//
-// Map a Plew scalar type name span to an LLVM integer type. v1 recognizes the
-// fixed-width integer lang-items and Bool; everything else falls back to i64
-// (the default scalar). Width/signedness refinement and
-// non-scalar types (String/struct/array) come in later increments.
+// Physical primitive widths and runtime String representation.
 
 pub impl LlvmCtx {
-    inout fn llvmScalarTy(c: inout Comp, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
-        // a `newtype` (spec/10) has its underlying type's representation: resolve the name
-        // to the underlying before any further handling.
-        val ntu: Bind = c.newtypeUnderName(start: tyStart, len: tyLen)
-        if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
-            return self.llvmScalarTy(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
-        }
-        // generic substitution: a type-parameter name (T) in scope resolves to its
-        // concrete argument (the monomorphization env curTypeParams -> curTypeArgs,
-        // set while emitting a generic instance). No-op outside a generic context.
-        if c.cur.typeParams.count() > 0U64 {
-            val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
-            // LAST-match (high -> low), consistent with resolveTy: when the env carries a
-            // name collision (`Optional[Optional[I32]]` merges two `T` bindings, the inner
-            // last), the innermost binding must win — lexical shadowing. First-match would
-            // pick the enclosing `T` (outer = Optional[I32]) over this instance's (inner = I32).
-            mut val ti: U64 = c.cur.typeParams.count()
-            while ti > 0U64 {
-                ti -= 1
-                if c.cur.typeParams[ti].nameId == qid {
-                    // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
-                    // must resolve to that registered instance type — recursing on the
-                    // bare name would drop the args and miss it.
-                    val argRef: U64 = c.cur.typeArgs[ti]
-                    if c.isGenericInst(ref: argRef) {
-                        return self.llvmTypeOfRef(c: inout c, ref: argRef)
-                    }
-                    val at: TypeRef = c.arena.typeAt(index: argRef)
-                    // an array argument (`T -> Array[I32]`) is the {ptr,i64} value type.
-                    if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
-                        return self.arrayTy
-                    }
-                    return self.llvmScalarTy(c: inout c, tyStart: at.nameStart, tyLen: at.nameLen)
-                }
-            }
-        }
-        // `String` is no longer name-dispatched here: it is a registered struct whose type is
-        // pinned to `strty`, so it resolves via the registered-struct lookup below (returns the
-        // same strty). The representation alias `strty` (= arrayTy) stays; only the type-name
-        // branch is gone (collections.md §3-付録2).
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") {
-            return self.i1ty
-        }
-        // float types F32 / F64 lower to the IEEE double (F32 as double for now).
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F64") {
-            return self.f64ty
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") {
-            return self.f64ty
-        }
-        // reference cells are compiler-supplied opaque pointers. Public Ref-family
-        // capabilities are ordinary wrapper structs over these two cell types.
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "StrongRefCell") {
-            return self.ptrty
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "WeakRefCell") {
-            return self.ptrty
-        }
-        // a `Buffer[T]` is the raw data pointer (the storage floor; opaque ptr).
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Buffer") {
-            return self.ptrty
-        }
-        // FFI raw pointers (`CPtr[T]`) are opaque pointers (spec/15).
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "CPtr") {
-            return self.ptrty
-        }
-        // a function-value type `fn(...) -> ...` is the {fn, env} closure fat pointer.
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "fn") {
-            return self.closureTy
-        }
-        // Width-accurate integers: I8/U8 -> i8, I16/U16 -> i16, I32/U32 -> i32, else
-        // i64 (signedness is tracked separately as a kind, not in the LLVM type).
+    // Primitive language-item widths are a physical lowering decision.
+    // Nominal, generic, newtype and opaque representations are already closed.
+    inout fn llvmPrimitiveTy(c: inout Comp, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return self.i1ty }
+        // Preserve the current F32-as-double runtime representation.
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") { return self.f64ty }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F64") { return self.f64ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I8") { return self.i8ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U8") { return self.i8ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I16") { return self.i16ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U16") { return self.i16ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I32") { return self.i32ty }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U32") { return self.i32ty }
-        // a registered (all-primitive-field) user struct -> its named LLVM struct type
-        // (its 0-type-arg genStruct instance).
-        val reg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if reg < self.genStructRefs.count() {
-            return self.genStructTys[reg]
-        }
-        // a registered enum -> its named tagged-union type (its 0-type-arg genEnum instance).
-        val ereg: U64 = self.enumRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if ereg < self.genEnumRefs.count() {
-            return self.genEnumTys[ereg]
-        }
-        // an extern(c) opaque foreign-C handle type (`type LLVMTypeRef`) — the C
-        // backend's `typedef void* <Name>` — is an opaque pointer. The LLVM root
-        // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
-        // backend must lower them to `ptr` to self-compile.
-        val cxi: U64 = c.structIndexByName(start: tyStart, len: tyLen)
-        if cxi < c.arena.structCount() {
-            if c.arena.structAt(index: cxi).isCExtern {
-                return self.ptrty
-            }
-        }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I64") { return self.i64ty }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U64") { return self.i64ty }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Unit") { return self.i64ty }
+        c.errorAt(offset: tyStart, msg: "internal error: finalized type has no physical representation")
         return self.i64ty
     }
 

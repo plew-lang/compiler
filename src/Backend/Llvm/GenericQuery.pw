@@ -1,91 +1,10 @@
-// Part of the LLVM backend (root: _.pw): generic-instance struct-field and type-ref queries.
-
-// The c.arena.structs index for a local/param/return of type (start,len) if that type
-// is a REGISTERED struct, else c.arena.structCount() (not a struct value).
-
+// Physical struct identity comes from the finalized layout contract.
 pub impl LlvmCtx {
-    inout fn localStructIdxFor(c: inout Comp, start: U64, len: U64) -> U64 {
-        // a `newtype` over a struct shares the struct's representation and inherits its
-        // members/conformances (spec/10), so resolve it to the underlying struct's index
-        // — then field access / method dispatch on the newtype go through the struct path
-        // (e.g. `w.mark()` for `newtype Wrapped = Plain`). Mirrors kindFromTySpan's
-        // newtype→underlying resolution for String/primitive underlyings.
-        val ntu: Bind = c.newtypeUnderName(start: start, len: len)
-        if ntu.nameStart != start || ntu.nameLen != len {
-            return self.localStructIdxFor(c: inout c, start: ntu.nameStart, len: ntu.nameLen)
-        }
-        // substitute a type parameter via the env (a generic-fn body's `x: T` with
-        // T = A resolves to A's struct, so `x.get()` dispatches to A.get()).
-        if c.cur.typeParams.count() > 0U64 {
-            val qid: U64 = intern(c: inout c, start: start, len: len)
-            mut val ti: U64 = 0
-            while ti < c.cur.typeParams.count() {
-                if c.cur.typeParams[ti].nameId == qid {
-                    val at: TypeRef = c.arena.typeAt(index: c.cur.typeArgs[ti])
-                    return self.localStructIdxFor(c: inout c, start: at.nameStart, len: at.nameLen)
-                }
-                ti += 1
-            }
-        }
-        if self.structRegSlot(c: inout c, start: start, len: len) < self.genStructRefs.count() {
-            return c.structIndexByName(start: start, len: len)
-        }
-        return c.arena.structCount()
-    }
-}
-
-pub impl LlvmCtx {
-
-    // TOTAL-REF: the struct def index a (grounded) TypeRef denotes, or the sentinel
-    // (structs.count()) for a non-struct ref. The single ref→struct-idx map that
-    // exprStructIdx derives from. An `Array`/`String` head resolves to that registered def
-    // (an array/String VALUE dispatches as the Array/String struct — matching the classifier
-    // tail); a generic instance → its registered gen-struct def; any other named type →
-    // localStructIdxFor (a bare registered struct, or the sentinel for a scalar/enum/
-    // newtype-over-scalar). Array/String are checked before isGenericInst since an `Array[E]`
-    // ref is gen-instance-pinned but must map to the Array def, not a gen slot.
     inout fn structIdxOfRef(c: inout Comp, ref: U64) -> U64 {
-        if ref == 0U64 {
-            return c.arena.structCount()
-        }
-        if ref >= c.arena.typeCount() {
-            return c.arena.structCount()
-        }
-        val runtimeRef: U64 = c.runtimeTypeRef(ref: ref)
-        if runtimeRef != ref { return self.structIdxOfRef(c: inout c, ref: runtimeRef) }
-        val t: TypeRef = c.arena.typeAt(index: ref)
-        // An existential is a distinct semantic term with the fat `anyTy`
-        // representation.  Its trait head is not a nominal struct name, even
-        // when it happens to spell the same as an ambient generic binder.
-        // Letting it fall through to localStructIdxFor would re-enter that
-        // textual binder lookup (`any T` -> T -> any T).  The final TypeTerm
-        // query dispatches by node kind; this is the equivalent carrier-level
-        // boundary during the migration.
-        if t.isAny {
-            return c.arena.structCount()
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
-            return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        }
-        if c.isGenericInst(ref: ref) {
-            val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-            if gs < self.genStructRefs.count() {
-                return self.genStructDefs[gs]
-            }
-            return c.arena.structCount()
-        }
-        return self.localStructIdxFor(c: inout c, start: t.nameStart, len: t.nameLen)
-    }
-
-    // The LLVM type for a declared type span, honoring array-ness: an array is the
-    // {ptr,i64} value type; otherwise the scalar/String/struct/enum type.
-    inout fn llvmTypeFor(c: inout Comp, tyStart: U64, tyLen: U64, isArray: Bool) -> LLVMTypeRef {
-        if isArray {
-            return self.arrayTy
-        }
-        return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
+        if ref == 0U64 { return c.arena.structCount() }
+        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: ref) - 1U64]
+        if contract.underlying != 0U64 { return self.structIdxOfRef(c: inout c, ref: contract.underlying) }
+        if contract.structLayout == 0U64 { return c.arena.structCount() }
+        return contract.structLayout - 1U64
     }
 }

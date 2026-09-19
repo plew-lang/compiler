@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { TypeRef, StructDef }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "U8")
+    val pointerName = compiler.internBytes(s: "CPtr")
+    val handleName = compiler.internBytes(s: "ForeignHandle")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    // CPtr has no declaration row; foreign handles have explicit nominal identity.
+    val pointer = compiler.pushType(t: <TypeRef nameStart=pointerName.nameStart nameLen=pointerName.nameLen args=[integer] />)
+    compiler.arena.registerStruct(<StructDef nameStart=handleName.nameStart nameLen=handleName.nameLen nameId=handleName.nameId typeParams=[] fields=[] isUnique=false isExtern=true isCExtern=true defOffset=handleName.nameStart />)
+    val handle = compiler.pushType(t: <TypeRef nameStart=handleName.nameStart nameLen=handleName.nameLen args=[] hasDecl=true declOffset=handleName.nameStart />)
+    compiler.enqueueFinalDestruction(typeRef: pointer)
+    compiler.enqueueFinalDestruction(typeRef: handle)
+    compiler.enqueueFinalDestruction(typeRef: integer)
+    val pointerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: pointer) - 1U64]
+    val handleContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: handle) - 1U64]
+    val integerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: integer) - 1U64]
+    assert(pointerContract.isOpaquePointer && handleContract.isOpaquePointer)
+    assert(pointerContract.structLayout == 0U64 && handleContract.structLayout == 0U64)
+    assert(!pointerContract.needsRelease && !handleContract.needsRelease)
+    assert(!integerContract.isOpaquePointer)
+    print("ok")
+}

@@ -3093,6 +3093,7 @@ export struct FinalDestruction {
     pub val deinitCall: FinalDestructorCall = <FinalDestructorCall />
     // One-based finalized struct layout; zero for scalar, opaque, enum or newtype.
     pub val structLayout: U64 = 0U64
+    pub val isOpaquePointer: Bool = false
     pub val underlying: U64 = 0U64
     pub val fieldTypes: Array[U64] = []
     pub val fieldBoxed: Array[Bool] = []

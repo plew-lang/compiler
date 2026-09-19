@@ -23,7 +23,7 @@ pub impl Comp {
                     return
                 }
                 val finalized = <FinalDestructorCall bodyId=call.bodyId receiverType=call.receiverType receiverPassing=call.receiverPassing ready=true />
-                self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
+                self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
             }
             index += 1U64
         }
@@ -157,7 +157,7 @@ pub impl Comp {
                 releases.append(contract.fieldBoxed[field] || self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs))
                 field += 1U64
             }
-            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
+            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
             index += 1U64
         }
     }
@@ -217,6 +217,8 @@ pub impl Comp {
         mut val destructor = 0U64
         mut val underlying = 0U64
         mut val structLayout = 0U64
+        // CPtr is a builtin FFI type constructor without a StructDef.
+        mut val isOpaquePointer = rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr")
         if type.isRecord {
             self.collectRecordLayout(ref: typeRef)
             val layout = self.recordStructIndex(ref: typeRef)
@@ -243,7 +245,8 @@ pub impl Comp {
                 val structure = self.structIndexForType(ref: typeRef)
                 if structure < self.arena.structCount() {
                     val declaration = self.arena.structAt(index: structure)
-                    if !declaration.isExtern { structLayout = structure + 1U64 }
+                    isOpaquePointer = declaration.isCExtern || (declaration.isExtern && type.args.count() > 0U64)
+                    if !declaration.isExtern && !declaration.isCExtern { structLayout = structure + 1U64 }
                     if declaration.isUnique {
                         val function = self.structOwnDeinitFi(sidx: structure)
                         if function < self.arena.functionCount() {
@@ -292,6 +295,6 @@ pub impl Comp {
             self.collectFinalDestruction(typeRef: fields[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
     }
 }
