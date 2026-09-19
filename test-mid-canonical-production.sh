@@ -205,3 +205,11 @@ if rg -n 'stringLlvmTy|arrayInstTy|structRegSlot|\bstrty\b|\barrayTy\b' src/Back
     echo "LLVM value construction must consume finalized result layouts" >&2
     exit 1
 fi
+
+# Physical ownership always selects the concrete instance's layout contract.
+# Recursive ownership edges call per-instance witnesses; declaration-level
+# recursion suppression can silently skip a nested generic instance.
+if rg -n 'isGenericInst|structSlotForSidx|enumRegSlot|arcOnStack|arcPush|arcPop' src/Backend/Llvm; then
+    echo "ownership emission must use finalized instance witnesses" >&2
+    exit 1
+fi

@@ -225,8 +225,9 @@ struct LlvmCtx {
     mut val genStructRefs: Array[U64] = []
     mut val genStructTys: Array[LLVMTypeRef] = []
     mut val genStructDefs: Array[U64] = []
-    // Definition ID -> first zero-argument slot + 1; zero means unregistered.
-    mut val zeroArgStructSlots: Array[U64] = []
+    // FinalDestruction identity -> physical slot + 1; zero means no such layout.
+    mut val finalStructSlots: Array[U64] = []
+    mut val finalEnumSlots: Array[U64] = []
     // enum instances (parallel: TypeRef ref -> LLVM type, def idx). Every enum lives here:
     // a generic instance (`Optional[I32]`) keyed by its arg-bearing ref, and a non-generic
     // enum keyed by its 0-type-arg (bare-name) ref. The one `%ge` mechanism (genEnumSlot).
@@ -324,13 +325,6 @@ struct LlvmCtx {
     pub mut val gvalRef: Array[LLVMValueRef] = []
     pub mut val gvalLty: Array[LLVMTypeRef] = []
     pub mut val gvalTref: Array[U64] = []
-    // struct indices currently on the value-ARC emit stack (emitDeinitValue / emitStructRetain),
-    // so a self-referential type (`struct S { items: Array[S] }`) does not recurse forever at
-    // codegen — a struct already being emitted is skipped. Only the INLINE walk must
-    // terminate: runtime recursion routes through the type's retain/release witness CALL,
-    // so deeper levels are still retained/released at run time.
-    pub mut val arcStack: Array[U64] = []
-    pub mut val arcDepth: U64 = 0
     // Cell pin (spec/03): a deref-crossing `inout` place retains its Ref cell for the
     // call's duration, so a mid-call rebind cannot free the lent pointee — the pointee
     // deinit runs after the call. A stack of pinned cells (parallel: cell value, the
@@ -368,19 +362,17 @@ struct LlvmCtx {
     pub mut val retWitReg: Array[U64]
     pub mut val retWitVal: Array[LLVMValueRef]
     pub mut val retWitTy: Array[LLVMTypeRef]
-    // Per-enum ARC witnesses. Release is keyed by the registered instance;
-    // retain witnesses handle concrete enums, with generic instances lowered
-    // through the same frozen-contract walker at their call sites.
+    // Enum retain and release witnesses are keyed by concrete layout slot.
     pub mut val enumRelWitReg: Array[U64]
     pub mut val enumRelWitVal: Array[LLVMValueRef]
     pub mut val enumRelWitTy: Array[LLVMTypeRef]
-    pub mut val enumRetWitEid: Array[U64]
+    pub mut val enumRetWitReg: Array[U64]
     pub mut val enumRetWitVal: Array[LLVMValueRef]
     pub mut val enumRetWitTy: Array[LLVMTypeRef]
     // persistent body-emission cursors for the 4 witness tables. The witness graphs cross
     // struct<->enum WITHIN a family (a struct-drop body releases an Array[Enum] element ->
     // enum-release witness, whose body deinits a struct field -> struct-drop witness), so a
-    // single drain pass is not enough — `emitWitnessBodies` loops all 6 drains to a fixpoint,
+    // single drain pass is not enough — `emitWitnessBodies` loops all 4 drains to a fixpoint,
     // and each resumes from its cursor (never re-emitting an already-emitted body).
     pub mut val dropWitDone: U64
     pub mut val retWitDone: U64
@@ -697,7 +689,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverageBodyIds=[] midCoverageFnIdxs=[] midCoverageKeys=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethVal=[] genMethTy=[] genMethBody=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] closures=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitReg=[] retWitVal=[] retWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitReg=[] enumRetWitVal=[] enumRetWitTy=[] dropWitDone=0 retWitDone=0 enumRelWitDone=0 enumRetWitDone=0 genMethEmit=[]
         promiseTy=promiseTy
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)

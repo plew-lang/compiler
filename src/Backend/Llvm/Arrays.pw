@@ -526,11 +526,11 @@ pub impl LlvmCtx {
             }
             // The field contract is already grounded for this value. Physical
             // witness emission must not reopen an ambient instance environment.
-            ArcClass.StructVal(val sidx) => {
+            ArcClass.StructVal(sidx: _) => {
                 if retain {
-                    self.emitStructRetain(c: inout c, v: v, sidx: sidx, ref: typeRef)
+                    self.emitStructRetain(c: inout c, v: v, ref: typeRef)
                 } else {
-                    self.emitDeinitValue(c: inout c, v: v, sidx: sidx, ref: typeRef)
+                    self.emitDeinitValue(c: inout c, v: v, ref: typeRef)
                 }
             }
             // an enum value: value-ARC its active variant's non-boxed heap.
@@ -547,21 +547,14 @@ pub impl LlvmCtx {
     // Retain and drop use the same concrete layout registration identity.
     // Nested instances of one declaration (Box[Box[String]], Box[String])
     // must call different witnesses rather than trigger an inline cycle guard.
-    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64, ref: U64) {
-        mut val reg: U64 = self.genStructRefs.count()
-        if ref != 0U64 && c.isGenericInst(ref: ref) { reg = self.genStructSlot(c: inout c, ref: ref) }
-        if reg >= self.genStructRefs.count() { reg = self.structSlotForSidx(structIndex: sidx) }
-        if reg < self.genStructRefs.count() {
-            val slot: U64 = self.structRetainWitness(c: inout c, reg: reg)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(v)
-            self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: av)
-            return
-        }
-        self.emitRetainWitnessWalk(c: inout c, v: v, sidx: sidx, typeRef: ref)
+    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, ref: U64) {
+        val reg = self.requireStructLayoutSlot(c: inout c, typeRef: ref)
+        val slot = self.structRetainWitness(c: inout c, reg: reg)
+        val arguments: Array[LLVMValueRef] = [v]
+        self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments)
     }
 
-    inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64, typeRef: U64) {
+    inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
         val identity = c.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
             c.errorAt(offset: 0U64, msg: "internal error: struct retain has no finalized destruction contract")
@@ -572,8 +565,6 @@ pub impl LlvmCtx {
             c.errorAt(offset: 0U64, msg: "internal error: struct retain has an incomplete destruction contract")
             return
         }
-        if self.arcOnStack(sidx: sidx) { return }
-        self.arcPush(sidx: sidx)
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
             if contract.fieldBoxed[field] {
@@ -583,7 +574,6 @@ pub impl LlvmCtx {
             }
             field += 1U64
         }
-        self.arcPop()
     }
 
     inout fn retWitSlot(reg: U64) -> U64 {
@@ -621,7 +611,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.retWitVal[slot]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitRetainWitnessWalk(c: inout c, v: self.valueParameter(function: fv, index: 0U64), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
+            self.emitRetainWitnessWalk(c: inout c, v: self.valueParameter(function: fv, index: 0U64), typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.retWitDone += 1U64
         }

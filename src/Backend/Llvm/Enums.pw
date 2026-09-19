@@ -2,23 +2,7 @@
 
 // ---- enums (tagged unions) ----
 
-// The genEnum* slot for a registered enum named (start,len) — its 0-type-arg instance —
-// or st.genEnumRefs.count() if not registered.
-
 pub impl LlvmCtx {
-    // B1 (generic-unification): a non-generic enum is the 0-type-arg instance of itself,
-    // registered in the genEnum* tables (see registerEnums). enumRegSlot now returns that
-    // genEnum* slot — every enum resolves through the one `%ge` mechanism. The slot indexes
-    // genEnumRefs/genEnumDefs/genEnumTys (sentinel genEnumRefs.count()); the 0-arg filter
-    // disambiguates a non-generic enum from any generic instance that shares the head name.
-    inout fn enumRegSlot(c: inout Comp, start: U64, len: U64) -> U64 {
-        val eid: U64 = c.enumIdxByName(start: start, len: len)
-        if eid < c.arena.enumCount() {
-            return self.enumRegSlotByEid(c: inout c, eid: eid)
-        }
-        return self.genEnumRefs.count()
-    }
-
     // The payload reserves whole i64 words. Summing per-field rounded sizes
     // is conservative for subword scalars and keeps alignment at most one word.
     // Boxed recursion ends at its pointer; inline cycles are rejected upstream.
@@ -98,34 +82,19 @@ pub impl LlvmCtx {
     // ---- enum value ARC (tag-dispatch over the active variant's payload) ----
     //
     // Release any heap held by enum value `v` whose type ref is `ref` (a generic instance
-    // like `Optional[Array[I64]]` via genEnumSlot, or a plain registered enum by name).
+    // such as `Optional[Array[I64]]`, using its finalized instance layout).
     // Returns true if `ref` was an enum (so the caller knows it was handled).
     inout fn emitEnumReleaseRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
         if ref == 0U64 {
             return false
         }
-        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-        if ge < self.genEnumRefs.count() {
-            if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[ge]) {
-                val slot: U64 = self.enumReleaseWitness(c: inout c, reg: ge)
-                mut val av: Array[LLVMValueRef] = []
-                av.append(v)
-                self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: av)
-            }
-            return true
+        val reg = self.requireEnumLayoutSlot(c: inout c, typeRef: ref)
+        if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
+            val slot = self.enumReleaseWitness(c: inout c, reg: reg)
+            val arguments: Array[LLVMValueRef] = [v]
+            self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments)
         }
-        val t: TypeRef = c.arena.typeAt(index: ref)
-        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.genEnumRefs.count() {
-            if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
-                val slot: U64 = self.enumReleaseWitness(c: inout c, reg: reg)
-                mut val av: Array[LLVMValueRef] = []
-                av.append(v)
-                self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: av)
-            }
-            return true
-        }
-        return false
+        return true
     }
 
     inout fn enumNeedsDeinit(c: inout Comp, typeRef: U64) -> Bool {
@@ -161,8 +130,6 @@ pub impl LlvmCtx {
             c.errorAt(offset: 0U64, msg: "internal error: enum ownership has an incomplete destruction contract")
             return
         }
-        if self.arcOnStack(sidx: self.enumArcKey(eid: eid)) { return }
-        self.arcPush(sidx: self.enumArcKey(eid: eid))
         val slot = self.entryAlloca(ty: ety)
         llvmStore(self.b, v, slot)
         val tag = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
@@ -173,7 +140,6 @@ pub impl LlvmCtx {
             val end = contract.variantFieldStarts[variant + 1U64]
             if start > end || end > contract.fieldTypes.count() {
                 c.errorAt(offset: 0U64, msg: "internal error: enum ownership has an invalid variant range")
-                self.arcPop()
                 return
             }
             mut val hasOwnership = false
@@ -214,7 +180,6 @@ pub impl LlvmCtx {
             }
             variant += 1U64
         }
-        self.arcPop()
     }
 
     inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) {
@@ -223,12 +188,6 @@ pub impl LlvmCtx {
 
     inout fn emitEnumRetain(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) {
         self.emitEnumOwnership(c: inout c, v: v, eid: eid, ety: ety, typeRef: typeRef, retain: true)
-    }
-
-    // The arcStack recursion-guard key for enum `eid`: offset past any struct sidx so enum
-    // and struct id spaces never collide in the shared stack (structs push their bare sidx).
-    inout fn enumArcKey(eid: U64) -> U64 {
-        return 4611686018427387904U64 + eid
     }
 
     // ---- per-enum value-ARC witnesses (registered/concrete enums only) ----
@@ -240,10 +199,10 @@ pub impl LlvmCtx {
 
     // The release-witness table is keyed by the genEnum* INSTANCE slot (not the enum id):
     // a generic instance (`Optional[Node[I64]]`) gets its own witness whose body is
-    // emitted under ITS substitution env, so every enum release — concrete or generic
+    // emitted from its frozen payload contract, so every enum release — concrete or generic
     // instance — is a function CALL. That makes runtime recursion expressible: a boxed
     // (recursive) payload's cell release destroys its pointee by calling the same
-    // witness, which an inline walker (guarded by arcOnStack) could never encode.
+    // witness, which an inline-only walker could never encode.
     inout fn enumRelWitSlot(reg: U64) -> U64 {
         mut val i: U64 = 0
         while i < self.enumRelWitReg.count() {
@@ -285,88 +244,61 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn enumRetWitSlot(eid: U64) -> U64 {
+    inout fn enumRetWitSlot(reg: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.enumRetWitEid.count() {
-            if self.enumRetWitEid[i] == eid {
+        while i < self.enumRetWitReg.count() {
+            if self.enumRetWitReg[i] == reg {
                 return i
             }
             i += 1
         }
-        return self.enumRetWitEid.count()
+        return self.enumRetWitReg.count()
     }
-    inout fn enumRetainWitness(c: inout Comp, eid: U64, ety: LLVMTypeRef) -> U64 {
-        val found: U64 = self.enumRetWitSlot(eid: eid)
-        if found < self.enumRetWitEid.count() {
+    inout fn enumRetainWitness(c: inout Comp, reg: U64) -> U64 {
+        val found: U64 = self.enumRetWitSlot(reg: reg)
+        if found < self.enumRetWitReg.count() {
             return found
         }
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(ety)
+        ptys.append(self.genEnumTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwenumret".bytes())
-        appendU64Dec(into: inout nm, n: eid)
+        appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
         val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
-        self.enumRetWitEid.append(eid)
+        self.enumRetWitReg.append(reg)
         self.enumRetWitVal.append(fv)
         self.enumRetWitTy.append(fty)
-        return self.enumRetWitEid.count() - 1U64
+        return self.enumRetWitReg.count() - 1U64
     }
     inout fn emitEnumRetainWitnessBodies(c: inout Comp) {
-        while self.enumRetWitDone < self.enumRetWitEid.count() {
+        while self.enumRetWitDone < self.enumRetWitReg.count() {
             val s: U64 = self.enumRetWitDone
+            val reg = self.enumRetWitReg[s]
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRetain(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.enumRetWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])], typeRef: self.genEnumRefs[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
+            self.emitEnumRetain(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
     }
 
-    // The genEnum* slot for a non-generic enum by its enum id — its 0-type-arg instance
-    // (genEnumDefs[slot]==eid AND the ref carries no args, distinguishing it from a generic
-    // instance of a same-named def). genEnumRefs.count() if not registered.
-    inout fn enumRegSlotByEid(c: inout Comp, eid: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.genEnumRefs.count() {
-            if self.genEnumDefs[i] == eid {
-                if c.arena.typeAt(index: self.genEnumRefs[i]).args.count() == 0U64 {
-                    return i
-                }
-            }
-            i += 1
-        }
-        return self.genEnumRefs.count()
-    }
-
     // Retain the heap of enum value `v` of type `ref` if it owns any (genericinstance or
-    // registered named enum needing deinit); else a nop. The retain counterpart of
+    // concrete enum needing deinit); else a nop. The retain counterpart of
     // emitEnumReleaseRef.
     inout fn emitEnumRetainRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
         if ref == 0U64 {
             return false
         }
-        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-        if ge < self.genEnumRefs.count() {
-            if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[ge]) {
-                self.emitEnumRetain(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge], typeRef: self.genEnumRefs[ge])
-            }
-            return true
+        val reg = self.requireEnumLayoutSlot(c: inout c, typeRef: ref)
+        if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
+            val slot = self.enumRetainWitness(c: inout c, reg: reg)
+            val arguments: Array[LLVMValueRef] = [v]
+            self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments)
         }
-        val t: TypeRef = c.arena.typeAt(index: ref)
-        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.genEnumRefs.count() {
-            if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
-                val slot: U64 = self.enumRetainWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
-                mut val av: Array[LLVMValueRef] = []
-                av.append(v)
-                self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: av)
-            }
-            return true
-        }
-        return false
+        return true
     }
 
 }

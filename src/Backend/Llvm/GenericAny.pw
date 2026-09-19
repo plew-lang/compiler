@@ -10,7 +10,7 @@ pub impl LlvmCtx {
         if contract.underlying != 0U64 { return self.llvmTypeOfRef(c: inout c, ref: contract.underlying) }
         if contract.isOpaquePointer { return self.ptrty }
         if contract.structLayout != 0U64 {
-            val slot = self.genStructSlotRaw(c: inout c, ref: contract.typeRef)
+            val slot = self.requireStructLayoutSlot(c: inout c, typeRef: contract.typeRef)
             if slot < self.genStructTys.count() { return self.genStructTys[slot] }
             c.errorAt(offset: 0U64, msg: "internal error: finalized struct type has no registered LLVM layout")
             return self.i64ty
@@ -19,7 +19,7 @@ pub impl LlvmCtx {
             ArcClass.AnyBox => { return self.anyTy }
             ArcClass.ClosureVal => { return self.closureTy }
             ArcClass.EnumVal(eidx: _) => {
-                val slot = self.genEnumSlotRaw(c: inout c, ref: contract.typeRef)
+                val slot = self.requireEnumLayoutSlot(c: inout c, typeRef: contract.typeRef)
                 if slot < self.genEnumTys.count() { return self.genEnumTys[slot] }
                 c.errorAt(offset: 0U64, msg: "internal error: finalized enum type has no registered LLVM layout")
                 return self.i64ty

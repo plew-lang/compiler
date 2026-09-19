@@ -4,41 +4,13 @@
 
 pub impl LlvmCtx {
 
-    // value-ARC emit-recursion guard (breaks self-referential types like `struct S {
-    // items: Array[S] }` at codegen): push on entry to a struct's release/retain emission,
-    // pop on exit; a struct already on the stack is skipped — only the INLINE walk stops
-    // there (runtime recursion goes through the type's witness CALL, see dropWitSlot).
-    inout fn arcPush(sidx: U64) {
-        if self.arcDepth < self.arcStack.count() {
-            self.arcStack[self.arcDepth] = sidx
-        } else {
-            self.arcStack.append(sidx)
-        }
-        self.arcDepth = self.arcDepth + 1U64
-    }
-    inout fn arcPop() {
-        if self.arcDepth > 0U64 {
-            self.arcDepth = self.arcDepth - 1U64
-        }
-    }
-    inout fn arcOnStack(sidx: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.arcDepth {
-            if self.arcStack[i] == sidx {
-                return true
-            }
-            i += 1
-        }
-        return false
-    }
-
     // The dropWit* slot for genStruct* instance slot `reg`, or dropWitReg.count() if
     // none declared yet. The drop-witness table is keyed by the INSTANCE slot (not the
-    // struct def sidx): a generic instance gets its own witness whose body is emitted
-    // under ITS substitution env, so every struct drop — concrete or generic instance —
+    // struct def sidx): every concrete instance consumes its frozen field contract,
+    // so every struct drop — concrete or generic instance —
     // is a function CALL. That makes runtime recursion expressible: a boxed (recursive)
     // field's cell release destroys its pointee by calling the same witness, which an
-    // inline walker (guarded by arcOnStack) could never encode.
+    // inline-only walker could never encode.
     inout fn dropWitSlot(reg: U64) -> U64 {
         mut val i: U64 = 0
         while i < self.dropWitReg.count() {
@@ -76,32 +48,15 @@ pub impl LlvmCtx {
     // first, then each field's deinit in declaration order, recursively. Routed through a
     // single per-type witness call (structDropWitness) so the recursive walker is emitted
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
-    inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64, ref: U64) {
-        // registered struct / grounded generic instance: call its drop witness instead
-        // of inlining the walker. A grounded instance ref routes to ITS per-instance
-        // witness; ref 0 (callers with only a sidx) falls back to the 0-type-arg slot.
-        mut val reg: U64 = self.genStructRefs.count()
-        if ref != 0U64 {
-            if c.isGenericInst(ref: ref) {
-                reg = self.genStructSlot(c: inout c, ref: ref)
-            }
-        }
-        if reg >= self.genStructRefs.count() {
-            reg = self.structSlotForSidx(structIndex: sidx)
-        }
-        if reg < self.genStructRefs.count() {
-            val slot: U64 = self.structDropWitness(c: inout c, reg: reg)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(v)
-            self.callValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: av)
-            return
-        }
-        // unregistered (rare; normally rejected at construction) — walk inline.
-        self.emitDropWitnessWalk(c: inout c, v: v, sidx: sidx, typeRef: ref)
+    inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, ref: U64) {
+        val reg = self.requireStructLayoutSlot(c: inout c, typeRef: ref)
+        val slot = self.structDropWitness(c: inout c, reg: reg)
+        val arguments: Array[LLVMValueRef] = [v]
+        self.callValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: arguments)
     }
 
     // The recursive struct-destruction walker — emitted ONCE inside each type's witness
-    // body (and used as the inline fallback for an unregistered struct). Sub-struct fields
+    // body with no unregistered inline fallback. Sub-struct fields
     // recurse through `emitDeinitValue`, which routes them to their own witness calls.
     // A single-field wrapper with no user destructor contributes no action
     // of its own. Consume its frozen contract directly instead of emitting
@@ -131,7 +86,6 @@ pub impl LlvmCtx {
     }
 
     inout fn emitDropWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64, typeRef: U64) {
-        if self.arcOnStack(sidx: sidx) { return }
         val declaration = c.arena.structAt(index: sidx)
         mut val contractId = c.finalDestructionIndex(typeRef: typeRef)
         while contractId != 0U64 && c.arena.finalDestructions[contractId - 1U64].underlying != 0U64 {
@@ -146,17 +100,14 @@ pub impl LlvmCtx {
             c.errorAt(offset: declaration.defOffset, msg: "internal error: struct drop has an incomplete destruction contract")
             return
         }
-        self.arcPush(sidx: sidx)
         if contract.deinitCall.bodyId != 0U64 {
             if !contract.deinitCall.ready {
                 c.errorAt(offset: declaration.defOffset, msg: "internal error: destructor call contract is not finalized")
-                self.arcPop()
                 return
             }
             val slot = self.ensureFinalGenMethodBody(c: inout c, bodyId: contract.deinitCall.bodyId)
             if slot >= self.genMethBody.count() {
                 c.errorAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body")
-                self.arcPop()
                 return
             }
             val arguments: Array[LLVMValueRef] = [v]
@@ -172,12 +123,10 @@ pub impl LlvmCtx {
             }
             field += 1U64
         }
-        self.arcPop()
     }
 
     // Emit the body of every declared drop witness `void @pwdrop<reg>(structVal)`: the
-    // recursive destruction walker over its single struct-value parameter, grounded
-    // under the instance's own env (a no-op for a 0-type-arg concrete struct). Drained
+    // recursive destruction walker over its single struct-value parameter. Drained
     // by a growing cursor — a walk may declare further sub-struct witnesses (appended to
     // the tables), which this same loop then picks up. Called once after the main emit pass.
     inout fn emitDropWitnessBodies(c: inout Comp) {
@@ -202,7 +151,7 @@ pub impl LlvmCtx {
         // The four cursor/table comparisons are the fixed-point condition itself. Keeping
         // the sole use at the loop header gives one source of truth for entry and re-entry:
         // a pass which declares no further witness bodies ends without an auxiliary flag.
-        while self.dropWitDone < self.dropWitReg.count() || self.retWitDone < self.retWitReg.count() || self.enumRelWitDone < self.enumRelWitReg.count() || self.enumRetWitDone < self.enumRetWitEid.count() {
+        while self.dropWitDone < self.dropWitReg.count() || self.retWitDone < self.retWitReg.count() || self.enumRelWitDone < self.enumRelWitReg.count() || self.enumRetWitDone < self.enumRetWitReg.count() {
             // These are phase boundaries rather than a per-witness log: the tables may be
             // large, but each boundary identifies the one family whose current cursor made
             // no observable progress.  `--trace-phases` therefore distinguishes a genuinely
@@ -217,7 +166,7 @@ pub impl LlvmCtx {
             tracePhaseCount(c: inout c, label: "backend:witness:enum-release-pending", count: self.enumRelWitReg.count() - self.enumRelWitDone)
             self.emitEnumReleaseWitnessBodies(c: inout c)
             tracePhase(c: inout c, label: "backend:witness:enum-release-done")
-            tracePhaseCount(c: inout c, label: "backend:witness:enum-retain-pending", count: self.enumRetWitEid.count() - self.enumRetWitDone)
+            tracePhaseCount(c: inout c, label: "backend:witness:enum-retain-pending", count: self.enumRetWitReg.count() - self.enumRetWitDone)
             self.emitEnumRetainWitnessBodies(c: inout c)
             tracePhase(c: inout c, label: "backend:witness:enum-retain-done")
         }

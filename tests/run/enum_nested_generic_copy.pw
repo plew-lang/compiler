@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Cell {
+    pub val number: I64
+    deinit { print(99I64) }
+}
+pub impl Cell { factory }
+enum Layer[T] { Value(value: T) }
+
+fn duplicate(value: Layer[Layer[MutableRef[Cell]]]) -> Layer[Layer[MutableRef[Cell]]] {
+    return value
+}
+
+fn main() {
+    val original: Layer[Layer[MutableRef[Cell]]] = <Layer.Value value=<Layer.Value value=<MutableRef value=<Cell number=7I64 /> /> /> />
+    val copy = duplicate(value: original)
+    match copy {
+        Layer.Value(value: val inner) => {
+            match inner {
+                Layer.Value(value: val cell) => { print(cell->number) }
+            }
+        }
+    }
+}
