@@ -77,7 +77,11 @@ fail=0
 
 echo "== building instrumented plewc_asan =="
 python3 ./scripts/support/trace-command.py "$TMP/build.err" -- "$PLEWC" --trace-phases --asan src/_.pw > "$TMP/pc.ll"
-python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan -S "$TMP/pc.ll" -o "$TMP/pc.inst.ll"
+# Remove redundant aggregate copies before ASan gives them observable checks.
+# Share the ordinary compiler's prepasses; instrument every remaining access.
+PREPASSES=$(PYTHONPATH=./scripts/support python3 -B -c 'from llvm_link import PIPELINE; print(PIPELINE)')
+python3 ./scripts/support/trace-command.py "$TMP/preopt.err" -- "$OPT" -debug-pass-manager "-passes=$PREPASSES" -S "$TMP/pc.ll" -o "$TMP/pc.preopt.ll"
+python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan -S "$TMP/pc.preopt.ll" -o "$TMP/pc.inst.ll"
 # std/prelude resolution is relative to the compiler binary's directory, so the
 # instrumented compiler must live in compiler/ (removed on exit).
 # Keep ASan instrumentation and frame pointers, with the standard -O1 level
