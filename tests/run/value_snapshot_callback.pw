@@ -1,0 +1,53 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+struct Snapshot {
+    pub mut val first: I64
+    pub mut val items: Array[I64]
+    pub val padding0: I64 = 0I64
+    pub val padding1: I64 = 0I64
+    pub val padding2: I64 = 0I64
+    pub val padding3: I64 = 0I64
+    pub val padding4: I64 = 0I64
+    pub val padding5: I64 = 0I64
+    pub val padding6: I64 = 0I64
+    pub val padding7: I64 = 0I64
+    pub val padding8: I64 = 0I64
+    pub val padding9: I64 = 0I64
+    pub val padding10: I64 = 0I64
+    pub val padding11: I64 = 0I64
+}
+pub impl Snapshot { factory }
+fn projected(snapshot: Snapshot) -> I64 { return snapshot.first }
+fn throughCallback(snapshot: Snapshot, action: fn()) -> I64 {
+    action()
+    return snapshot.first + snapshot.items[0]
+}
+fn throughInout(original: inout Snapshot, snapshot: Snapshot) -> I64 {
+    original.first = 50I64
+    original.items[0] = 60I64
+    return snapshot.first + snapshot.items[0]
+}
+fn escaped(snapshot: Snapshot) -> fn() -> I64 {
+    return fn() -> I64 { return snapshot.first + snapshot.items[0] }
+}
+struct Holder { pub mut val snapshot: Snapshot }
+pub impl Holder {
+    factory
+    fn value() -> Snapshot { return self.snapshot }
+    inout fn change() {
+        self.snapshot.first = 10I64
+        self.snapshot.items[0] = 20I64
+    }
+}
+fn main() {
+    val shared: MutableRef[Holder] = <MutableRef value=<Holder snapshot=<Snapshot first=1I64 items=[2I64] /> /> />
+    print(projected(snapshot: shared->value()))
+    val saved: fn() -> I64 = escaped(snapshot: shared->value())
+    val action: fn() = fn() { shared->change() }
+    print(throughCallback(snapshot: shared->value(), action: action))
+    mut val original = shared->value()
+    print(throughInout(original: inout original, snapshot: original))
+    print(original.first + original.items[0])
+    print(saved())
+}

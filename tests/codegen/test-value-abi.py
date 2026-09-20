@@ -42,3 +42,30 @@ with tempfile.TemporaryDirectory(prefix='plew-value-abi-') as directory:
     output = subprocess.check_output([str(directory / 'program')], timeout=55)
     assert output == (root / 'tests/run/mid_value_abi.out').read_bytes()
 print(f'PASS value ABI: {checked} direct aggregate calls, indirect calls, O0 output')
+
+# A field reader must not receive the whole large value after the common passes.
+# Snapshot behavior must also survive callbacks, aliasing inout, and escaping values.
+import sys
+sys.path.insert(0, str(root / 'scripts/support'))
+import llvm_link
+fixture = root / 'tests/run/value_snapshot_callback.pw'
+raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
+large_types = [name for name, body in re.findall(r'^(%[\w.]+) = type \{ ([^\n]+) \}', raw, re.M) if body.count('i64') >= 12]
+readers = []
+for aggregate in large_types:
+    readers += re.findall(r'^define internal i64 @([\w.]+)\(ptr byval\(' + re.escape(aggregate) + r'\) %[\w.]+\)', raw, re.M)
+assert len(readers) == 1, 'fixture must contain one large single-field reader'
+config = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
+with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory:
+    directory = Path(directory)
+    source, optimized = directory / 'raw.ll', directory / 'optimized.ll'
+    source.write_text(raw)
+    (directory / 'runtime.c').write_bytes(runtime.stdout)
+    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    reduced = optimized.read_text()
+    assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
+    for material in (source, optimized):
+        executable = directory / material.stem
+        subprocess.run(['clang', '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
+        assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
+print('PASS aggregate argument reduction: scalar field, callback/inout snapshots, escaping closure, raw and optimized O0 output')

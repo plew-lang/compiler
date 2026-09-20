@@ -7,7 +7,9 @@ import shutil
 import subprocess
 import sys
 
-PIPELINE = 'function(sroa,early-cse),cgscc(argpromotion)'
+# Split aggregate loads into field reads before promoting private byval arguments.
+# Keep fixpoint verification enabled; generated bodies can need several rounds.
+PIPELINE = 'function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion)'
 ROOT = Path(__file__).resolve().parents[2]
 
 
