@@ -1,0 +1,52 @@
+import /Ir with { Arena, Func }
+import @Std/Io with { write }
+
+fn declaration(nameId: U64, body: U64) -> Func {
+    return <Func nameStart=0U64 nameLen=0U64 nameId=nameId
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />
+}
+fn verify(arena: Arena, nameId: U64) {
+    mut val candidate = arena.firstFunctionNamed(nameId: nameId)
+    mut val index: U64 = 0U64
+    while index < arena.functionCount() {
+        if arena.functionAt(index: index).nameId == nameId {
+            if candidate != index { panic "candidate order disagrees with linear scan" }
+            candidate = arena.nextFunctionNamed(index: candidate)
+        }
+        index += 1U64
+    }
+    if candidate != arena.functionCount() { panic "extra candidate" }
+}
+fn main() {
+    mut val arena: Arena = <Arena />
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    mut val index: U64 = 0U64
+    while index < 80U64 {
+        arena.registerFunction(declaration(nameId: index % 17U64, body: index))
+        index += 1U64
+    }
+    mut val name: U64 = 0U64
+    while name < 19U64 {
+        verify(arena: arena, nameId: name)
+        name += 1U64
+    }
+    mut val copy = arena
+    arena.registerFunction(declaration(nameId: 18446744073709551615U64, body: 100U64))
+    copy.registerFunction(declaration(nameId: 99U64, body: 200U64))
+    arena.registerFunction(declaration(nameId: 0U64, body: 101U64))
+    copy.registerFunction(declaration(nameId: 0U64, body: 201U64))
+    verify(arena: arena, nameId: 0U64)
+    verify(arena: copy, nameId: 0U64)
+    verify(arena: arena, nameId: 18446744073709551615U64)
+    verify(arena: copy, nameId: 18446744073709551615U64)
+    verify(arena: arena, nameId: 99U64)
+    verify(arena: copy, nameId: 99U64)
+    if arena.functionCount() != 82U64 || copy.functionCount() != 82U64 { panic "copy row mutation escaped" }
+    if copy.firstFunctionNamed(nameId: 18446744073709551615U64) != copy.functionCount() { panic "new name escaped into copy" }
+    if arena.firstFunctionNamed(nameId: 99U64) != arena.functionCount() { panic "copy name escaped" }
+    if arena.functionAt(index: 81U64).body != 101U64 || copy.functionAt(index: 81U64).body != 201U64 { panic "copied rows alias" }
+    write(s: "function-name-index-ok\n")
+}

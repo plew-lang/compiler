@@ -2376,6 +2376,9 @@ export struct Arena {
     mut val typeParameterNameIds: Set[U64] = Set.new()
     mut val concreteTypeNameIds: Set[U64] = Set.new()
     mut val funcs: Array[Func] = []
+    mut val functionNameHeads: Dictionary[U64, U64] = [:]
+    mut val functionNameTails: Dictionary[U64, U64] = [:]
+    mut val functionNameNext: Array[U64] = []
     mut val structs: Array[StructDef] = []
     mut val structsByOffset: Dictionary[U64, U64] = [:]
     mut val structNameHeads: Dictionary[U64, U64] = [:]

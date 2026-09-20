@@ -727,24 +727,21 @@ pub impl Comp {
     inout fn callArgTypeByNameIds(nameId: U64, labelId: U64, hasReceiver: Bool) -> U64 {
         mut val matchCount: U64 = 0
         mut val resultTy: U64 = 0
-        mut val fi: U64 = 0
-        while fi < self.arena.functionCount() {
-            if self.arena.functionAt(index: fi).nameId == nameId {
-                if self.arena.functionAt(index: fi).hasRecv == hasReceiver {
-                    if self.arena.functionAt(index: fi).typeParams.count() == 0U64 {
-                        matchCount += 1
-                        mut val pi: U64 = 0
-                        while pi < self.arena.functionAt(index: fi).params.count() {
-                            val param: Param = self.funcParamAt(params: self.arena.functionAt(index: fi).params, index: pi)
-                            if intern(c: inout self, start: param.nameStart, len: param.nameLen) == labelId {
-                                resultTy = param.ty
-                            }
-                            pi += 1
-                        }
+        mut val functionIndex = self.arena.firstFunctionNamed(nameId: nameId)
+        while functionIndex < self.arena.functionCount() {
+            val declaration = self.arena.functionAt(index: functionIndex)
+            if declaration.hasRecv == hasReceiver && declaration.typeParams.count() == 0U64 {
+                matchCount += 1
+                mut val parameterIndex: U64 = 0
+                while parameterIndex < declaration.params.count() {
+                    val parameter = self.funcParamAt(params: declaration.params, index: parameterIndex)
+                    if intern(c: inout self, start: parameter.nameStart, len: parameter.nameLen) == labelId {
+                        resultTy = parameter.ty
                     }
+                    parameterIndex += 1
                 }
             }
-            fi += 1
+            functionIndex = self.arena.nextFunctionNamed(index: functionIndex)
         }
         if matchCount == 1U64 {
             return resultTy
