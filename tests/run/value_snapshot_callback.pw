@@ -3,6 +3,7 @@ import @Std/Core with { MutableRef }
 
 struct Snapshot {
     pub mut val first: I64
+    pub val gate: Bool = true
     pub mut val items: Array[I64]
     pub val padding0: I64 = 0I64
     pub val padding1: I64 = 0I64

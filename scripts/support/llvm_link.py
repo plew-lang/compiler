@@ -21,8 +21,12 @@ def optimizer(config):
     return path
 
 
-def optimization_command(config, source, destination):
-    return [optimizer(config), '-debug-pass-manager', '-passes=' + PIPELINE,
+def optimization_command(config, source, destination, clang=None):
+    # Older bootstrap material has no triple. Never let opt simplify offsets
+    # using its target-independent layout before the native clang link.
+    native_clang = clang or shutil.which('clang')
+    triple = subprocess.check_output([native_clang, '-dumpmachine'], text=True).strip()
+    return [optimizer(config), '-mtriple=' + triple, '-debug-pass-manager', '-passes=' + PIPELINE,
             '-S', str(source), '-o', str(destination)]
 
 
@@ -31,7 +35,7 @@ def link(config, log_prefix, source, runtime, destination, libraries=(), clang=N
     prefix.parent.mkdir(parents=True, exist_ok=True)
     optimized = Path(str(prefix) + '.optimized.ll')
     steps = [
-        (str(prefix) + '.opt.log', optimization_command(config, source, optimized)),
+        (str(prefix) + '.opt.log', optimization_command(config, source, optimized, clang=clang)),
         (str(prefix) + '.log', [clang or shutil.which('clang'), '-Xclang', '-fdebug-pass-manager',
                                '-mllvm', '-debug-pass=Executions', '-w', '-O2', str(optimized),
                                str(runtime), *libraries, '-o', str(destination)]),

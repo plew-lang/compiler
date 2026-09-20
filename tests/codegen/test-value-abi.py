@@ -50,6 +50,7 @@ sys.path.insert(0, str(root / 'scripts/support'))
 import llvm_link
 fixture = root / 'tests/run/value_snapshot_callback.pw'
 raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
+assert re.search(r'^target triple = "[^"]+"$', raw, re.M), 'native target must be explicit before optimization'
 large_types = [name for name, body in re.findall(r'^(%[\w.]+) = type \{ ([^\n]+) \}', raw, re.M) if body.count('i64') >= 12]
 readers = []
 for aggregate in large_types:
@@ -63,6 +64,7 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
     (directory / 'runtime.c').write_bytes(runtime.stdout)
     subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
     reduced = optimized.read_text()
+    assert 'target datalayout = ' in reduced, 'layout-sensitive optimization must have a native data layout'
     assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
     for material in (source, optimized):
         executable = directory / material.stem
