@@ -54,6 +54,9 @@ int main(int argc, char **argv) {
             assert len({r['compiler_sha256'] for r in state['measurements']}) == 1, state
             assert 'self_compile_median_seconds=' in summary
             assert '-fdebug-pass-manager' in state['link_command'], state
+            bindir = Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip())
+            assert Path(state['link_command'][0]) == bindir / 'clang', state
+            assert Path(state['optimization_command'][0]) == bindir / 'opt', state
             assert '-passes=function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion),default<O1>' in state['optimization_command'], state
             assert state['optimizer_version'], state
             for row in state['generations']:

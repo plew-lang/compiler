@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
         assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
     for material in (source, optimized):
         executable = directory / material.stem
-        subprocess.run(['clang', '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
+        subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS aggregate argument reduction: scalar field, callback/inout snapshots, escaping closure, raw and optimized O0 output')
 

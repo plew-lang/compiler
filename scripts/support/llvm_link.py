@@ -23,10 +23,19 @@ def optimizer(config):
     return path
 
 
+def selected_clang(config):
+    # opt may introduce IR syntax/intrinsics newer than the system compiler.
+    # Use the linker driver distributed with the selected LLVM toolchain.
+    path = str(Path(subprocess.check_output([config, '--bindir'], text=True).strip()) / 'clang')
+    if not os.access(path, os.X_OK):
+        raise ValueError('selected LLVM clang is unavailable')
+    return path
+
+
 def optimization_command(config, source, destination, clang=None):
     # Older bootstrap material has no triple. Never let opt simplify offsets
     # using its target-independent layout before the native clang link.
-    native_clang = clang or shutil.which('clang')
+    native_clang = clang or selected_clang(config)
     triple = subprocess.check_output([native_clang, '-dumpmachine'], text=True).strip()
     return [optimizer(config), '-mtriple=' + triple, '-debug-pass-manager', '-passes=' + PIPELINE,
             '-S', str(source), '-o', str(destination)]
@@ -38,7 +47,7 @@ def link(config, log_prefix, source, runtime, destination, libraries=(), clang=N
     optimized = Path(str(prefix) + '.optimized.ll')
     steps = [
         (str(prefix) + '.opt.log', optimization_command(config, source, optimized, clang=clang)),
-        (str(prefix) + '.log', [clang or shutil.which('clang'), '-Xclang', '-fdebug-pass-manager',
+        (str(prefix) + '.log', [clang or selected_clang(config), '-Xclang', '-fdebug-pass-manager',
                                '-mllvm', '-debug-pass=Executions', '-w', '-O2', str(optimized),
                                str(runtime), *libraries, '-o', str(destination)]),
     ]

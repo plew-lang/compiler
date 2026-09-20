@@ -38,9 +38,7 @@ def main():
         config = next((p for p in ['/opt/homebrew/opt/llvm/bin/llvm-config', '/opt/homebrew/opt/llvm@22/bin/llvm-config'] if Path(p).is_file()), None)
     if not config:
         raise ValueError('llvm-config unavailable')
-    clang = shutil.which('clang')
-    if not clang:
-        raise ValueError('clang unavailable')
+    clang = llvm_link.selected_clang(config)
     libdir = os.environ.get('LLVM_LIBDIR')
     if not libdir:
         prefix = Path(config).parent.parent / 'lib'
