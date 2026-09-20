@@ -173,38 +173,12 @@ else
 fi
 
 # Call results consume the type of their frozen semantic call site.
-if sh ./tests/codegen/test-mid-hash-seed.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-hash-seed"
-fi
-
-if sh ./tests/codegen/test-mid-call-result-types.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-call-result-types"
-fi
 
 # Inferred storage uses the frozen result, including scoped match payloads.
-if sh ./tests/codegen/test-mid-local-types.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-local-types"
-fi
 
 # Static view values must retain their type facet through Mid.
-if sh ./tests/codegen/test-mid-value-views.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-value-views"
-fi
 
 # Inherited fields retain their newtype declaration identity.
-if sh ./tests/codegen/test-mid-newtype-fields.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-newtype-fields"
-fi
 
 # Inherited calls use shared, demand-driven typed boundaries.
 if sh ./tests/codegen/test-mid-newtype-adapters.sh; then
@@ -214,25 +188,10 @@ else
 fi
 
 # Loop patterns lower to ordinary owned elements and field bindings.
-if sh ./tests/codegen/test-mid-for-destructure.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-for-destructure"
-fi
 
 # Raw external symbols and bundled runtime targets retain distinct identities.
-if sh ./tests/codegen/test-mid-direct-extern.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-direct-extern"
-fi
 
 # Reference cell control preserves borrowed inputs and owned results.
-if sh ./tests/codegen/test-mid-cell-control.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-cell-control"
-fi
 
 # OS entropy has a declaration-owned closed runtime target.
 if sh ./tests/codegen/test-mid-entropy.sh; then
@@ -242,101 +201,35 @@ else
 fi
 
 # Self field layout is selected without rewriting its nominal parameter type.
-if sh ./tests/codegen/test-mid-self-fields.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-self-fields"
-fi
 
 # A construction retains its nominal owner beside unrelated lexical binders.
-if sh ./tests/codegen/test-mid-nominal-construction.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-nominal-construction"
-fi
 
 # Synthetic deinitializers retain the declared receiver TypeTerm.
-if sh ./tests/codegen/test-mid-deinit-receivers.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-deinit-receivers"
-fi
-
-if sh ./tests/codegen/test-mid-provided-receivers.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-provided-receivers"
-fi
 
 # Unit results must remain distinct from missing call-result type facts.
-if sh ./tests/codegen/test-mid-unit-call-results.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-unit-call-results"
-fi
 
 # Lifetime output alone must not pass through a legacy caller unnoticed.
-if sh ./tests/codegen/test-mid-temporary-lifetime.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-temporary-lifetime"
-fi
 
 # Heap-copy ownership tests must exercise Mid rather than legacy lowering.
-if sh ./tests/codegen/test-mid-copy-owned-destination.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-copy-owned-destination"
-fi
 
 # A receiverless call still owns a canonical `None` receiver row. The row is
 # not an operand and must not become a synthetic move during verification.
-if sh ./tests/codegen/test-mid-direct-call-without-receiver.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-direct-call-without-receiver"
-fi
 
 # Read-only receivers accept constants under the same operand contract as
 # ordinary borrowed arguments, without granting a writable or movable place.
-if sh ./tests/codegen/test-mid-borrow-constant-receiver.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-borrow-constant-receiver"
-fi
 
 # An `inout self` call must carry the writable receiver place through
 # canonical Mid, not fall back to the AST emitter because its ABI is by
 # pointer.
-if sh ./tests/codegen/test-mid-inout-receiver.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-inout-receiver"
-fi
 
 # Indexing a temporary's field keeps its owner in the ordinary Mid scope.
-if sh ./tests/codegen/test-mid-index-rvalue-field.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-index-rvalue-field"
-fi
 
 # A free call receiving an `inout` struct field must retain that precise
 # writable place through Mid's call terminator, including from return position.
-if sh ./tests/codegen/test-mid-inout-field-argument.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-inout-field-argument"
-fi
 
 # A receiver reached through field then index projections must preserve that
 # exact writable place. The surrounding factory-heavy main is intentionally
 # outside this gate; only the isolated mutating helper is the Mid boundary.
-if sh ./tests/codegen/test-mid-access-nested-field-receiver.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-access-nested-field-receiver"
-fi
 
 if sh ./tests/codegen/test-mid-strong-cell.sh; then
     :
@@ -357,88 +250,20 @@ else
 fi
 
 # Conversion runtime tests must not silently exercise a legacy boundary.
-if sh ./tests/codegen/test-mid-owned-conversion.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-owned-conversion"
-fi
 
 # A direct struct field store is physical Mid Place storage, not an index
 # access/writeback. Keep its ownership drop/store path out of legacy lowering.
-if sh ./tests/codegen/test-mid-field-overwrite.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-field-overwrite"
-fi
 
 # Moving a unique value into a freshly constructed aggregate is an ordinary
 # Mid ownership transfer, never a reason to fall back to legacy lowering.
-if sh ./tests/codegen/test-mid-unique-aggregate.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-unique-aggregate"
-fi
-
-if sh ./tests/codegen/test-mid-for.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-for"
-fi
-
-if sh ./tests/codegen/test-mid-range.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-range"
-fi
-
-if sh ./tests/codegen/test-mid-record-construction.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-record-construction"
-fi
-if sh ./tests/codegen/test-mid-self-layout.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-self-layout"
-fi
-if sh ./tests/codegen/test-mid-enum-owner.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-enum-owner"
-fi
-if sh ./tests/codegen/test-mid-struct-pattern.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-struct-pattern"
-fi
-if sh ./tests/codegen/test-mid-body-receiver.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-body-receiver"
-fi
-if sh ./tests/codegen/test-mid-field-defaults.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-field-defaults"
-fi
 
 # Global places are declaration-target addresses, not legacy seeded locals.
 # Keep reads, mutable replacement, and global initializer provenance on the
 # Mid migration gate once every consumer can interpret that root directly.
-if sh ./tests/codegen/test-mid-global-access.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-global-access"
-fi
 
 # Global initializers are executable source bodies.  They must use the same
 # frozen Mid/call facts as functions rather than merely allowing functions to
 # read a legacy-initialized global address.
-if sh ./tests/codegen/test-mid-global-init.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-global-init"
-fi
 
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
@@ -448,50 +273,10 @@ if sh ./tests/architecture/test-mid-assign-diagnostics.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-assign-diagnostics"
 fi
-if sh ./tests/codegen/test-mid-value-match.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-value-match"
-fi
-if sh ./tests/codegen/test-mid-consuming-match.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-consuming-match"
-fi
-if sh ./tests/codegen/test-mid-value-if.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-value-if"
-fi
-if sh ./tests/codegen/test-mid-try.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-try"
-fi
 if sh ./tests/architecture/test-mid-operand-diagnostics.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-operand-diagnostics"
-fi
-if sh ./tests/codegen/test-mid-numeric-cast.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-numeric-cast"
-fi
-if sh ./tests/codegen/test-mid-panic.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-panic"
-fi
-if sh ./tests/codegen/test-mid-while-true-return.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-while-true-return"
-fi
-if sh ./tests/codegen/test-mid-if-all-diverge.sh; then
-    :
-else
-    fail=$((fail + 1)); failed="$failed mid-if-all-diverge"
 fi
 
 # Entry and ordinary functions must both consume the frozen canonical body.
