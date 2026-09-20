@@ -284,7 +284,7 @@ pub impl Comp {
         mut val typeMatchEdge: U64 = self.arena.functionCount()
         mut val typeMatch2Edge: U64 = self.arena.functionCount()
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -346,7 +346,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         // same-module first
         if typeMatchSame != self.arena.functionCount() {
@@ -385,7 +385,7 @@ pub impl Comp {
         // "not found" (firstLabel == count) so checkUseVisibility can demand an import.
         if self.genMode {
             mut val gLabel: U64 = self.arena.functionCount()
-            mut val gj: U64 = 0
+            mut val gj: U64 = self.decls.firstCallableNamed(nameId: qId)
             while gj < self.decls.callableCount() {
                 val gc: Callable = self.decls.callableAt(index: gj)
                 val gf: Func = self.arena.functionAt(index: gc.funcIdx)
@@ -402,7 +402,7 @@ pub impl Comp {
                         }
                     }
                 }
-                gj += 1
+                gj = self.decls.nextCallableNamed(index: gj)
             }
             return gLabel
         }
