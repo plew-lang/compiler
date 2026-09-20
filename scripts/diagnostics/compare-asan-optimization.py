@@ -28,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--rounds', type=int, default=3)
+    parser.add_argument('--prepared', type=Path, help='reuse verified compiler IR/binaries from an earlier diagnostic')
     args = parser.parse_args()
     if args.rounds < 2:
         parser.error('at least two alternating rounds are required')
@@ -67,11 +68,28 @@ def main():
         _, raw, _ = run('compiler-ir', [carrier, '--trace-phases', '--asan', 'src/_.pw'])
         raw.rename(out / 'compiler.ll')
         ir = out / 'compiler.inst.ll'
-        run('instrument', [opt, '-debug-pass-manager', '-passes=asan', '-S', out / 'compiler.ll', '-o', ir])
+        if args.prepared:
+            prepared = args.prepared.absolute()
+            previous = json.loads((prepared / 'summary.json').read_text())
+            for name in ('runtime.c', 'compiler.ll'):
+                if sha(out / name) != sha(prepared / name):
+                    raise RuntimeError(f'prepared {name} does not match current carrier output')
+            ir = prepared / 'compiler.inst.ll'
+            if sha(ir) != previous['instrumented_ir_sha256']:
+                raise RuntimeError('prepared instrumented LLVM changed')
+            binaries = {level: Path(row['path']) for level, row in previous['binaries'].items()}
+            for level, binary in binaries.items():
+                if sha(binary) != previous['binaries'][level]['sha256']:
+                    raise RuntimeError(f'prepared {level} binary changed')
+            if set(binaries) != {'O1', 'O2'}:
+                raise RuntimeError('prepared comparison requires both O1 and O2')
+            state['prepared'] = str(prepared)
+        else:
+            run('instrument', [opt, '-debug-pass-manager', '-passes=asan', '-S', out / 'compiler.ll', '-o', ir])
         if '__asan_report_' not in ir.read_text():
             raise RuntimeError('compiler LLVM has no ASan access checks')
         state['instrumented_ir_sha256'] = sha(ir)
-        for level, binary in binaries.items():
+        for level, binary in (() if args.prepared else binaries.items()):
             if binary.exists():
                 raise RuntimeError(f'refusing to overwrite {binary}')
             run('link-' + level, [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions',
@@ -115,16 +133,15 @@ int main(int argc, char **argv) {
         cases = ['tests/run/mid_body_type_results.pw', 'tests/run/mid_copy_contract_verify.pw',
                  'tests/run/access_call_result_nested_index.pw', 'tests/reject/unknown_identifier_generic.pw']
         expected_hash = {}
-        for case in cases:
-            _, output, _ = run('reference-' + Path(case).stem, [carrier, '--trace-phases', case],
-                               expected=1 if '/reject/' in case else 0)
-            expected_hash[case] = sha(output)
+        # Compare candidates linked against the SAME LLVM. The adopted carrier
+        # may use another LLVM whose intrinsic attributes print differently.
         for iteration in range(args.rounds):
             for level in (('O1', 'O2') if iteration % 2 == 0 else ('O2', 'O1')):
                 for case in cases:
                     row, output, log = run(f'round{iteration}-{level}-{Path(case).stem}',
                                            [binaries[level], '--trace-phases', case],
                                            expected=1 if '/reject/' in case else 0)
+                    expected_hash.setdefault(case, sha(output))
                     if sha(output) != expected_hash[case] or 'ERROR: AddressSanitizer' in log.read_text():
                         raise RuntimeError(f'output or sanitizer mismatch: {log}')
                     if '/reject/' in case and 'plewc: error:' not in log.read_text():
