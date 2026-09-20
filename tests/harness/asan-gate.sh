@@ -71,22 +71,21 @@ progress_results() {
 
 fail=0
 
-# Instrumentation note: the instrumented file must keep a .ll extension — clang
-# infers input language from it (a .inst suffix would be handed to the linker as
-# an object → error).
+# Keep .ll/.bc extensions so clang recognizes LLVM input. Internal compiler
+# stages exchange bitcode to avoid materializing hundreds of MB of LLVM text.
 
 echo "== building instrumented plewc_asan =="
 python3 ./scripts/support/trace-command.py "$TMP/build.err" -- "$PLEWC" --trace-phases --asan src/_.pw > "$TMP/pc.ll"
 # Remove redundant aggregate copies before ASan gives them observable checks.
 # Share the ordinary compiler's prepasses; instrument every remaining access.
 PREPASSES=$(PYTHONPATH=./scripts/support python3 -B -c 'from llvm_link import PIPELINE; print(PIPELINE)')
-python3 ./scripts/support/trace-command.py "$TMP/preopt.err" -- "$OPT" -debug-pass-manager "-passes=$PREPASSES" -S "$TMP/pc.ll" -o "$TMP/pc.preopt.ll"
-python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan -S "$TMP/pc.preopt.ll" -o "$TMP/pc.inst.ll"
+python3 ./scripts/support/trace-command.py "$TMP/preopt.err" -- "$OPT" -debug-pass-manager "-passes=$PREPASSES" "$TMP/pc.ll" -o "$TMP/pc.preopt.bc"
+python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debug-pass-manager -passes=asan "$TMP/pc.preopt.bc" -o "$TMP/pc.inst.bc"
 # std/prelude resolution is relative to the compiler binary's directory, so the
 # instrumented compiler must live in compiler/ (removed on exit).
 # Keep ASan instrumentation and frame pointers, with the standard -O1 level
 # so the whole compile corpus can exercise a practical instrumented compiler.
-python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.ll" "$RT" "$LIB" -o ./plewc_asan
+python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.bc" "$RT" "$LIB" -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
 echo "== A. self-compile under ASan =="
