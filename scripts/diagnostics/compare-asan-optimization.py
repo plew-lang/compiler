@@ -29,9 +29,12 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--prepared', type=Path, help='reuse verified compiler IR/binaries from an earlier diagnostic')
+    parser.add_argument('--prepared-evidence', type=Path, help='original meta gate result.json required for reuse')
     args = parser.parse_args()
     if args.rounds < 2:
         parser.error('at least two alternating rounds are required')
+    if bool(args.prepared) != bool(args.prepared_evidence):
+        parser.error('--prepared and --prepared-evidence must be supplied together')
     os.chdir(ROOT)
     out = args.output.absolute()
     out.mkdir(parents=True, exist_ok=False)
@@ -63,6 +66,18 @@ def main():
         return row, stdout, log
 
     try:
+        if args.prepared_evidence:
+            evidence = json.loads(args.prepared_evidence.read_text())
+            if evidence.get('inputs_unchanged') is not True:
+                raise RuntimeError('prepared build has no unchanged-input evidence')
+            for path, expected in evidence['inputs'].items():
+                # Diagnostic logic may be corrected between attempts. Compiler,
+                # sources, dependencies, toolchain and watchdog must not change.
+                if Path(path).resolve() != Path(__file__).resolve() and sha(Path(path)) != expected:
+                    raise RuntimeError(f'prepared build input changed: {path}')
+            for key, value in [('LLVM_PREFIX', str(llvm)), ('PLEWC', carrier)]:
+                if Path(evidence['env'][key]).resolve() != Path(value).resolve():
+                    raise RuntimeError(f'prepared build setting changed: {key}')
         _, runtime, _ = run('runtime', [carrier, '--runtime'])
         runtime.rename(out / 'runtime.c')
         _, raw, _ = run('compiler-ir', [carrier, '--trace-phases', '--asan', 'src/_.pw'])
