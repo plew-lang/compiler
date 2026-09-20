@@ -3,10 +3,15 @@
 import json
 import os
 from pathlib import Path
+import shutil
+import sys
 import subprocess
 import tempfile
 
 ROOT = Path.cwd()
+sys.path.insert(0, str(ROOT / "scripts/support"))
+import clang_environment
+clang_environment.apply()
 CONFIG = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
 CLANG = str(Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip()) / 'clang')
 
@@ -57,7 +62,9 @@ int main(int argc, char **argv) {
             assert '-fdebug-pass-manager' in state['link_command'], state
             bindir = Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip())
             assert Path(state['link_command'][0]) == bindir / 'clang', state
-            assert Path(state['optimization_command'][0]) == bindir / 'opt', state
+            expected_opt = shutil.which(os.environ['LLVM_OPT']) if os.environ.get('LLVM_OPT') else str(bindir / 'opt')
+            assert Path(state['optimization_command'][0]) == Path(expected_opt), state
+            assert state['clang_environment'] == clang_environment.settings(), state
             assert '-passes=function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion),default<O1>' in state['optimization_command'], state
             assert state['optimizer_version'], state
             for row in state['generations']:
@@ -78,6 +85,15 @@ int main(int argc, char **argv) {
     compiler('unstable', 'unstable', nondeterministic=True)
     compiler('mutation', 'mutation', mutate=True)
     run('immediate', 'stable', generation=2)
+    override = work / 'opt-override'
+    override.symlink_to(shutil.which(os.environ.get('LLVM_OPT', str(Path(CLANG).with_name('opt')))))
+    saved_opt = os.environ.get('LLVM_OPT')
+    os.environ['LLVM_OPT'] = str(override)
+    run('optimizer-override', 'stable', generation=2)
+    if saved_opt is None:
+        del os.environ['LLVM_OPT']
+    else:
+        os.environ['LLVM_OPT'] = saved_opt
     run('one-transition', 'transition', generation=3)
     run('no-convergence', 'cycle-a', expected=65)
     run('runtime-transition', 'runtime', generation=3)

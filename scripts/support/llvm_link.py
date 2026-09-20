@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 
+import clang_environment
+
 # Split aggregate loads into field reads before promoting private byval arguments.
 # Finish ordinary module optimization before any sanitizer instrumentation.
 # Field splitting alone can leave byval snapshots that ASan turns into copies.
@@ -35,6 +37,7 @@ def selected_clang(config):
 def optimization_command(config, source, destination, clang=None):
     # Older bootstrap material has no triple. Never let opt simplify offsets
     # using its target-independent layout before the native clang link.
+    clang_environment.apply()
     native_clang = clang or selected_clang(config)
     triple = subprocess.check_output([native_clang, '-dumpmachine'], text=True).strip()
     return [optimizer(config), '-mtriple=' + triple, '-debug-pass-manager', '-passes=' + PIPELINE,

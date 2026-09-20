@@ -10,7 +10,7 @@
 #
 # The fix: `plewc --asan` stamps the host target triple and marks every DEFINED
 # function `sanitize_address`, so a downstream `opt -passes=asan` genuinely
-# instruments every load/store. This gate wires that pipeline at four levels:
+# instruments every load/store. This gate wires that pipeline at five levels:
 #
 #   A. self-compile — an instrumented `plewc_asan` compiles src/_.pw. The
 #      richest single exercise of the compiler's own ARC/CoW memory management.
@@ -21,6 +21,8 @@
 #   D. panic corpus — every tests/panic program runs instrumented and must die
 #      by SIGABRT (panic = abort, spec/11) with its panic text and no ASan
 #      error before the trap; catches UAF on the panic path itself.
+#   E. raw-IR compiler self-compile and ownership inputs; instrumentation
+#      precedes optimization, including a nonvolatile unused-UAF control.
 #
 # Deterministic UAF slips through both the fixpoint check and ./tests/harness/test.sh (the
 # stale bytes usually still decode correctly), so this ASan gate is the only
@@ -31,6 +33,9 @@
 # Requires homebrew LLVM (Apple clang rejects the asan ABI v8 the pass emits).
 set -e
 cd "$(dirname "$0")/../.."
+
+clang_settings=$(python3 -B ./scripts/support/clang_environment.py)
+eval "$clang_settings"
 
 LLVM="${LLVM_PREFIX:-/opt/homebrew/opt/llvm}"
 OPT="$LLVM/bin/opt"
@@ -215,6 +220,11 @@ else
     if [ "$dn" != "$dexpected" ] && [ "$dfail" = 0 ]; then
         echo "  FAIL: only $dn of $dexpected panic tests reached execution (silent compile/instrument/link losses)"
     fi
+    fail=1
+fi
+
+echo "== E. compiler ownership before optimization =="
+if ! python3 -B ./tests/harness/asan-ownership.py; then
     fail=1
 fi
 

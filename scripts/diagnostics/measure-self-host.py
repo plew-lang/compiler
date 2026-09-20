@@ -23,6 +23,7 @@ def fields(path):
 
 
 def main():
+    clang_settings = llvm_link.clang_environment.apply()
     carrier = Path(os.environ['CARRIER']).absolute()
     source = Path(os.environ.get('SOURCE', 'src/_.pw')).absolute()
     output = Path(os.environ.get('OUT_DIR', datetime.now().strftime('tmp/perf/%Y%m%d-%H%M%S-self-host'))).absolute()
@@ -46,7 +47,7 @@ def main():
     opt = llvm_link.optimizer(config)
     output.mkdir(parents=True, exist_ok=False)
     state = dict(schema='self-host-measure-v2', status='running', carrier=str(carrier),
-                 carrier_sha256=digest(carrier), source=str(source), runs=runs,
+                 carrier_sha256=digest(carrier), source=str(source), runs=runs, clang_environment=clang_settings,
                  link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<optimized-llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
                  llvm_config=config, llvm_version=subprocess.check_output([config, '--version'], text=True).strip(),
                  clang_version=subprocess.check_output([clang, '--version'], text=True).strip(),
@@ -74,7 +75,7 @@ def main():
             paths.update(p for p in root.rglob('*') if p.suffix == '.pw' or p.name in ('Plew.toml', 'Plew.lock'))
         paths.update(Path(p) for p in ('Plew.toml', 'Plew.lock'))
         paths.update((carrier, Path(config), Path(clang), Path(opt)))
-        paths.update(Path(p) for p in ('scripts/support/llvm_link.py', 'scripts/support/trace-command.py', 'scripts/diagnostics/measure-self-host.py', 'scripts/diagnostics/measure-self-host.sh', 'scripts/diagnostics/measure-self-compile.sh', 'measure-self-compile.py'))
+        paths.update(Path(p) for p in ('scripts/support/clang_environment.py', 'scripts/support/llvm_link.py', 'scripts/support/trace-command.py', 'scripts/diagnostics/measure-self-host.py', 'scripts/diagnostics/measure-self-host.sh', 'scripts/diagnostics/measure-self-compile.sh', 'measure-self-compile.py'))
         paths.update(Path(libdir).glob('libLLVM*.dylib'))
         return {str(p.absolute()): digest(p) for p in sorted(paths) if p.is_file()}
 
