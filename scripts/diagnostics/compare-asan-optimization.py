@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnostic only: compare post-instrumentation O1/O2; never promote a carrier.
+"""Diagnostic only: compare ASan optimization pipelines; never promote a carrier.
 
 Run from the compiler root under the meta diagnostic gate for input snapshots.
 Every subprocess uses the existing 60-second progress watchdog. Artifacts and
@@ -18,6 +18,8 @@ import time
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 TRACE = ROOT / 'scripts/support/trace-command.py'
+sys.path.insert(0, str(ROOT / 'scripts/support'))
+from llvm_link import PIPELINE
 
 
 def sha(path):
@@ -30,6 +32,8 @@ def main():
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--prepared', type=Path, help='reuse verified compiler IR/binaries from an earlier diagnostic')
     parser.add_argument('--prepared-evidence', type=Path, help='original meta gate result.json required for reuse')
+    parser.add_argument('--preopt', action='store_true', help='compare O1 against shared prepasses before ASan, also linked O1')
+    parser.add_argument('--self-compile-check', action='store_true', help='also compare complete compiler-source LLVM output')
     args = parser.parse_args()
     if args.rounds < 2:
         parser.error('at least two alternating rounds are required')
@@ -104,12 +108,26 @@ def main():
         if '__asan_report_' not in ir.read_text():
             raise RuntimeError('compiler LLVM has no ASan access checks')
         state['instrumented_ir_sha256'] = sha(ir)
-        for level, binary in (() if args.prepared else binaries.items()):
+        candidate_irs = {level: ir for level in binaries}
+        if args.preopt:
+            binaries = {'O1': binaries['O1'], 'preopt-O1': ROOT / ('plewc-' + out.name + '-preopt-O1')}
+            preopt = out / 'compiler.preopt.ll'
+            candidate = out / 'compiler.preopt.inst.ll'
+            run('preopt', [opt, '-debug-pass-manager', '-passes=' + PIPELINE, '-S', out / 'compiler.ll', '-o', preopt])
+            run('preopt-instrument', [opt, '-debug-pass-manager', '-passes=asan', '-S', preopt, '-o', candidate])
+            if '__asan_report_' not in candidate.read_text():
+                raise RuntimeError('preoptimized compiler LLVM has no ASan access checks')
+            candidate_irs = {'O1': ir, 'preopt-O1': candidate}
+            state['preopt_pipeline'] = PIPELINE
+            state['preopt_instrumented_ir_sha256'] = sha(candidate)
+        for level, binary in binaries.items():
+            if args.prepared and level != 'preopt-O1':
+                continue
             if binary.exists():
                 raise RuntimeError(f'refusing to overwrite {binary}')
             run('link-' + level, [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions',
-                                 '-' + level, '-fno-omit-frame-pointer', '-fsanitize=address', '-w',
-                                 ir, out / 'runtime.c', llvm / 'lib/libLLVM.dylib', '-o', binary])
+                                 '-O1' if level == 'preopt-O1' else '-' + level, '-fno-omit-frame-pointer', '-fsanitize=address', '-w',
+                                 candidate_irs[level], out / 'runtime.c', llvm / 'lib/libLLVM.dylib', '-o', binary])
         state['binaries'] = {level: dict(path=str(p), sha256=sha(p)) for level, p in binaries.items()}
 
         # Volatile accesses keep the deliberate defects observable after optimization.
@@ -135,8 +153,13 @@ int main(int argc, char **argv) {
         run('control-instrument', [opt, '-passes=asan', '-S', out / 'control.ll', '-o', out / 'control.inst.ll'])
         for level in binaries:
             binary = out / ('control-' + level)
-            run('control-link-' + level, [clang, '-' + level, '-fno-omit-frame-pointer', '-fsanitize=address',
-                                          out / 'control.inst.ll', '-o', binary])
+            control_ir = out / 'control.inst.ll'
+            if level == 'preopt-O1':
+                run('control-preopt', [opt, '-passes=' + PIPELINE, '-S', out / 'control.ll', '-o', out / 'control.preopt.ll'])
+                control_ir = out / 'control.preopt.inst.ll'
+                run('control-preopt-instrument', [opt, '-passes=asan', '-S', out / 'control.preopt.ll', '-o', control_ir])
+            run('control-link-' + level, [clang, '-O1' if level == 'preopt-O1' else '-' + level, '-fno-omit-frame-pointer', '-fsanitize=address',
+                                          control_ir, '-o', binary])
             for case, marker in [('clean', None), ('uaf', 'heap-use-after-free'), ('overflow', 'heap-buffer-overflow'),
                                  ('double', 'double-free'), ('leak', 'LeakSanitizer: detected memory leaks')]:
                 _, _, log = run('control-' + level + '-' + case, [binary, case],
@@ -151,7 +174,7 @@ int main(int argc, char **argv) {
         # Compare candidates linked against the SAME LLVM. The adopted carrier
         # may use another LLVM whose intrinsic attributes print differently.
         for iteration in range(args.rounds):
-            for level in (('O1', 'O2') if iteration % 2 == 0 else ('O2', 'O1')):
+            for level in (tuple(binaries) if iteration % 2 == 0 else tuple(reversed(binaries))):
                 for case in cases:
                     row, output, log = run(f'round{iteration}-{level}-{Path(case).stem}',
                                            [binaries[level], '--trace-phases', case],
@@ -164,6 +187,16 @@ int main(int argc, char **argv) {
                     state['measurements'].append(dict(level=level, case=case, round=iteration, seconds=row['seconds']))
         state['medians'] = {case: {level: statistics.median(r['seconds'] for r in state['measurements']
                             if r['case'] == case and r['level'] == level) for level in binaries} for case in cases}
+        if args.self_compile_check:
+            outputs = []
+            for level, binary in binaries.items():
+                _, output, log = run('self-compile-' + level, [binary, '--trace-phases', 'src/_.pw'])
+                if 'ERROR: AddressSanitizer' in log.read_text():
+                    raise RuntimeError(f'self-compile sanitizer failure: {log}')
+                outputs.append(sha(output))
+            if len(set(outputs)) != 1:
+                raise RuntimeError('self-compile LLVM mismatch')
+            state['self_compile_output_sha256'] = outputs[0]
         state['status'] = 'passed'
         print('ASan optimization comparison: PASS', flush=True)
     except BaseException as error:
