@@ -37,7 +37,7 @@ require 'buildParametricMidClosureBody' src/Mid/Build.pw
 require 'closure.parameters' src/Mid/Build.pw
 require 'closure.captures' src/Mid/Build.pw
 require 'closure.bodyBlock' src/Mid/Build.pw
-require 'if body.locals[local].isBorrowed { }' src/Mid/Drop.pw
+require 'if body.locals[local].isBorrowed || body.locals[local].isInout { }' src/Mid/Drop.pw
 # A Mid body owns its ABI return contract. Synthetic closure body keys are not
 # Func indices, so shared return lowering must never rediscover a return type
 # through arena.funcs[sourceFunction].

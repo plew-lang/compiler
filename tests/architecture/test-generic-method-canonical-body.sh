@@ -18,10 +18,11 @@ for forbidden in ["recvParamCount(", "copyFinalCalleeTypeArgs(", "findBodyInstan
         raise SystemExit(f"Mid call reconstructs the finalized body identity: {forbidden}")
 
 methods = Path("src/Backend/Llvm/GenMethods.pw").read_text()
-for forbidden in ["bodyInstanceEnvironment(", "findBodyInstance(", "recvParamCount(", "ensureGenMethodDeclared(", "genMethOwn", "finalBodyMethodOwnArgs"]:
+for forbidden in ["bodyInstanceEnvironment(", "findBodyInstance(", "recvParamCount(", "ensureGenMethodDeclared(", "genMethOwn", "finalBodyMethodOwnArgs", "body.environment.params", "body.environment.args"]:
     if forbidden in methods:
         raise SystemExit(f"Method emission reconstructs specialization state: {forbidden}")
-for required in ["self.genMethBody[slot] == bodyId", "body.environment.params", "body.environment.args",
+for required in ["self.genMethBody[slot] == bodyId", "c.arena.bodySignature(bodyId: bodyId)", "signature.receiverPassing",
+                 "signature.receiverType", "bodyReturnLlvmTy(c: inout c, bodyId: bodyId)",
                  "bodyId: bodyId, fv: self.genMethVal[slot]", "bodyId: bodyId, index: pi"]:
     if required not in methods:
         raise SystemExit(f"Method emission lost the frozen body contract: {required}")

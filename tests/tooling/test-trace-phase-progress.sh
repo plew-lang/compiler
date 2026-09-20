@@ -14,14 +14,14 @@ require_progress() {
 }
 
 require_progress src/Codegen/Resolve/Record.pw 'semantic-expression-record:body' self
-require_progress src/Backend.pw 'backend:drain:provided-emitting' c
+require_progress src/Backend.pw 'backend:drain:round' c
 require_progress src/Backend.pw 'backend:drain:generic-method-emitting' c
 require_progress src/Backend.pw 'backend:drain:generic-function-emitting' c
 require_progress src/Backend/Llvm/GenMethods.pw 'backend:generic-method-emitting' c
 
 methods=src/Backend/Llvm/GenMethods.pw
 grep -F 'eprint(text: " body=")' "$methods" >/dev/null
-grep -F 'eprint(text: " ownArgs=")' "$methods" >/dev/null
+grep -F 'self.traceCodegenU64(n: bodyId)' "$methods" >/dev/null
 
 if grep -F '"[trace-phase] semantic-expression-record:body index="' src/Codegen/Resolve/Record.pw >/dev/null; then
     echo 'unbounded semantic-expression trace remains' >&2

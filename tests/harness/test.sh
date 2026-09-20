@@ -128,6 +128,25 @@ for n in $(printf '%s\n' "$run_results" | sed -n 's/^FAIL //p'); do
 done
 skip=0
 
+# Architecture, diagnostic, and intrinsic contracts retained by the test inventory.
+for gate in \
+    tests/architecture/test-generic-method-canonical-body.sh \
+    tests/architecture/test-loader-no-value-parser-fallback.sh \
+    tests/tooling/test-measure-self-compile-input-fingerprint.sh \
+    tests/architecture/test-mid-capture-cell-ownership.sh \
+    tests/codegen/test-mid-core-string-intrinsics.sh \
+    tests/codegen/test-mid-ffi-intrinsics.sh \
+    tests/architecture/test-semantic-closure-body-descriptor.sh \
+    tests/architecture/test-syntax-direct-extern-builder.sh \
+    tests/architecture/test-syntax-direct-impl-builder.sh \
+    tests/tooling/test-trace-phase-progress.sh; do
+    if sh "./$gate"; then
+        :
+    else
+        fail=$((fail + 1)); failed="$failed $gate"
+    fi
+done
+
 # Keep phase tracing composable with both coverage modes used for self-hosting.
 if sh ./tests/tooling/test-cli-options.sh; then
     :
