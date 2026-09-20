@@ -8,8 +8,10 @@ import subprocess
 import sys
 
 # Split aggregate loads into field reads before promoting private byval arguments.
+# Finish ordinary module optimization before any sanitizer instrumentation.
+# Field splitting alone can leave byval snapshots that ASan turns into copies.
 # Keep fixpoint verification enabled; generated bodies can need several rounds.
-PIPELINE = 'function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion)'
+PIPELINE = 'function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion),default<O1>'
 ROOT = Path(__file__).resolve().parents[2]
 
 

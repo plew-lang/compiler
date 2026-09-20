@@ -65,9 +65,46 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
     subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
     reduced = optimized.read_text()
     assert 'target datalayout = ' in reduced, 'layout-sensitive optimization must have a native data layout'
-    assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
+    # Inlining/constant folding may remove the reader entirely. A remaining
+    # reader must still have only the projected scalar parameter.
+    if '@' + readers[0] + '(' in reduced:
+        assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
     for material in (source, optimized):
         executable = directory / material.stem
         subprocess.run(['clang', '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS aggregate argument reduction: scalar field, callback/inout snapshots, escaping closure, raw and optimized O0 output')
+
+# Three field loads exceed argument promotion's small-element budget. The
+# common module cleanup must remove this private snapshot before ASan can turn
+# it into an instrumented memcpy. The external sink keeps all fields observable.
+with tempfile.TemporaryDirectory(prefix='plew-aggregate-pre-sanitizer-') as directory:
+    directory = Path(directory)
+    source, optimized, instrumented = (directory / name for name in ('raw.ll', 'optimized.ll', 'asan.ll'))
+    triple = re.search(r'^target triple = "[^"]+"$', raw, re.M)[0]
+    source.write_text(triple + '\n' + """
+%Triple = type { i64, i64, i64 }
+declare void @sink(i64, i64, i64)
+define internal void @consume(ptr byval(%Triple) %p) sanitize_address {
+  %v = load %Triple, ptr %p
+  %a = extractvalue %Triple %v, 0
+  %b = extractvalue %Triple %v, 1
+  %c = extractvalue %Triple %v, 2
+  call void @sink(i64 %a, i64 %b, i64 %c)
+  ret void
+}
+define void @entry(ptr %p) sanitize_address {
+  call void @consume(ptr byval(%Triple) %p)
+  ret void
+}
+""")
+    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    reduced = optimized.read_text()
+    assert 'byval(' not in reduced and 'alloca ' not in reduced, 'private field snapshot must disappear before instrumentation'
+    assert re.search(r'call void @sink\(', reduced), 'all snapshot fields must remain observable'
+    assert 'sanitize_address' in reduced, 'optimization must preserve sanitizer eligibility'
+    subprocess.run([llvm_link.optimizer(config), '-passes=asan', '-S', str(optimized), '-o', str(instrumented)], check=True, timeout=55)
+    checked = instrumented.read_text()
+    assert '__asan_report_load' in checked, 'surviving loads must be instrumented'
+    assert not re.search(r'\bcall\b[^\n]*@(?:llvm\.memcpy|__asan_memcpy)', checked), 'ASan must not reintroduce the eliminated snapshot copy'
+print('PASS pre-sanitizer aggregate cleanup: observable fields, no snapshot copy, surviving accesses instrumented')
