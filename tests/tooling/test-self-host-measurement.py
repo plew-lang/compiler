@@ -8,6 +8,7 @@ import tempfile
 
 ROOT = Path.cwd()
 CONFIG = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
+CLANG = str(Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip()) / 'clang')
 
 with tempfile.TemporaryDirectory(prefix='plew-self-host-') as temporary:
     work = Path(temporary)
@@ -35,7 +36,7 @@ int main(int argc, char **argv) {
         code = code.replace('MUTATION', f'FILE *m = fopen({json.dumps(str(source / "_.pw"))}, "a"); fputs("// changed\\n", m); fclose(m);' if mutate else '')
         path = work / (name + '.c')
         path.write_text(code)
-        subprocess.run(['clang', '-S', '-emit-llvm', '-O0', str(path), '-o', str(work / (name + '.ll'))], check=True)
+        subprocess.run([CLANG, '-S', '-emit-llvm', '-O0', str(path), '-o', str(work / (name + '.ll'))], check=True)
 
     def run(label, first, expected=0, generation=None, runtime='\n'):
         carrier = work / ('carrier-' + label)
