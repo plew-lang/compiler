@@ -1,13 +1,13 @@
 #!/bin/sh
 # Metaprogramming (gen) coverage harness — the gen/genreject companion to
-# tests/harness/test.sh. For each tests/gen/<name>/App.pw it runs the whole `plew gen`
+# tests/harness/test.sh. For each tests/fixtures/gen/<name>/App.pw it runs the whole `plew gen`
 # pipeline through the compiler:
 #
 #   1. plewc --gen App.pw            -> harness IR   (the derive-runner)
 #   2. clang harness.ll + runtime         -> harness bin
 #   3. harness                            -> App.gen.pw   (generated source)
 #   4. plewc App.pw                  -> app IR       (auto-parts App.gen.pw)
-#   5. clang app.ll + runtime -> run      -> stdout vs tests/gen/<name>/App.out
+#   5. clang app.ll + runtime -> run      -> stdout vs tests/fixtures/gen/<name>/App.out
 #
 # Every gen case must compile and execute. A genreject case must produce
 # a compiler diagnostic (exit 1); crashes are failures, not rejections.
@@ -33,7 +33,7 @@ RT=tmp/gen_rt.c
 pass=0; fail=0
 failed=""
 
-for app in tests/gen/*/App.pw; do
+for app in tests/fixtures/gen/*/App.pw; do
     [ -f "$app" ] || continue
     echo "check $app(gen)" >&2
     dir=$(dirname "$app")
@@ -80,7 +80,7 @@ done
 # genreject/ : `plewc --gen` must REJECT these (e.g. a directive arg setting
 # a private macro-struct field). Only the diagnostic exit status is accepted.
 rpass=0
-for app in tests/genreject/*/App.pw; do
+for app in tests/fixtures/genreject/*/App.pw; do
     [ -f "$app" ] || continue
     echo "check $app(genreject)" >&2
     name=$(basename "$(dirname "$app")")
@@ -100,7 +100,7 @@ for app in tests/genreject/*/App.pw; do
     fi
 done
 
-if ! sh ./tests/codegen/test-gen-input-ast.sh; then
+if ! sh ./tests/compiler/codegen/test-gen-input-ast.sh; then
     fail=$((fail + 1)); failed="$failed gen-input-ast"
 fi
 

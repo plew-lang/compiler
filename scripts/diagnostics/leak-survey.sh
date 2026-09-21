@@ -1,5 +1,5 @@
 #!/bin/sh
-# Leak SURVEY over the run corpus: compile each tests/run program with --asan,
+# Leak SURVEY over the run corpus: compile each tests/fixtures/run program with --asan,
 # instrument, run with detect_leaks=1, and summarize every LeakSanitizer report.
 # A triage tool for rooting out generated-code leaks (the permanent pass/fail
 # gate lives in tests/harness/asan-gate.sh level D once the corpus is clean).
@@ -24,15 +24,15 @@ export TMP RT OPT CLANG PLEW_LD
 
 # One test per worker; each prints one LEAK/CLEAN/SKIP line, aggregated (and
 # sorted back to glob order) after the fan-out.
-results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
-    [ -f "tests/run/$name.out" ] || exit 0
+    [ -f "tests/fixtures/run/$name.out" ] || exit 0
     ll="$TMP/l_$name.ll"; bin="$TMP/l_$name.bin"; err="$TMP/l_$name.err"
     ./plewc --asan "$f" > "$ll" 2>/dev/null || { echo "SKIP $name"; exit 0; }
     "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || { echo "SKIP $name"; exit 0; }
-    extra_c=""; [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
+    extra_c=""; [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
     "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || { echo "SKIP $name"; exit 0; }
-    infile="tests/run/$name.in"
+    infile="tests/fixtures/run/$name.in"
     if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1 "$bin" < "$infile" > /dev/null 2>"$err" || true
     else ASAN_OPTIONS=detect_leaks=1 "$bin" > /dev/null 2>"$err" || true; fi
     if grep -q "LeakSanitizer: detected memory leaks" "$err"; then

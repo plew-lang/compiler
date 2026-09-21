@@ -1,0 +1,19 @@
+// Bare MutableRef construction must infer Cell and retain its owned value.
+// Appending the temporary must not destroy Cell early or leak it: array drop
+// destroys each Cell exactly once, after the 100 marker, in element order.
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+pub impl Cell { factory }
+
+fn main() {
+    mut val xs: Array[MutableRef[Cell]] = []
+    xs.append(<MutableRef value=<Cell v=1 /> />)
+    xs.append(<MutableRef value=<Cell v=2 /> />)
+    print(100I32)
+}
+// expected: 100, 1, 2

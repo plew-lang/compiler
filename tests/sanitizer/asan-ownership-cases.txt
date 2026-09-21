@@ -1,0 +1,10 @@
+# Compiler memory safety before optimization: ownership, identity, snapshots,
+# async frame transfer and ARC teardown. Extend when ownership paths change.
+src/_.pw
+tests/fixtures/run/mid_inout_ownership.pw
+tests/fixtures/run/mid_unique_borrow_availability_verify.pw
+tests/fixtures/run/mid_unique_type_identity.pw
+tests/fixtures/run/value_snapshot_callback.pw
+tests/fixtures/run/async_unique_frame.pw
+tests/fixtures/run/arc_deinit_order.pw
+tests/fixtures/run/async_enum_param_arc.pw

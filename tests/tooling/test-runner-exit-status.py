@@ -13,6 +13,33 @@ def install_supervisors(root):
         (root / name).write_bytes((Path(__file__).resolve().parents[2] / name).read_bytes())
 
 source = (Path(__file__).resolve().parents[2] / 'tests/harness/test.sh').read_text()
+# Preparation must compile once, clean up, and stop on failure (no stale object).
+preparation = source.split('# One runtime object per invocation,', 1)[1].split('\nJOBS=', 1)[0]
+preparation = preparation[preparation.index('\n') + 1:]
+with tempfile.TemporaryDirectory(prefix='plew-runtime-preparation-') as directory:
+    root = Path(directory)
+    install_supervisors(root)
+    tools = root / 'tools'
+    tools.mkdir()
+    compiler = tools / 'compiler'
+    compiler.write_text('#!/bin/sh\necho runtime\n')
+    compiler.chmod(0o755)
+    clang = tools / 'clang'
+    clang.write_text('#!/bin/sh\necho compile >> "$CALLS"\n[ "$FAIL_COMPILE" = 0 ] || exit 7\ntouch "$5"\n')
+    clang.chmod(0o755)
+    for fail in ('0', '1'):
+        calls = root / 'calls'
+        calls.write_text('')
+        env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'],
+               'PLEWC': str(compiler), 'TMPDIR': str(root), 'CALLS': str(calls), 'FAIL_COMPILE': fail}
+        result = subprocess.run(['sh', '-c', 'set -e\n' + preparation + '\ntest -f "$RUNTIME_DIR/runtime.o"\necho ready\n'],
+                                cwd=root, env=env, capture_output=True, text=True)
+        assert (result.returncode == 0) == (fail == '0'), result
+        assert result.stdout == ('ready\n' if fail == '0' else ''), result
+        assert calls.read_text() == 'compile\n'
+        assert not list(root.glob('plew-test-runtime.*')), 'runtime scratch leaked'
+    print('PASS runtime/once-cleanup-and-failure', flush=True)
+
 workers = {}
 for phase in ('run', 'part'):
     match = re.search(rf'{phase}_results=.*?sh -c \'\n(.*?)\n\' sh \| progress_stream {phase} ', source, re.S)
@@ -52,8 +79,8 @@ chmod +x "$output"
         for name, body, expected_pass in cases:
             for stdin in (False, True) if phase == 'run' else (False,):
                 case = name + ('_stdin' if stdin else '')
-                path = root / ('tests/run/' + case + '.pw' if phase == 'run'
-                               else 'tests/part/' + case + '/Main.pw')
+                path = root / ('tests/fixtures/run/' + case + '.pw' if phase == 'run'
+                               else 'tests/fixtures/part/' + case + '/Main.pw')
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('#!/bin/sh\n' + ('read value\n' if stdin else '') + body + '\n')
                 path.with_suffix('.out').write_text('expected\n')
@@ -70,6 +97,28 @@ chmod +x "$output"
                         assert '(exit:' in result.stdout, result
                 assert result.returncode == 0, result
                 print(f'PASS {phase}/{case}', flush=True)
+    # Exact output must reject missing/extra newlines and embedded NUL bytes.
+    for exact in (False, True):
+        for body, same in [('printf "expected\\n"', True),
+                           ('printf "expected"', False),
+                           ('printf "expected\\n\\n"', False),
+                           ('printf "expected\\000\\n"', False)]:
+            path = root / 'tests/fixtures/run/bytes.pw'
+            path.write_text('#!/bin/sh\n' + body + '\n')
+            path.with_suffix('.out').write_bytes(b'expected\n')
+            marker = path.with_suffix('.out.exact')
+            if exact:
+                marker.touch()
+            elif marker.exists():
+                marker.unlink()
+            result = subprocess.run(['sh', '-c', workers['run'].replace('/tmp/t_', str(root / 't_')), 'sh', str(path.relative_to(root))],
+                                    cwd=root, env=env, capture_output=True, text=True)
+            if exact:
+                assert result.stdout.startswith('PASS ' if same else 'FAIL '), result
+            elif '000' not in body:
+                assert result.stdout.startswith('PASS '), result
+            assert result.returncode == 0, result
+    print('PASS run/exact-and-legacy-output', flush=True)
     gen_source = (Path(__file__).resolve().parents[2] / 'tests/harness/test-gen.sh').read_text()
     gen_worker = gen_source.split('    # 5. run + compare\n', 1)[1].split('\ndone', 1)[0]
     work = root / 'gen'
@@ -120,11 +169,11 @@ worker = '    run_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
     root = Path(directory)
     install_supervisors(root)
-    (root/'tests/run').mkdir(parents=True)
+    (root/'tests/fixtures/run').mkdir(parents=True)
     binary = root/'app'
     for name, body, expected_pass in cases:
         for stdin in (False, True):
-            infile = root/'tests/run/fixture.in'
+            infile = root/'tests/fixtures/run/fixture.in'
             if stdin: infile.write_text('input\n')
             elif infile.exists(): infile.unlink()
             binary.write_text('#!/bin/sh\n' + ('read value\n' if stdin else '') + body + '\n')
@@ -150,7 +199,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
         for code in (0, 1, 7, 143):
             compiler.write_text(f'#!/bin/sh\necho "plewc: error: diagnostic" >&2\nexit {code}\n')
             compiler.chmod(0o755)
-            path = 'tests/reject/fixture.pw' if reject else 'tests/run/fixture.pw'
+            path = 'tests/fixtures/reject/fixture.pw' if reject else 'tests/fixtures/run/fixture.pw'
             result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh',path,str(root/'error')],
                                     cwd=root,capture_output=True,text=True)
             expected = code == (1 if reject else 0)
@@ -160,7 +209,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
 
     compiler.write_text('#!/bin/sh\necho "[trace-phase] fixture:start" >&2\nexit 1\n')
     compiler.chmod(0o755)
-    result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/reject/fixture.pw',str(root/'error')],
+    result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/fixtures/reject/fixture.pw',str(root/'error')],
                             cwd=root,capture_output=True,text=True)
     assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
     assert 'missing rejection diagnostic' in result.stdout, result

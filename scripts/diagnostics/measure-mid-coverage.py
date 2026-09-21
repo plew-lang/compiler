@@ -36,8 +36,8 @@ def main():
         cases = [(str(Path(source)), []) for source in args.sources]
     else:
         sources = set()
-        for pattern in ("tests/run/*.pw", "tests/panic/*.pw",
-                        "tests/part/*/Main.pw", "tests/part/Main.pw",
+        for pattern in ("tests/fixtures/run/*.pw", "tests/fixtures/panic/*.pw",
+                        "tests/fixtures/part/*/Main.pw", "tests/fixtures/part/Main.pw",
                         "src/_.pw", "resolve/_.pw", "tools/*.pw"):
             sources.update(str(p) for p in root.glob(pattern) if p.is_file())
         cases = [(source, []) for source in sorted(sources)]
@@ -50,7 +50,7 @@ def main():
         if not llvm_config:
             llvm_config = "/opt/homebrew/opt/llvm/bin/llvm-config"
         link_flags = subprocess.check_output([llvm_config, "--ldflags"], text=True).split()
-        for source in sorted(root.glob("tests/gen/*/App.pw")):
+        for source in sorted(root.glob("tests/fixtures/gen/*/App.pw")):
             work = output / ("gen_" + source.parent.name)
             work.mkdir()
             for item in source.parent.glob("*.pw"):
