@@ -51,7 +51,7 @@ sys.exit(int(sys.argv[3]))
                        'raise SystemExit(m.run_stages(*json.loads(sys.argv[2]),2))\n')
     commands = [[sys.executable, str(root / 'scripts/support/watch-command.py'), '--',
                  sys.executable, str(sleepy), str(path)] for path in pidfiles]
-    child = subprocess.Popen([sys.executable, str(wrapper), str(root / 'tests/sanitizer/asan-schedule.py'), json.dumps(commands)],
+    child = subprocess.Popen([sys.executable, '-B', str(wrapper), str(root / 'tests/sanitizer/asan-schedule.py'), json.dumps(commands)],
                              stdout=subprocess.DEVNULL)
     try:
         deadline = time.monotonic() + 10
