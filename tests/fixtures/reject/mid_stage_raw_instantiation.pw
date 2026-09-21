@@ -1,0 +1,6 @@
+import /Frontend with { Comp }
+import /Mid with { MidCanonicalBody, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody }
+fn wrongStage(compiler: inout Comp, body: MidCanonicalBody) {
+    val result = MidInstantiatedBody.instantiate(c: inout compiler, body: body, bodyId: 1U64)
+}
+fn main() {}

@@ -1,0 +1,6 @@
+import /Frontend with { Comp }
+import /Mid with { MidCanonicalBody, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody }
+fn wrongStage(compiler: inout Comp, body: MidDropElaboratedBody) {
+    val result = body.optimizedReturns(arena: inout compiler.mid)
+}
+fn main() {}

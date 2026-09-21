@@ -23,5 +23,5 @@ export ./Mid/Optimize with { optimizeCanonicalMidReturns }
 import ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
 export ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
 
-import ./Mid/Prepare with { MidExecutableBody, MidPreparationError }
-export ./Mid/Prepare with { MidExecutableBody, MidPreparationError }
+import ./Mid/Prepare with { MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError }
+export ./Mid/Prepare with { MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError }

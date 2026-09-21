@@ -1,7 +1,7 @@
 #!/bin/sh
 # The production Mid path is intentionally one-way: build freezes once, then
 # instantiation, access elaboration, drop elaboration, verification and LLVM
-# emission consume only MidCanonicalBody.  A textual gate is appropriate here:
+# emission consume canonical storage through typed preparation stages.  A textual gate is appropriate here:
 # it protects this architectural boundary even while fresh WIP candidates
 # cannot yet compile every ordinary-function fixture.
 set -eu
@@ -104,10 +104,21 @@ for name in passes:
     positions.append(calls[0].start())
 assert positions == sorted(positions), 'mandatory pass order changed'
 assert source.index('MidVerifyError.None => { return <Result.Ok') > positions[-1]
-assert 'factory' not in re.sub(r'//[^\n]*', '', source), 'executable admission must not expose a raw constructor'
-for path in Path('src/Backend').rglob('*.pw'):
+for stage in ['MidInstantiatedBody', 'MidAccessResolvedBody', 'MidDropElaboratedBody', 'MidExecutableBody']:
+    implementation = source.split(f'pub impl {stage} {{', 1)[1].split('\npub impl ', 1)[0]
+    assert 'factory' not in re.sub(r'//[^\n]*', '', implementation), f'{stage}: raw construction must stay private'
+pipeline = source.split('assoc fn prepare(', 1)[1]
+transitions = ['MidInstantiatedBody.instantiate(', 'MidAccessResolvedBody.elaborate(',
+               '.optimizedReturns(', 'MidDropElaboratedBody.elaborate(', 'MidExecutableBody.verify(']
+assert all(pipeline.count(name) == 1 for name in transitions), 'pipeline must run each typed transition once'
+assert [pipeline.index(name) for name in transitions] == sorted(pipeline.index(name) for name in transitions)
+assert 'body: MidParametricBody' in pipeline.split('->', 1)[0], 'pipeline admission must be typed'
+owners = dict(zip(passes, ['Instantiate', 'Access', 'Optimize', 'Drop', 'Verify']))
+for path in Path('src').rglob('*.pw'):
     for name in passes:
-        assert not re.search(r'\b' + name + r'\(', path.read_text()), f'{path}: bypasses shared preparation'
+        if path in [Path('src/Mid/Prepare.pw'), Path(f'src/Mid/{owners[name]}.pw')]:
+            continue
+        assert not re.search(r'\b' + name + r'\(', path.read_text()), f'{path}: bypasses typed preparation'
 
 # Match each executable entry, not just a symbol somewhere in the file.
 entries = [('Any', 'genLlvmFuncBody', 'prepareCanonicalForLlvm'),
@@ -122,7 +133,7 @@ for file, name, call in entries:
 backend = Path('src/Backend/Llvm/Mid.pw').read_text()
 for symbol in ['recordMidInstantiate', 'recordMidAccess', 'recordMidVerify', 'recordMidPreflight']:
     assert symbol + '(' in backend, f'shared preparation lost failure coverage: {symbol}'
-assert 'MidExecutableBody.prepare(c: inout c, canonical: canonical, bodyId: bodyId)' in backend
+assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=canonical />, bodyId: bodyId)' in backend
 assert 'canonical: executable.canonical, abiParameterCount: parameterCount' in backend
 assert 'MidLlvmPrepared.Ready canonical=executable.canonical abiParameterCount=parameterCount' in backend
 PYPREPARE

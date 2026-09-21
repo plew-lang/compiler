@@ -1,0 +1,6 @@
+import /Frontend with { Comp }
+import /Mid with { MidCanonicalBody, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody }
+fn wrongStage(compiler: inout Comp, body: MidAccessResolvedBody) {
+    val result = MidExecutableBody.verify(c: inout compiler, body: body)
+}
+fn main() {}

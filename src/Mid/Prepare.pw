@@ -1,18 +1,38 @@
-// Mandatory semantic preparation is independent of LLVM and entry-point ABI.
-// A canonical handle describes storage; only this pipeline publishes an
-// executable handle after every mandatory transformation and verification.
+// Production pass admission is typed; canonical handles remain storage IDs.
+// Tokens describe pass history for one immutable snapshot in its owning arena.
+// They do not authorize mutation or transfer a body into a different arena.
 import ../Frontend with { Comp }
-import ./Ir with { MidCanonicalBody }
+import ./Ir with { MidCanonicalArena, MidCanonicalBody }
 import ./Instantiate with { MidInstantiateError, instantiateCanonicalMidBody }
 import ./Access with { MidAccessError, elaborateCanonicalMidAccesses }
 import ./Optimize with { optimizeCanonicalMidReturns }
 import ./Drop with { elaborateCanonicalMidDrops }
 import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
 
+// Admission to the beginning of the pipeline makes no validation claim.
+export struct MidParametricBody {
+    pub val canonical: MidCanonicalBody
+}
+pub impl MidParametricBody {
+    factory input(canonical: MidCanonicalBody) {
+        return <MidParametricBody canonical=canonical />
+    }
+}
+
+// No public factories for completed stages. Only the corresponding pass can
+// construct its token; reading the canonical ID does not grant that ability.
+export struct MidInstantiatedBody {
+    pub val canonical: MidCanonicalBody
+}
+export struct MidAccessResolvedBody {
+    pub val canonical: MidCanonicalBody
+}
+export struct MidDropElaboratedBody {
+    pub val canonical: MidCanonicalBody
+}
 export struct MidExecutableBody {
     pub val canonical: MidCanonicalBody
 }
-// Deliberately no public memberwise factory: callers cannot admit an unverified body.
 
 export enum MidPreparationError {
     InstantiationFailed(error: MidInstantiateError)
@@ -20,24 +40,68 @@ export enum MidPreparationError {
     VerificationFailed(body: MidCanonicalBody, verification: MidVerification)
 }
 
-pub impl MidExecutableBody {
-    assoc fn prepare(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64) -> Result[MidExecutableBody, MidPreparationError] {
-        val instantiated = instantiateCanonicalMidBody(c: inout c, body: canonical, bodyId: bodyId)
+pub impl MidInstantiatedBody {
+    assoc fn instantiate(c: inout Comp, body: MidParametricBody, bodyId: U64) -> Result[MidInstantiatedBody, MidPreparationError] {
+        val instantiated = instantiateCanonicalMidBody(c: inout c, body: body.canonical, bodyId: bodyId)
         match instantiated.error {
-            MidInstantiateError.None => {}
+            MidInstantiateError.None => { return <Result.Ok value=<MidInstantiatedBody canonical=instantiated.body /> /> }
             _ => { return <Result.Err error=<MidPreparationError.InstantiationFailed error=instantiated.error /> /> }
         }
-        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
+    }
+}
+
+pub impl MidAccessResolvedBody {
+    assoc fn elaborate(c: inout Comp, body: MidInstantiatedBody) -> Result[MidAccessResolvedBody, MidPreparationError] {
+        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: body.canonical)
         match accesses.error {
-            MidAccessError.None => {}
+            MidAccessError.None => { return <Result.Ok value=<MidAccessResolvedBody canonical=accesses.body /> /> }
             _ => { return <Result.Err error=<MidPreparationError.AccessFailed error=accesses.error /> /> }
         }
-        val optimized = optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body)
-        val dropped = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimized)
-        val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
-        match verification.error {
-            MidVerifyError.None => { return <Result.Ok value=<MidExecutableBody canonical=dropped /> /> }
-            _ => { return <Result.Err error=<MidPreparationError.VerificationFailed body=dropped verification=verification /> /> }
+    }
+
+    // An optional optimization preserves the stage; it is not an admission
+    // requirement and must remain separate from ownership correctness.
+    fn optimizedReturns(arena: inout MidCanonicalArena) -> MidAccessResolvedBody {
+        val optimized = optimizeCanonicalMidReturns(arena: inout arena, canonical: self.canonical)
+        return <MidAccessResolvedBody canonical=optimized />
+    }
+}
+
+pub impl MidDropElaboratedBody {
+    assoc fn elaborate(arena: inout MidCanonicalArena, body: MidAccessResolvedBody) -> Result[MidDropElaboratedBody, MidPreparationError] {
+        val dropped = elaborateCanonicalMidDrops(arena: inout arena, canonical: body.canonical)
+        // The low-level rewrite uses zero for an invalid output. Preserve
+        // the existing InvalidTarget diagnostic without publishing a token.
+        if dropped.body == 0U64 {
+            return <Result.Err error=<MidPreparationError.VerificationFailed body=dropped verification=<MidVerification error=<MidVerifyError.InvalidTarget /> /> /> />
         }
+        return <Result.Ok value=<MidDropElaboratedBody canonical=dropped /> />
+    }
+}
+
+pub impl MidExecutableBody {
+    assoc fn verify(c: inout Comp, body: MidDropElaboratedBody) -> Result[MidExecutableBody, MidPreparationError] {
+        val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: body.canonical)
+        match verification.error {
+            MidVerifyError.None => { return <Result.Ok value=<MidExecutableBody canonical=body.canonical /> /> }
+            _ => { return <Result.Err error=<MidPreparationError.VerificationFailed body=body.canonical verification=verification /> /> }
+        }
+    }
+
+    assoc fn prepare(c: inout Comp, body: MidParametricBody, bodyId: U64) -> Result[MidExecutableBody, MidPreparationError] {
+        val instantiated = match MidInstantiatedBody.instantiate(c: inout c, body: body, bodyId: bodyId) {
+            Result.Ok(value: val value) => { give value }
+            Result.Err(error: val failure) => { return <Result.Err error=failure /> }
+        }
+        val accesses = match MidAccessResolvedBody.elaborate(c: inout c, body: instantiated) {
+            Result.Ok(value: val value) => { give value }
+            Result.Err(error: val failure) => { return <Result.Err error=failure /> }
+        }
+        val optimized = accesses.optimizedReturns(arena: inout c.mid)
+        val dropped = match MidDropElaboratedBody.elaborate(arena: inout c.mid, body: optimized) {
+            Result.Ok(value: val value) => { give value }
+            Result.Err(error: val failure) => { return <Result.Err error=failure /> }
+        }
+        return MidExecutableBody.verify(c: inout c, body: dropped)
     }
 }

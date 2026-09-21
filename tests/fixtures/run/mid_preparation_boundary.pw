@@ -4,12 +4,37 @@ import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
 import /Ir with { BodyInstance, InstanceEnvironment }
-import /Mid with { MidBody, MidBlock, MidTerminator, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
+import /Mid with { MidBody, MidBlock, MidTerminator, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
+
+fn typedStages(compiler: inout Comp, input: MidParametricBody, instance: U64) -> Bool {
+    val instantiated = match MidInstantiatedBody.instantiate(c: inout compiler, body: input, bodyId: instance) {
+        Result.Ok(value: val body) => { give body }
+        Result.Err(error: _) => { return false }
+    }
+    val accesses = match MidAccessResolvedBody.elaborate(c: inout compiler, body: instantiated) {
+        Result.Ok(value: val body) => { give body }
+        Result.Err(error: _) => { return false }
+    }
+    val optimized = accesses.optimizedReturns(arena: inout compiler.mid)
+    val dropped = match MidDropElaboratedBody.elaborate(arena: inout compiler.mid, body: optimized) {
+        Result.Ok(value: val body) => { give body }
+        Result.Err(error: _) => { return false }
+    }
+    match MidExecutableBody.verify(c: inout compiler, body: dropped) {
+        Result.Ok(value: val executable) => {
+            assert(compiler.mid.isWellFormed(body: input.canonical))
+            assert(compiler.mid.isWellFormed(body: executable.canonical))
+            assert(executable.canonical.body != input.canonical.body)
+            return true
+        }
+        Result.Err(error: _) => { return false }
+    }
+}
 
 fn main() {
     mut val compiler: Comp = <Comp />
     val body = compiler.mid.store(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
-    match MidExecutableBody.prepare(c: inout compiler, canonical: body, bodyId: 0U64) {
+    match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=body />, bodyId: 0U64) {
         Result.Err(error: val failure) => {
             match failure {
                 MidPreparationError.InstantiationFailed(error: val error) => {
@@ -24,7 +49,7 @@ fn main() {
         _ => { assert(false) }
     }
     val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
-    match MidExecutableBody.prepare(c: inout compiler, canonical: body, bodyId: instance) {
+    match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=body />, bodyId: instance) {
         Result.Ok(value: val executable) => {
             assert(executable.canonical.body != body.body)
             assert(compiler.mid.isWellFormed(body: executable.canonical))
@@ -32,8 +57,10 @@ fn main() {
         }
         _ => { assert(false) }
     }
+    assert(typedStages(compiler: inout compiler, input: <MidParametricBody.input canonical=body />, instance: instance))
+    print("typed-stages")
     val invalid = compiler.mid.store(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] entry=1U64 />)
-    match MidExecutableBody.prepare(c: inout compiler, canonical: invalid, bodyId: instance) {
+    match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=invalid />, bodyId: instance) {
         Result.Err(error: val failure) => {
             match failure {
                 MidPreparationError.VerificationFailed(body: _, verification: val verification) => {

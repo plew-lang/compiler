@@ -1,0 +1,4 @@
+import /Mid with { MidDropElaboratedBody, MidCanonicalBody }
+fn main() {
+    val body = <MidDropElaboratedBody canonical=<MidCanonicalBody body=1U64 /> />
+}

@@ -1,0 +1,6 @@
+import /Frontend with { Comp }
+import /Mid with { MidCanonicalBody, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody }
+fn wrongStage(compiler: inout Comp, body: MidParametricBody) {
+    val result = MidAccessResolvedBody.elaborate(c: inout compiler, body: body)
+}
+fn main() {}

@@ -2798,7 +2798,7 @@ pub impl LlvmCtx {
     // Semantic preparation is shared by every entry. Only this adapter maps
     // Mid failures into backend coverage and diagnostic context.
     inout fn prepareMidExecutable(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64, fnIdx: U64) -> Optional[MidExecutableBody] {
-        val preparation = MidExecutableBody.prepare(c: inout c, canonical: canonical, bodyId: bodyId)
+        val preparation = MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=canonical />, bodyId: bodyId)
         match preparation {
             Result.Ok(value: val executable) => { return <Optional.Some v=executable /> }
             Result.Err(error: val failure) => {
