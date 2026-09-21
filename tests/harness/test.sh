@@ -22,11 +22,18 @@ command -v "$LC" >/dev/null 2>&1 || {
 PLEWC="${PLEWC:-./plewc}"
 [ -x "$PLEWC" ] || { echo "run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 
-RT=/tmp/plew_rt.c
-"$PLEWC" --runtime > "$RT"
+# One runtime object per invocation, using the same clang/default O0 as links.
+RUNTIME_DIR=$(mktemp -d "${TMPDIR:-/tmp}/plew-test-runtime.XXXXXX")
+trap 'rm -rf "$RUNTIME_DIR"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+RT="$RUNTIME_DIR/runtime.c"
+python3 ./scripts/support/watch-command.py -- "$PLEWC" --runtime > "$RT"
+python3 ./scripts/support/watch-command.py -- clang -w -c "$RT" -o "$RUNTIME_DIR/runtime.o"
 
 JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}"
-PLEW_RT="$RT"
+PLEW_RT="$RUNTIME_DIR/runtime.o"
 PLEW_LD="$("$LC" --ldflags)"
 export PLEWC PLEW_RT PLEW_LD
 

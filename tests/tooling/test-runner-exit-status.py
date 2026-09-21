@@ -13,6 +13,33 @@ def install_supervisors(root):
         (root / name).write_bytes((Path(__file__).resolve().parents[2] / name).read_bytes())
 
 source = (Path(__file__).resolve().parents[2] / 'tests/harness/test.sh').read_text()
+# Preparation must compile once, clean up, and stop on failure (no stale object).
+preparation = source.split('# One runtime object per invocation,', 1)[1].split('\nJOBS=', 1)[0]
+preparation = preparation[preparation.index('\n') + 1:]
+with tempfile.TemporaryDirectory(prefix='plew-runtime-preparation-') as directory:
+    root = Path(directory)
+    install_supervisors(root)
+    tools = root / 'tools'
+    tools.mkdir()
+    compiler = tools / 'compiler'
+    compiler.write_text('#!/bin/sh\necho runtime\n')
+    compiler.chmod(0o755)
+    clang = tools / 'clang'
+    clang.write_text('#!/bin/sh\necho compile >> "$CALLS"\n[ "$FAIL_COMPILE" = 0 ] || exit 7\ntouch "$5"\n')
+    clang.chmod(0o755)
+    for fail in ('0', '1'):
+        calls = root / 'calls'
+        calls.write_text('')
+        env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'],
+               'PLEWC': str(compiler), 'TMPDIR': str(root), 'CALLS': str(calls), 'FAIL_COMPILE': fail}
+        result = subprocess.run(['sh', '-c', 'set -e\n' + preparation + '\ntest -f "$RUNTIME_DIR/runtime.o"\necho ready\n'],
+                                cwd=root, env=env, capture_output=True, text=True)
+        assert (result.returncode == 0) == (fail == '0'), result
+        assert result.stdout == ('ready\n' if fail == '0' else ''), result
+        assert calls.read_text() == 'compile\n'
+        assert not list(root.glob('plew-test-runtime.*')), 'runtime scratch leaked'
+    print('PASS runtime/once-cleanup-and-failure', flush=True)
+
 workers = {}
 for phase in ('run', 'part'):
     match = re.search(rf'{phase}_results=.*?sh -c \'\n(.*?)\n\' sh \| progress_stream {phase} ', source, re.S)
