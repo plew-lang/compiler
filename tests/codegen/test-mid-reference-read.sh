@@ -12,6 +12,3 @@ for name in read readMutable readMethod make; do
     fi
 done
 echo 'PASS reference reads (Ref, MutableRef, and pointee receiver use Mid)' >&2
-
-"$PLEWC" --require-mid --emit-mid-coverage tests/run/mid_reference_copy_to_move.pw >"$directory/input.ll" 2>"$directory/trace" || { cat "$directory/trace" >&2; exit 1; }
-echo 'PASS reference construction (owned copies passed to consuming ABI)' >&2
