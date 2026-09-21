@@ -20,5 +20,28 @@ compiler or seed with diagnostic artifacts.
 `TemplateDependencyUnfinalized.pw` checks that a published implicit-call slot
 cannot satisfy a different, unfinalized slot. Compile/link the harness normally;
 its execution must exit 1 and report the diagnostic in the companion `.err`.
-This is a compiler diagnostic test, not a panic (SIGABRT) test. The focused
-runner is `meta/agents/performance-profiles/20260910-dependency-index/check.py`.
+This is a compiler diagnostic test, not a panic (SIGABRT) test.
+
+## Manual execution procedure
+
+Run from the compiler repository root with the selected carrier. Keep all
+outputs in a new directory under `tmp/`; these fixtures are not automatically
+registered in the normal suite.
+
+1. Compile the selected `.pw` with `--trace-phases`, using
+   `python3 -B scripts/support/trace-command.py <compile-log> -- <carrier> ...`
+   to supervise progress. Save stdout as LLVM and require compiler exit 0.
+2. Export that same carrier's `--runtime` output to a C file. Link it with the
+   generated LLVM using `clang -w`, adding the selected `llvm-config --ldflags`.
+   Supervise runtime export and linking with `scripts/support/watch-command.py`;
+   require exit 0 for each step. Do not execute an old binary after a failure.
+3. Execute the new binary through `scripts/support/watch-command.py`, capturing
+   stdout, stderr and the actual exit code separately.
+4. For `TypeTermPublication`, require exit 0 and byte-compare stdout with its
+   `.out`. For `TemplateDependencyUnfinalized`, require exit 1 and the literal
+   diagnostic from its `.err` in stderr. A signal, timeout, compile/link failure,
+   or another exit code is a failure, even if the diagnostic text appears.
+
+Pass the fixture path under `tests/compiler/frontend/` to the carrier. Neither
+procedure updates the canonical compiler or seed, nor replaces the standard
+normal or sanitizer gates.

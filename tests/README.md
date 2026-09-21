@@ -33,6 +33,9 @@ may also be invoked explicitly; filenames alone do not register a test.
 Dependency tests create isolated packages in scratch; their implementation is
 `harness/test-deps.sh`, not another copied fixture corpus.
 
+`fixtures/genast/` is not automatically enumerated: adding an input also
+requires registering its checks in `compiler/codegen/test-gen-input-ast.sh`.
+
 ## Shared inputs and companions
 
 Keep one input and all its companions together. A run fixture requires `.out`;
