@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise stage budgets, barriers, failure cancellation and signal cleanup."""
+from contextlib import ExitStack
 import importlib.util
 import json
 import os
@@ -9,14 +10,27 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 root = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('schedule', root / 'tests/sanitizer/asan-schedule.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-with tempfile.TemporaryDirectory() as directory:
+with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
     work = Path(directory)
+    # Expected interruptions are fixture evidence, not failures of the outer gate.
+    # Retain their logs locally and never publish them to its worker channel.
+    original_popen = subprocess.Popen
+    diagnostics = stack.enter_context((work / 'expected-interruptions.log').open('wb'))
+    def isolated_popen(*args, **kwargs):
+        env = dict(kwargs.get('env', os.environ))
+        env.pop('PLEW_WATCH_EVENTS', None)
+        kwargs['env'] = env
+        if kwargs.get('stderr') is None:
+            kwargs['stderr'] = diagnostics
+        return original_popen(*args, **kwargs)
+    stack.enter_context(patch.object(module.subprocess, 'Popen', side_effect=isolated_popen))
     stage = work / 'stage.py'
     stage.write_text('''import json,os,sys,time
 from pathlib import Path
