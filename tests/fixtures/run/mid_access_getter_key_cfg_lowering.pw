@@ -35,6 +35,21 @@ fn resetNamed(table: inout KeyedCounter, names: Array[String]) -> I32 {
     return table[names[0U64]].takeAndReset()
 }
 
+// Multiple expanded calls, a branch and a back edge must share the same
+// body-relative layout, including stable homes for the materialized keys.
+fn resetLoop(rows: inout Array[Array[Counter]], order: Array[U64]) -> I32 {
+    mut val total: I32 = 0I32
+    mut val index: U64 = 0U64
+    while index < 2U64 {
+        total += rows[order[0U64]][index].takeAndReset()
+        if index == 0U64 {
+            total += rows[order[0U64]][1U64].takeAndReset()
+        }
+        index += 1U64
+    }
+    return total
+}
+
 fn main() {
     mut val rows: Array[Array[Counter]] = []
     rows.append([<Counter n=7I32 />])
@@ -43,4 +58,8 @@ fn main() {
     mut val table = <KeyedCounter value=<Counter n=13I32 /> />
     print(resetNamed(table: inout table, names: ["named"]))
     print(table.value.n)
+    mut val loopRows: Array[Array[Counter]] = [[<Counter n=2I32 />, <Counter n=3I32 />]]
+    print(resetLoop(rows: inout loopRows, order: [0U64]))
+    print(loopRows[0U64][0U64].n)
+    print(loopRows[0U64][1U64].n)
 }
