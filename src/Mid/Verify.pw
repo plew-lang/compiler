@@ -208,19 +208,6 @@ fn canonicalMidTargetIsValid(body: MidBodyNode, target: U64) -> Bool {
     return target < body.blocks.len
 }
 
-fn canonicalMidVerifySuccessors(c: Comp, term: MidTerminatorNode) -> Array[U64] {
-    if term.tag == 2U64 || term.tag == 4U64 { return [term.target] }
-    if term.tag == 10U64 { return [term.resume] }
-    if term.tag != 3U64 { return [] }
-    mut val successors: Array[U64] = []
-    mut val caseI: U64 = 0U64
-    while caseI < term.cases.len {
-        successors.append(c.mid.switchCases[term.cases.start + caseI].target)
-        caseI = caseI + 1U64
-    }
-    successors.append(term.otherwise)
-    return successors
-}
 
 // Field and dereference paths denote physical storage. Dereferencing a
 // MutableRef permits replacement of its pointee; Ref never grants this
@@ -315,10 +302,10 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
                     statementI = statementI + 1U64
                 }
                 if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
-                    val successors: Array[U64] = canonicalMidVerifySuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+                    val term = c.mid.terminators[block.terminator - 1U64]
                     mut val successorI: U64 = 0U64
-                    while successorI < successors.count() {
-                        val target: U64 = successors[successorI]
+                    while successorI < term.successorCount() {
+                        val target: U64 = c.mid.successorAt(term: term, index: successorI)
                         if !canonicalMidTargetIsValid(body: body, target: target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
                         if !reachable[target] {
                             incoming.set(i: target, value: outgoing)
@@ -495,7 +482,10 @@ fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
     while index < queue.count() {
         val block = c.mid.blocks[body.blocks.start + queue[index]]
         val term = c.mid.terminators[block.terminator - 1U64]
-        for target in canonicalMidVerifySuccessors(c: c, term: term) {
+        mut val edge: U64 = 0U64
+        while edge < term.successorCount() {
+            val target = c.mid.successorAt(term: term, index: edge)
+            edge += 1U64
             if target < reached.count() && !reached[target] { reached.set(i: target, value: true)
                 queue.append(target) }
         }
@@ -620,7 +610,10 @@ fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerificatio
                 }
             }
             if (term.tag == 4U64 || term.tag == 10U64) && canonicalMidFlagPlace(c: c, placeId: term.destination, owner: owner) { state = state % 2U64 + 2U64 }
-            for target in canonicalMidVerifySuccessors(c: c, term: term) {
+            mut val edge: U64 = 0U64
+            while edge < term.successorCount() {
+                val target = c.mid.successorAt(term: term, index: edge)
+                edge += 1U64
                 val entry = target * 4U64 + state
                 if target < body.blocks.len && !visited[entry] { visited.set(i: entry, value: true)
                     queue.append(entry) }
@@ -783,8 +776,11 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
             }
-            if statement.tag == 11U64 || statement.tag == 12U64 { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI /> }
-            if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
+            if statement.requiresAccessElaboration() { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI /> }
+            if statement.requiresDropElaboration() {
+                if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
+                return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI />
+            }
             statementI = statementI + 1U64
         }
         if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }

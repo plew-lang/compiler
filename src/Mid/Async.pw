@@ -52,55 +52,36 @@ fn definePlace(c: Comp, body: MidBodyNode, locals: inout Array[Bool], placeId: U
 fn useOperand(c: Comp, locals: inout Array[Bool], operandId: U64) {
     if operandId == 0U64 { return }
     val operand = c.mid.operands[operandId - 1U64]
-    usePlace(c: c, locals: inout locals, placeId: operand.place)
-    usePlace(c: c, locals: inout locals, placeId: operand.accessPlace)
+    mut val index: U64 = 0U64
+    while index < operand.placeCount() {
+        usePlace(c: c, locals: inout locals, placeId: operand.placeAt(index: index))
+        index += 1U64
+    }
 }
 
 fn useRvalue(c: Comp, body: MidBodyNode, locals: inout Array[Bool], valueId: U64) -> Bool {
     if valueId == 0U64 { return false }
     val value = c.mid.rvalues[valueId - 1U64]
-    if value.tag == 0U64 || value.tag == 7U64 || value.tag >= 20U64 { return false }
+    if !value.hasKnownOpcode() || value.isParametricOnly() { return false }
     if value.tag == 2U64 && (body.bodyInstance == 0U64 || value.targetTerm == 0U64) { return false }
-    useOperand(c: c, locals: inout locals, operandId: value.operand)
     usePlace(c: c, locals: inout locals, placeId: value.place)
     mut val index: U64 = 0U64
-    while index < value.elements.len {
-        if value.tag == 19U64 {
-            useOperand(c: c, locals: inout locals, operandId: c.mid.closureCaptures[value.elements.start + index].operand)
-        } else {
-            useOperand(c: c, locals: inout locals, operandId: c.mid.aggregateElements[value.elements.start + index].operand)
-        }
+    while index < value.operandCount() {
+        useOperand(c: c, locals: inout locals, operandId: c.mid.rvalueOperandAt(value: value, index: index))
         index += 1U64
     }
     return true
 }
 
-fn successors(c: Comp, term: MidTerminatorNode) -> Array[U64] {
-    if term.tag == 2U64 || term.tag == 4U64 { return [term.target] }
-    if term.tag == 10U64 { return [term.resume] }
-    mut val result: Array[U64] = []
-    if term.tag == 3U64 {
-        mut val index: U64 = 0U64
-        while index < term.cases.len {
-            result.append(c.mid.switchCases[term.cases.start + index].target)
-            index += 1U64
-        }
-        result.append(term.otherwise)
-    }
-    return result
-}
 
 fn transferTerminator(c: Comp, body: MidBodyNode, locals: inout Array[Bool], term: MidTerminatorNode) -> Bool {
-    if term.tag < 2U64 || term.tag > 10U64 { return false }
+    if !term.hasKnownOpcode() || term.isParametricOnly() { return false }
     // The destination is initialized by completion, not retained while the
     // operation is pending. Inputs are read after killing that definition.
     if term.tag == 4U64 || term.tag == 10U64 { definePlace(c: c, body: body, locals: inout locals, placeId: term.destination) }
-    useOperand(c: c, locals: inout locals, operandId: term.discriminant)
-    useOperand(c: c, locals: inout locals, operandId: term.value)
-    if term.callReceiver != 0U64 { useOperand(c: c, locals: inout locals, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand) }
     mut val index: U64 = 0U64
-    while index < term.args.len {
-        useOperand(c: c, locals: inout locals, operandId: c.mid.callArguments[term.args.start + index])
+    while index < c.mid.terminatorOperandCount(term: term) {
+        useOperand(c: c, locals: inout locals, operandId: c.mid.terminatorOperandAt(term: term, index: index))
         index += 1U64
     }
     return true
@@ -128,8 +109,8 @@ fn transferStatements(c: Comp, locals: inout Array[Bool], body: MidBodyNode, blo
             if statement.flag < locals.count() { locals.set(i: statement.flag, value: false) }
         } else if statement.tag == 13U64 {
             mut val output: U64 = 0U64
-            while output < statement.enumDestinations.len {
-                definePlace(c: c, body: body, locals: inout locals, placeId: c.mid.enumDestinations[statement.enumDestinations.start + output].place)
+            while output < statement.destinationCount() {
+                definePlace(c: c, body: body, locals: inout locals, placeId: c.mid.statementDestinationAt(statement: statement, index: output))
                 output += 1U64
             }
             usePlace(c: c, locals: inout locals, placeId: statement.source)
@@ -211,10 +192,10 @@ export fn planCanonicalMidAsyncFrame(c: Comp, canonical: MidCanonicalBody) -> Mi
         while index < body.blocks.len {
             if reachable[index] {
                 val block = c.mid.blocks[body.blocks.start + index]
-                val edges = successors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+                val term = c.mid.terminators[block.terminator - 1U64]
                 mut val edge: U64 = 0U64
-                while edge < edges.count() {
-                    val target = edges[edge]
+                while edge < term.successorCount() {
+                    val target = c.mid.successorAt(term: term, index: edge)
                     if target >= body.blocks.len { return <MidAsyncFramePlan /> }
                     if !reachable[target] { reachable.set(i: target, value: true)
                         changed = true }
@@ -236,10 +217,9 @@ export fn planCanonicalMidAsyncFrame(c: Comp, canonical: MidCanonicalBody) -> Mi
                 val block = c.mid.blocks[body.blocks.start + index]
                 val term = c.mid.terminators[block.terminator - 1U64]
                 mut val locals = emptyLocalSet(count: body.locals.len)
-                val edges = successors(c: c, term: term)
                 mut val edge: U64 = 0U64
-                while edge < edges.count() {
-                    val merged = unionLocals(locals: inout locals, input: incoming[edges[edge]])
+                while edge < term.successorCount() {
+                    val merged = unionLocals(locals: inout locals, input: incoming[c.mid.successorAt(term: term, index: edge)])
                     edge += 1U64
                 }
                 if !transferTerminator(c: c, body: body, locals: inout locals, term: term) || !transferStatements(c: c, locals: inout locals, body: body, blockIndex: index) { return <MidAsyncFramePlan /> }

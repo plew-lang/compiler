@@ -43,16 +43,11 @@ fn countDestination(arena: MidCanonicalArena, placeId: U64, definitions: inout A
 fn countRvalue(arena: MidCanonicalArena, valueId: U64, uses: inout Array[U64]) -> Bool {
     if valueId == 0U64 || valueId > arena.rvalues.count() { return false }
     val value = arena.rvalues[valueId - 1U64]
-    if value.tag < 1U64 || value.tag > 19U64 { return false }
-    countOperand(arena: arena, operandId: value.operand, uses: inout uses)
+    if !value.hasKnownOpcode() || value.tag > 19U64 { return false }
     countPlace(arena: arena, placeId: value.place, counts: inout uses)
     mut val index: U64 = 0U64
-    while index < value.elements.len {
-        if value.tag == 19U64 {
-            countOperand(arena: arena, operandId: arena.closureCaptures[value.elements.start + index].operand, uses: inout uses)
-        } else {
-            countOperand(arena: arena, operandId: arena.aggregateElements[value.elements.start + index].operand, uses: inout uses)
-        }
+    while index < value.operandCount() {
+        countOperand(arena: arena, operandId: arena.rvalueOperandAt(value: value, index: index), uses: inout uses)
         index += 1U64
     }
     return true
@@ -69,8 +64,8 @@ fn countBody(arena: MidCanonicalArena, body: MidBodyNode, definitions: inout Arr
             if statement.tag == 13U64 {
                 countPlace(arena: arena, placeId: statement.source, counts: inout uses)
                 mut val output: U64 = 0U64
-                while output < statement.enumDestinations.len {
-                    countDestination(arena: arena, placeId: arena.enumDestinations[statement.enumDestinations.start + output].place, definitions: inout definitions, uses: inout uses)
+                while output < statement.destinationCount() {
+                    countDestination(arena: arena, placeId: arena.statementDestinationAt(statement: statement, index: output), definitions: inout definitions, uses: inout uses)
                     output += 1U64
                 }
             } else if statement.tag == 1U64 || statement.tag == 9U64 {
@@ -86,7 +81,7 @@ fn countBody(arena: MidCanonicalArena, body: MidBodyNode, definitions: inout Arr
             index += 1U64
         }
         val term = arena.terminators[block.terminator - 1U64]
-        if term.tag < 2U64 || term.tag > 10U64 { return false }
+        if !term.hasKnownOpcode() || term.isParametricOnly() { return false }
         countOperand(arena: arena, operandId: term.value, uses: inout uses)
         countOperand(arena: arena, operandId: term.discriminant, uses: inout uses)
         if term.tag == 4U64 {

@@ -1,0 +1,98 @@
+// Pool-relative ranges, repeated occurrences and distinct child pools matter:
+// traversal must not deduplicate edges or confuse captures with aggregate fields.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Mid/Ir with { MidCanonicalArena, MidRange, MidSwitchCase, MidTerminatorNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidCallReceiverNode, MidStatementNode, MidEnumDestinationNode, MidOperandNode }
+
+fn main() {
+    mut val arena: MidCanonicalArena = <MidCanonicalArena />
+    arena.switchCases.append(<MidSwitchCase value=0 target=99U64 />)
+    arena.switchCases.append(<MidSwitchCase value=1 target=7U64 />)
+    arena.switchCases.append(<MidSwitchCase value=2 target=7U64 />)
+    val branch = <MidTerminatorNode tag=3U64 cases=<MidRange start=1U64 len=2U64 /> otherwise=3U64 discriminant=4U64 />
+    assert(branch.successorCount() == 3U64)
+    assert(arena.successorAt(term: branch, index: 0U64) == 7U64)
+    assert(arena.successorAt(term: branch, index: 1U64) == 7U64)
+    assert(arena.successorAt(term: branch, index: 2U64) == 3U64)
+    for tag in [2U64, 4U64] {
+        val term = <MidTerminatorNode tag=tag target=5U64 />
+        assert(term.successorCount() == 1U64)
+        assert(arena.successorAt(term: term, index: 0U64) == 5U64)
+    }
+    val suspend = <MidTerminatorNode tag=10U64 resume=6U64 value=8U64 destination=9U64 />
+    assert(suspend.successorCount() == 1U64)
+    assert(arena.successorAt(term: suspend, index: 0U64) == 6U64)
+    assert(arena.terminatorOperandCount(term: suspend) == 1U64)
+    assert(arena.terminatorOperandAt(term: suspend, index: 0U64) == 8U64)
+    for tag in [11U64, 12U64] {
+        val term = <MidTerminatorNode tag=tag target=5U64 otherwise=6U64 />
+        assert(term.isParametricOnly())
+        assert(term.successorCount() == 2U64)
+        assert(arena.successorAt(term: term, index: 0U64) == 5U64)
+        assert(arena.successorAt(term: term, index: 1U64) == 6U64)
+    }
+    for tag in [1U64, 5U64, 6U64, 7U64, 8U64, 9U64] {
+        val term = <MidTerminatorNode tag=tag />
+        assert(term.hasKnownOpcode())
+        assert(term.successorCount() == 0U64)
+    }
+    print("edges")
+
+    arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=0U64 operand=99U64 isBoxed=false />)
+    arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=0U64 operand=11U64 isBoxed=false />)
+    arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=1U64 operand=12U64 isBoxed=false />)
+    arena.closureCaptures.append(<MidClosureCaptureNode operand=99U64 />)
+    arena.closureCaptures.append(<MidClosureCaptureNode operand=21U64 />)
+    arena.closureCaptures.append(<MidClosureCaptureNode operand=22U64 />)
+    val aggregate = <MidRvalueNode tag=3U64 elements=<MidRange start=1U64 len=2U64 /> />
+    val closure = <MidRvalueNode tag=19U64 elements=<MidRange start=1U64 len=2U64 /> />
+    assert(aggregate.operandCount() == 2U64 && closure.operandCount() == 2U64)
+    assert(arena.rvalueOperandAt(value: aggregate, index: 0U64) == 11U64)
+    assert(arena.rvalueOperandAt(value: aggregate, index: 1U64) == 12U64)
+    assert(arena.rvalueOperandAt(value: closure, index: 0U64) == 21U64)
+    assert(arena.rvalueOperandAt(value: closure, index: 1U64) == 22U64)
+    val converted = <MidRvalueNode tag=6U64 operand=31U64 />
+    assert(converted.operandCount() == 1U64)
+    assert(arena.rvalueOperandAt(value: converted, index: 0U64) == 31U64)
+    val enumTag = <MidRvalueNode tag=11U64 place=41U64 />
+    assert(enumTag.requiresPlace() && enumTag.operandCount() == 0U64)
+    arena.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=3U64 />)
+    arena.callArguments.append(99U64)
+    arena.callArguments.append(7U64)
+    arena.callArguments.append(7U64)
+    val call = <MidTerminatorNode tag=4U64 callReceiver=1U64 args=<MidRange start=1U64 len=2U64 /> />
+    assert(arena.terminatorOperandCount(term: call) == 3U64)
+    assert(arena.terminatorOperandAt(term: call, index: 0U64) == 3U64)
+    assert(arena.terminatorOperandAt(term: call, index: 1U64) == 7U64)
+    assert(arena.terminatorOperandAt(term: call, index: 2U64) == 7U64)
+    assert(arena.terminatorOperandAt(term: branch, index: 0U64) == 4U64)
+    print("operands")
+
+    arena.enumDestinations.append(<MidEnumDestinationNode place=99U64 />)
+    arena.enumDestinations.append(<MidEnumDestinationNode place=51U64 />)
+    arena.enumDestinations.append(<MidEnumDestinationNode place=52U64 />)
+    val destructure = <MidStatementNode tag=13U64 source=53U64 enumDestinations=<MidRange start=1U64 len=2U64 /> />
+    assert(destructure.destinationCount() == 2U64)
+    assert(arena.statementDestinationAt(statement: destructure, index: 0U64) == 51U64)
+    assert(arena.statementDestinationAt(statement: destructure, index: 1U64) == 52U64)
+    val drop = <MidStatementNode tag=3U64 destination=54U64 />
+    assert(drop.destinationCount() == 1U64)
+    assert(arena.statementDestinationAt(statement: drop, index: 0U64) == 54U64)
+    val access = <MidOperandNode tag=4U64 place=61U64 accessPlace=62U64 />
+    assert(access.placeCount() == 2U64)
+    assert(access.placeAt(index: 0U64) == 61U64 && access.placeAt(index: 1U64) == 62U64)
+    print("places")
+
+    val unknown = <MidTerminatorNode tag=99U64 />
+    assert(!unknown.hasKnownOpcode())
+    val boundary = <MidRvalueNode tag=23U64 operand=31U64 />
+    assert(boundary.hasKnownOpcode() && boundary.isParametricOnly())
+    assert(!closure.isParametricOnly())
+    val commit = <MidStatementNode tag=11U64 />
+    val end = <MidStatementNode tag=12U64 />
+    val exit = <MidStatementNode tag=6U64 />
+    assert(commit.requiresAccessElaboration())
+    assert(end.requiresDropElaboration() && exit.requiresDropElaboration())
+    assert(!drop.requiresDropElaboration())
+    print("phases")
+}

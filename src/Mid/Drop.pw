@@ -152,22 +152,6 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
     return out
 }
 
-fn canonicalMidSuccessors(arena: MidCanonicalArena, term: MidTerminatorNode) -> Array[U64] {
-    if term.tag == 2U64 { return [term.target] }
-    if term.tag == 4U64 { return [term.target] }
-    if term.tag == 10U64 { return [term.resume] }
-    if term.tag == 3U64 {
-        mut val out: Array[U64] = []
-        mut val caseI: U64 = 0U64
-        while caseI < term.cases.len {
-            out.append(arena.switchCases[term.cases.start + caseI].target)
-            caseI = caseI + 1U64
-        }
-        out.append(term.otherwise)
-        return out
-    }
-    return []
-}
 
 // Canonical ownership analysis consumes only scalar rows/ranges. Its nested
 // Arrays are transient fixed-point work state, never a body representation.
@@ -217,10 +201,10 @@ export fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidC
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
         val out: Array[MidOwnership] = canonicalMidTransferBlock(arena: arena, body: body, block: block, input: incoming[blockI])
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
-            val successors: Array[U64] = canonicalMidSuccessors(arena: arena, term: arena.terminators[block.terminator - 1U64])
+            val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
-            while successorI < successors.count() {
-                val successor: U64 = successors[successorI]
+            while successorI < term.successorCount() {
+                val successor: U64 = arena.successorAt(term: term, index: successorI)
                 if successor < body.blocks.len {
                     if !reachable[successor] {
                         incoming.set(i: successor, value: out)
@@ -392,10 +376,10 @@ export fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: 
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
         val out: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(arena: arena, body: body, block: block, input: incoming[blockI])
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
-            val successors: Array[U64] = canonicalMidSuccessors(arena: arena, term: arena.terminators[block.terminator - 1U64])
+            val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
-            while successorI < successors.count() {
-                val successor: U64 = successors[successorI]
+            while successorI < term.successorCount() {
+                val successor: U64 = arena.successorAt(term: term, index: successorI)
                 if successor < body.blocks.len {
                     if !reachable[successor] {
                         incoming.set(i: successor, value: out)
@@ -445,10 +429,10 @@ fn canonicalMidDropPredecessors(arena: MidCanonicalArena, body: MidBodyNode, own
         exits.append(canonicalMidTransferBlock(arena: arena, body: body, block: block, input: ownership[blockI]))
         accessExits.append(canonicalMidAccessibilityTransfer(arena: arena, body: body, block: block, input: accessibility[blockI]))
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
-            val successors = canonicalMidSuccessors(arena: arena, term: arena.terminators[block.terminator - 1U64])
+            val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
-            while successorI < successors.count() {
-                val target = successors[successorI]
+            while successorI < term.successorCount() {
+                val target = arena.successorAt(term: term, index: successorI)
                 if target < body.blocks.len {
                     mut val incoming = predecessors[target]
                     incoming.append(blockI)
@@ -703,10 +687,10 @@ fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCano
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
         val out: Array[MidOwnership] = canonicalMidTransferBlockAfterCliffs(arena: arena, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
-            val successors: Array[U64] = canonicalMidSuccessors(arena: arena, term: arena.terminators[block.terminator - 1U64])
+            val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
-            while successorI < successors.count() {
-                val successor: U64 = successors[successorI]
+            while successorI < term.successorCount() {
+                val successor: U64 = arena.successorAt(term: term, index: successorI)
                 if successor < body.blocks.len {
                     if !reachable[successor] {
                         incoming.set(i: successor, value: out)

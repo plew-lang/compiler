@@ -1,0 +1,132 @@
+// Structural queries on scalar canonical rows. These enumerate occurrences,
+// not distinct IDs, and preserve source order and duplicate CFG edges. They
+// neither allocate arrays nor decide whether a place is read, owned or killed.
+// Callers validate pool ranges before indexed traversal. Unknown opcodes must
+// be rejected through hasKnownOpcode, never treated as an empty instruction.
+
+pub impl MidOperandNode {
+    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 8U64 }
+    fn placeCount() -> U64 {
+        mut val count: U64 = 0U64
+        if self.place != 0U64 { count += 1U64 }
+        if self.accessPlace != 0U64 { count += 1U64 }
+        return count
+    }
+    fn placeAt(index: U64) -> U64 {
+        if self.place != 0U64 {
+            if index == 0U64 { return self.place }
+            if index == 1U64 && self.accessPlace != 0U64 { return self.accessPlace }
+        } else if index == 0U64 && self.accessPlace != 0U64 { return self.accessPlace }
+        panic "Mid operand place index out of bounds"
+    }
+}
+
+pub impl MidRvalueNode {
+    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 23U64 }
+    // Return/try/closure rows may survive instantiation with grounded payloads.
+    // These boundary opcodes themselves must instead be replaced.
+    fn isParametricOnly() -> Bool {
+        return self.tag == 7U64 || self.tag == 20U64 || self.tag == 21U64 || self.tag == 22U64 || self.tag == 23U64
+    }
+    fn hasAggregateElements() -> Bool { return self.tag >= 3U64 && self.tag <= 5U64 }
+    fn hasClosureCaptures() -> Bool { return self.tag == 19U64 }
+    fn requiresPlace() -> Bool { return (self.tag >= 11U64 && self.tag <= 17U64) || self.tag == 21U64 || self.tag == 22U64 }
+    fn operandCount() -> U64 {
+        if !self.hasKnownOpcode() { panic "unknown Mid rvalue opcode" }
+        if self.operand != 0U64 { return 1U64 + self.elements.len }
+        return self.elements.len
+    }
+}
+
+pub impl MidStatementNode {
+    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 13U64 }
+    fn requiresAccessElaboration() -> Bool { return self.tag == 11U64 }
+    fn requiresDropElaboration() -> Bool { return self.tag == 6U64 || self.tag == 12U64 }
+    // A destination slot is a structural role, not a definition: Drop and
+    // ConditionalDrop also use that slot. Each analysis interprets it itself.
+    fn destinationCount() -> U64 {
+        if self.destination != 0U64 { return 1U64 + self.enumDestinations.len }
+        return self.enumDestinations.len
+    }
+}
+
+pub impl MidTerminatorNode {
+    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 12U64 }
+    fn isParametricOnly() -> Bool { return self.tag == 1U64 || self.tag == 11U64 || self.tag == 12U64 }
+    fn successorCount() -> U64 {
+        if !self.hasKnownOpcode() { panic "unknown Mid terminator opcode" }
+        if self.tag == 2U64 || self.tag == 4U64 || self.tag == 10U64 { return 1U64 }
+        if self.tag == 3U64 { return self.cases.len + 1U64 }
+        if self.tag == 11U64 || self.tag == 12U64 { return 2U64 }
+        return 0U64
+    }
+}
+
+pub impl MidCanonicalArena {
+    fn successorAt(term: MidTerminatorNode, index: U64) -> U64 {
+        if term.tag == 2U64 || term.tag == 4U64 {
+            if index == 0U64 { return term.target }
+        } else if term.tag == 10U64 {
+            if index == 0U64 { return term.resume }
+        } else if term.tag == 3U64 {
+            if index < term.cases.len { return self.switchCases[term.cases.start + index].target }
+            if index == term.cases.len { return term.otherwise }
+        } else if term.tag == 11U64 || term.tag == 12U64 {
+            if index == 0U64 { return term.target }
+            if index == 1U64 { return term.otherwise }
+        }
+        panic "Mid successor index out of bounds"
+    }
+
+    fn rvalueOperandAt(value: MidRvalueNode, index: U64) -> U64 {
+        mut val element = index
+        if value.operand != 0U64 {
+            if index == 0U64 { return value.operand }
+            element -= 1U64
+        }
+        if element >= value.elements.len { panic "Mid rvalue operand index out of bounds" }
+        if value.hasClosureCaptures() { return self.closureCaptures[value.elements.start + element].operand }
+        return self.aggregateElements[value.elements.start + element].operand
+    }
+
+    fn statementDestinationAt(statement: MidStatementNode, index: U64) -> U64 {
+        mut val output = index
+        if statement.destination != 0U64 {
+            if index == 0U64 { return statement.destination }
+            output -= 1U64
+        }
+        if output >= statement.enumDestinations.len { panic "Mid statement destination index out of bounds" }
+        return self.enumDestinations[statement.enumDestinations.start + output].place
+    }
+
+    // Switch/branch discriminant, return/panic/suspend value, call receiver,
+    // then call arguments. Ordinary canonical rows use exactly one prefix.
+    fn terminatorOperandCount(term: MidTerminatorNode) -> U64 {
+        mut val count = term.args.len
+        if term.discriminant != 0U64 { count += 1U64 }
+        if term.value != 0U64 { count += 1U64 }
+        if term.callReceiver != 0U64 && self.callReceivers[term.callReceiver - 1U64].operand != 0U64 { count += 1U64 }
+        return count
+    }
+
+    fn terminatorOperandAt(term: MidTerminatorNode, index: U64) -> U64 {
+        mut val argument = index
+        if term.discriminant != 0U64 {
+            if argument == 0U64 { return term.discriminant }
+            argument -= 1U64
+        }
+        if term.value != 0U64 {
+            if argument == 0U64 { return term.value }
+            argument -= 1U64
+        }
+        if term.callReceiver != 0U64 {
+            val receiver = self.callReceivers[term.callReceiver - 1U64].operand
+            if receiver != 0U64 {
+                if argument == 0U64 { return receiver }
+                argument -= 1U64
+            }
+        }
+        if argument >= term.args.len { panic "Mid terminator operand index out of bounds" }
+        return self.callArguments[term.args.start + argument]
+    }
+}
