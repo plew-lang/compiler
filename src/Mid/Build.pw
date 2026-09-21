@@ -1034,6 +1034,17 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     // their source term differs from the selected slot term.
     val local: U64 = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm, isUnique: ownsUnique)
     val writeDestination: MidPlace = <MidPlace local=local typeTerm=aggregate.resultTerm />
+    mut val captures: Array[Bool] = []
+    mut val elementIndex = 0U64
+    while elementIndex < aggregate.elements.count() { captures.append(false)
+        elementIndex += 1U64 }
+    mut val laterEffect = false
+    while elementIndex > 0U64 {
+        elementIndex -= 1U64
+        captures.set(i: elementIndex, value: laterEffect)
+        val element = aggregate.elements[elementIndex]
+        if !midImmediateValueExpression(c: c, exprId: element.exprId) { laterEffect = true }
+    }
     mut val elements: Array[MidAggregateElement] = []
     mut val i: U64 = 0U64
     while i < aggregate.elements.count() {
@@ -1050,7 +1061,9 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
         }
         match operand.error { MidBuildError.None => {} _ => { return operand } }
         if !midCurrentBlockIsOpen(state: state) { return operand }
-        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=midEvaluatedValue(c: inout c, state: inout state, operand: operand.operand) targetTerm=element.targetTerm isBoxed=element.isBoxed />)
+        mut val evaluated = operand.operand
+        if captures[i] { evaluated = midEvaluatedValue(c: inout c, state: inout state, operand: evaluated) }
+        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=evaluated targetTerm=element.targetTerm isBoxed=element.isBoxed />)
         i += 1U64
     }
     match aggregate.kind {
@@ -1470,6 +1483,30 @@ fn midIndexLocalForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId:
     return <MidIndexLocalBuild local=temporary />
 }
 
+// Only leaf reads/literals and physical field chains have no intervening
+// source effects. Calls, indexing, moves, conversions, control flow and unknown
+// forms are barriers. This proof is independent of type size or caller identity.
+fn midImmediateValueExpression(c: Comp, exprId: U64) -> Bool {
+    if exprId >= c.arena.exprs.count() { return false }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
+        Expr.Str(start: _, len: _) => { return true }
+        Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => { return midImmediateValueExpression(c: c, exprId: base) }
+        _ => { return false }
+    }
+}
+
+fn midImmediateTemplateArgument(c: Comp, argument: CallTemplateArgument) -> Bool {
+    match argument.source {
+        CallArgumentSource.Term(exprId: val exprId, term: _) => { return midImmediateValueExpression(c: c, exprId: exprId) }
+        CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: _) => { return midImmediateValueExpression(c: c, exprId: exprId) }
+        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midImmediateValueExpression(c: c, exprId: exprId) }
+        _ => { return false }
+    }
+}
+
 // A value operand must denote the value at this evaluation point, not a
 // source place that a later sibling expression may change. Anonymous whole
 // temporaries already own a completed evaluation; borrows retain their place.
@@ -1484,6 +1521,13 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
     }
     if source.rootTag == 1U64 && source.projections.count() == 0U64 && source.local < state.locals.count() {
         val local = state.locals[source.local]
+        // An ordinary synchronous value parameter is immutable and caller-
+        // guaranteed for this whole call. It cannot be replaced or moved out.
+        // This concerns the whole value only, never a dereferenced subobject,
+        // receiver borrow, inout capability or shared capture cell.
+        if local.isParameter && !local.ownsAtEntry && !local.isInout && !local.isBorrowed && !local.isCaptureCell && local.sourceNameStart != identSelfTarget() {
+            match operand { MidOperand.Copy(place: _) => { return operand } _ => {} }
+        }
         if local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
     }
     val ownsUnique = midTermIsUnique(c: inout c, term: source.typeTerm)
@@ -1496,7 +1540,7 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
     }
 }
 
-fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
+fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument, captureValue: Bool) -> MidOperandBuild {
     mut val built: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
     match argument.source {
         CallArgumentSource.Term(exprId: val exprId, term: val term) => {
@@ -1545,7 +1589,8 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             }
         }
     }
-    return <MidOperandBuild operand=midEvaluatedValue(c: inout c, state: inout state, operand: built.operand) />
+    if captureValue { return <MidOperandBuild operand=midEvaluatedValue(c: inout c, state: inout state, operand: built.operand) /> }
+    return built
 }
 
 fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateArgument] {
@@ -1759,16 +1804,39 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
     mut val hasInoutArgument: Bool = false
+    mut val delayedAccess = false
+    match receiver.receiver {
+        MidCallReceiver.Value(operand: val operand) => { match operand { MidOperand.Access(candidate: _) => { delayedAccess = true } _ => {} } }
+        _ => {}
+    }
+    mut val captures: Array[Bool] = []
+    mut val immediate: Array[Bool] = []
     mut val sourceI: U64 = 0U64
     while sourceI < sources.count() {
-        if sources[sourceI].isInout { hasInoutArgument = true }
+        val source = sources[sourceI]
+        val leaf = midImmediateTemplateArgument(c: c, argument: source)
+        immediate.append(leaf)
+        captures.append(false)
+        if source.isInout {
+            hasInoutArgument = true
+            // Getters in a deferred access execute before the parent call.
+            // Keep snapshots even for arguments written after that marker.
+            if !leaf { delayedAccess = true }
+        }
         sourceI += 1U64
+    }
+    mut val laterEffect = delayedAccess
+    sourceI = sources.count()
+    while sourceI > 0U64 {
+        sourceI -= 1U64
+        captures.set(i: sourceI, value: laterEffect)
+        if !immediate[sourceI] { laterEffect = true }
     }
     if !hasInoutArgument {
         mut val ordinaryArgs: Array[MidOperand] = []
         mut val ordinaryI: U64 = 0U64
         while ordinaryI < sources.count() {
-            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[ordinaryI])
+            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[ordinaryI], captureValue: captures[ordinaryI])
             match argument.error { MidBuildError.None => {} _ => { return argument.error } }
             if !midCurrentBlockIsOpen(state: state) { return <MidBuildError.None /> }
             ordinaryArgs.append(argument.operand)
@@ -1787,7 +1855,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
             match argument.error { MidBuildError.None => {} _ => { return argument.error } }
             args.append(argument.argument)
         } else {
-            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i])
+            val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i], captureValue: captures[i])
             match argument.error { MidBuildError.None => {} _ => { return argument.error } }
             args.append(midNormalizeCallArgument(state: inout state, operand: argument.operand))
         }

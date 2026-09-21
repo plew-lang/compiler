@@ -6,6 +6,13 @@ fn change() -> I64 { number = 2I64 text = "after" return 0I64 }
 fn consume(first: I64, second: I64) { print(first) }
 fn consumeText(first: String, second: I64) { print(first) }
 fn defaulted(first: I64, second: I64 = change()) { print(first) }
+fn fromParameter(value: String) { consumeText(first: value, second: change()) }
+struct Snapshot { pub val value: String }
+pub impl Snapshot { factory }
+mut val snapshot = <Snapshot value="before" />
+fn replaceSnapshot() -> I64 { snapshot = <Snapshot value="after" /> return 0I64 }
+fn consumeSnapshot(first: Snapshot, second: I64) { print(first.value) }
+fn fromSnapshot(value: Snapshot) { consumeSnapshot(first: value, second: replaceSnapshot()) }
 fn main() {
     consume(first: number, second: change())
     number = 1I64
@@ -15,4 +22,7 @@ fn main() {
     defaulted(first: number)
     text = "before"
     consumeText(first: text, second: change())
+    text = "before"
+    fromParameter(value: text)
+    fromSnapshot(value: snapshot)
 }
