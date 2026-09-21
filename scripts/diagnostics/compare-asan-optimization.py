@@ -168,8 +168,8 @@ int main(int argc, char **argv) {
                 if (marker and marker not in text) or (marker is None and 'Sanitizer' in text):
                     raise RuntimeError(f'control detection mismatch: {log}')
 
-        cases = ['tests/run/mid_body_type_results.pw', 'tests/run/mid_copy_contract_verify.pw',
-                 'tests/run/access_call_result_nested_index.pw', 'tests/reject/unknown_identifier_generic.pw']
+        cases = ['tests/fixtures/run/mid_body_type_results.pw', 'tests/fixtures/run/mid_copy_contract_verify.pw',
+                 'tests/fixtures/run/access_call_result_nested_index.pw', 'tests/fixtures/reject/unknown_identifier_generic.pw']
         expected_hash = {}
         # Compare candidates linked against the SAME LLVM. The adopted carrier
         # may use another LLVM whose intrinsic attributes print differently.

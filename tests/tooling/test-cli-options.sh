@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/../.."
 PLEWC="${PLEWC:-./plewc}"
 task_dir=$(mktemp -d /tmp/plew-cli-options.XXXXXX)
-source=tests/run/mid_build_expr_stmt_category.pw
+source=tests/fixtures/run/mid_build_expr_stmt_category.pw
 for mode in --emit-mid-coverage --require-mid; do
     baseline_status=0
     "$PLEWC" "$mode" "$source" > "$task_dir/baseline.ll" 2> "$task_dir/baseline.err" || baseline_status=$?

@@ -79,8 +79,8 @@ chmod +x "$output"
         for name, body, expected_pass in cases:
             for stdin in (False, True) if phase == 'run' else (False,):
                 case = name + ('_stdin' if stdin else '')
-                path = root / ('tests/run/' + case + '.pw' if phase == 'run'
-                               else 'tests/part/' + case + '/Main.pw')
+                path = root / ('tests/fixtures/run/' + case + '.pw' if phase == 'run'
+                               else 'tests/fixtures/part/' + case + '/Main.pw')
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('#!/bin/sh\n' + ('read value\n' if stdin else '') + body + '\n')
                 path.with_suffix('.out').write_text('expected\n')
@@ -103,7 +103,7 @@ chmod +x "$output"
                            ('printf "expected"', False),
                            ('printf "expected\\n\\n"', False),
                            ('printf "expected\\000\\n"', False)]:
-            path = root / 'tests/run/bytes.pw'
+            path = root / 'tests/fixtures/run/bytes.pw'
             path.write_text('#!/bin/sh\n' + body + '\n')
             path.with_suffix('.out').write_bytes(b'expected\n')
             marker = path.with_suffix('.out.exact')
@@ -169,11 +169,11 @@ worker = '    run_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
     root = Path(directory)
     install_supervisors(root)
-    (root/'tests/run').mkdir(parents=True)
+    (root/'tests/fixtures/run').mkdir(parents=True)
     binary = root/'app'
     for name, body, expected_pass in cases:
         for stdin in (False, True):
-            infile = root/'tests/run/fixture.in'
+            infile = root/'tests/fixtures/run/fixture.in'
             if stdin: infile.write_text('input\n')
             elif infile.exists(): infile.unlink()
             binary.write_text('#!/bin/sh\n' + ('read value\n' if stdin else '') + body + '\n')
@@ -199,7 +199,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
         for code in (0, 1, 7, 143):
             compiler.write_text(f'#!/bin/sh\necho "plewc: error: diagnostic" >&2\nexit {code}\n')
             compiler.chmod(0o755)
-            path = 'tests/reject/fixture.pw' if reject else 'tests/run/fixture.pw'
+            path = 'tests/fixtures/reject/fixture.pw' if reject else 'tests/fixtures/run/fixture.pw'
             result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh',path,str(root/'error')],
                                     cwd=root,capture_output=True,text=True)
             expected = code == (1 if reject else 0)
@@ -209,7 +209,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
 
     compiler.write_text('#!/bin/sh\necho "[trace-phase] fixture:start" >&2\nexit 1\n')
     compiler.chmod(0o755)
-    result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/reject/fixture.pw',str(root/'error')],
+    result = subprocess.run(['sh','-c','f=$1; err=$2\n'+worker,'sh','tests/fixtures/reject/fixture.pw',str(root/'error')],
                             cwd=root,capture_output=True,text=True)
     assert result.returncode == 0 and result.stdout.startswith('FAIL '), result
     assert 'missing rejection diagnostic' in result.stdout, result

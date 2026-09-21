@@ -10,14 +10,14 @@ import tempfile
 from unittest.mock import patch
 
 root = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('ownership', root / 'tests/harness/asan-ownership.py')
+spec = importlib.util.spec_from_file_location('ownership', root / 'tests/sanitizer/asan-ownership.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 with tempfile.TemporaryDirectory() as directory:
     sandbox = Path(directory)
-    (sandbox / 'tests/harness').mkdir(parents=True)
+    (sandbox / 'tests/sanitizer').mkdir(parents=True)
     (sandbox / 'input.pw').write_text('fixture')
-    (sandbox / 'tests/harness/asan-ownership-cases.txt').write_text('input.pw\n')
+    (sandbox / 'tests/sanitizer/asan-ownership-cases.txt').write_text('input.pw\n')
     env = {'TMP': directory, 'OPT': '/fixture/bin/opt', 'CLANG': '/fixture/bin/clang', 'RT': '/fixture/runtime.c', 'PLEW_TEST_JOBS': '1'}
     for failure in (None, 'control-missed', 'instrument', 'link', 'compile', 'diagnostic'):
         def run(argv, **kwargs):

@@ -74,7 +74,7 @@ count_cases() {
 #     would otherwise silently drop that test from coverage — the runners skip
 #     unpaired files without a word. ---
 hygiene=""
-for f in tests/run/*.out tests/run/*.in tests/run/*.c tests/run/*.ll.expect tests/run/*.out.exact; do
+for f in tests/fixtures/run/*.out tests/fixtures/run/*.in tests/fixtures/run/*.c tests/fixtures/run/*.ll.expect tests/fixtures/run/*.out.exact; do
     [ -f "$f" ] || continue
     case "$f" in
         *.out.exact) pw="${f%.out.exact}.pw" ;;
@@ -83,14 +83,14 @@ for f in tests/run/*.out tests/run/*.in tests/run/*.c tests/run/*.ll.expect test
     esac
     [ -f "$pw" ] || hygiene="$hygiene orphan:$f"
 done
-for pw in tests/run/*.pw; do
+for pw in tests/fixtures/run/*.pw; do
     [ -f "${pw%.pw}.out" ] || hygiene="$hygiene no-golden:$pw"
 done
-for f in tests/panic/*.panic; do
+for f in tests/fixtures/panic/*.panic; do
     [ -f "$f" ] || continue
     [ -f "${f%.panic}.pw" ] || hygiene="$hygiene orphan:$f"
 done
-for pw in tests/panic/*.pw; do
+for pw in tests/fixtures/panic/*.pw; do
     [ -f "${pw%.pw}.panic" ] || hygiene="$hygiene no-golden:$pw"
 done
 
@@ -98,10 +98,10 @@ done
 python3 ./tests/tooling/test-runner-exit-status.py
 
 # --- run/ : compile, link, run, compare stdout to the golden .out ---
-run_total=$(count_cases tests/run/*.pw)
+run_total=$(count_cases tests/fixtures/run/*.pw)
 progress_start run "$run_total"
-run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
-    f="$1"; name=$(basename "$f" .pw); out="tests/run/$name.out"
+run_results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+    f="$1"; name=$(basename "$f" .pw); out="tests/fixtures/run/$name.out"
     [ -f "$out" ] || exit 0
     ll="/tmp/t_$name.ll"; bin="/tmp/t_$name"
     if ! python3 ./scripts/support/watch-command.py -- "$PLEWC" "$f" > "$ll" 2>/dev/null; then echo "FAIL $name(reject)"; exit 0; fi
@@ -109,17 +109,17 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     # behaviour is intentionally identical to an older lowering.  `.ll.expect`
     # contains one stable literal required in the generated LLVM; normal run
     # tests need no such companion.
-    ir_expect="tests/run/$name.ll.expect"
+    ir_expect="tests/fixtures/run/$name.ll.expect"
     if [ -f "$ir_expect" ] && ! grep -qF "$(cat "$ir_expect")" "$ll"; then echo "FAIL $name(ir)"; exit 0; fi
     # Runtime output cannot detect an unnecessary metadata read. Check the
     # final-owner release branches in the actual generated LLVM for this fixture.
-    if [ "$name" = array_drop_count ] && ! python3 ./tests/codegen/test-array-release-count.py "$ll" >/dev/null; then
+    if [ "$name" = array_drop_count ] && ! python3 ./tests/compiler/codegen/test-array-release-count.py "$ll" >/dev/null; then
         echo "FAIL $name(release-count-ir)"; exit 0
     fi
     extra_c=""
-    [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
+    [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
     if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
-    infile="tests/run/$name.in"
+    infile="tests/fixtures/run/$name.in"
     status=0
     if [ -f "$infile" ]; then python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > "$bin.stdout" 2>/dev/null || status=$?
     else python3 ./scripts/support/watch-command.py -- "$bin" > "$bin.stdout" 2>/dev/null || status=$?; fi
@@ -141,15 +141,15 @@ skip=0
 
 # Architecture, diagnostic, and intrinsic contracts retained by the test inventory.
 for gate in \
-    tests/architecture/test-generic-method-canonical-body.sh \
-    tests/architecture/test-loader-no-value-parser-fallback.sh \
+    tests/compiler/architecture/test-generic-method-canonical-body.sh \
+    tests/compiler/architecture/test-loader-no-value-parser-fallback.sh \
     tests/tooling/test-measure-self-compile-input-fingerprint.sh \
-    tests/architecture/test-mid-capture-cell-ownership.sh \
-    tests/codegen/test-mid-core-string-intrinsics.sh \
-    tests/codegen/test-mid-ffi-intrinsics.sh \
-    tests/architecture/test-semantic-closure-body-descriptor.sh \
-    tests/architecture/test-syntax-direct-extern-builder.sh \
-    tests/architecture/test-syntax-direct-impl-builder.sh \
+    tests/compiler/architecture/test-mid-capture-cell-ownership.sh \
+    tests/compiler/codegen/test-mid-core-string-intrinsics.sh \
+    tests/compiler/codegen/test-mid-ffi-intrinsics.sh \
+    tests/compiler/architecture/test-semantic-closure-body-descriptor.sh \
+    tests/compiler/architecture/test-syntax-direct-extern-builder.sh \
+    tests/compiler/architecture/test-syntax-direct-impl-builder.sh \
     tests/tooling/test-trace-phase-progress.sh; do
     if sh "./$gate"; then
         :
@@ -171,13 +171,13 @@ else
     fail=$((fail + 1)); failed="$failed self-host-measurement"
 fi
 
-if sh ./tests/architecture/test-final-call-evaluation-plan.sh; then
+if sh ./tests/compiler/architecture/test-final-call-evaluation-plan.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed final-call-evaluation-plan"
 fi
 
-if sh ./tests/architecture/test-call-template-scalar-storage.sh; then
+if sh ./tests/compiler/architecture/test-call-template-scalar-storage.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed call-template-scalar-storage"
@@ -192,7 +192,7 @@ fi
 # Inherited fields retain their newtype declaration identity.
 
 # Inherited calls use shared, demand-driven typed boundaries.
-if sh ./tests/codegen/test-mid-newtype-adapters.sh; then
+if sh ./tests/compiler/codegen/test-mid-newtype-adapters.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-newtype-adapters"
@@ -205,7 +205,7 @@ fi
 # Reference cell control preserves borrowed inputs and owned results.
 
 # OS entropy has a declaration-owned closed runtime target.
-if sh ./tests/codegen/test-mid-entropy.sh; then
+if sh ./tests/compiler/codegen/test-mid-entropy.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-entropy"
@@ -242,19 +242,19 @@ fi
 # exact writable place. The surrounding factory-heavy main is intentionally
 # outside this gate; only the isolated mutating helper is the Mid boundary.
 
-if sh ./tests/codegen/test-mid-strong-cell.sh; then
+if sh ./tests/compiler/codegen/test-mid-strong-cell.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-strong-cell"
 fi
 
-if sh ./tests/codegen/test-mid-reference-read.sh; then
+if sh ./tests/compiler/codegen/test-mid-reference-read.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-reference-read"
 fi
 
-if sh ./tests/codegen/test-mid-reference-write.sh; then
+if sh ./tests/compiler/codegen/test-mid-reference-write.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-reference-write"
@@ -279,12 +279,12 @@ fi
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.
-if sh ./tests/architecture/test-mid-assign-diagnostics.sh; then
+if sh ./tests/compiler/architecture/test-mid-assign-diagnostics.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-assign-diagnostics"
 fi
-if sh ./tests/architecture/test-mid-operand-diagnostics.sh; then
+if sh ./tests/compiler/architecture/test-mid-operand-diagnostics.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-operand-diagnostics"
@@ -293,7 +293,7 @@ fi
 # Entry and ordinary functions must both consume the frozen canonical body.
 # This guards the architectural one-way boundary independently of fixture
 # execution, which is temporarily unavailable for fresh WIP candidates.
-if sh ./tests/codegen/test-mid-canonical-production.sh; then
+if sh ./tests/compiler/codegen/test-mid-canonical-production.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-canonical-production"
@@ -302,7 +302,7 @@ fi
 # The compiler parser must not hide the old value-AST → freeze path behind the
 # immutable syntax arena.  This is a structural complement to the runtime
 # SyntaxFile accessor corpus.
-if sh ./tests/architecture/test-syntax-direct-builder.sh; then
+if sh ./tests/compiler/architecture/test-syntax-direct-builder.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed syntax-direct-builder"
@@ -311,7 +311,7 @@ fi
 # Macro-facing value APIs are adapters over the same direct SyntaxFile parser;
 # this prevents a second recursive-descent parser from surviving behind a
 # compatible TopItemAst / ExprAst result.
-if sh ./tests/architecture/test-syntax-value-materializer.sh; then
+if sh ./tests/compiler/architecture/test-syntax-value-materializer.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed syntax-value-materializer"
@@ -320,7 +320,7 @@ fi
 # The macro value parser is a public explicit boundary, not an ambient normal
 # compiler dependency.  Keep its endpoints out of normal compiler imports so
 # self-hosted generic codegen cannot root their bodies accidentally.
-if sh ./tests/architecture/test-normal-compiler-no-macro-parser-root.sh; then
+if sh ./tests/compiler/architecture/test-normal-compiler-no-macro-parser-root.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed normal-compiler-no-macro-parser-root"
@@ -328,44 +328,44 @@ fi
 
 # Frozen conversion facts must stay canonical all the way through LLVM
 # lowering; a draft proof thaw here would reintroduce the migration bridge.
-if sh ./tests/architecture/test-mid-canonical-conversion.sh; then
+if sh ./tests/compiler/architecture/test-mid-canonical-conversion.sh; then
     :
 else
     fail=$((fail + 1)); failed="$failed mid-canonical-conversion"
 fi
 
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
-if python3 ./tests/codegen/test-existential-mid-bodies.py; then
+if python3 ./tests/compiler/codegen/test-existential-mid-bodies.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed existential-mid-bodies"
 fi
 
-if python3 ./tests/codegen/test-final-await-facts.py; then
+if python3 ./tests/compiler/codegen/test-final-await-facts.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed final-await-facts"
 fi
 
-if python3 ./tests/architecture/test-final-enum-ownership.py; then
+if python3 ./tests/compiler/architecture/test-final-enum-ownership.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed final-enum-ownership"
 fi
 
-if python3 ./tests/codegen/test-bounds-lowering.py; then
+if python3 ./tests/compiler/codegen/test-bounds-lowering.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed bounds-lowering"
 fi
 
-if python3 ./tests/codegen/test-value-abi.py; then
+if python3 ./tests/compiler/codegen/test-value-abi.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed value-abi"
 fi
 
-if python3 ./tests/codegen/test-closure-environment-mid.py; then
+if python3 ./tests/compiler/codegen/test-closure-environment-mid.py; then
     :
 else
     fail=$((fail + 1)); failed="$failed closure-environment-mid"
@@ -375,7 +375,7 @@ fi
 # instances.  This deliberately does not pin a permanent legacy fallback: as
 # the corpus reaches zero coverage the expected gate result changes from 1 to
 # 0, but disagreement or unstructured output is always a failure.
-mid_coverage_results=$(python3 ./tests/codegen/test-mid-coverage.py || echo "FAIL mid-coverage")
+mid_coverage_results=$(python3 ./tests/compiler/codegen/test-mid-coverage.py || echo "FAIL mid-coverage")
 mcpass=$(printf '%s\n' "$mid_coverage_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$mid_coverage_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
@@ -390,7 +390,7 @@ done
 # receiver. The old Mid lowering has two such retains and this is therefore a
 # real red gate for the CallResolution passing contract.
 mid_borrowed_read_receiver_results=$(
-    source="tests/run/mid_borrowed_read_receiver_cfg_lowering.pw"
+    source="tests/fixtures/run/mid_borrowed_read_receiver_cfg_lowering.pw"
     ll="/tmp/t_mid_borrowed_read_receiver_$$.ll"
     if ! "$PLEWC" --emit-mid-coverage "$source" >"$ll" 2>/dev/null; then
         echo "FAIL mid-borrowed-read-receiver(emit)"; exit 0
@@ -419,12 +419,12 @@ done
 #     (panic = abort, spec/11) with the expected panic text on stderr
 #     (overflow / div-by-zero / OOB / assert). The checked-arithmetic floor
 #     (plew_<w><Op>) is held to loud behaviour. 134 = 128 + SIGABRT. ---
-panic_total=$(count_cases tests/panic/*.pw)
+panic_total=$(count_cases tests/fixtures/panic/*.pw)
 progress_start panic "$panic_total"
-panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+panic_results=$(printf '%s\n' tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
-    want=$(cat "tests/panic/$name.panic")
+    want=$(cat "tests/fixtures/panic/$name.panic")
     ll="/tmp/t_panic_$name.ll"; bin="/tmp/t_panic_$name"; perr="/tmp/t_panic_$name.err"
     if ! python3 ./scripts/support/watch-command.py -- "$PLEWC" "$pw" > "$ll" 2>/dev/null; then echo "FAIL panic/$name(reject)"; exit 0; fi
     if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
@@ -444,12 +444,12 @@ done
 #     (clean nonzero exit). The shared frontend (incl. the backend-independent
 #     acceptance pass verifyProgram) rejects these. A compiler death by signal
 #     (>= 128, e.g. its own panic/abort) is a crash, not a rejection — FAIL. ---
-reject_total=$(count_cases tests/reject/*.pw)
+reject_total=$(count_cases tests/fixtures/reject/*.pw)
 progress_start reject "$reject_total"
-reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+reject_results=$(printf '%s\n' tests/fixtures/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
-    want="tests/reject/$name.err"
+    want="tests/fixtures/reject/$name.err"
     perr="/tmp/t_reject_$name.err"
     code=0
     sh -c "python3 ./scripts/support/watch-command.py -- \"\$PLEWC\" \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
@@ -466,9 +466,9 @@ done
 
 # --- part/ : multi-file modules (each subdir's Main.pw stitches siblings via
 #     `part`). Compile the root, run, compare to Main.out. ---
-part_total=$(count_cases tests/part/*/Main.pw tests/part/Main.pw)
+part_total=$(count_cases tests/fixtures/part/*/Main.pw tests/fixtures/part/Main.pw)
 progress_start part "$part_total"
-part_results=$(printf '%s\n' tests/part/*/Main.pw tests/part/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
+part_results=$(printf '%s\n' tests/fixtures/part/*/Main.pw tests/fixtures/part/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     dir=$(dirname "$main")
     name=$(basename "$dir")
@@ -488,9 +488,9 @@ done
 # --- partreject/ : multi-file modules whose Main.pw the FRONT-END must reject —
 #     cross-module rules that need real loaded sibling modules (e.g. a circular
 #     import, which a single file cannot express). ---
-partreject_total=$(count_cases tests/partreject/*/Main.pw)
+partreject_total=$(count_cases tests/fixtures/partreject/*/Main.pw)
 progress_start partreject "$partreject_total"
-pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
+pr_results=$(printf '%s\n' tests/fixtures/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     name=$(basename "$(dirname "$main")")
     want="$(dirname "$main")/Main.err"
