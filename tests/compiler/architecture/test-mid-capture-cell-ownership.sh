@@ -15,7 +15,7 @@ require() {
 require 'InitializeCaptureCell(destination: MidPlace, value: MidRvalue)' src/Mid/Ir.pw
 require 'ReleaseCaptureCell(place: MidPlace)' src/Mid/Ir.pw
 require 'MidStatement.InitializeCaptureCell' src/Mid/Build.pw
-require 'MidStatement.ReleaseCaptureCell' src/Mid/Drop.pw
+require 'else if declaration.isCaptureCell { c.mid.statements.append(<MidStatementNode tag=10U64 destination=place />) }' src/Mid/Drop.pw
 # Canonical storage uses tags, not the draft enum at the LLVM boundary.
 python3 - <<'PYCELL'
 from pathlib import Path

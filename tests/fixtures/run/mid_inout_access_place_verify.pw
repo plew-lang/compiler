@@ -12,11 +12,12 @@ fn accepted(alive: Bool, validPlace: Bool, tag: U64) -> Bool {
     val integer = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
     val storage = <MidPlace local=0U64 typeTerm=integer />
     val temporary = <MidPlace local=1U64 typeTerm=integer />
+    val result = <MidPlace local=2U64 typeTerm=0U64 />
     mut val before: Array[MidStatement] = []
-    mut val after: Array[MidStatement] = [<MidStatement.Drop place=temporary />]
+    mut val after: Array[MidStatement] = [<MidStatement.Drop place=temporary />, <MidStatement.Drop place=result />]
     if alive { after.append(<MidStatement.Drop place=storage />) }
     else { before.append(<MidStatement.Drop place=storage />) }
-    val body = <MidBody locals=[<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=before terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Borrow place=temporary capability=<MidBorrowCapability.Inout /> />] destination=temporary target=1U64 /> />, <MidBlock statements=after terminator=<MidTerminator.Return /> />] entry=0U64 />
+    val body = <MidBody locals=[<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=[<MidBlock statements=before terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Borrow place=temporary capability=<MidBorrowCapability.Inout /> />] destination=result target=1U64 /> />, <MidBlock statements=after terminator=<MidTerminator.Return /> />] entry=0U64 />
     val canonical = compiler.mid.store(body: body)
     val stored = compiler.mid.bodies[canonical.body - 1U64]
     val call = compiler.mid.terminators[compiler.mid.blocks[stored.blocks.start].terminator - 1U64]

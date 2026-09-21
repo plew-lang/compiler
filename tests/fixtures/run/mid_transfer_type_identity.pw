@@ -7,7 +7,7 @@ import /Mid/Verify with { MidVerifyError }
 
 fn accepted(compiler: inout Comp, source: U64, target: U64) -> Bool {
     val destination = <MidPlace local=0U64 typeTerm=target />
-    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=target sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=source sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[<MidStatement.Drop place=destination />, <MidStatement.Overwrite destination=destination source=<MidPlace local=1U64 typeTerm=source /> />] terminator=<MidTerminator.Return /> />] />)
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=target sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=source sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=[<MidStatement.Drop place=destination />, <MidStatement.Overwrite destination=destination source=<MidPlace local=1U64 typeTerm=source /> />, <MidStatement.Drop place=destination />] terminator=<MidTerminator.Return /> />] />)
     return match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => { give true } _ => { give false } }
 }
 fn main() {

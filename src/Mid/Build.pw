@@ -2767,7 +2767,8 @@ export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> Mid
         if !c.newtypeBoundaryTypesCompatible(source: executable.resultType, target: surface.resultType) { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> /> }
         exit = <MidTerminator.ReturnValue value=<MidOperand.Move place=midAdapterPlace(c: inout c, local: resultLocal, source: executable.resultType, target: surface.resultType) /> />
     }
-    val body = <MidBody bodyInstance=bodyId sourceFunction=fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=parameterCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=instance.adapterCallResolutionId - 1U64 /> receiver=receiver args=args destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=exit />] entry=0U64 />
+    val cleanupCount = if function.hasRet { give parameterCount } else { give locals.count() }
+    val body = <MidBody bodyInstance=bodyId sourceFunction=fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=cleanupCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=instance.adapterCallResolutionId - 1U64 /> receiver=receiver args=args destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=exit />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
     return <MidBodyBuild body=body canonical=canonical />
@@ -2805,7 +2806,7 @@ fn buildMidExistentialWitness(c: inout Comp, bodyId: U64, resolutionIndex: U64, 
     val result = <MidPlace local=resultLocal typeTerm=member.sourceResultType />
     mut val statements: Array[MidStatement] = []
     mut val exit: MidTerminator = <MidTerminator.Return />
-    mut val cleanupCount = resultLocal
+    mut val cleanupCount = if hasResult { give resultLocal } else { give locals.count() }
     if hasResult {
         mut val returned = result
         if !identity {

@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Index, IndexSet }
 
 // The outer indexed mutation has two independently selected getter inputs:
 // its receiver is `rows[order[0]]`, while its key is a separate getter result
@@ -19,9 +20,27 @@ fn resetOrdered(rows: inout Array[Array[Counter]], order: Array[U64]) -> I32 {
     return rows[order[0U64]][0U64].takeAndReset()
 }
 
+// A materialized getter key may own ARC storage, not just a scalar index.
+struct KeyedCounter { pub mut val value: Counter }
+pub impl KeyedCounter { factory }
+pub impl KeyedCounter as Index[String] {
+    type Output = Counter
+    fn index(key: String) -> Counter { return self.value }
+}
+pub impl KeyedCounter as IndexSet[String] {
+    type Value = Counter
+    inout fn indexSet(key: String, value~: Counter) { self.value = value }
+}
+fn resetNamed(table: inout KeyedCounter, names: Array[String]) -> I32 {
+    return table[names[0U64]].takeAndReset()
+}
+
 fn main() {
     mut val rows: Array[Array[Counter]] = []
     rows.append([<Counter n=7I32 />])
     print(resetOrdered(rows: inout rows, order: [0U64]))
     print(rows[0U64][0U64].n)
+    mut val table = <KeyedCounter value=<Counter n=13I32 /> />
+    print(resetNamed(table: inout table, names: ["named"]))
+    print(table.value.n)
 }

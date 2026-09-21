@@ -431,12 +431,6 @@ fn canonicalAccessChainAt(c: Comp, body: MidBodyNode, site: MidCanonicalAccessSi
     return current
 }
 
-fn canonicalAccessSetterHasResult(c: Comp, access: SemanticAccess) -> Bool {
-    if access.writeResolution >= c.arena.finalCallees.count() { return false }
-    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
-    return setter.callee < c.arena.functionCount() && c.arena.functionAt(index: setter.callee).hasRet
-}
-
 fn canonicalAccessMarkerLocalBase(c: Comp, body: MidBodyNode, term: MidTerminatorNode, localBase: U64, marker: U64) -> U64 {
     mut val local: U64 = localBase
     mut val markerI: U64 = 0U64
@@ -444,9 +438,7 @@ fn canonicalAccessMarkerLocalBase(c: Comp, body: MidBodyNode, term: MidTerminato
         val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
         mut val stage: U64 = 0U64
         while stage < site.chainLen {
-            local = local + 1U64
-            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
-            if accessId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[accessId - 1U64]) { local = local + 1U64 }
+            local += 2U64
             stage = stage + 1U64
         }
         markerI = markerI + 1U64
@@ -457,18 +449,7 @@ fn canonicalAccessMarkerLocalBase(c: Comp, body: MidBodyNode, term: MidTerminato
 fn canonicalAccessSetterLocal(c: Comp, body: MidBodyNode, term: MidTerminatorNode, localBase: U64, marker: U64, stage: U64) -> U64 {
     val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
     val base: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker)
-    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
-    if accessId == 0U64 { return 0U64 }
-    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
-    if !canonicalAccessSetterHasResult(c: c, access: access) { return base + stage }
-    mut val resultOffset: U64 = 0U64
-    mut val prior: U64 = 0U64
-    while prior < stage {
-        val priorId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: prior)
-        if priorId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[priorId - 1U64]) { resultOffset = resultOffset + 1U64 }
-        prior = prior + 1U64
-    }
-    return base + site.chainLen + resultOffset
+    return base + site.chainLen + stage
 }
 
 fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode) -> MidAccessError {
@@ -528,10 +509,10 @@ fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode) -> MidAccessErr
                 while stage < site.chainLen {
                     val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
                     val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
-                    if canonicalAccessSetterHasResult(c: c, access: access) {
-                        val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
-                        c.mid.locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
-                    }
+                    // Even a Unit-returning call has its own result local.
+                    // Never alias a still-live getter value as a call result.
+                    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+                    c.mid.locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
                     stage = stage + 1U64
                 }
                 markerI = markerI + 1U64
@@ -878,7 +859,7 @@ fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, term: MidTermin
     val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: access.writeResolution)
     if receiver == 0U64 || target == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
     val destinationLocal: U64 = canonicalAccessSetterLocal(c: c, body: body, term: term, localBase: localBase, marker: marker, stage: stage)
-    val destinationTerm: U64 = if canonicalAccessSetterHasResult(c: c, access: access) { give setter.resultTypeRef } else { give access.valueTerm }
+    val destinationTerm: U64 = setter.resultTypeRef
     val destination: U64 = canonicalAccessAppendPlace(c: inout c, local: destinationLocal, typeTerm: destinationTerm)
     val argumentStart: U64 = c.mid.callArguments.count()
     val key: U64 = canonicalAccessAppendSelectedArgument(c: inout c, operandId: rawKey, resolution: access.writeResolution, index: 0U64)
@@ -893,18 +874,17 @@ fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, term: MidTermin
     c.mid.blocks.append(<MidBlockNode terminator=c.mid.terminators.count() />)
     val cleanupStart: U64 = c.mid.statements.count()
     c.mid.statements.append(<MidStatementNode tag=3U64 destination=valuePlace />)
-    if canonicalAccessSetterHasResult(c: c, access: access) { c.mid.statements.append(<MidStatementNode tag=3U64 destination=destination />) }
+    c.mid.statements.append(<MidStatementNode tag=3U64 destination=destination />)
     if marker == 0U64 && stage + 1U64 == site.chainLen {
         mut val recipeI: U64 = plan.materializedInputs.count()
         while recipeI > 0U64 {
             recipeI -= 1U64
             val input: SemanticAccessInput = c.arena.semanticAccessInputs[plan.materializedInputs[recipeI] - 1U64]
-            if input.tag == 7U64 {
-                val referenceTerm: U64 = c.arena.semanticAccessInputs[input.base - 1U64].typeTerm
-                val local: U64 = localBase + mutableLocalCount + recipeI
-                val referencePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: local, typeTerm: referenceTerm)
-                c.mid.statements.append(<MidStatementNode tag=3U64 destination=referencePlace />)
-            }
+            mut val localTerm = input.typeTerm
+            if input.tag == 7U64 { localTerm = c.arena.semanticAccessInputs[input.base - 1U64].typeTerm }
+            val local: U64 = localBase + mutableLocalCount + recipeI
+            val place = canonicalAccessAppendPlace(c: inout c, local: local, typeTerm: localTerm)
+            c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />)
         }
     }
     mut val continuation: U64 = 0U64
@@ -930,9 +910,7 @@ fn canonicalAccessMutableLocalCount(c: Comp, body: MidBodyNode, term: MidTermina
         val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
         mut val stage: U64 = 0U64
         while stage < site.chainLen {
-            count = count + 1U64
-            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
-            if accessId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[accessId - 1U64]) { count = count + 1U64 }
+            count += 2U64
             stage = stage + 1U64
         }
         markerI = markerI + 1U64

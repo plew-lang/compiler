@@ -11,6 +11,7 @@ fn replacement(reference: U64, pointee: U64, release: Bool, overwrite: Bool) -> 
     mut val statements: Array[MidStatement] = []
     if release { statements.append(<MidStatement.Drop place=destination />) }
     if overwrite { statements.append(<MidStatement.Overwrite destination=destination source=source />) }
+    statements.append(<MidStatement.Drop place=<MidPlace local=0U64 typeTerm=reference /> />)
     return <MidBody locals=[<MidLocalDecl typeTerm=reference sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />, <MidLocalDecl typeTerm=pointee sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=true />] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] entry=0U64 />
 }
 fn valid(error: MidVerifyError) -> Bool {
