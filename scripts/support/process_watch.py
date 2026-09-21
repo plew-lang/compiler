@@ -102,11 +102,12 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                     sys.stderr.buffer.write(data)
                     sys.stderr.buffer.flush()
                 pending += data
-                while b'\n' in pending:
-                    line, pending = pending.split(b'\n', 1)
+                lines = pending.split(b'\n')
+                pending = lines.pop()
+                for line in lines:
                     phase = line.startswith(b'[trace-phase]')
                     llvm = line.startswith((b'Running pass:', b'Running analysis:', b'Invalidating analysis:')) or (line.startswith(b'[') and b" Executing Pass '" in line)
-                    nested = re.match(rb'\[trace-command log=(.+) events=(\d+)\]', line)
+                    nested = re.match(rb'\[trace-command log=(.+) events=(\d+)\]', line) if line.startswith(b'[trace-command ') else None
                     progress = llvm or (phase and line != last_phase)
                     if nested:
                         name, value = nested[1], int(nested[2])

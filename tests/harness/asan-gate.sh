@@ -93,45 +93,12 @@ python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debu
 python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.bc" "$RT" "$LIB" -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
-echo "== A. self-compile under ASan =="
-if ! python3 ./scripts/support/trace-command.py "$TMP/self.err" -- ./plewc_asan --trace-phases src/_.pw > /dev/null; then
-    if grep -q "ERROR: AddressSanitizer" "$TMP/self.err"; then
-        echo "  FAIL self-compile:"; grep -A3 "ERROR: AddressSanitizer" "$TMP/self.err" | head -8
-    else
-        # a non-ASan failure (crash, reject) must not read as clean.
-        echo "  FAIL self-compile (non-ASan):"; head -3 "$TMP/self.err" | sed 's/^/  /'
-    fi
-    fail=1
+# Prepare the raw compiler alongside A/B; join before C reuses all CPU slots.
+export PLEW_TEST_JOBS="$JOBS"
+if ! python3 -B ./tests/sanitizer/asan-schedule.py; then
+    exit 1
 fi
-[ "$fail" = 0 ] && echo "  clean"
-
-echo "== B. compile corpus under ASan =="
-b_results=$(ls tests/fixtures/run/*.pw tests/fixtures/reject/*.pw tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
-    f="$1"; err="$TMP/b_$(printf "%s" "$f" | tr "/" "_").err"
-    compile_exit=0
-    python3 ./scripts/support/trace-command.py "$err" -- ./plewc_asan --trace-phases "$f" > /dev/null || compile_exit=$?
-    expected_exit=0
-    case "$f" in tests/fixtures/reject/*) expected_exit=1 ;; esac
-    if grep -q "ERROR: AddressSanitizer" "$err"; then
-        echo "FAIL compiling $f: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
-    elif [ "$compile_exit" -ne "$expected_exit" ]; then
-        echo "FAIL compiling $f: expected exit=$expected_exit, got=$compile_exit"
-    elif [ "$expected_exit" -eq 1 ] && ! grep -q "^plewc: error:" "$err"; then
-        echo "FAIL compiling $f: missing rejection diagnostic"
-    else
-        echo "RAN $f"
-    fi
-' sh | progress_results B)
-bfail=$(printf '%s' "$b_results" | grep -c '^FAIL' || true)
-bn=$(printf '%s\n' "$b_results" | grep -c '^RAN' || true)
-bexpected=$(printf '%s\n' tests/fixtures/run/*.pw tests/fixtures/reject/*.pw tests/fixtures/panic/*.pw | wc -l | tr -d ' ')
-if [ "$bfail" = 0 ] && [ "$bn" = "$bexpected" ]; then
-    echo "  clean ($bn files)"
-else
-    echo "  completed $bn/$bexpected successful compilations"
-    printf '%s\n' "$b_results" | sed 's/^/  /'
-    fail=1
-fi
+trap 'rm -f ./plewc_asan ./plewc_asan_ownership' EXIT
 
 echo "== C. run corpus under ASan + LeakSanitizer =="
 # C/D use identical C compilation flags and separate program processes. Share
@@ -145,8 +112,8 @@ c_results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c 
     ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     extra_c=""; [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
-    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     run_exit=0
     infile="tests/fixtures/run/$name.in"
     if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
@@ -193,8 +160,8 @@ d_results=$(printf '%s\n' tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -
     [ -f "tests/fixtures/panic/$name.panic" ] || { echo "FAIL $f: missing panic expectation"; exit 0; }
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     want=$(cat "tests/fixtures/panic/$name.panic")
     code=0
     # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
@@ -224,7 +191,7 @@ else
 fi
 
 echo "== E. compiler ownership before optimization =="
-if ! python3 -B ./tests/sanitizer/asan-ownership.py; then
+if ! python3 -B ./tests/sanitizer/asan-ownership.py --check; then
     fail=1
 fi
 

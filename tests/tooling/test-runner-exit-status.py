@@ -163,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix='plew-gen-status-') as directory:
             print(f'PASS gen-status/{phase}/{code}', flush=True)
 
 # Actual ASan run-status branch, without requiring a sanitizer installation.
-asan = (Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text()
+asan = ((Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text() + (Path(__file__).resolve().parents[2] / 'tests/harness/asan-compile-corpus.sh').read_text())
 worker = asan.split('    run_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = '    run_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
@@ -188,7 +188,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-status-') as directory:
             print(f'PASS asan-status/{name}/stdin={stdin}', flush=True)
 
 # Compile corpus must reject only expected diagnostics, never crashes.
-asan = (Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text()
+asan = ((Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text() + (Path(__file__).resolve().parents[2] / 'tests/harness/asan-compile-corpus.sh').read_text())
 worker = asan.split('    compile_exit=0\n', 1)[1].split("\n' sh", 1)[0]
 worker = 'compile_exit=0\n' + worker
 with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
@@ -216,7 +216,7 @@ with tempfile.TemporaryDirectory(prefix='plew-asan-compile-') as directory:
     print('PASS asan-compile/trace-is-not-diagnostic', flush=True)
 
 # Every preparation failure must produce a result instead of disappearing.
-asan = (Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text()
+asan = ((Path(__file__).resolve().parents[2] / 'tests/harness/asan-gate.sh').read_text() + (Path(__file__).resolve().parents[2] / 'tests/harness/asan-compile-corpus.sh').read_text())
 with tempfile.TemporaryDirectory(prefix='plew-asan-preparation-') as directory:
     root = Path(directory)
     install_supervisors(root)

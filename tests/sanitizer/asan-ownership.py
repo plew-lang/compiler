@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
 
 
-def main():
+def main(mode="all"):
     clang_environment.apply()
     tmp = Path(os.environ['TMP']) / 'ownership'
     tmp.mkdir(parents=True, exist_ok=True)
@@ -32,17 +32,26 @@ def main():
             raise RuntimeError(f'{label}: sanitizer diagnostic; {log}')
         return diagnostics
 
+    prepared = False
+
     # Nonvolatile, unused UAF is optimized away by module O1. This control
     # must be instrumented first, just like the compiler below.
-    fixture = ROOT / 'tests/sanitizer/nonvolatile-unused-uaf.ll'
-    command('control-instrument', [opt, '-passes=asan', fixture, '-o', tmp / 'control.bc'])
-    command('control-link', [clang, '-O1', '-fsanitize=address', tmp / 'control.bc', '-o', tmp / 'control'])
-    diagnostics = command('control-run', [tmp / 'control'], expected=1)
-    if 'ERROR: AddressSanitizer: heap-use-after-free' not in diagnostics:
-        raise RuntimeError('nonvolatile UAF control did not detect heap-use-after-free')
     try:
-        command('instrument', [opt, '-debug-pass-manager', '-passes=asan', Path(os.environ['TMP']) / 'pc.ll', '-o', tmp / 'compiler.bc'])
-        command('link', [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-O1', '-fno-omit-frame-pointer', '-fsanitize=address', '-w', tmp / 'compiler.bc', os.environ['RT'], str(Path(opt).parent.parent / 'lib/libLLVM.dylib'), '-o', binary])
+        if mode != "check":
+            binary.unlink(missing_ok=True)
+            fixture = ROOT / 'tests/sanitizer/nonvolatile-unused-uaf.ll'
+            command('control-instrument', [opt, '-passes=asan', fixture, '-o', tmp / 'control.bc'])
+            command('control-link', [clang, '-O1', '-fsanitize=address', tmp / 'control.bc', '-o', tmp / 'control'])
+            diagnostics = command('control-run', [tmp / 'control'], expected=1)
+            if 'ERROR: AddressSanitizer: heap-use-after-free' not in diagnostics:
+                raise RuntimeError('nonvolatile UAF control did not detect heap-use-after-free')
+            command('instrument', [opt, '-debug-pass-manager', '-passes=asan', Path(os.environ['TMP']) / 'pc.ll', '-o', tmp / 'compiler.bc'])
+            command('link', [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-O1', '-fno-omit-frame-pointer', '-fsanitize=address', '-w', tmp / 'compiler.bc', os.environ['RT'], str(Path(opt).parent.parent / 'lib/libLLVM.dylib'), '-o', binary])
+            prepared = True
+            if mode == "prepare":
+                return
+        elif not binary.is_file():
+            raise RuntimeError('raw ownership compiler was not prepared')
         cases = [line.strip() for line in (ROOT / 'tests/sanitizer/asan-ownership-cases.txt').read_text().splitlines() if line.strip() and not line.startswith('#')]
         if not cases or len(cases) != len(set(cases)):
             raise RuntimeError('ownership manifest must be nonempty and unique')
@@ -63,12 +72,19 @@ def main():
                 raise RuntimeError('; '.join(failures))
         print(f'  clean ({len(cases)} files)', flush=True)
     finally:
-        binary.unlink(missing_ok=True)
+        if mode != "prepare" or not prepared:
+            binary.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':
     try:
-        main()
+        import argparse
+        parser = argparse.ArgumentParser()
+        modes = parser.add_mutually_exclusive_group()
+        modes.add_argument("--prepare", action="store_true")
+        modes.add_argument("--check", action="store_true")
+        args = parser.parse_args()
+        main("prepare" if args.prepare else "check" if args.check else "all")
     except (OSError, ValueError, RuntimeError) as error:
         print(f'FAIL raw ownership ASan: {error}', flush=True)
         sys.exit(1)

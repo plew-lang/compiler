@@ -20,7 +20,7 @@ that the others passed.
 | `compiler/frontend/` | Focused tests importing the compiler implementation | manual diagnostics; see its README |
 | `tooling/` | Runner, watchdog, build/measurement and sanitizer orchestration correctness | normal harness and focused Python/shell checks |
 | `sanitizer/` | Sanitizer detection control and raw ownership supplement | ASan E |
-| `harness/` | Normal, generation, dependency and ASan suite orchestration | standard profile entry points |
+| `harness/` | Normal, generation, dependency and ASan suite orchestration | four standard entries plus the internal A/B stage |
 
 `fixtures/` is shared input, not a claim that every fixture is a language
 specification test. Some inputs import compiler internals. Classify by the
@@ -52,6 +52,12 @@ E instruments the compiler before optimization and compiles the inputs listed
 in `sanitizer/asan-ownership-cases.txt`, including self-compilation; the unused
 nonvolatile UAF control must be detected. Keep that manifest as references to
 shared inputs, never copies. Coverage must not be inferred beyond these sets.
+
+E preparation overlaps A/B through `sanitizer/asan-schedule.py`: one CPU slot
+is reserved for preparation, the remaining slots run A/B. With one slot the
+stages run serially. Both must succeed before C starts with the full budget.
+The two large compiler builds never overlap. The raw compiler stays private to
+this invocation; E still executes every manifest input and is never skipped.
 
 ## Adding or changing a test
 

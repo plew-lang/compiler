@@ -46,4 +46,29 @@ with tempfile.TemporaryDirectory() as directory:
             else:
                 assert failure is None, failure
         assert not (sandbox / 'plewc_asan_ownership').exists()
+    labels = []
+    def staged_run(argv, **kwargs):
+        label = Path(argv[2]).stem
+        labels.append(label)
+        text = 'ERROR: AddressSanitizer: heap-use-after-free' if label == 'control-run' else ''
+        Path(argv[2]).write_text(text)
+        if label == 'link':
+            Path(argv[-1]).touch()
+        return subprocess.CompletedProcess(argv, 1 if label == 'control-run' else 0)
+    with patch.object(module, 'ROOT', sandbox), patch.dict(os.environ, env), \
+         patch.object(module.clang_environment, 'apply'), patch.object(module.subprocess, 'run', side_effect=staged_run), \
+         contextlib.redirect_stdout(io.StringIO()):
+        module.main('prepare')
+        assert (sandbox / 'plewc_asan_ownership').is_file()
+        assert labels == ['control-instrument', 'control-link', 'control-run', 'instrument', 'link']
+        labels.clear()
+        module.main('check')
+        assert labels == ['compile-0']
+        assert not (sandbox / 'plewc_asan_ownership').exists()
+        try:
+            module.main('check')
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('missing prepared compiler was accepted')
 print('PASS raw-asan-failure-propagation')
