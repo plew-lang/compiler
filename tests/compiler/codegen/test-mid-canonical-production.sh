@@ -9,6 +9,11 @@ cd "$(dirname "$0")/../../.."
 
 entries="src/Backend/Llvm/Entry.pw src/Backend/Llvm/Any.pw"
 legacy='\bMidBody\b|\bMidInstantiation\b|\bMidAccessElaboration\b|\binstantiateMidBody\b|\belaborateMidAccesses\b|\belaborateMidDrops\b|\bverifyMidBody\b|\bmidInitialLlvmPreflight\b|\bgenLlvmMidBody\b'
+# Draft is construction vocabulary only; no analysis or rewrite API remains.
+if rg -n '\b(analyzeMidOwnership|analyzeMidAccessibility|instantiateMidBody|elaborateMidAccesses|elaborateMidDrops|verifyMidBody)\b' src tests/fixtures --glob '*.pw'; then
+    echo "draft consumer bypasses production canonical passes" >&2
+    exit 1
+fi
 canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyExecutableCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
 
 if rg -n "$legacy" $entries; then

@@ -2487,7 +2487,7 @@ fn midAggregateHasUniqueValue(c: inout Comp, aggregate: SemanticAggregate) -> Bo
 
 // Build the parametric body once from the frozen frontend AST/semantic table.
 // Parameters and receiver are represented by the same declaration identities
-// used at identifier sites; only instantiateMidBody may subsequently ground
+// used at identifier sites; only instantiateCanonicalMidBody may subsequently ground
 // their TypeTerms. This function intentionally does not install Cursor state.
 export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     if fnIdx >= c.arena.functionCount() {

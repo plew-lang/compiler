@@ -689,7 +689,7 @@ pub impl MidBlock { factory }
 // shortcut.  Drop elaboration uses it to preserve source-order destruction
 // while operating exclusively on flat CFG edges.
 export struct MidLocalDecl {
-    // Parametric TypeTerm; instantiateMidBody replaces it with a ground TypeRef
+    // Parametric TypeTerm; instantiateCanonicalMidBody replaces it with a ground TypeRef
     // without re-resolving source spelling.
     pub val typeTerm: U64
     // Parametric-only source; instantiation consumes it under a BodyInstance.
