@@ -1050,7 +1050,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
         }
         match operand.error { MidBuildError.None => {} _ => { return operand } }
         if !midCurrentBlockIsOpen(state: state) { return operand }
-        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand.operand targetTerm=element.targetTerm isBoxed=element.isBoxed />)
+        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=midEvaluatedValue(c: inout c, state: inout state, operand: operand.operand) targetTerm=element.targetTerm isBoxed=element.isBoxed />)
         i += 1U64
     }
     match aggregate.kind {
@@ -1470,6 +1470,32 @@ fn midIndexLocalForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId:
     return <MidIndexLocalBuild local=temporary />
 }
 
+// A value operand must denote the value at this evaluation point, not a
+// source place that a later sibling expression may change. Anonymous whole
+// temporaries already own a completed evaluation; borrows retain their place.
+fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOperand) -> MidOperand {
+    val source: MidPlace = match operand {
+        MidOperand.Copy(place: val place) => {
+            if midTermIsUnique(c: inout c, term: place.typeTerm) { return operand }
+            give place
+        }
+        MidOperand.Move(place: val place) => { give place }
+        _ => { return operand }
+    }
+    if source.rootTag == 1U64 && source.projections.count() == 0U64 && source.local < state.locals.count() {
+        val local = state.locals[source.local]
+        if local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
+    }
+    val ownsUnique = midTermIsUnique(c: inout c, term: source.typeTerm)
+    val local = addMidTemporary(state: inout state, typeTerm: source.typeTerm, isUnique: ownsUnique, typeRecipe: source.typeRecipe)
+    val destination = <MidPlace local=local typeTerm=source.typeTerm typeRecipe=source.typeRecipe />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operand /> />)
+    match operand {
+        MidOperand.Move(place: _) => { return <MidOperand.Move place=destination /> }
+        _ => { return <MidOperand.Copy place=destination /> }
+    }
+}
+
 fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
     mut val built: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
     match argument.source {
@@ -1519,7 +1545,7 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             }
         }
     }
-    return built
+    return <MidOperandBuild operand=midEvaluatedValue(c: inout c, state: inout state, operand: built.operand) />
 }
 
 fn midTemplateArguments(c: Comp, template: CallTemplate) -> Array[CallTemplateArgument] {

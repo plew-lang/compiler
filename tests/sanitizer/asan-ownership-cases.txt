@@ -8,3 +8,4 @@ tests/fixtures/run/value_snapshot_callback.pw
 tests/fixtures/run/async_unique_frame.pw
 tests/fixtures/run/arc_deinit_order.pw
 tests/fixtures/run/async_enum_param_arc.pw
+tests/fixtures/run/mid_value_evaluation_order.pw

@@ -1,0 +1,18 @@
+// Earlier value arguments/elements must survive later sibling side effects.
+import @Std/Io with { print }
+mut val number: I64 = 1I64
+mut val text: String = "before"
+fn change() -> I64 { number = 2I64 text = "after" return 0I64 }
+fn consume(first: I64, second: I64) { print(first) }
+fn consumeText(first: String, second: I64) { print(first) }
+fn defaulted(first: I64, second: I64 = change()) { print(first) }
+fn main() {
+    consume(first: number, second: change())
+    number = 1I64
+    val values = [number, change()]
+    print(values[0])
+    number = 1I64
+    defaulted(first: number)
+    text = "before"
+    consumeText(first: text, second: change())
+}
