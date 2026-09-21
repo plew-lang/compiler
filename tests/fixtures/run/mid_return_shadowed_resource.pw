@@ -1,0 +1,36 @@
+// A shadowed unique binding ends inside this function. That cleanup must stay
+// ordered while the unrelated owned return temporary transfers without a copy.
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+
+unique struct Token {
+    pub val number: I64
+    deinit { print(self.number) }
+}
+pub impl Token { factory }
+struct Bundle {
+    pub mut val values: Array[I64]
+    pub val token: MutableRef[Token]
+}
+pub impl Bundle { factory }
+fn make() -> Bundle {
+    return <Bundle values=[3I64] token=<MutableRef value=<Token number=70I64 /> /> />
+}
+fn forwarded() -> Bundle {
+    val token = <Token number=1I64 />
+    val token = <Token number=2I64 />
+    print("ready")
+    return make()
+}
+fn exercise() {
+    mut val output = forwarded()
+    val snapshot = output
+    output.values[0] = 9I64
+    print(snapshot.values[0])
+    print(output.values[0])
+    print("owned")
+}
+fn main() {
+    exercise()
+    print("released")
+}

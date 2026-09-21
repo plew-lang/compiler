@@ -60,8 +60,14 @@ fn countBody(arena: MidCanonicalArena, body: MidBodyNode, definitions: inout Arr
         mut val index: U64 = 0U64
         while index < block.statements.len {
             val statement = arena.statements[block.statements.start + index]
-            if statement.tag < 1U64 || (statement.tag > 10U64 && statement.tag != 13U64) { return false }
-            if statement.tag == 13U64 {
+            if statement.tag < 1U64 || (statement.tag > 10U64 && statement.tag != 12U64 && statement.tag != 13U64) { return false }
+            if statement.tag == 12U64 {
+                // Ending a binding may drop its current owner. Treat that
+                // occurrence as a use, so this local cannot be a sole-use
+                // return source. Other locals remain eligible.
+                if statement.bindingLocal >= body.locals.len { return false }
+                countLocal(counts: inout uses, local: statement.bindingLocal)
+            } else if statement.tag == 13U64 {
                 countPlace(arena: arena, placeId: statement.source, counts: inout uses)
                 mut val output: U64 = 0U64
                 while output < statement.destinationCount() {
@@ -131,7 +137,11 @@ fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: Mid
     mut val index: U64 = statementIndex + 1U64
     while index < block.statements.len {
         val following = arena.statements[block.statements.start + index]
-        if following.tag != 6U64 && following.tag != 7U64 { return 0U64 }
+        if following.tag == 12U64 {
+            // A different binding can end here without observing the unnamed
+            // return source. Preserve the marker for ordinary drop elaboration.
+            if following.bindingLocal == source.local || following.bindingLocal == destination.local { return 0U64 }
+        } else if following.tag != 6U64 && following.tag != 7U64 { return 0U64 }
         index += 1U64
     }
     return value.operand

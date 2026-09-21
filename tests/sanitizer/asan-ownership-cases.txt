@@ -11,3 +11,4 @@ tests/fixtures/run/async_enum_param_arc.pw
 tests/fixtures/run/mid_value_evaluation_order.pw
 tests/fixtures/run/mid_shared_promise_waiters.pw
 tests/fixtures/run/mid_access_getter_key_cfg_lowering.pw
+tests/fixtures/run/mid_return_shadowed_resource.pw
