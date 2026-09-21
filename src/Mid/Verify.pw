@@ -637,7 +637,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-    val incoming: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(c: c, canonical: canonical)
+    val incoming: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
     val reachable = canonicalMidReachable(c: c, body: body)
 
     mut val blockI: U64 = 0U64

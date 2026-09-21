@@ -29,13 +29,13 @@ fn main() {
     val join: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val body: MidBody = <MidBody locals=[file, result] blocks=[entry, moved, kept, join] entry=0U64 />
     val frozen = c.mid.store(body: body)
-    val ownership = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
+    val ownership = analyzeCanonicalMidOwnership(arena: c.mid, canonical: frozen)
     val joinOwnership = ownership[3U64]
     printState(state: joinOwnership[0U64])
-    val accessibility = analyzeCanonicalMidAccessibility(c: c, canonical: frozen)
+    val accessibility = analyzeCanonicalMidAccessibility(arena: c.mid, canonical: frozen)
     val joinAccessibility = accessibility[3U64]
     printAccessibility(state: joinAccessibility[0U64])
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: c.mid.store(body: body))
     val node = c.mid.bodies[elaborated.body - 1U64]
     val block = c.mid.blocks[node.blocks.start + 3U64]
     if c.mid.statements[block.statements.start].tag == 4U64 { write(s: "conditional-drop\n") }

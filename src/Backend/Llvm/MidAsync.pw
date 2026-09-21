@@ -25,7 +25,7 @@ pub impl LlvmCtx {
             _ => { c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid access elaboration failed")
                 return <MidCanonicalBody body=0U64 /> }
         }
-        val dropped = elaborateCanonicalMidDrops(c: inout c, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: access.body))
+        val dropped = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: access.body))
         val verified = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
         match verified.error {
             MidVerifyError.None => {}

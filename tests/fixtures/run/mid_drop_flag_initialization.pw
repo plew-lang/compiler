@@ -46,7 +46,7 @@ fn main() {
     val assigned: MidBlock = <MidBlock statements=[<MidStatement.Assign destination=place value=<MidRvalue.Use operand=condition() /> />] terminator=<MidTerminator.Goto target=3U64 /> />
     val body: MidBody = <MidBody locals=[local] blocks=[<MidBlock terminator=branch />, assigned, kept, <MidBlock terminator=<MidTerminator.Return /> />] />
     mut val c: Comp = <Comp />
-    val canonical = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val canonical = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: c.mid.store(body: body))
     val elaborated = c.mid.bodies[canonical.body - 1U64]
     mut val flags: U64 = 0U64
     mut val initialized: U64 = 0U64

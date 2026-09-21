@@ -26,7 +26,7 @@ fn check(reversed: Bool) {
     blocks.set(i: position(block: 6U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Return /> />)
     val body: MidBody = <MidBody locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />] blocks=blocks entry=position(block: 0U64, reversed: reversed) />
     mut val c: Comp = <Comp />
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: c.mid.store(body: body))
     match verifyCanonicalMidBody(c: inout c, canonical: elaborated).error {
         MidVerifyError.None => { print("valid") }
         _ => { print("invalid") }

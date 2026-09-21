@@ -10,7 +10,7 @@ fn main() {
     val file: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
     val boundary: MidBlock = <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=<MidTerminator.Return /> />
     val body: MidBody = <MidBody locals=[file] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[boundary] entry=0U64 />
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: c.mid.store(body: body))
     val node = c.mid.bodies[elaborated.body - 1U64]
     val block = c.mid.blocks[node.blocks.start]
     val statement = c.mid.statements[block.statements.start]

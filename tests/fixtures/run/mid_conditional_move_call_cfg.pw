@@ -39,9 +39,9 @@ fn main() {
     val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
     val frozen = c.mid.store(body: body)
-    val ownershipStates = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
+    val ownershipStates = analyzeCanonicalMidOwnership(arena: c.mid, canonical: frozen)
     val ownership: MidOwnership = ownershipStates[3U64][0U64]
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: c.mid.store(body: body))
     mut val dropped: Bool = false
     val node = c.mid.bodies[elaborated.body - 1U64]
     val join = c.mid.blocks[node.blocks.start + 3U64]

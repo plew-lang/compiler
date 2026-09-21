@@ -42,7 +42,7 @@ fn main() {
         _ => { write(s: "canonical-ordinary:wrong-error\n") }
     }
 
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: canonicalSynthetic)
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: canonicalSynthetic)
     val node = c.mid.bodies[elaborated.body - 1U64]
     val block = c.mid.blocks[node.blocks.start]
     if c.mid.statements[block.statements.start].tag == 8U64 { write(s: "no-pre-drop\n") }

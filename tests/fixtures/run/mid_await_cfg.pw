@@ -44,7 +44,7 @@ fn main() {
     match grounded.error { MidInstantiateError.None => {} _ => { assert(false) } }
     val access = elaborateCanonicalMidAccesses(c: inout compiler, canonical: grounded.body)
     match access.error { MidAccessError.None => {} _ => { assert(false) } }
-    val dropped = elaborateCanonicalMidDrops(c: inout compiler, canonical: access.body)
+    val dropped = elaborateCanonicalMidDrops(arena: inout compiler.mid, canonical: access.body)
     val checked = verifyCanonicalMidBody(c: inout compiler, canonical: dropped)
     match checked.error { MidVerifyError.None => {} _ => { assert(false) } }
     val frame = planCanonicalMidAsyncFrame(c: compiler, canonical: dropped)

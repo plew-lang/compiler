@@ -26,7 +26,7 @@ fn check(mode: U64) {
         MidVerifyError.UnelaboratedBindingEnd => { print(1I64) }
         _ => { print(0I64) }
     }
-    val canonical = elaborateCanonicalMidDrops(c: inout compiler, canonical: frozen)
+    val canonical = elaborateCanonicalMidDrops(arena: inout compiler.mid, canonical: frozen)
     match verifyCanonicalMidBody(c: inout compiler, canonical: canonical).error { MidVerifyError.None => {} _ => { print(901I64) } }
     val node = compiler.mid.bodies[canonical.body - 1U64]
     mut val drops = 0U64

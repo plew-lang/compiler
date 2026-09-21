@@ -32,7 +32,7 @@ fn main() {
     val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
     val frozen = c.mid.store(body: body)
-    val ownership = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
+    val ownership = analyzeCanonicalMidOwnership(arena: c.mid, canonical: frozen)
     val joinState: MidOwnership = ownership[3U64][0U64]
     // The builder yields parametric storage boundaries. Publish the concrete
     // frontend fact and instantiate before drop elaboration and verification.
@@ -46,7 +46,7 @@ fn main() {
     val concrete = instantiateCanonicalMidBody(c: inout c, body: c.mid.store(body: body), bodyId: instance)
     mut val instantiated: Bool = false
     match concrete.error { MidInstantiateError.None => { instantiated = true } _ => {} }
-    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: concrete.body)
+    val elaborated = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: concrete.body)
     mut val hasConditionalDrop: Bool = false
     val node = c.mid.bodies[elaborated.body - 1U64]
     val join = c.mid.blocks[node.blocks.start + 3U64]
