@@ -70,6 +70,28 @@ chmod +x "$output"
                         assert '(exit:' in result.stdout, result
                 assert result.returncode == 0, result
                 print(f'PASS {phase}/{case}', flush=True)
+    # Exact output must reject missing/extra newlines and embedded NUL bytes.
+    for exact in (False, True):
+        for body, same in [('printf "expected\\n"', True),
+                           ('printf "expected"', False),
+                           ('printf "expected\\n\\n"', False),
+                           ('printf "expected\\000\\n"', False)]:
+            path = root / 'tests/run/bytes.pw'
+            path.write_text('#!/bin/sh\n' + body + '\n')
+            path.with_suffix('.out').write_bytes(b'expected\n')
+            marker = path.with_suffix('.out.exact')
+            if exact:
+                marker.touch()
+            elif marker.exists():
+                marker.unlink()
+            result = subprocess.run(['sh', '-c', workers['run'].replace('/tmp/t_', str(root / 't_')), 'sh', str(path.relative_to(root))],
+                                    cwd=root, env=env, capture_output=True, text=True)
+            if exact:
+                assert result.stdout.startswith('PASS ' if same else 'FAIL '), result
+            elif '000' not in body:
+                assert result.stdout.startswith('PASS '), result
+            assert result.returncode == 0, result
+    print('PASS run/exact-and-legacy-output', flush=True)
     gen_source = (Path(__file__).resolve().parents[2] / 'tests/harness/test-gen.sh').read_text()
     gen_worker = gen_source.split('    # 5. run + compare\n', 1)[1].split('\ndone', 1)[0]
     work = root / 'gen'

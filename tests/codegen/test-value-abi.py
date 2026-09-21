@@ -32,16 +32,8 @@ for line in llvm.splitlines():
         checked += bool(definitions[match[1]])
 assert checked, 'fixture must exercise direct aggregate calls'
 assert re.search(r'\bcall\b[^\n]*%[\w.]+\([^\n]*byval\(', llvm), 'fixture must exercise indirect aggregate calls'
-# O0 protects correctness independently of argument promotion/inlining.
-with tempfile.TemporaryDirectory(prefix='plew-value-abi-') as directory:
-    directory = Path(directory)
-    (directory / 'program.ll').write_text(llvm)
-    runtime = subprocess.run([str(compiler), '--runtime'], capture_output=True, check=True, timeout=55)
-    (directory / 'runtime.c').write_bytes(runtime.stdout)
-    subprocess.run(['clang', '-w', '-O0', str(directory / 'program.ll'), str(directory / 'runtime.c'), '-o', str(directory / 'program')], check=True, timeout=55)
-    output = subprocess.check_output([str(directory / 'program')], timeout=55)
-    assert output == (root / 'tests/run/mid_value_abi.out').read_bytes()
-print(f'PASS value ABI: {checked} direct aggregate calls, indirect calls, O0 output')
+# The normal run suite checks O0 output with mid_value_abi.out.exact.
+print(f'PASS value ABI: {checked} direct aggregate calls, indirect calls, physical ABI')
 
 # A field reader must not receive the whole large value after the common passes.
 # Snapshot behavior must also survive callbacks, aliasing inout, and escaping values.
@@ -61,7 +53,8 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
     directory = Path(directory)
     source, optimized = directory / 'raw.ll', directory / 'optimized.ll'
     source.write_text(raw)
-    (directory / 'runtime.c').write_bytes(runtime.stdout)
+    runtime = subprocess.check_output([str(compiler), '--runtime'], timeout=55)
+    (directory / 'runtime.c').write_bytes(runtime)
     subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
     reduced = optimized.read_text()
     assert 'target datalayout = ' in reduced, 'layout-sensitive optimization must have a native data layout'

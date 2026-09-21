@@ -1,0 +1,1 @@
+Require byte-exact stdout, including trailing newlines.

@@ -67,9 +67,10 @@ count_cases() {
 #     would otherwise silently drop that test from coverage — the runners skip
 #     unpaired files without a word. ---
 hygiene=""
-for f in tests/run/*.out tests/run/*.in tests/run/*.c tests/run/*.ll.expect; do
+for f in tests/run/*.out tests/run/*.in tests/run/*.c tests/run/*.ll.expect tests/run/*.out.exact; do
     [ -f "$f" ] || continue
     case "$f" in
+        *.out.exact) pw="${f%.out.exact}.pw" ;;
         *.ll.expect) pw="${f%.ll.expect}.pw" ;;
         *) pw="${f%.*}.pw" ;;
     esac
@@ -113,10 +114,13 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
     infile="tests/run/$name.in"
     status=0
-    if [ -f "$infile" ]; then got=$(python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" 2>/dev/null) || status=$?
-    else got=$(python3 ./scripts/support/watch-command.py -- "$bin" 2>/dev/null) || status=$?; fi
+    if [ -f "$infile" ]; then python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > "$bin.stdout" 2>/dev/null || status=$?
+    else python3 ./scripts/support/watch-command.py -- "$bin" > "$bin.stdout" 2>/dev/null || status=$?; fi
     if [ "$status" -ne 0 ]; then echo "FAIL $name(exit:$status)"; exit 0; fi
-    if [ "$got" = "$(cat "$out")" ]; then echo "PASS $name"; else echo "FAIL $name"; fi
+    # An .out.exact companion opts into byte equality, including trailing newlines.
+    if [ -f "$out.exact" ]; then
+        if cmp -s "$bin.stdout" "$out"; then echo "PASS $name"; else echo "FAIL $name"; fi
+    elif [ "$(cat "$bin.stdout")" = "$(cat "$out")" ]; then echo "PASS $name"; else echo "FAIL $name"; fi
 ' sh | progress_stream run "$run_total")
 pass=$(printf '%s\n' "$run_results" | grep -c '^PASS' || true)
 fail=0; failed=""
