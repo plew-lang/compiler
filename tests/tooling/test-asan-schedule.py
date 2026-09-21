@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 
+sys.dont_write_bytecode = True
 root = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('schedule', root / 'tests/sanitizer/asan-schedule.py')
 module = importlib.util.module_from_spec(spec)
@@ -43,6 +44,22 @@ sys.exit(int(sys.argv[3]))
     # Real supervisors must forward cancellation to children with their own groups.
     sleepy = work / 'sleepy.py'
     sleepy.write_text('import os,sys,time\nfrom pathlib import Path\nPath(sys.argv[1]).write_text(str(os.getpid()))\ntime.sleep(50)\n')
+    for failing in ('corpus', 'prepare'):
+        pidfile = work / ('failed-peer-' + failing)
+        live = [sys.executable, str(root / 'scripts/support/watch-command.py'), '--',
+                sys.executable, str(sleepy), str(pidfile)]
+        failed = args('failing', 7)
+        start = time.monotonic()
+        code = module.run_stages(failed if failing == 'corpus' else live,
+                                 failed if failing == 'prepare' else live, 2)
+        assert code != 0 and time.monotonic() - start < 8
+        if pidfile.exists():
+            try:
+                os.kill(int(pidfile.read_text()), 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise AssertionError('failed stage left its peer running')
     wrapper = work / 'wrapper.py'
     pidfiles = [work / 'one.pid', work / 'two.pid']
     # Use explicit argv serialization so the supervisor command is identical in both stages.

@@ -112,8 +112,8 @@ c_results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c 
     ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     extra_c=""; [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
-    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     run_exit=0
     infile="tests/fixtures/run/$name.in"
     if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
@@ -160,8 +160,8 @@ d_results=$(printf '%s\n' tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -
     [ -f "tests/fixtures/panic/$name.panic" ] || { echo "FAIL $f: missing panic expectation"; exit 0; }
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
+    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     want=$(cat "tests/fixtures/panic/$name.panic")
     code=0
     # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
