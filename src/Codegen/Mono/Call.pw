@@ -5645,6 +5645,25 @@ pub impl Comp {
         self.enqueueFinalDestruction(typeRef: type)
     }
 
+    // Capturing is a use of a lexical binding, including a write-only place.
+    // Keep value and place traversal distinct; only their binding bookkeeping
+    // is shared so assignment indexes are never rewritten as value reads.
+    inout fn scanBindingInsts(exprId: U64, start: U64, len: U64) {
+        self.selectReferencedGlobal(exprId: exprId)
+        // capture detection: inside a closure, an identifier that resolves to
+        // a local below the closure's entry mark is an enclosing capture.
+        if self.cur.inClosure {
+            val li: U64 = self.localIndexByName(start: start, len: len)
+            if li < self.cur.captureMark {
+                // a module-level variable (spec/15) seeded at the locals base
+                // (index < globals.count()) is globally accessible — not a capture.
+                if li >= self.arena.globals.count() {
+                    self.recordCapture(closureId: self.cur.closureId, localIdx: li)
+                }
+            }
+        }
+    }
+
     inout fn scanExprInsts(exprId: U64) {
         if self.tracePhases {
             self.traceExprInstScans += 1U64
@@ -5658,21 +5677,7 @@ pub impl Comp {
             }
             Expr.Str(start: _, len: _) => { self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { self.collectRecordedValueLayout(exprId: exprId) }
-            Expr.Ident(val start, val len) => {
-                self.selectReferencedGlobal(exprId: exprId)
-                // capture detection: inside a closure, an identifier that resolves to
-                // a local below the closure's entry mark is an enclosing capture.
-                if self.cur.inClosure {
-                    val li: U64 = self.localIndexByName(start: start, len: len)
-                    if li < self.cur.captureMark {
-                        // a module-level variable (spec/15) seeded at the locals base
-                        // (index < globals.count()) is globally accessible — not a capture.
-                        if li >= self.arena.globals.count() {
-                            self.recordCapture(closureId: self.cur.closureId, localIdx: li)
-                        }
-                    }
-                }
-            }
+            Expr.Ident(val start, val len) => { self.scanBindingInsts(exprId: exprId, start: start, len: len) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 // a closure literal lexically inside another closure body: the inner
                 // env construction would have to reach the outer env, which is not
@@ -5916,7 +5921,7 @@ pub impl Comp {
     // here, while still scanning an index key as an ordinary value expression.
     inout fn scanPlaceInsts(exprId: U64) {
         match self.arena.exprs[exprId] {
-            Expr.Ident(start: _, len: _) => { self.selectReferencedGlobal(exprId: exprId) }
+            Expr.Ident(val start, val len) => { self.scanBindingInsts(exprId: exprId, start: start, len: len) }
             Expr.Field(val base, nameStart: _, nameLen: _) => {
                 self.scanPlaceInsts(exprId: base)
             }

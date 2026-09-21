@@ -1,0 +1,32 @@
+// Write-only uses must register a shared capture just like reads and +=.
+// Include two closures sharing one cell, shadowing, argument snapshots, and
+// an escaping write-only closure whose cell outlives the declaring activation.
+import @Std/Io with { print }
+fn setter() -> fn(value: I64) {
+    mut val stored: I64 = 0I64
+    return fn(value: I64) { stored = value }
+}
+fn first(value: I64, effect: I64) { print(value) }
+fn main() {
+    mut val number: I64 = 1I64
+    val replaceNumber = fn(value: I64) { number = value }
+    val currentNumber = fn() -> I64 { return number }
+    replaceNumber(value: 2I64)
+    print(currentNumber())
+    replaceNumber(value: 3I64)
+    print(number)
+    val change = fn() -> I64 { number = 4I64 return 0I64 }
+    first(value: number, effect: change())
+    print(number)
+    if true {
+        mut val number: I64 = 10I64
+        val replace = fn() { number = 20I64 }
+        replace()
+        print(number)
+    }
+    print(number)
+    val escaped = setter()
+    escaped(value: 100I64)
+    escaped(value: 200I64)
+    print("done")
+}
