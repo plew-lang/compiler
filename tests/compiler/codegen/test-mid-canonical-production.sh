@@ -14,7 +14,7 @@ if rg -n '\b(analyzeMidOwnership|analyzeMidAccessibility|instantiateMidBody|elab
     echo "draft consumer bypasses production canonical passes" >&2
     exit 1
 fi
-canonical='MidCanonicalBody instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyExecutableCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
+canonical='prepareCanonicalForLlvm genLlvmPreparedMidBody'
 
 if rg -n "$legacy" $entries; then
     echo "legacy Mid consumer remains in a production entry" >&2
@@ -35,7 +35,7 @@ done
 # closures reserve ABI argument 0 for their environment.
 # Preflight validates the count once; the Ready value carries that evidence
 # to emission instead of passing a second, independently supplied count.
-for needle in 'abiParameterCount: abiParameterCount' 'MidLlvmPrepared.Ready canonical=elaborated abiParameterCount=abiParameterCount' 'prepared: preparedMid'; do
+for needle in 'parameterCount: abiParameterCount' 'prepared: preparedMid'; do
     if ! grep -F "$needle" src/Backend/Llvm/Any.pw >/dev/null; then
         echo "ordinary Mid preparation is missing $needle" >&2
         exit 1
@@ -71,7 +71,7 @@ PYABI
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a
 # second AST-to-LLVM path that happens to run before `main`.
-global_canonical='declareGlobalStorage buildParametricMidGlobalInit instantiateCanonicalMidBody elaborateCanonicalMidAccesses elaborateCanonicalMidDrops verifyExecutableCanonicalMidBody midVerifiedLlvmPreflight genLlvmPreparedMidBody'
+global_canonical='declareGlobalStorage buildParametricMidGlobalInit prepareCanonicalForLlvm genLlvmPreparedMidBody'
 for symbol in $global_canonical; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer Mid pipeline is missing $symbol" >&2
@@ -82,12 +82,50 @@ done
 # `--require-mid` is a soundness gate, not a preference.  Every synthetic-body
 # failure shape must enter the same closed coverage table that makes the driver
 # reject a legacy fallback.
-for symbol in recordMidMissingBodyInstance recordMidBuildError recordMidInstantiate recordMidAccess recordMidVerify recordMidPreflight; do
+for symbol in recordMidMissingBodyInstance recordMidBuildError; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer fallback is not covered by $symbol" >&2
         exit 1
     fi
 done
+
+# All entry kinds share semantic preparation; physical ABI admission stays in LLVM.
+python3 - <<'PYPREPARE'
+from pathlib import Path
+import re
+source = Path('src/Mid/Prepare.pw').read_text()
+passes = ['instantiateCanonicalMidBody', 'elaborateCanonicalMidAccesses',
+          'optimizeCanonicalMidReturns', 'elaborateCanonicalMidDrops',
+          'verifyExecutableCanonicalMidBody']
+positions = []
+for name in passes:
+    calls = list(re.finditer(r'\b' + name + r'\(', source))
+    assert len(calls) == 1, f'{name}: mandatory pass must run once'
+    positions.append(calls[0].start())
+assert positions == sorted(positions), 'mandatory pass order changed'
+assert source.index('MidVerifyError.None => { return <Result.Ok') > positions[-1]
+assert 'factory' not in re.sub(r'//[^\n]*', '', source), 'executable admission must not expose a raw constructor'
+for path in Path('src/Backend').rglob('*.pw'):
+    for name in passes:
+        assert not re.search(r'\b' + name + r'\(', path.read_text()), f'{path}: bypasses shared preparation'
+
+# Match each executable entry, not just a symbol somewhere in the file.
+entries = [('Any', 'genLlvmFuncBody', 'prepareCanonicalForLlvm'),
+           ('Entry', 'genLlvmInitGlobals', 'prepareCanonicalForLlvm'),
+           ('Entry', 'genLlvmMain', 'prepareCanonicalForLlvm'),
+           ('Closures', 'prepareClosureMidBody', 'prepareCanonicalForLlvm'),
+           ('Mid', 'prepareSyntheticMidBody', 'prepareCanonicalForLlvm'),
+           ('MidAsync', 'prepareAsyncMidCanonical', 'prepareMidExecutable')]
+for file, name, call in entries:
+    body = Path(f'src/Backend/Llvm/{file}.pw').read_text().split(f'fn {name}(', 1)[1].split('\n    inout fn ', 1)[0]
+    assert f'self.{call}(' in body, f'{name}: missing common preparation'
+backend = Path('src/Backend/Llvm/Mid.pw').read_text()
+for symbol in ['recordMidInstantiate', 'recordMidAccess', 'recordMidVerify', 'recordMidPreflight']:
+    assert symbol + '(' in backend, f'shared preparation lost failure coverage: {symbol}'
+assert 'MidExecutableBody.prepare(c: inout c, canonical: canonical, bodyId: bodyId)' in backend
+assert 'canonical: executable.canonical, abiParameterCount: parameterCount' in backend
+assert 'MidLlvmPrepared.Ready canonical=executable.canonical abiParameterCount=parameterCount' in backend
+PYPREPARE
 
 # Executable verification must preserve the earlier ownership/dataflow pass.
 python3 - <<'PYVERIFY'

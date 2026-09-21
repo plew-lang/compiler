@@ -1,0 +1,43 @@
+// Mandatory semantic preparation is independent of LLVM and entry-point ABI.
+// A canonical handle describes storage; only this pipeline publishes an
+// executable handle after every mandatory transformation and verification.
+import ../Frontend with { Comp }
+import ./Ir with { MidCanonicalBody }
+import ./Instantiate with { MidInstantiateError, instantiateCanonicalMidBody }
+import ./Access with { MidAccessError, elaborateCanonicalMidAccesses }
+import ./Optimize with { optimizeCanonicalMidReturns }
+import ./Drop with { elaborateCanonicalMidDrops }
+import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
+
+export struct MidExecutableBody {
+    pub val canonical: MidCanonicalBody
+}
+// Deliberately no public memberwise factory: callers cannot admit an unverified body.
+
+export enum MidPreparationError {
+    InstantiationFailed(error: MidInstantiateError)
+    AccessFailed(error: MidAccessError)
+    VerificationFailed(body: MidCanonicalBody, verification: MidVerification)
+}
+
+pub impl MidExecutableBody {
+    assoc fn prepare(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64) -> Result[MidExecutableBody, MidPreparationError] {
+        val instantiated = instantiateCanonicalMidBody(c: inout c, body: canonical, bodyId: bodyId)
+        match instantiated.error {
+            MidInstantiateError.None => {}
+            _ => { return <Result.Err error=<MidPreparationError.InstantiationFailed error=instantiated.error /> /> }
+        }
+        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
+        match accesses.error {
+            MidAccessError.None => {}
+            _ => { return <Result.Err error=<MidPreparationError.AccessFailed error=accesses.error /> /> }
+        }
+        val optimized = optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body)
+        val dropped = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimized)
+        val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
+        match verification.error {
+            MidVerifyError.None => { return <Result.Ok value=<MidExecutableBody canonical=dropped /> /> }
+            _ => { return <Result.Err error=<MidPreparationError.VerificationFailed body=dropped verification=verification /> /> }
+        }
+    }
+}

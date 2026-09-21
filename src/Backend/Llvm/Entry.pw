@@ -74,31 +74,10 @@ pub impl LlvmCtx {
             val parametric: MidBodyBuild = buildParametricMidGlobalInit(c: inout c)
             match parametric.error {
                 MidBuildError.None => {
-                    val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: parametric.canonical, bodyId: bodyId)
-                    match instantiated.error {
-                        MidInstantiateError.None => {
-                            val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-                            match accesses.error {
-                                MidAccessError.None => {
-                                    val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
-                                    match verification.error {
-                                        MidVerifyError.None => {
-                                            // Preflight before emission so an unsupported
-                                            // Mid shape cannot begin LLVM emission.
-                                            val preflight: MidLlvmPreflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped)
-                                            match preflight {
-                                                MidLlvmPreflight.Ready => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=0U64 />) }
-                                                _ => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: preflight) }
-                                            }
-                                        }
-                                        _ => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: verification.error) }
-                                    }
-                                }
-                                _ => { self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: globalOwner) }
-                            }
-                        }
-                        _ => { self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: instantiated.error) }
+                    val prepared = self.prepareCanonicalForLlvm(c: inout c, canonical: parametric.canonical, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64)
+                    match prepared {
+                        MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: prepared) }
+                        _ => {}
                     }
                 }
                 _ => { self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: globalOwner, error: parametric.error) }
@@ -141,106 +120,10 @@ pub impl LlvmCtx {
             match parametric.error {
                 MidBuildError.None => {
                     if bodyId != 0U64 {
-                        val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: parametric.canonical, bodyId: bodyId)
-                        match instantiated.error {
-                            MidInstantiateError.None => {
-                                val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-                                mut val accessReady: Bool = true
-                                match accesses.error {
-                                    MidAccessError.None => {}
-                                    _ => {
-                                        accessReady = false
-                                        self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fi)
-                                        if c.traceCodegen {
-                                            eprint(text: "[trace-codegen] Mid main: access elaboration error=")
-                                            match accesses.error {
-                                                MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
-                                                MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
-                                                MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
-                                                MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
-                                                MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
-                                                MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
-                                                MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
-                                                MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
-                                                MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
-                                                MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
-                                                _ => { eprint(text: "unknown") }
-                                            }
-                                            eprint(text: "\n")
-                                        }
-                                    }
-                                }
-                                if accessReady {
-                                    val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-                                    val verification: MidVerification = verifyExecutableCanonicalMidBody(c: inout c, canonical: elaborated)
-                                    match verification.error {
-                                        MidVerifyError.None => {
-                                            match self.midVerifiedLlvmPreflight(c: inout c, canonical: elaborated) {
-                                                MidLlvmPreflight.Ready => {
-                                                    preparedMid = <MidLlvmPrepared.Ready canonical=elaborated abiParameterCount=0U64 />
-                                                    midReady = true
-                                                }
-                                                MidLlvmPreflight.AbiLocals => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AbiLocals />) }
-                                                MidLlvmPreflight.AssignmentProjection => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AssignmentProjection />) }
-                                                MidLlvmPreflight.UnsupportedRvalue => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.UnsupportedRvalue />) }
-                                                MidLlvmPreflight.ConversionOperand => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ConversionOperand />) }
-                                                MidLlvmPreflight.DropProjection => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.DropProjection />) }
-                                                MidLlvmPreflight.ScopeExit => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ScopeExit />) }
-                                                MidLlvmPreflight.Switch => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Switch />) }
-                                                MidLlvmPreflight.Call(reason: val reason) => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Call reason=reason />) }
-                                                MidLlvmPreflight.ReturnValue => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ReturnValue />) }
-                                                MidLlvmPreflight.Terminator => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Terminator />) }
-                                            }
-                                        }
-                                        _ => {
-                                            match verification.error {
-                                                MidVerifyError.InvalidTarget => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.PartialMove => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.MoveUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.DropUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.InvalidDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UninitializedDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UnelaboratedBindingEnd => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.MissingOwnershipContract => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.OutstandingOwnership => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                MidVerifyError.LiveInitialization => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
-                                                _ => {}
-                                            }
-                                        if c.traceCodegen {
-                                            eprint(text: "[trace-codegen] Mid main: verifier error=")
-                                            match verification.error {
-                                                MidVerifyError.InvalidTarget => { eprint(text: "invalid-target") }
-                                                MidVerifyError.PartialMove => { eprint(text: "partial-move") }
-                                                MidVerifyError.MoveUnavailable => { eprint(text: "move-unavailable") }
-                                                MidVerifyError.DropUnavailable => { eprint(text: "drop-unavailable") }
-                                                MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
-                                                MidVerifyError.UninitializedDropFlag => { eprint(text: "uninitialized-drop-flag") }
-                                                MidVerifyError.UnelaboratedBindingEnd => { eprint(text: "binding-end") }
-                                                MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
-                                                MidVerifyError.UninstantiatedCastBoundary => { eprint(text: "cast-boundary") }
-                                                MidVerifyError.MissingOwnershipContract => { eprint(text: "ownership-contract") }
-                                                MidVerifyError.OutstandingOwnership => { eprint(text: "outstanding-ownership") }
-                                                MidVerifyError.LiveInitialization => { eprint(text: "live-initialization") }
-                                                _ => { eprint(text: "unknown") }
-                                            }
-                                            eprint(text: " block=")
-                                            self.traceCodegenU64(n: verification.block)
-                                            eprint(text: " local=")
-                                            self.traceCodegenU64(n: verification.local)
-                                            eprint(text: "\n")
-                                        }
-                                    }
-                                }
-                            }
-                            }
-                            _ => {
-                                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fi, reason: instantiated.error)
-                                if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: instantiation failed\n") }
-                            }
+                        preparedMid = self.prepareCanonicalForLlvm(c: inout c, canonical: parametric.canonical, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64)
+                        match preparedMid {
+                            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = true }
+                            _ => {}
                         }
                     } else {
                         self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)

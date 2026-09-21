@@ -2789,40 +2789,128 @@ pub impl LlvmCtx {
                 return <MidLlvmPrepared.None />
             }
         }
-        val instantiated = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: bodyId)
-        match instantiated.error {
-            MidInstantiateError.None => {}
-            _ => {
-                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: instantiated.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val accesses = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-        match accesses.error {
-            MidAccessError.None => {}
-            _ => {
-                self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val dropped = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-        val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
-        match verification.error {
-            MidVerifyError.None => {}
-            _ => {
-                self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val preflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped, abiParameterCount: parameterCount)
-        match preflight {
-            MidLlvmPreflight.Ready => {}
-            _ => {
-                self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: preflight)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        return <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=parameterCount />
+        return self.prepareCanonicalForLlvm(c: inout c, canonical: built.canonical, bodyId: bodyId, fnIdx: fnIdx, parameterCount: parameterCount)
     }
 
+}
+
+pub impl LlvmCtx {
+    // Semantic preparation is shared by every entry. Only this adapter maps
+    // Mid failures into backend coverage and diagnostic context.
+    inout fn prepareMidExecutable(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64, fnIdx: U64) -> Optional[MidExecutableBody] {
+        val preparation = MidExecutableBody.prepare(c: inout c, canonical: canonical, bodyId: bodyId)
+        match preparation {
+            Result.Ok(value: val executable) => { return <Optional.Some v=executable /> }
+            Result.Err(error: val failure) => {
+                match failure {
+                    MidPreparationError.InstantiationFailed(error: val error) => {
+                        self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: error)
+                    }
+                    MidPreparationError.AccessFailed(error: val error) => {
+                        self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
+                        if c.traceCodegen {
+                            eprint(text: "[trace-codegen] Mid access error=")
+                            match error {
+                                MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
+                                MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
+                                MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
+                                MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
+                                MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
+                                MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
+                                MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
+                                MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
+                                MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
+                                MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
+                                MidAccessError.None => { eprint(text: "none") }
+                            }
+                            eprint(text: "\n")
+                        }
+                    }
+                    MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
+                        self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
+                        if c.traceCodegen { self.traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
+                    }
+                }
+            }
+        }
+        return <Optional.None />
+    }
+
+    // ABI admission is LLVM-specific and follows semantic verification. Async
+    // shares prepareMidExecutable, then computes its own frame before emission.
+    inout fn prepareCanonicalForLlvm(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
+        match self.prepareMidExecutable(c: inout c, canonical: canonical, bodyId: bodyId, fnIdx: fnIdx) {
+            Optional.Some(v: val executable) => {
+                val preflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: executable.canonical, abiParameterCount: parameterCount)
+                match preflight {
+                    MidLlvmPreflight.Ready => { return <MidLlvmPrepared.Ready canonical=executable.canonical abiParameterCount=parameterCount /> }
+                    _ => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: preflight) }
+                }
+            }
+            Optional.None => {}
+        }
+        return <MidLlvmPrepared.None />
+    }
+
+    inout fn traceMidVerificationFailure(c: inout Comp, canonical: MidCanonicalBody, fnIdx: U64, verification: MidVerification) {
+        eprint(text: "[trace-codegen] Mid verification location fn=")
+        self.traceCodegenU64(n: fnIdx)
+        eprint(text: " block=")
+        self.traceCodegenU64(n: verification.block)
+        eprint(text: " local=")
+        self.traceCodegenU64(n: verification.local)
+        eprint(text: "\n")
+        if !c.mid.isWellFormed(body: canonical) { return }
+        val failedBody = c.mid.bodies[canonical.body - 1U64]
+        if verification.local < failedBody.locals.len {
+            val local = c.mid.locals[failedBody.locals.start + verification.local]
+            eprint(text: "[trace-codegen] Mid failed-local binding=")
+            self.traceCodegenU64(n: local.sourceNameStart)
+            eprint(text: " scope=")
+            self.traceCodegenU64(n: local.sourceScope)
+            eprint(text: " type=")
+            c.traceMonoTypeHead(ref: local.typeTerm)
+            eprint(text: "\n")
+        }
+        if verification.block < failedBody.blocks.len {
+            val failedBlock = c.mid.blocks[failedBody.blocks.start + verification.block]
+            mut val statementIndex: U64 = 0U64
+            while statementIndex < failedBlock.statements.len {
+                val statement = c.mid.statements[failedBlock.statements.start + statementIndex]
+                eprint(text: "[trace-codegen] Mid failed-block statement=")
+                self.traceCodegenU64(n: statementIndex)
+                eprint(text: " tag=")
+                self.traceCodegenU64(n: statement.tag)
+                if statement.destination != 0U64 {
+                    eprint(text: " destination=")
+                    self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].local)
+                    eprint(text: " destination-type=")
+                    self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].typeTerm)
+                }
+                if statement.source != 0U64 {
+                    val source = c.mid.places[statement.source - 1U64]
+                    eprint(text: " overwrite-source=")
+                    self.traceCodegenU64(n: source.local)
+                    eprint(text: " source-local-type=")
+                    if source.local < failedBody.locals.len { self.traceCodegenU64(n: c.mid.locals[failedBody.locals.start + source.local].typeTerm) }
+                }
+                if statement.value != 0U64 {
+                    val value = c.mid.rvalues[statement.value - 1U64]
+                    eprint(text: " rvalue=")
+                    self.traceCodegenU64(n: value.tag)
+                    if value.operand != 0U64 {
+                        val operand = c.mid.operands[value.operand - 1U64]
+                        eprint(text: " operand=")
+                        self.traceCodegenU64(n: operand.tag)
+                        if operand.place != 0U64 {
+                            eprint(text: " source=")
+                            self.traceCodegenU64(n: c.mid.places[operand.place - 1U64].local)
+                        }
+                    }
+                }
+                eprint(text: "\n")
+                statementIndex += 1U64
+            }
+        }
+    }
 }

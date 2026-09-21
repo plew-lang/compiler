@@ -1,0 +1,50 @@
+// Shared semantic preparation publishes an executable body only on success.
+// A builder handle alone is insufficient; failures keep their stage and cause.
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { BodyInstance, InstanceEnvironment }
+import /Mid with { MidBody, MidBlock, MidTerminator, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    val body = compiler.mid.store(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match MidExecutableBody.prepare(c: inout compiler, canonical: body, bodyId: 0U64) {
+        Result.Err(error: val failure) => {
+            match failure {
+                MidPreparationError.InstantiationFailed(error: val error) => {
+                    match error {
+                        MidInstantiateError.InvalidBodyInstance => { print("invalid-instance") }
+                        _ => { assert(false) }
+                    }
+                }
+                _ => { assert(false) }
+            }
+        }
+        _ => { assert(false) }
+    }
+    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+    match MidExecutableBody.prepare(c: inout compiler, canonical: body, bodyId: instance) {
+        Result.Ok(value: val executable) => {
+            assert(executable.canonical.body != body.body)
+            assert(compiler.mid.isWellFormed(body: executable.canonical))
+            print("executable")
+        }
+        _ => { assert(false) }
+    }
+    val invalid = compiler.mid.store(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] entry=1U64 />)
+    match MidExecutableBody.prepare(c: inout compiler, canonical: invalid, bodyId: instance) {
+        Result.Err(error: val failure) => {
+            match failure {
+                MidPreparationError.VerificationFailed(body: _, verification: val verification) => {
+                    match verification.error {
+                        MidVerifyError.InvalidTarget => { print("invalid-target") }
+                        _ => { assert(false) }
+                    }
+                }
+                _ => { assert(false) }
+            }
+        }
+        _ => { assert(false) }
+    }
+}

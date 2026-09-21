@@ -214,40 +214,7 @@ pub impl LlvmCtx {
                 return <MidLlvmPrepared.None />
             }
         }
-        val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: closure.bodyId)
-        match instantiated.error {
-            MidInstantiateError.None => {}
-            _ => {
-                self.recordMidInstantiate(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: instantiated.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-        match accesses.error {
-            MidAccessError.None => {}
-            _ => {
-                self.recordMidAccess(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val dropped: MidCanonicalBody = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: accesses.body))
-        val verification: MidVerification = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
-        match verification.error {
-            MidVerifyError.None => {}
-            _ => {
-                self.recordMidVerify(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: verification.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        val preflight: MidLlvmPreflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: dropped, abiParameterCount: fact.parameters.count())
-        match preflight {
-            MidLlvmPreflight.Ready => {}
-            _ => {
-                self.recordMidPreflight(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, reason: preflight)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        return <MidLlvmPrepared.Ready canonical=dropped abiParameterCount=fact.parameters.count() />
+        return self.prepareCanonicalForLlvm(c: inout c, canonical: built.canonical, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
     }
 
     // Captures are borrowed from the environment for this activation. Mutable

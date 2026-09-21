@@ -12,28 +12,13 @@ pub impl LlvmCtx {
                 c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid body construction failed")
                 return <MidCanonicalBody body=0U64 /> }
         }
-        val instantiated = instantiateCanonicalMidBody(c: inout c, body: built.canonical, bodyId: bodyId)
-        match instantiated.error {
-            MidInstantiateError.None => {}
-            _ => { self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fi, reason: instantiated.error)
-                c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid instantiation failed")
-                return <MidCanonicalBody body=0U64 /> }
+        match self.prepareMidExecutable(c: inout c, canonical: built.canonical, bodyId: bodyId, fnIdx: fi) {
+            Optional.Some(v: val executable) => { return executable.canonical }
+            Optional.None => {
+                c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid preparation failed")
+                return <MidCanonicalBody body=0U64 />
+            }
         }
-        val access = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
-        match access.error {
-            MidAccessError.None => {}
-            _ => { c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid access elaboration failed")
-                return <MidCanonicalBody body=0U64 /> }
-        }
-        val dropped = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: optimizeCanonicalMidReturns(arena: inout c.mid, canonical: access.body))
-        val verified = verifyExecutableCanonicalMidBody(c: inout c, canonical: dropped)
-        match verified.error {
-            MidVerifyError.None => {}
-            _ => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verified.error)
-                c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid ownership verification failed")
-                return <MidCanonicalBody body=0U64 /> }
-        }
-        return dropped
     }
 
     inout fn buildMidAsyncFrameTy(c: inout Comp, bodyId: U64) -> LLVMTypeRef {
