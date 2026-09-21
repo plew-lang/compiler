@@ -1,7 +1,8 @@
 import @Std/Io with { print }
+import /Frontend with { Comp }
 import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
-import /Mid/Drop with { elaborateMidDrops }
-import /Mid/Verify with { MidVerifyError, verifyMidBody }
+import /Mid/Drop with { elaborateCanonicalMidDrops }
+import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
 
 fn position(block: U64, reversed: Bool) -> U64 {
     if reversed { return 6U64 - block }
@@ -24,20 +25,24 @@ fn check(reversed: Bool) {
     blocks.set(i: position(block: 5U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Goto target=position(block: 1U64, reversed: reversed) /> />)
     blocks.set(i: position(block: 6U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Return /> />)
     val body: MidBody = <MidBody locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />] blocks=blocks entry=position(block: 0U64, reversed: reversed) />
-    val elaborated: MidBody = elaborateMidDrops(body: body)
-    match verifyMidBody(body: elaborated).error {
+    mut val c: Comp = <Comp />
+    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    match verifyCanonicalMidBody(c: inout c, canonical: elaborated).error {
         MidVerifyError.None => { print("valid") }
         _ => { print("invalid") }
     }
     mut val drops: U64 = 0U64
-    for block in elaborated.blocks {
-        for statement in block.statements {
-            match statement {
-                MidStatement.ConditionalDrop(place: _, flag: _) => { drops += 1U64 }
-                MidStatement.Drop(place: _) => { drops += 1U64 }
-                _ => {}
-            }
+    val node = c.mid.bodies[elaborated.body - 1U64]
+    mut val blockIndex = 0U64
+    while blockIndex < node.blocks.len {
+        val block = c.mid.blocks[node.blocks.start + blockIndex]
+        mut val index = 0U64
+        while index < block.statements.len {
+            val statement = c.mid.statements[block.statements.start + index]
+            if statement.tag == 3U64 || statement.tag == 4U64 { drops += 1U64 }
+            index += 1U64
         }
+        blockIndex += 1U64
     }
     print(drops)
 }

@@ -1,10 +1,10 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Mid with { emptyMidBody, MidBuildError, MidInstantiateError, buildParametricMidBody, instantiateMidBody }
+import /Mid with { emptyMidBody, MidBuildError, MidInstantiateError, buildParametricMidBody, instantiateCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
-    val result = instantiateMidBody(c: inout c, body: emptyMidBody(sourceFunction: 0U64), bodyId: 1U64)
+    val result = instantiateCanonicalMidBody(c: inout c, body: c.mid.store(body: emptyMidBody(sourceFunction: 0U64)), bodyId: 1U64)
     match result.error {
         MidInstantiateError.InvalidBodyInstance => { write(s: "invalid-body-instance\n") }
         _ => { write(s: "wrong-error\n") }

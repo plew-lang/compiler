@@ -1,5 +1,6 @@
 import @Std/Io with { write }
-import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallReceiver, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops, verifyMidBody }
+import /Frontend with { Comp }
+import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallReceiver, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn printState(state: MidOwnership) {
     match state {
@@ -17,6 +18,7 @@ fn printAccessibility(state: MidAccessibility) {
 }
 
 fn main() {
+    mut val c: Comp = <Comp />
     val file: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
     val result: MidLocalDecl = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />
     val place: MidPlace = <MidPlace local=0U64 />
@@ -26,36 +28,33 @@ fn main() {
     val kept: MidBlock = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
     val join: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val body: MidBody = <MidBody locals=[file, result] blocks=[entry, moved, kept, join] entry=0U64 />
-    val ownership = analyzeMidOwnership(body: body)
+    val frozen = c.mid.store(body: body)
+    val ownership = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
     val joinOwnership = ownership[3U64]
     printState(state: joinOwnership[0U64])
-    val accessibility = analyzeMidAccessibility(body: body)
+    val accessibility = analyzeCanonicalMidAccessibility(c: c, canonical: frozen)
     val joinAccessibility = accessibility[3U64]
     printAccessibility(state: joinAccessibility[0U64])
-    val elaborated: MidBody = elaborateMidDrops(body: body)
-    match elaborated.blocks[3U64].statements[0U64] {
-        MidStatement.ConditionalDrop(place: _, flag: _) => { write(s: "conditional-drop\n") }
-        _ => { write(s: "missing-conditional-drop\n") }
-    }
-    match elaborated.blocks[3U64].statements[1U64] {
-        MidStatement.SetDropFlag(local: _, isSet: val isSet) => {
-            if !isSet { write(s: "conditional-drop-clears-flag\n") }
-            else { write(s: "conditional-drop-keeps-flag\n") }
-        }
-        _ => { write(s: "conditional-drop-keeps-flag\n") }
-    }
-    match verifyMidBody(body: body).error {
-        MidVerifyError.None => { write(s: "valid\n") }
+    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val node = c.mid.bodies[elaborated.body - 1U64]
+    val block = c.mid.blocks[node.blocks.start + 3U64]
+    if c.mid.statements[block.statements.start].tag == 4U64 { write(s: "conditional-drop\n") }
+    else { write(s: "missing-conditional-drop\n") }
+    val clear = c.mid.statements[block.statements.start + 1U64]
+    if clear.tag == 5U64 && !clear.isSet { write(s: "conditional-drop-clears-flag\n") }
+    else { write(s: "conditional-drop-keeps-flag\n") }
+    match verifyCanonicalMidBody(c: inout c, canonical: c.mid.store(body: body)).error {
+        MidVerifyError.OutstandingOwnership => { write(s: "unelaborated-rejected\n") }
         _ => { write(s: "invalid\n") }
     }
-    match verifyMidBody(body: elaborated).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: elaborated).error {
         MidVerifyError.None => { write(s: "elaborated-valid\n") }
         _ => { write(s: "elaborated-invalid\n") }
     }
     val badEntry: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Move place=place />, <MidOperand.Move place=place />] destination=resultPlace target=1U64 /> />
     val badReturn: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val bad: MidBody = <MidBody locals=[file, result] blocks=[badEntry, badReturn] entry=0U64 />
-    match verifyMidBody(body: bad).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: c.mid.store(body: bad)).error {
         MidVerifyError.MoveUnavailable => { write(s: "move-unavailable\n") }
         _ => { write(s: "wrong-error\n") }
     }

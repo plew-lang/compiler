@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { Global }
-import /Mid with { MidBlock, MidBody, MidBuildError, MidCanonicalBody, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateMidDrops, verifyCanonicalMidBody, verifyMidBody }
+import /Mid with { MidBlock, MidBody, MidBuildError, MidCanonicalBody, MidLocalDecl, MidPlace, MidScope, MidStatement, MidTerminator, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 import /Mid/Verify with { MidVerifyError }
 
 // InitializeGlobal is the one transfer into a process-lifetime root.  It is
@@ -26,25 +26,7 @@ fn globalReplaceBody(withDrop: Bool) -> MidBody {
 
 fn main() {
     val synthetic: MidBody = globalInitBody(owner: 18446744073709551615U64)
-    match verifyMidBody(body: synthetic).error {
-        MidVerifyError.None => { write(s: "synthetic:accepted\n") }
-        _ => { write(s: "synthetic:rejected\n") }
-    }
-    val elaborated: MidBody = elaborateMidDrops(body: synthetic)
-    match elaborated.blocks[0U64].statements[0U64] {
-        MidStatement.InitializeGlobal(destination: _, source: _) => { write(s: "no-pre-drop\n") }
-        _ => { write(s: "unexpected-pre-drop\n") }
-    }
-
     val ordinary: MidBody = globalInitBody(owner: 0U64)
-    match verifyMidBody(body: ordinary).error {
-        MidVerifyError.MoveUnavailable => { write(s: "ordinary:rejected\n") }
-        MidVerifyError.None => { write(s: "ordinary:accepted\n") }
-        _ => { write(s: "ordinary:wrong-error\n") }
-    }
-
-    // The production verifier consumes frozen rows, so assert the same owner
-    // restriction after the draft-to-canonical boundary as well.
     mut val c: Comp = <Comp />
     c.arena.globals.append(<Global nameStart=77U64 nameLen=1U64 letStmt=0U64 mutable=false />)
     c.arena.globals.append(<Global nameStart=78U64 nameLen=1U64 letStmt=0U64 mutable=true />)
@@ -59,6 +41,12 @@ fn main() {
         MidVerifyError.None => { write(s: "canonical-ordinary:accepted\n") }
         _ => { write(s: "canonical-ordinary:wrong-error\n") }
     }
+
+    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: canonicalSynthetic)
+    val node = c.mid.bodies[elaborated.body - 1U64]
+    val block = c.mid.blocks[node.blocks.start]
+    if c.mid.statements[block.statements.start].tag == 8U64 { write(s: "no-pre-drop\n") }
+    else { write(s: "unexpected-pre-drop\n") }
 
     val missingDrop: MidCanonicalBody = c.mid.store(body: globalReplaceBody(withDrop: false))
     match verifyCanonicalMidBody(c: inout c, canonical: missingDrop).error {

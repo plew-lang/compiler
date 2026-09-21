@@ -1,7 +1,8 @@
 import @Std/Io with { write }
+import /Frontend with { Comp }
 import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
-import /Mid/Drop with { elaborateMidDrops }
-import /Mid/Verify with { MidVerifyError, verifyMidBody }
+import /Mid/Drop with { elaborateCanonicalMidDrops }
+import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
 
 fn condition() -> MidOperand {
     return <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
@@ -10,7 +11,9 @@ fn condition() -> MidOperand {
 fn verifyCase(label: String, body: MidBody, valid: Bool) {
     mut val accepted: Bool = false
     mut val uninitialized: Bool = false
-    match verifyMidBody(body: body).error {
+    mut val c: Comp = <Comp />
+    val canonical = c.mid.store(body: body)
+    match verifyCanonicalMidBody(c: inout c, canonical: canonical).error {
         MidVerifyError.None => { accepted = true }
         MidVerifyError.UninitializedDropFlag => { uninitialized = true }
         _ => {}
@@ -42,34 +45,32 @@ fn main() {
     val local: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false />
     val assigned: MidBlock = <MidBlock statements=[<MidStatement.Assign destination=place value=<MidRvalue.Use operand=condition() /> />] terminator=<MidTerminator.Goto target=3U64 /> />
     val body: MidBody = <MidBody locals=[local] blocks=[<MidBlock terminator=branch />, assigned, kept, <MidBlock terminator=<MidTerminator.Return /> />] />
-    val elaborated: MidBody = elaborateMidDrops(body: body)
+    mut val c: Comp = <Comp />
+    val canonical = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
+    val elaborated = c.mid.bodies[canonical.body - 1U64]
     mut val flags: U64 = 0U64
     mut val initialized: U64 = 0U64
     mut val i: U64 = 0U64
-    while i < elaborated.locals.count() {
-        if elaborated.locals[i].isDropFlag { flags += 1U64 }
+    while i < elaborated.locals.len {
+        if c.mid.locals[elaborated.locals.start + i].isDropFlag { flags += 1U64 }
         i += 1U64
     }
     i = 0U64
-    while i < elaborated.blocks[elaborated.entry].statements.count() {
-        match elaborated.blocks[elaborated.entry].statements[i] {
-            MidStatement.SetDropFlag(local: _, isSet: val isSet) => {
-                if !isSet { initialized += 1U64 }
-            }
-            _ => {}
-        }
+    val entry = c.mid.blocks[elaborated.blocks.start + elaborated.entry]
+    while i < entry.statements.len {
+        val statement = c.mid.statements[entry.statements.start + i]
+        if statement.tag == 5U64 && !statement.isSet { initialized += 1U64 }
         i += 1U64
     }
     if flags > 0U64 && initialized == flags { write(s: "producer:ok\n") }
     else { write(s: "producer:wrong\n") }
     if elaborated.entry >= body.blocks.count() {
-        match elaborated.blocks[elaborated.entry].terminator {
-            MidTerminator.Goto(target: val target) => {
-                if target == body.entry { write(s: "invocation-entry:ok\n") }
-                else { write(s: "invocation-entry:wrong\n") }
-            }
-            _ => { write(s: "invocation-entry:wrong\n") }
-        }
+        val term = c.mid.terminators[entry.terminator - 1U64]
+        if term.tag == 2U64 && term.target == body.entry { write(s: "invocation-entry:ok\n") }
+        else { write(s: "invocation-entry:wrong\n") }
     } else { write(s: "invocation-entry:wrong\n") }
-    verifyCase(label: "producer-verified", body: elaborated, valid: true)
+    match verifyCanonicalMidBody(c: inout c, canonical: canonical).error {
+        MidVerifyError.None => { write(s: "producer-verified:ok\n") }
+        _ => { write(s: "producer-verified:wrong\n") }
+    }
 }

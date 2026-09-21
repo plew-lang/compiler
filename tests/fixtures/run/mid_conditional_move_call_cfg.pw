@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { SemanticExprType, StructDef, Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
-import /Mid with { MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidVerifyError, addMidLocal, analyzeMidOwnership, buildMidIf, elaborateMidDrops, verifyMidBody }
+import /Mid with { MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidIf, elaborateCanonicalMidDrops, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -38,16 +38,16 @@ fn main() {
     val file = addMidLocal(state: inout state, declarationTarget: 90U64, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: true)
     val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
-    val ownershipStates = analyzeMidOwnership(body: body)
+    val frozen = c.mid.store(body: body)
+    val ownershipStates = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
     val ownership: MidOwnership = ownershipStates[3U64][0U64]
-    val elaborated = elaborateMidDrops(body: body)
+    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: c.mid.store(body: body))
     mut val dropped: Bool = false
-    match elaborated.blocks[3U64].statements[0U64] {
-        MidStatement.ConditionalDrop(place: _, flag: _) => { dropped = true }
-        _ => {}
-    }
+    val node = c.mid.bodies[elaborated.body - 1U64]
+    val join = c.mid.blocks[node.blocks.start + 3U64]
+    if c.mid.statements[join.statements.start].tag == 4U64 { dropped = true }
     mut val valid: Bool = false
-    match verifyMidBody(body: elaborated).error { MidVerifyError.None => { valid = true } _ => {} }
+    match verifyCanonicalMidBody(c: inout c, canonical: elaborated).error { MidVerifyError.None => { valid = true } _ => {} }
     mut val built: Bool = false
     match result { MidBuildError.None => { built = true } _ => {} }
     match ownership {

@@ -94,6 +94,8 @@ pub impl LlvmCtx {
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
             MidVerifyError.MissingOwnershipContract => { return 12U64 }
+            MidVerifyError.OutstandingOwnership => { return 13U64 }
+            MidVerifyError.LiveInitialization => { return 14U64 }
             MidVerifyError.InvalidDropFlag => { return 5U64 }
             MidVerifyError.UninitializedDropFlag => { return 9U64 }
             MidVerifyError.UnelaboratedBindingEnd => { return 6U64 }

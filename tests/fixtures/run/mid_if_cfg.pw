@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { Block, Expr, SemanticExprType, StructDef, Stmt, Func, InstanceEnvironment, FinalStorageResolution, ValueConversionProof, identValueCode }
-import /Mid with { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeMidOwnership, buildMidBlock, buildMidIf, elaborateMidDrops, instantiateMidBody, verifyMidBody }
+import /Mid with { MidInstantiateError, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeCanonicalMidOwnership, buildMidBlock, buildMidIf, elaborateCanonicalMidDrops, instantiateCanonicalMidBody, verifyCanonicalMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -31,7 +31,8 @@ fn main() {
     val fileLocal = addMidLocal(state: inout state, declarationTarget: 60U64, typeTerm: fileTerm, isUnique: true, isParameter: false, ownsAtEntry: true)
     val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
     val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
-    val ownership = analyzeMidOwnership(body: body)
+    val frozen = c.mid.store(body: body)
+    val ownership = analyzeCanonicalMidOwnership(c: c, canonical: frozen)
     val joinState: MidOwnership = ownership[3U64][0U64]
     // The builder yields parametric storage boundaries. Publish the concrete
     // frontend fact and instantiate before drop elaboration and verification.
@@ -42,17 +43,16 @@ fn main() {
     val instance = c.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
     val identity = c.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
     c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=0U64 sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
-    val concrete = instantiateMidBody(c: inout c, body: body, bodyId: instance)
+    val concrete = instantiateCanonicalMidBody(c: inout c, body: c.mid.store(body: body), bodyId: instance)
     mut val instantiated: Bool = false
     match concrete.error { MidInstantiateError.None => { instantiated = true } _ => {} }
-    val elaborated = elaborateMidDrops(body: concrete.body)
+    val elaborated = elaborateCanonicalMidDrops(c: inout c, canonical: concrete.body)
     mut val hasConditionalDrop: Bool = false
-    match elaborated.blocks[3U64].statements[0U64] {
-        MidStatement.ConditionalDrop(place: _, flag: _) => { hasConditionalDrop = true }
-        _ => {}
-    }
+    val node = c.mid.bodies[elaborated.body - 1U64]
+    val join = c.mid.blocks[node.blocks.start + 3U64]
+    if c.mid.statements[join.statements.start].tag == 4U64 { hasConditionalDrop = true }
     mut val elaboratedValid: Bool = false
-    match verifyMidBody(body: elaborated).error {
+    match verifyCanonicalMidBody(c: inout c, canonical: elaborated).error {
         MidVerifyError.None => { elaboratedValid = true }
         _ => {}
     }

@@ -577,6 +577,8 @@ pub impl LlvmCtx {
                                         MidVerifyError.UninstantiatedStorageBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.MissingOwnershipContract => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.OutstandingOwnership => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.LiveInitialization => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                     }
                                 }
                             }

@@ -206,6 +206,8 @@ pub impl LlvmCtx {
                                                 MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.MissingOwnershipContract => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.OutstandingOwnership => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.LiveInitialization => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 _ => {}
                                             }
                                         if c.traceCodegen {
@@ -221,6 +223,8 @@ pub impl LlvmCtx {
                                                 MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
                                                 MidVerifyError.UninstantiatedCastBoundary => { eprint(text: "cast-boundary") }
                                                 MidVerifyError.MissingOwnershipContract => { eprint(text: "ownership-contract") }
+                                                MidVerifyError.OutstandingOwnership => { eprint(text: "outstanding-ownership") }
+                                                MidVerifyError.LiveInitialization => { eprint(text: "live-initialization") }
                                                 _ => { eprint(text: "unknown") }
                                             }
                                             eprint(text: " block=")

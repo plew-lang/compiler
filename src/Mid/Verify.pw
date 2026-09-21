@@ -14,6 +14,8 @@ export enum MidVerifyError {
     MoveUnavailable
     DropUnavailable
     MissingOwnershipContract
+    OutstandingOwnership
+    LiveInitialization
     InvalidDropFlag
     UninitializedDropFlag
     UnelaboratedScopeExit
@@ -45,6 +47,35 @@ fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
         index += 1U64
     }
     return false
+}
+
+// Caller-owned parameters/captures are guaranteed by the enclosing call.
+// Every other local read requires a live owner, including Copy and projections.
+fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: Array[MidOwnership], placeId: U64, block: U64) -> MidVerification {
+    if placeId == 0U64 || placeId > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+    val place = c.mid.places[placeId - 1U64]
+    if place.rootTag == 2U64 {
+        if !canonicalMidGlobalRootIsValid(c: c, place: place) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block /> }
+    } else {
+        if place.rootTag != 1U64 || place.local >= body.locals.len || place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+        val local = c.mid.locals[body.locals.start + place.local]
+        if !local.isBorrowed && !(local.isParameter && !local.ownsAtEntry && !local.isInout) {
+            match states[place.local] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> } }
+        }
+    }
+    mut val index = 0U64
+    while index < place.projections.len {
+        val projection = c.mid.projections[place.projections.start + index]
+        if projection.tag == 2U64 {
+            if projection.indexLocal >= body.locals.len || projection.indexLocal >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+            val local = c.mid.locals[body.locals.start + projection.indexLocal]
+            if !local.isBorrowed && !(local.isParameter && !local.ownsAtEntry) {
+                match states[projection.indexLocal] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=projection.indexLocal /> } }
+            }
+        }
+        index += 1U64
+    }
+    return <MidVerification />
 }
 
 fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], operandId: U64, block: U64, executable: Bool) -> MidVerification {
@@ -107,6 +138,10 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
             }
         }
     }
+    if operand.tag >= 1U64 && operand.tag <= 4U64 {
+        val read = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: operand.place, block: block)
+        match read.error { MidVerifyError.None => {} _ => { return read } }
+    }
     if operand.tag != 2U64 { return <MidVerification /> }
     if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
@@ -124,6 +159,10 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
 fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, executable: Bool) -> MidVerification {
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    if value.place != 0U64 {
+        val read = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: value.place, block: block)
+        match read.error { MidVerifyError.None => {} _ => { return read } }
+    }
     if executable && value.tag == 6U64 && !canonicalMidConversionContractsAreReady(c: inout c, proofId: value.conversion) {
         return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
     }
@@ -445,14 +484,167 @@ fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool 
     return true
 }
 
+// Enumerate reachable blocks once; dead code carries no runtime obligation.
+fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
+    mut val reached: Array[Bool] = []
+    mut val index = 0U64
+    while index < body.blocks.len { reached.append(false)
+        index += 1U64 }
+    mut val queue: Array[U64] = [body.entry]
+    reached.set(i: body.entry, value: true)
+    index = 0U64
+    while index < queue.count() {
+        val block = c.mid.blocks[body.blocks.start + queue[index]]
+        val term = c.mid.terminators[block.terminator - 1U64]
+        for target in canonicalMidVerifySuccessors(c: c, term: term) {
+            if target < reached.count() && !reached[target] { reached.set(i: target, value: true)
+                queue.append(target) }
+        }
+        index += 1U64
+    }
+    return reached
+}
+
+fn canonicalMidFlagPlace(c: Comp, placeId: U64, owner: U64) -> Bool {
+    if placeId == 0U64 || placeId > c.mid.places.count() { return false }
+    val place = c.mid.places[placeId - 1U64]
+    return place.rootTag == 1U64 && place.local == owner && canonicalMidPlaceIsWhole(arena: c.mid, place: place)
+}
+
+fn canonicalMidFlagOperand(c: Comp, operandId: U64, owner: U64, state: U64) -> U64 {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return state }
+    val operand = c.mid.operands[operandId - 1U64]
+    if operand.tag == 2U64 && canonicalMidFlagPlace(c: c, placeId: operand.place, owner: owner) { return state % 2U64 }
+    return state
+}
+
+fn canonicalMidFlagRvalue(c: Comp, valueId: U64, owner: U64, state: U64) -> U64 {
+    if valueId == 0U64 || valueId > c.mid.rvalues.count() { return state }
+    val value = c.mid.rvalues[valueId - 1U64]
+    mut val result = canonicalMidFlagOperand(c: c, operandId: value.operand, owner: owner, state: state)
+    mut val index = 0U64
+    if value.tag >= 3U64 && value.tag <= 5U64 {
+        while index < value.elements.len {
+            result = canonicalMidFlagOperand(c: c, operandId: c.mid.aggregateElements[value.elements.start + index].operand, owner: owner, state: result)
+            index += 1U64
+        }
+    } else if value.tag == 19U64 {
+        while index < value.elements.len {
+            result = canonicalMidFlagOperand(c: c, operandId: c.mid.closureCaptures[value.elements.start + index].operand, owner: owner, state: result)
+            index += 1U64
+        }
+    }
+    return result
+}
+
+// For each flag, explore the four joint states (consumed/owned, false/true).
+// Joining these pairs, rather than separate may-owned and may-true facts,
+// preserves their correlation through diamonds and loops. Each block/pair is
+// visited at most once. Flag initialization is checked independently above.
+fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerification {
+    mut val owners: Array[U64] = []
+    mut val index = 0U64
+    while index < body.locals.len { owners.append(body.locals.len)
+        index += 1U64 }
+    mut val blockIndex = 0U64
+    while blockIndex < body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + blockIndex]
+        index = 0U64
+        while index < block.statements.len {
+            val statement = c.mid.statements[block.statements.start + index]
+            if statement.tag == 4U64 {
+                if statement.flag >= owners.count() || statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex /> }
+                val owner = c.mid.places[statement.destination - 1U64].local
+                if owners[statement.flag] != body.locals.len && owners[statement.flag] != owner { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex local=statement.flag /> }
+                owners.set(i: statement.flag, value: owner)
+            }
+            index += 1U64
+        }
+        blockIndex += 1U64
+    }
+    mut val flag = 0U64
+    while flag < owners.count() {
+        val owner = owners[flag]
+        if owner == body.locals.len { flag += 1U64
+            continue }
+        mut val initial = 0U64
+        if c.mid.locals[body.locals.start + owner].ownsAtEntry { initial = 2U64 }
+        mut val visited: Array[Bool] = []
+        index = 0U64
+        while index < body.blocks.len * 4U64 { visited.append(false)
+            index += 1U64 }
+        mut val queue: Array[U64] = [body.entry * 4U64 + initial, body.entry * 4U64 + initial + 1U64]
+        visited.set(i: queue[0U64], value: true)
+        visited.set(i: queue[1U64], value: true)
+        mut val next = 0U64
+        while next < queue.count() {
+            blockIndex = queue[next] / 4U64
+            mut val state = queue[next] % 4U64
+            next += 1U64
+            val block = c.mid.blocks[body.blocks.start + blockIndex]
+            index = 0U64
+            while index < block.statements.len {
+                val statement = c.mid.statements[block.statements.start + index]
+                if statement.tag == 5U64 && statement.flag == flag {
+                    state = (state / 2U64) * 2U64
+                    if statement.isSet { state += 1U64 }
+                } else if statement.tag == 1U64 || statement.tag == 9U64 {
+                    state = canonicalMidFlagRvalue(c: c, valueId: statement.value, owner: owner, state: state)
+                    if canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
+                } else if statement.tag == 2U64 || statement.tag == 8U64 {
+                    if canonicalMidFlagPlace(c: c, placeId: statement.source, owner: owner) { state = state % 2U64 }
+                    if statement.tag == 2U64 && canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
+                } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+                    if canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) {
+                        if statement.tag == 4U64 && statement.flag == flag && state != 0U64 && state != 3U64 { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex local=flag /> }
+                        state = state % 2U64
+                    }
+                } else if statement.tag == 13U64 {
+                    if canonicalMidFlagPlace(c: c, placeId: statement.source, owner: owner) { state = state % 2U64 }
+                    mut val output = 0U64
+                    while output < statement.enumDestinations.len {
+                        if canonicalMidFlagPlace(c: c, placeId: c.mid.enumDestinations[statement.enumDestinations.start + output].place, owner: owner) { state = state % 2U64 + 2U64 }
+                        output += 1U64
+                    }
+                }
+                index += 1U64
+            }
+            val term = c.mid.terminators[block.terminator - 1U64]
+            state = canonicalMidFlagOperand(c: c, operandId: term.discriminant, owner: owner, state: state)
+            state = canonicalMidFlagOperand(c: c, operandId: term.value, owner: owner, state: state)
+            if term.tag == 4U64 {
+                if term.callReceiver != 0U64 { state = canonicalMidFlagOperand(c: c, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand, owner: owner, state: state) }
+                index = 0U64
+                while index < term.args.len {
+                    state = canonicalMidFlagOperand(c: c, operandId: c.mid.callArguments[term.args.start + index], owner: owner, state: state)
+                    index += 1U64
+                }
+            }
+            if (term.tag == 4U64 || term.tag == 10U64) && canonicalMidFlagPlace(c: c, placeId: term.destination, owner: owner) { state = state % 2U64 + 2U64 }
+            for target in canonicalMidVerifySuccessors(c: c, term: term) {
+                val entry = target * 4U64 + state
+                if target < body.blocks.len && !visited[entry] { visited.set(i: entry, value: true)
+                    queue.append(entry) }
+            }
+        }
+        flag += 1U64
+    }
+    return <MidVerification />
+}
+
 fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, executable: Bool) -> MidVerification {
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
+    if !c.mid.isWellFormed(body: canonical) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
     val incoming: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(c: c, canonical: canonical)
+    val reachable = canonicalMidReachable(c: c, body: body)
+
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
+        if !reachable[blockI] { blockI += 1U64
+            continue }
         mut val states: Array[MidOwnership] = []
         if blockI < incoming.count() { states = incoming[blockI] }
         val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
@@ -469,7 +661,10 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                     if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
-                    if destination.rootTag == 1U64 && destination.projections.len == 0U64 && destination.local < states.count() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    if destination.projections.len == 0U64 && destination.local < states.count() {
+                        match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.LiveInitialization /> block=blockI local=destination.local /> } }
+                        if !c.mid.locals[body.locals.start + destination.local].isBorrowed { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    }
                 }
             }
             if statement.tag == 9U64 {
@@ -509,8 +704,8 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 if destination.rootTag == 2U64 { }
                 else if destination.projections.len == 0U64 {
                     match states[destination.local] {
-                        MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
-                        _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                        MidOwnership.Consumed => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                        _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     }
                 } else {
                     match states[destination.local] {
@@ -623,7 +818,10 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             }
             if term.destination != 0U64 && term.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
-                if destination.projections.len == 0U64 && destination.local < states.count() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                if destination.projections.len == 0U64 && destination.local < states.count() {
+                    match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.LiveInitialization /> block=blockI local=destination.local /> } }
+                    states.set(i: destination.local, value: <MidOwnership.Owned />)
+                }
             }
             if !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         }
@@ -644,9 +842,19 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.value, block: blockI, executable: executable)
             match result.error { MidVerifyError.None => {} _ => { return result } }
         }
+        if term.tag == 5U64 || term.tag == 6U64 {
+            mut val local = 0U64
+            while local < body.locals.len {
+                val declaration = c.mid.locals[body.locals.start + local]
+                if !declaration.isBorrowed && !declaration.isInout && !declaration.isDropFlag && !(declaration.isParameter && !declaration.ownsAtEntry) {
+                    match states[local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.OutstandingOwnership /> block=blockI local=local /> } }
+                }
+                local += 1U64
+            }
+        }
         blockI = blockI + 1U64
     }
-    return <MidVerification />
+    return verifyCanonicalMidFlagOwnership(c: c, body: body)
 }
 
 fn midVerifyConsumeOperand(body: MidBody, states: inout Array[MidOwnership], operand: MidOperand, block: U64) -> MidVerification {

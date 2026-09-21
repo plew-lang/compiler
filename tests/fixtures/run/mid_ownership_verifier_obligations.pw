@@ -1,0 +1,52 @@
+// Mutated executable IR must be rejected, independently of the producer.
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Mid with { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
+fn check(mode: U64) {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "String")
+    val t = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    c.enqueueFinalDestruction(typeRef: t)
+    val p = <MidPlace local=0U64 typeTerm=t />
+    val q = <MidPlace local=1U64 typeTerm=t />
+    mut val statements: Array[MidStatement] = []
+    if mode == 1U64 {
+        statements.append(<MidStatement.Drop place=p />)
+        statements.append(<MidStatement.Assign destination=q value=<MidRvalue.Use operand=<MidOperand.Copy place=p /> /> />)
+        statements.append(<MidStatement.Drop place=q />)
+    }
+    if mode == 3U64 { statements.append(<MidStatement.Drop place=p />) }
+    if mode == 2U64 {
+        statements.append(<MidStatement.Assign destination=p value=<MidRvalue.Use operand=<MidOperand.Copy place=p /> /> />)
+        statements.append(<MidStatement.Drop place=p />)
+    }
+    val body = c.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />, <MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] />)
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: body).error {
+        MidVerifyError.None => { print("accepted") }
+        _ => { print("rejected") }
+    }
+}
+fn flagCase(correct: Bool) {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "String")
+    val t = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    c.enqueueFinalDestruction(typeRef: t)
+    val p = <MidPlace local=0U64 typeTerm=t />
+    val owner = <MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />
+    val flag = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />
+    val clear = <MidStatement.SetDropFlag local=1U64 isSet=correct />
+    val condition = <MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=true typeTerm=0U64 /> />
+    val entry = <MidBlock statements=[clear] terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[1U64] otherwise=2U64 /> />
+    val moved = <MidBlock statements=[<MidStatement.Drop place=p />, <MidStatement.SetDropFlag local=1U64 isSet=false />] terminator=<MidTerminator.Goto target=3U64 /> />
+    val kept = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
+    val join = <MidBlock statements=[<MidStatement.ConditionalDrop place=p flag=1U64 />] terminator=<MidTerminator.Return /> />
+    val body = c.mid.store(body: <MidBody locals=[owner, flag] blocks=[entry, moved, kept, join] />)
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: body).error {
+        MidVerifyError.None => { print("flag-case-accepted") }
+        _ => { print("flag-case-rejected") }
+    }
+}
+fn main() { check(mode: 0U64) check(mode: 1U64) check(mode: 2U64) flagCase(correct: false) check(mode: 3U64) flagCase(correct: true) }
