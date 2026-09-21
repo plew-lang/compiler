@@ -377,9 +377,8 @@ struct LlvmCtx {
     // Finalized method slots requested during emission join the body drain.
     pub mut val genMethEmit: Array[U64]
     // ---- async (spec/14): stackless state machine, mirrors Codegen/Async.pw ----
-    // PlewPromise value type { i32 done, i64 value, ptr k, ptr kframe } — ABI-
-    // identical to the C runtime's PlewPromise (the resume continuation `k` is a
-    // void(*)(void*); `kframe` is its frame). Awaited promises are PlewPromise*.
+    // Promise completion cell: the first two fields are read by Mid lowering;
+    // the runtime exclusively manages the waiter head/tail pointers.
     pub mut val promiseTy: LLVMTypeRef
     // Physical state of the Mid-generated async resume: frame layout, callback,
     // and dispatch switch. Suspension states and storage come from canonical Mid.
@@ -674,7 +673,7 @@ export fn emitLlvm(c: inout Comp) {
     anyelems.append(ptrty)
     anyelems.append(ptrty)
     val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U64, 0I32)
-    // PlewPromise = { i32 done, i64 value, ptr k, ptr kframe } (ABI-identical to
+    // PlewPromise = { i32 done, i64 value, ptr waiterHead, ptr waiterTail } (ABI-identical to
     // the C runtime). Awaited values are type-erased through `value` (i64).
     mut val promelems: Array[LLVMTypeRef] = []
     promelems.append(LLVMInt32TypeInContext(ctx))
@@ -1138,15 +1137,13 @@ export fn emitLlvmRuntime() {
     write(s: "long long plew_execCode(void){ return plew_last_exit; }\n")
     // ---- async runtime (event loop / promises / timers) ----
     //
-    // The SAME runtime as the C backend (Codegen/Async.pw), but the symbols the IR
-    // calls (promise_new / promise_resolve / sleep / loop_run / frame_alloc /
-    // frame_free) have EXTERNAL linkage — the IR is a separate translation unit, so
-    // `static` (file-local, as in the single-TU C backend) would leave them
-    // unresolved at link time. The queues/timers and their helpers stay file-local.
-    // PlewPromise's layout matches the IR's { i32 done, i64 value, ptr k, ptr kframe }.
+    // Runtime symbols have external linkage for the separate LLVM module.
+    // Promise layout is { i32 done, i64 value, ptr waiterHead, ptr waiterTail }.
+    // Pending activations retain their awaited handle; the promise owns only
+    // waiter nodes, and transfers callbacks to the ready queue at completion.
     write(s: "typedef struct PlewPromise PlewPromise;\n")
     write(s: "typedef void (*PlewResumeFn)(void*);\n")
-    write(s: "struct PlewPromise { int done; long long value; PlewResumeFn k; void* kframe; };\n")
+    write(s: "typedef struct PlewWaiter { PlewResumeFn fn; void* frame; struct PlewWaiter* next; } PlewWaiter;\nstruct PlewPromise { int done; long long value; PlewWaiter* head; PlewWaiter* tail; };\n")
     write(s: "typedef struct { PlewResumeFn fn; void* arg; } PlewTask;\n")
     write(s: "static PlewTask* plew_ready = 0; static long long plew_ready_len = 0, plew_ready_cap = 0, plew_ready_head = 0;\n")
     write(s: "static void plew_enqueue(PlewResumeFn fn, void* arg) { if (plew_ready_len == plew_ready_cap) { plew_ready_cap = plew_ready_cap ? plew_ready_cap * 2 : 16; plew_ready = (PlewTask*)realloc(plew_ready, (size_t)plew_ready_cap * sizeof(PlewTask)); } plew_ready[plew_ready_len].fn = fn; plew_ready[plew_ready_len].arg = arg; plew_ready_len++; }\n")
@@ -1159,8 +1156,9 @@ export fn emitLlvmRuntime() {
     // fn's frame owns one count (released after the final resolve), the returned Promise
     // VALUE owns another (retained at the entry thunk's return; released by its binding's
     // scope-exit drop / awaited-temp drop), and a pending timer owns a third.
-    write(s: "PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)plew_rawbuf_alloc((long long)sizeof(PlewPromise), 1); p->done = 0; p->value = 0; p->k = 0; p->kframe = 0; return p; }\n")
-    write(s: "void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; if (p->k) { PlewResumeFn k = p->k; void* f = p->kframe; p->k = 0; plew_enqueue(k, f); } }\n")
+    write(s: "PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)plew_rawbuf_alloc((long long)sizeof(PlewPromise), 1); p->done = 0; p->value = 0; p->head = 0; p->tail = 0; return p; }\n")
+    write(s: "void plew_promise_await(PlewPromise* p, PlewResumeFn fn, void* frame) { if (p->done) { plew_enqueue(fn, frame); return; } PlewWaiter* w = (PlewWaiter*)malloc(sizeof(PlewWaiter)); w->fn = fn; w->frame = frame; w->next = 0; if (p->tail) p->tail->next = w; else p->head = w; p->tail = w; }\n")
+    write(s: "void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; PlewWaiter* w = p->head; p->head = 0; p->tail = 0; while (w) { PlewWaiter* next = w->next; plew_enqueue(w->fn, w->frame); free(w); w = next; } }\n")
     write(s: "static void plew_timer_add(long long delay, PlewPromise* p) { if (plew_timers_len == plew_timers_cap) { plew_timers_cap = plew_timers_cap ? plew_timers_cap * 2 : 8; plew_timers = (PlewTimer*)realloc(plew_timers, (size_t)plew_timers_cap * sizeof(PlewTimer)); } plew_timers[plew_timers_len].deadline = plew_vnow + delay; plew_timers[plew_timers_len].p = p; plew_timers_len++; }\n")
     // the timer co-owns the promise until it fires (retain here, drop in plew_loop_run
     // after the resolve) — the returned value keeps the creation count.

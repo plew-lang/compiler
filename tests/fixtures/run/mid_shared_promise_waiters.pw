@@ -1,0 +1,27 @@
+// Multiple pending consumers must all resume, while a completed handle may
+// still be awaited repeatedly. Sum the results without depending on wake order.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+mut val resumed: I64 = 0I64
+async fn answer() -> Promise[I64] {
+    await sleep(ms: 1)
+    return 21I64
+}
+async fn consume(p: Promise[I64]) -> Promise[I64] {
+    val value = await p
+    resumed += 1I64
+    return value
+}
+async fn main() {
+    val pending = answer()
+    val first = consume(p: pending)
+    val second = consume(p: pending)
+    val third = consume(p: pending)
+    val a = await first
+    val b = await second
+    val c = await third
+    print(a + b + c)
+    print(resumed)
+    print(await pending)
+    print(await pending)
+}

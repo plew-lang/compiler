@@ -117,8 +117,13 @@ pub impl LlvmCtx {
         val suspended = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.await.suspend"))
         LLVMBuildCondBr(self.b, complete, completion, suspended)
         LLVMPositionBuilderAtEnd(self.b, suspended)
-        llvmStore(self.b, self.curResumeFn, LLVMBuildStructGEP2(self.b, self.promiseTy, promise, 2U64, anon()))
-        llvmStore(self.b, self.curFrameBase, LLVMBuildStructGEP2(self.b, self.promiseTy, promise, 3U64, anon()))
+        // Registration is runtime-owned: several activations may await the
+        // same shared Promise without replacing each other's continuation.
+        val arguments: Array[LLVMValueRef] = [promise, self.curResumeFn, self.curFrameBase]
+        val types: Array[LLVMTypeRef] = [self.ptrty, self.ptrty, self.ptrty]
+        val signature = LLVMFunctionType(self.voidty, arrayCPtr(types), types.count(), 0I32)
+        val function = self.getOrDeclare(c: inout c, name: "plew_promise_await", fnTy: signature)
+        val ignored = LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), arguments.count(), anon())
         LLVMBuildRetVoid(self.b)
         LLVMAddCase(self.curAsyncSwitch, LLVMConstInt(self.i32ty, term.state, 0I32), completion)
         LLVMPositionBuilderAtEnd(self.b, completion)
