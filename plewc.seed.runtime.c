@@ -104,7 +104,8 @@ char* plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if
 long long plew_execCode(void){ return plew_last_exit; }
 typedef struct PlewPromise PlewPromise;
 typedef void (*PlewResumeFn)(void*);
-struct PlewPromise { int done; long long value; PlewResumeFn k; void* kframe; };
+typedef struct PlewWaiter { PlewResumeFn fn; void* frame; struct PlewWaiter* next; } PlewWaiter;
+struct PlewPromise { int done; long long value; PlewWaiter* head; PlewWaiter* tail; };
 typedef struct { PlewResumeFn fn; void* arg; } PlewTask;
 static PlewTask* plew_ready = 0; static long long plew_ready_len = 0, plew_ready_cap = 0, plew_ready_head = 0;
 static void plew_enqueue(PlewResumeFn fn, void* arg) { if (plew_ready_len == plew_ready_cap) { plew_ready_cap = plew_ready_cap ? plew_ready_cap * 2 : 16; plew_ready = (PlewTask*)realloc(plew_ready, (size_t)plew_ready_cap * sizeof(PlewTask)); } plew_ready[plew_ready_len].fn = fn; plew_ready[plew_ready_len].arg = arg; plew_ready_len++; }
@@ -113,8 +114,9 @@ typedef struct { long long deadline; PlewPromise* p; } PlewTimer;
 static PlewTimer* plew_timers = 0; static long long plew_timers_len = 0, plew_timers_cap = 0; static long long plew_vnow = 0;
 void* plew_frame_alloc(long long sz) { return calloc(1, (size_t)sz); }
 void plew_frame_free(void* p) { free(p); }
-PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)plew_rawbuf_alloc((long long)sizeof(PlewPromise), 1); p->done = 0; p->value = 0; p->k = 0; p->kframe = 0; return p; }
-void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; if (p->k) { PlewResumeFn k = p->k; void* f = p->kframe; p->k = 0; plew_enqueue(k, f); } }
+PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)plew_rawbuf_alloc((long long)sizeof(PlewPromise), 1); p->done = 0; p->value = 0; p->head = 0; p->tail = 0; return p; }
+void plew_promise_await(PlewPromise* p, PlewResumeFn fn, void* frame) { if (p->done) { plew_enqueue(fn, frame); return; } PlewWaiter* w = (PlewWaiter*)malloc(sizeof(PlewWaiter)); w->fn = fn; w->frame = frame; w->next = 0; if (p->tail) p->tail->next = w; else p->head = w; p->tail = w; }
+void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; PlewWaiter* w = p->head; p->head = 0; p->tail = 0; while (w) { PlewWaiter* next = w->next; plew_enqueue(w->fn, w->frame); free(w); w = next; } }
 static void plew_timer_add(long long delay, PlewPromise* p) { if (plew_timers_len == plew_timers_cap) { plew_timers_cap = plew_timers_cap ? plew_timers_cap * 2 : 8; plew_timers = (PlewTimer*)realloc(plew_timers, (size_t)plew_timers_cap * sizeof(PlewTimer)); } plew_timers[plew_timers_len].deadline = plew_vnow + delay; plew_timers[plew_timers_len].p = p; plew_timers_len++; }
 PlewPromise* plew_sleep(long long ms) { PlewPromise* p = plew_promise_new(); plew_rawbuf_retain(p); plew_timer_add(ms, p); return p; }
 void plew_loop_run(void) { PlewTask t; while (1) { while (plew_dequeue(&t)) { t.fn(t.arg); } if (plew_timers_len == 0) break; long long bi = -1, bd = 0; for (long long i = 0; i < plew_timers_len; i++) { if (bi < 0 || plew_timers[i].deadline < bd) { bi = i; bd = plew_timers[i].deadline; } } PlewPromise* p = plew_timers[bi].p; plew_vnow = plew_timers[bi].deadline; plew_timers[bi] = plew_timers[--plew_timers_len]; plew_promise_resolve(p, 0); plew_rawbuf_drop(p); } }
