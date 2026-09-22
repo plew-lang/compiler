@@ -1,0 +1,13 @@
+// Consuming an owner in the same call cannot coexist with read self.
+unique struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    fn read(other: move Counter) -> I64 {
+        
+        return self.value
+    }
+}
+fn main() {
+    mut val counter = <Counter value=1I64 />
+    counter.read(other: move counter)
+}

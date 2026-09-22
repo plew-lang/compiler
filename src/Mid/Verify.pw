@@ -69,7 +69,7 @@ fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
     mut val index = 0U64
     while index < term.args.len {
         val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
-        if argument.tag == 4U64 {
+        if argument.tag == 4U64 || argument.tag == 2U64 {
             mut val storage = argument.place
             if argument.accessPlace != 0U64 { storage = argument.accessPlace }
             if canonicalMidValuePlacesOverlap(c: c, leftId: operand.place, rightId: storage) { return true }

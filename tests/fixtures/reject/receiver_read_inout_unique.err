@@ -1,1 +1,1 @@
-read-only receiver overlaps an inout argument
+read-only receiver overlaps an inout or move argument

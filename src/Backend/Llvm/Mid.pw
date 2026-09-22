@@ -2834,7 +2834,7 @@ pub impl LlvmCtx {
                             MidVerifyError.ConflictingReceiverAccess => {
                                 mut val offset = 0U64
                                 if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                                c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout argument in the same call")
+                                c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
                             }
                             _ => {}
                         }
