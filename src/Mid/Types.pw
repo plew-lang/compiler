@@ -26,8 +26,8 @@ fn midRetagTypesMatch(c: inout Comp, source: U64, target: U64) -> Bool {
     if source == 0U64 || target == 0U64 || source >= c.arena.typeCount() || target >= c.arena.typeCount() { return false }
     if midViewTypesMatch(c: inout c, sourceTerm: source, targetTerm: target) { return true }
     if c.newtypeBoundaryTypesCompatible(source: source, target: target) { return true }
-    val from = c.arena.typeAt(index: source)
-    val to = c.arena.typeAt(index: target)
+    val from = c.arena.typeTerms[source]
+    val to = c.arena.typeTerms[target]
     return c.isFloatType(start: from.nameStart, len: from.nameLen) && c.isFloatType(start: to.nameStart, len: to.nameLen)
 }
 
@@ -90,20 +90,22 @@ fn midPlaceTypeIsValid(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
                 if c.traceCodegen { eprint(text: "[trace-mid-types] missing field layout type=") c.traceMonoTypeHead(ref: current) eprint(text: "\n") }
                 return false
             }
-            val layout = c.arena.finalDestructions[contract - 1U64]
-            if projection.index >= layout.fieldTypes.count() || projection.index >= layout.fieldBoxed.count() || !midTypesEqual(c: inout c, left: layout.fieldTypes[projection.index], right: projection.typeTerm) || layout.fieldBoxed[projection.index] != projection.isBoxed {
+            if projection.index >= c.arena.finalDestructions[contract - 1U64].fieldTypes.count() || projection.index >= c.arena.finalDestructions[contract - 1U64].fieldBoxed.count() { return false }
+            val fieldType = c.arena.finalDestructions[contract - 1U64].fieldTypes[projection.index]
+            val fieldBoxed = c.arena.finalDestructions[contract - 1U64].fieldBoxed[projection.index]
+            if !midTypesEqual(c: inout c, left: fieldType, right: projection.typeTerm) || fieldBoxed != projection.isBoxed {
                 if c.traceCodegen { eprint(text: "[trace-mid-types] field layout index=") eprintU64(n: projection.index) eprint(text: " type=") c.traceMonoTypeHead(ref: current) eprint(text: "\n") }
                 return false
             }
         } else if projection.tag == 2U64 {
             if current == 0U64 || projection.indexLocal >= body.locals.len { return false }
-            val array = c.arena.typeAt(index: current)
-            if c.langArrayDeclOffset == 0U64 || !array.hasDecl || array.declOffset != c.langArrayDeclOffset || array.args.count() != 1U64 || !midTypesEqual(c: inout c, left: array.args[0U64], right: projection.typeTerm) { return false }
+            val array = c.arena.typeTerms[current]
+            if c.langArrayDeclOffset == 0U64 || !array.hasDecl || array.declOffset != c.langArrayDeclOffset || array.args.len != 1U64 || !midTypesEqual(c: inout c, left: c.arena.typeArgumentPool[array.args.start], right: projection.typeTerm) { return false }
             if !c.tcIsPrimInt(ref: c.mid.locals[body.locals.start + projection.indexLocal].typeTerm) { return false }
         } else if projection.tag == 3U64 {
             if current == 0U64 || !c.isStrongRefInst(ref: current) { return false }
-            val reference = c.arena.typeAt(index: current)
-            if reference.args.count() != 1U64 || !midTypesEqual(c: inout c, left: reference.args[0U64], right: projection.typeTerm) { return false }
+            val reference = c.arena.typeTerms[current]
+            if reference.args.len != 1U64 || !midTypesEqual(c: inout c, left: c.arena.typeArgumentPool[reference.args.start], right: projection.typeTerm) { return false }
         } else if projection.tag == 4U64 {
             if !midTypesEqual(c: inout c, left: current, right: projection.sourceTerm) || !c.newtypeBoundaryTypesCompatible(source: current, target: projection.typeTerm) { return false }
         } else {
@@ -126,7 +128,7 @@ fn midOperandTypesAreValid(c: inout Comp, body: MidBodyNode, operandId: U64) -> 
     }
     if operand.place == 0U64 && operand.typeTerm != 0U64 {
         if operand.typeTerm >= c.arena.typeCount() { return false }
-        val type = c.arena.typeAt(index: operand.typeTerm)
+        val type = c.arena.typeTerms[operand.typeTerm]
         if operand.tag == 5U64 {
             if operand.integerBool {
                 if !rangeEquals(bytes: c.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Bool") { return false }

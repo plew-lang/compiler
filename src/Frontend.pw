@@ -607,6 +607,8 @@ pub impl Comp {
     inout fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
         mut val out: Array[ResolvedViewSource] = []
         if ref == 0U64 || ref >= self.arena.typeCount() { return out }
+        val term = self.arena.typeTerms[ref]
+        if term.viewSources.len == 0U64 && term.viewIds.len == 0U64 && term.viewExtId == 0U64 { return out }
         val t: TypeRef = self.arena.typeAt(index: ref)
         out = t.viewSources
         if out.count() != 0U64 { return out }

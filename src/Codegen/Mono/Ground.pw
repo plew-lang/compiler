@@ -208,17 +208,16 @@ pub impl Comp {
     // consults whichever callee environment happens to be in Cursor.
     inout fn groundTermForBody(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        val outerViews: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
+        val t = self.arena.typeTerms[ref]
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
-        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.count() == 0U64 {
+        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: outerViews)
+                return self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: self.typeRefViewSources(ref: ref))
             }
             if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return self.typeRefWithAddedViewSources(ref: itemRef, additions: outerViews)
+                return self.typeRefWithAddedViewSources(ref: itemRef, additions: self.typeRefViewSources(ref: ref))
             }
         }
         val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
@@ -236,6 +235,10 @@ pub impl Comp {
     // all frontend semantic reads agree on one closed type term.
     inout fn closeBodyProjectionTerms(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        // A non-projection leaf has no children to close. Read its scalar
+        // shape before materializing any owning compatibility type record.
+        val term = self.arena.typeTerms[ref]
+        if !term.isRecord && term.assocNameId == 0U64 && term.args.len == 0U64 && term.assocTraitArgs.len == 0U64 { return ref }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }

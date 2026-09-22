@@ -272,7 +272,8 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.typeCount() {
             return false
         }
-        return self.isIntType(start: self.arena.typeAt(index: ref).nameStart, len: self.arena.typeAt(index: ref).nameLen)
+        val term = self.arena.typeTerms[ref]
+        return self.isIntType(start: term.nameStart, len: term.nameLen)
     }
 
     inout fn tcCheckArrayIndex(base: U64, index: U64) {
