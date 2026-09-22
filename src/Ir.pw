@@ -1704,6 +1704,11 @@ export struct CallResolutionArgumentRange {
 pub impl CallResolutionArgumentRange { factory fn count() -> U64 { return self.len } }
 
 export struct CallEvaluationArgument {
+    // Explicit outer-view adaptation to the selected witness's lexical type.
+    pub val adaptsReceiverView: Bool = false
+    // Frozen source type before the selected argument conversion. Literal
+    // adapters must not reach executable Mid with an unknown type.
+    pub val sourceTypeRef: U64 = 0U64
     pub val exprId: U64
     pub val isInout: Bool
     pub val labelStart: U64
@@ -1989,6 +1994,8 @@ export struct BodySignature {
     pub val parameterTypes: Array[U64] = []
     pub val parameterPassings: Array[CallArgumentPassing] = []
     pub val resultType: U64 = 0U64
+    // Logical body return, distinct from an async entry's Promise result.
+    pub val bodyResultType: U64 = 0U64
     pub val closureSignatureId: U64 = 0U64
 }
 pub impl BodySignature { factory }
@@ -2777,6 +2784,7 @@ export enum CallArgumentSource {
 // navigation anchor for value evaluation.  Keeping them beside the semantic
 // type source prevents Mono from reopening an Expr solely to recover them.
 export struct CallTemplateArgument {
+    pub val isDispatchReceiver: Bool = false
     pub val source: CallArgumentSource
     pub val isInout: Bool
     pub val labelStart: U64

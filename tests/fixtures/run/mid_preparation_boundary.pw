@@ -49,6 +49,7 @@ fn main() {
         _ => { assert(false) }
     }
     val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+    compiler.arena.setBodySignature(bodyId: instance, parameters: [], passings: [], result: 0U64)
     match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=body />, bodyId: instance) {
         Result.Ok(value: val executable) => {
             assert(executable.canonical.body != body.body)

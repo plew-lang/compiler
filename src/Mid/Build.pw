@@ -610,6 +610,9 @@ fn midFinishEvaluationScope(state: inout MidBuildState, scope: U64) {
 // resources used to compute it do. The Switch consumes this result home.
 fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U64) -> MidOperandBuild {
     val term: U64 = c.semanticExprTerm(exprId: exprId)
+    // A generic callable may only publish its result through a recipe.
+    // Preserve that same dependency for the condition's outer-scope home.
+    val recipe = if term == 0U64 { give c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId).resultTypeRecipe } else { give 0U64 }
     val parentCalls: Array[MidCallValue] = state.callValues
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
@@ -618,7 +621,7 @@ fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U6
     // has closed. Reserve its home in the enclosing scope, just like the
     // result of a try or aggregate evaluation. Constants keep their operand
     // form and leave this home uninitialized.
-    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
+    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term, typeRecipe: recipe) typeTerm=term typeRecipe=recipe />
     val scope: U64 = midOpenScope(state: inout state)
     val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: false)
     match value.error {

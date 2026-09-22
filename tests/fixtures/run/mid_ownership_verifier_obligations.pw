@@ -2,6 +2,7 @@
 import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
+import /Ir with { CallResolution }
 import /Mid with { MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidCallTarget, MidCallReceiver, MidVerifyError, verifyExecutableCanonicalMidBody }
 fn check(mode: U64) {
     mut val c: Comp = <Comp />
@@ -25,6 +26,8 @@ fn check(mode: U64) {
     mut val blocks = [<MidBlock statements=statements terminator=<MidTerminator.Return /> />]
     if mode == 4U64 { blocks = [<MidBlock terminator=<MidTerminator.Unreachable /> />] }
     if mode == 5U64 {
+        // Supply a typed call so the test isolates live-owner initialization.
+        c.arena.finalCallees.append(<CallResolution bodyId=0U64 exprId=0U64 callee=0U64 resultTypeRef=t />)
         blocks = [<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[] destination=p target=1U64 /> />,
             <MidBlock statements=[<MidStatement.Drop place=p />] terminator=<MidTerminator.Return /> />]
     }

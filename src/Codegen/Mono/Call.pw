@@ -1746,7 +1746,13 @@ pub impl Comp {
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             resultProjection = <CallResultProjection.OrderingTest op=op />
         }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef resultProjection=resultProjection target=target />
+        mut val argumentSources: Array[CallTemplateArgument] = []
+        mut val sourceIndex = 0U64
+        while sourceIndex < operands.count() {
+            argumentSources.append(<CallTemplateArgument source=operands[sourceIndex] isDispatchReceiver=sourceIndex == 0U64 isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+            sourceIndex += 1U64
+        }
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef resultProjection=resultProjection target=target />
         self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.functionCount() { self.enqueueSelectedCallee(selection: selection) }
     }
@@ -1943,12 +1949,16 @@ pub impl Comp {
         return out
     }
 
-    inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument]) -> CallResolutionArgumentRange {
+    inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64]) -> CallResolutionArgumentRange {
         val start: U64 = self.arena.finalCalleeArgumentPool.count()
         mut val i: U64 = 0U64
         while i < arguments.count() {
             val argument: CallTemplateArgument = arguments[i]
-            self.arena.finalCalleeArgumentPool.append(<CallEvaluationArgument exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            mut val expected = 0U64
+            if i < parameterTypes.count() { expected = parameterTypes[i] }
+            val sourceType = self.finalCallArgumentType(source: argument.source, expected: expected)
+            val adaptsReceiverView = argument.isDispatchReceiver && sourceType != 0U64 && expected != 0U64 && !self.typeRefEq(a: sourceType, b: expected) && self.typeRefEq(a: self.runtimeTypeRef(ref: sourceType), b: self.runtimeTypeRef(ref: expected))
+            self.arena.finalCalleeArgumentPool.append(<CallEvaluationArgument adaptsReceiverView=adaptsReceiverView sourceTypeRef=sourceType exprId=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
             i += 1U64
         }
         return <CallResolutionArgumentRange start=start len=arguments.count() />
@@ -1981,7 +1991,7 @@ pub impl Comp {
         val parameterTypes: CallResolutionParameterTypeRange = self.pushFinalCalleeParameterTypes(types: parameterTypeRefs)
         val conversions: CallResolutionConversionRange = self.pushFinalCalleeConversions(conversions: argumentConversions)
         val passings: CallResolutionArgumentPassingRange = self.pushFinalCalleeArgumentPassings(passings: argumentPassings)
-        val evaluationArguments: CallResolutionArgumentRange = self.pushFinalCalleeArguments(arguments: arguments)
+        val evaluationArguments: CallResolutionArgumentRange = self.pushFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs)
         self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=typeArgs parameterTypeRefs=parameterTypes argumentConversions=conversions receiverPassing=receiverPassing argumentPassings=passings arguments=evaluationArguments recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
@@ -2915,12 +2925,47 @@ pub impl Comp {
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef shadowedBindingTarget=shadowedBindingTarget conversion=self.freezeValueConversionProof(proof: conversion) />)
     }
 
+    // Close the numeric-literal adapter in the frontend, where the selected
+    // parameter supplies its checked context. This never converts a typed
+    // operand or introduces an implicit newtype boundary.
+    inout fn finalCallArgumentType(source: CallArgumentSource, expected: U64) -> U64 {
+        val type = self.groundCallArgumentSource(source: source)
+        if type != 0U64 { return type }
+        val expr = self.callArgumentExprId(source: source)
+        if expr >= self.arena.exprs.count() || expected == 0U64 { return 0U64 }
+        val literal = self.castLiteralContextTerm(operand: expr, targetTerm: expected)
+        if literal != 0U64 && self.typeRefEq(a: literal, b: expected) { return literal }
+        return 0U64
+    }
+
     inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64]) -> Array[ValueConversionProof] {
         mut val conversions: Array[ValueConversionProof] = []
         mut val i: U64 = 0U64
         while i < parameterTypeRefs.count() {
             if i < sources.count() {
-                conversions.append(self.finalValueConversion(sourceRef: self.groundCallArgumentSource(source: sources[i].source), targetRef: parameterTypeRefs[i]))
+                val source = self.finalCallArgumentType(source: sources[i].source, expected: parameterTypeRefs[i])
+                // An operator's lhs selects a witness like a method receiver.
+                // Adapt only that dispatch boundary; ordinary arguments retain
+                // their exact view identity, including nested type arguments.
+                mut val conversion = self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i])
+                if sources[i].isDispatchReceiver && source != 0U64 && parameterTypeRefs[i] != 0U64 && self.typeRefEq(a: self.runtimeTypeRef(ref: source), b: self.runtimeTypeRef(ref: parameterTypeRefs[i])) {
+                    conversion = <ValueConversionProof.Identity />
+                }
+                match conversion {
+                    ValueConversionProof.Missing => {
+                        if self.traceCodegen {
+                            eprint(text: "[trace-codegen] missing argument conversion source=")
+                            self.traceMonoTypeHead(ref: source)
+                            eprint(text: " target=")
+                            self.traceMonoTypeHead(ref: parameterTypeRefs[i])
+                            eprint(text: " source-id=")
+                            eprintU64(n: source)
+                            eprint(text: "\n")
+                        }
+                    }
+                    _ => {}
+                }
+                conversions.append(conversion)
             } else {
                 // Omitted defaults own their conversion at the default's
                 // semantic boundary, not at this caller.
@@ -3800,7 +3845,7 @@ pub impl Comp {
                     if fnRef != 0U64 && self.isFnType(ref: fnRef) {
                         val fnTy: TypeRef = self.arena.typeAt(index: fnRef)
                         mut val resultRef: U64 = 0U64
-                        if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                        if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnRef) { resultRef = fnTy.args[0] }
                         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=self.cur.locals[li].nameStart fnTypeRef=fnRef /> />
                     }
                 }
@@ -3947,7 +3992,7 @@ pub impl Comp {
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
-                if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnTypeRef) { resultRef = fnTy.args[0] }
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ClosureField(fieldIndex: val fieldIndex, fnTypeTerm: val fnTypeTerm) => {
@@ -3958,7 +4003,7 @@ pub impl Comp {
                 }
                 val fnTy: TypeRef = self.arena.typeAt(index: fnTypeRef)
                 mut val resultRef: U64 = 0U64
-                if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                if fnTy.args.count() > 0U64 && !self.functionTypeReturnsUnit(ref: fnTypeRef) { resultRef = fnTy.args[0] }
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> />
             }
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
@@ -4545,7 +4590,8 @@ pub impl Comp {
             signatureResult = self.groundAndRecordBodyType(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
             self.scanType(ref: signatureResult)
         }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx))
+        val bodyResult = if f.isAsync { give self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId) } else { give signatureResult }
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
         if instance.adapterTargetBodyId != 0U64 {
             self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { self.scanBlockInsts(blkId: f.body) }
@@ -4941,6 +4987,7 @@ pub impl Comp {
         self.cur.typeParams = noParams
         self.cur.typeArgs = noArgs
         self.enterBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        self.arena.setBodySignature(bodyId: self.currentBodyInstanceId(), parameters: [], passings: [], result: 0U64)
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         mut val gi: U64 = 0U64

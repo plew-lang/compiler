@@ -1,0 +1,236 @@
+// Consistency of published Mid types, separate from ownership dataflow.
+// Consumers call these only after structural pool/range validation. No name
+// resolution, type inference, AST walk, or LLVM representation is involved.
+import @Std/Io with { eprint }
+import ../Diag with { eprintU64 }
+import ../Frontend with { Comp }
+import ../Ir with { InstanceEnvironment, CallReceiverPassing }
+import @Plew/Syntax with { rangeEquals }
+import ./Ir with { MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
+
+// Removing outer facets must not erase views inside generic arguments or
+// change nominal identity. This check is separate from conversion selection.
+export fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
+    if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.typeTermIsClosed(ref: sourceTerm) || !c.typeTermIsClosed(ref: targetTerm) { return false }
+    val source: U64 = c.typeRefWithoutOuterViews(ref: sourceTerm)
+    val target: U64 = c.typeRefWithoutOuterViews(ref: targetTerm)
+    return c.typeRefEq(a: source, b: target)
+}
+
+// IdentityRetag also carries explicit immediate newtype casts and float
+// casts. Its allowed source/target relation is semantic, never just ABI size.
+fn midRetagTypesMatch(c: inout Comp, source: U64, target: U64) -> Bool {
+    if source == 0U64 || target == 0U64 || source >= c.arena.typeCount() || target >= c.arena.typeCount() { return false }
+    if midViewTypesMatch(c: inout c, sourceTerm: source, targetTerm: target) { return true }
+    if c.newtypeBoundaryTypesCompatible(source: source, target: target) { return true }
+    val from = c.arena.typeAt(index: source)
+    val to = c.arena.typeAt(index: target)
+    return c.isFloatType(start: from.nameStart, len: from.nameLen) && c.isFloatType(start: to.nameStart, len: to.nameLen)
+}
+
+fn midTypesEqual(c: inout Comp, left: U64, right: U64) -> Bool {
+    // Zero is an explicit Unit/synthetic-control type, never a wildcard.
+    mut val equal = false
+    if left == 0U64 || right == 0U64 { equal = left == right }
+    else if left < c.arena.typeCount() && right < c.arena.typeCount() { equal = c.typeRefEq(a: left, b: right) }
+    if !equal && c.traceCodegen {
+        eprint(text: "[trace-mid-types] unequal left=")
+        eprintU64(n: left)
+        eprint(text: " right=")
+        eprintU64(n: right)
+        eprint(text: " types=")
+        c.traceMonoTypeHead(ref: left)
+        eprint(text: " / ")
+        c.traceMonoTypeHead(ref: right)
+        eprint(text: "\n")
+    }
+    return equal
+}
+
+fn midOperandType(c: Comp, operandId: U64) -> U64 {
+    val operand = c.mid.operands[operandId - 1U64]
+    if operand.place != 0U64 { return c.mid.places[operand.place - 1U64].typeTerm }
+    return operand.typeTerm
+}
+
+fn midPlaceTypeIsValid(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+    if placeId == 0U64 || placeId > c.mid.places.count() { return false }
+    val place = c.mid.places[placeId - 1U64]
+    if place.typeRecipe != 0U64 { return false }
+    mut val current = place.typeTerm
+    if place.rootTag == 1U64 {
+        if place.local >= body.locals.len { return false }
+        val local = c.mid.locals[body.locals.start + place.local]
+        if local.typeRecipe != 0U64 { return false }
+        current = local.typeTerm
+    } else if place.rootTag == 2U64 {
+        val global = c.globalIndexForDeclarationTarget(target: place.globalTarget)
+        if global >= c.arena.globals.count() { return false }
+        val owner = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        val storage = c.finalStorageIndex(bodyId: owner, stmtId: c.arena.globals[global].letStmt)
+        if storage >= c.arena.finalStorages.count() { return false }
+        current = c.arena.finalStorages[storage].targetTypeRef
+    }
+    if current != 0U64 && current >= c.arena.typeCount() { return false }
+    mut val index = 0U64
+    while index < place.projections.len {
+        val projection = c.mid.projections[place.projections.start + index]
+        if projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.typeCount() { return false }
+        if projection.tag == 1U64 {
+            mut val contract = c.finalDestructionIndex(typeRef: current)
+            mut val remaining = c.arena.finalDestructions.count()
+            while contract != 0U64 && c.arena.finalDestructions[contract - 1U64].underlying != 0U64 && remaining > 0U64 {
+                contract = c.finalDestructionIndex(typeRef: c.arena.finalDestructions[contract - 1U64].underlying)
+                remaining -= 1U64
+            }
+            if contract == 0U64 || remaining == 0U64 {
+                if c.traceCodegen { eprint(text: "[trace-mid-types] missing field layout type=") c.traceMonoTypeHead(ref: current) eprint(text: "\n") }
+                return false
+            }
+            val layout = c.arena.finalDestructions[contract - 1U64]
+            if projection.index >= layout.fieldTypes.count() || projection.index >= layout.fieldBoxed.count() || !midTypesEqual(c: inout c, left: layout.fieldTypes[projection.index], right: projection.typeTerm) || layout.fieldBoxed[projection.index] != projection.isBoxed {
+                if c.traceCodegen { eprint(text: "[trace-mid-types] field layout index=") eprintU64(n: projection.index) eprint(text: " type=") c.traceMonoTypeHead(ref: current) eprint(text: "\n") }
+                return false
+            }
+        } else if projection.tag == 2U64 {
+            if current == 0U64 || projection.indexLocal >= body.locals.len { return false }
+            val array = c.arena.typeAt(index: current)
+            if c.langArrayDeclOffset == 0U64 || !array.hasDecl || array.declOffset != c.langArrayDeclOffset || array.args.count() != 1U64 || !midTypesEqual(c: inout c, left: array.args[0U64], right: projection.typeTerm) { return false }
+            if !c.tcIsPrimInt(ref: c.mid.locals[body.locals.start + projection.indexLocal].typeTerm) { return false }
+        } else if projection.tag == 3U64 {
+            if current == 0U64 || !c.isStrongRefInst(ref: current) { return false }
+            val reference = c.arena.typeAt(index: current)
+            if reference.args.count() != 1U64 || !midTypesEqual(c: inout c, left: reference.args[0U64], right: projection.typeTerm) { return false }
+        } else if projection.tag == 4U64 {
+            if !midTypesEqual(c: inout c, left: current, right: projection.sourceTerm) || !c.newtypeBoundaryTypesCompatible(source: current, target: projection.typeTerm) { return false }
+        } else {
+            if c.traceCodegen { eprint(text: "[trace-mid-types] projection tag=") eprintU64(n: projection.tag) eprint(text: "\n") }
+            return false
+        }
+        current = projection.typeTerm
+        index += 1U64
+    }
+    return midTypesEqual(c: inout c, left: current, right: place.typeTerm)
+}
+
+fn midOperandTypesAreValid(c: inout Comp, body: MidBodyNode, operandId: U64) -> Bool {
+    if operandId == 0U64 || operandId > c.mid.operands.count() { return false }
+    val operand = c.mid.operands[operandId - 1U64]
+    mut val index = 0U64
+    while index < operand.placeCount() {
+        if !midPlaceTypeIsValid(c: inout c, body: body, placeId: operand.placeAt(index: index)) { return false }
+        index += 1U64
+    }
+    if operand.place == 0U64 && operand.typeTerm != 0U64 {
+        if operand.typeTerm >= c.arena.typeCount() { return false }
+        val type = c.arena.typeAt(index: operand.typeTerm)
+        if operand.tag == 5U64 {
+            if operand.integerBool {
+                if !rangeEquals(bytes: c.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Bool") { return false }
+            } else if !c.isIntType(start: type.nameStart, len: type.nameLen) && !c.isFloatType(start: type.nameStart, len: type.nameLen) { return false }
+        } else if operand.tag == 6U64 {
+            if !rangeEquals(bytes: c.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "String") { return false }
+        } else if operand.tag == 7U64 && !c.isFloatType(start: type.nameStart, len: type.nameLen) { return false }
+    }
+    return true
+}
+
+fn midConversionTypesMatch(c: inout Comp, proofId: U64, source: U64, target: U64) -> Bool {
+    if proofId == 0U64 || proofId > c.arena.conversionProofs.count() { return false }
+    val proof = c.arena.conversionProofs[proofId - 1U64]
+    if proof.tag == 0U64 { return midTypesEqual(c: inout c, left: source, right: target) }
+    return midTypesEqual(c: inout c, left: source, right: proof.sourceRef) && midTypesEqual(c: inout c, left: target, right: proof.targetRef)
+}
+
+fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, destination: U64) -> Bool {
+    if (value.tag == 1U64 || value.tag == 2U64 || (value.tag >= 6U64 && value.tag <= 10U64)) && value.operand == 0U64 { return false }
+    if value.place != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: value.place) { return false }
+    mut val index = 0U64
+    while index < value.operandCount() {
+        if !midOperandTypesAreValid(c: inout c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: index)) { return false }
+        index += 1U64
+    }
+    if value.tag == 1U64 { return midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: value.operand), right: destination) }
+    if value.tag == 6U64 { return midConversionTypesMatch(c: inout c, proofId: value.conversion, source: midOperandType(c: c, operandId: value.operand), target: destination) }
+    if value.tag == 10U64 && !midRetagTypesMatch(c: inout c, source: midOperandType(c: c, operandId: value.operand), target: value.targetTerm) { return false }
+    if value.tag == 2U64 && !midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: value.operand), right: value.targetTerm) { return false }
+    if value.tag == 2U64 || (value.tag >= 8U64 && value.tag <= 10U64) {
+        return midTypesEqual(c: inout c, left: value.targetTerm, right: destination)
+    }
+    if value.hasAggregateElements() {
+        index = 0U64
+        while index < value.elements.len {
+            val element = c.mid.aggregateElements[value.elements.start + index]
+            if !midConversionTypesMatch(c: inout c, proofId: element.conversion, source: midOperandType(c: c, operandId: element.operand), target: element.targetTerm) { return false }
+            index += 1U64
+        }
+    }
+    if value.hasClosureCaptures() {
+        index = 0U64
+        while index < value.elements.len {
+            val capture = c.mid.closureCaptures[value.elements.start + index]
+            if !midTypesEqual(c: inout c, left: capture.typeTerm, right: midOperandType(c: c, operandId: capture.operand)) { return false }
+            index += 1U64
+        }
+    }
+    if (value.tag >= 3U64 && value.tag <= 5U64) || (value.tag >= 11U64 && value.tag <= 19U64) {
+        return midTypesEqual(c: inout c, left: value.resultTerm, right: destination)
+    }
+    return false
+}
+
+export fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, statement: MidStatementNode) -> Bool {
+    mut val index = 0U64
+    while index < statement.destinationCount() {
+        if !midPlaceTypeIsValid(c: inout c, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: index)) { return false }
+        index += 1U64
+    }
+    if statement.source != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: statement.source) { return false }
+    if statement.tag == 1U64 || statement.tag == 9U64 {
+        if statement.destination == 0U64 || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
+        return midRvalueTypesMatch(c: inout c, body: body, value: c.mid.rvalues[statement.value - 1U64], destination: c.mid.places[statement.destination - 1U64].typeTerm)
+    }
+    if statement.tag == 2U64 || statement.tag == 8U64 {
+        if statement.destination == 0U64 || statement.source == 0U64 { return false }
+        return midTypesEqual(c: inout c, left: c.mid.places[statement.destination - 1U64].typeTerm, right: c.mid.places[statement.source - 1U64].typeTerm)
+    }
+    return true
+}
+
+export fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode) -> Bool {
+    if term.destination != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: term.destination) { return false }
+    mut val index = 0U64
+    while index < c.mid.terminatorOperandCount(term: term) {
+        if !midOperandTypesAreValid(c: inout c, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: index)) { return false }
+        index += 1U64
+    }
+    if term.tag == 4U64 {
+        if term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return false }
+        val target = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return false }
+        val call = c.arena.finalCallees[target.resolution]
+        if term.args.len != call.parameterTypeRefs.len || call.parameterTypeRefs.start > c.arena.finalCalleeParameterTypePool.count() || call.parameterTypeRefs.len > c.arena.finalCalleeParameterTypePool.count() - call.parameterTypeRefs.start { return false }
+        index = 0U64
+        while index < term.args.len {
+            if !midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: c.mid.callArguments[term.args.start + index]), right: c.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: index)) { return false }
+            index += 1U64
+        }
+        match call.receiverPassing {
+            CallReceiverPassing.None => {}
+            _ => {
+                if term.callReceiver == 0U64 { return false }
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if receiver.operand == 0U64 || !midViewTypesMatch(c: inout c, sourceTerm: midOperandType(c: c, operandId: receiver.operand), targetTerm: call.recvTypeRef) { return false }
+            }
+        }
+        if term.destination != 0U64 && !midTypesEqual(c: inout c, left: c.mid.places[term.destination - 1U64].typeTerm, right: call.resultTypeRef) { return false }
+    }
+    if (term.tag == 5U64 || term.tag == 6U64) && body.bodyInstance != 0U64 {
+        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+        if !signature.ready { return false }
+        if term.tag == 5U64 { return signature.bodyResultType == 0U64 }
+        if term.value == 0U64 { return false }
+        return midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: term.value), right: signature.bodyResultType)
+    }
+    return true
+}

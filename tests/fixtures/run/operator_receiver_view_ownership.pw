@@ -1,0 +1,16 @@
+// Operator lhs dispatch has the same view boundary as a method receiver.
+// The selected implementation receives its own lexical type, while copies
+// of an ARC-managed source remain valid after each consuming operation.
+import @Std/Io with { print }
+extension Decorated {
+    pub impl String {
+        fn appendMark() -> String { return self + "!" }
+    }
+}
+fn main() {
+    val text: String = "hello"
+    print(text#Decorated.appendMark())
+    print(text#Decorated.appendMark())
+    print(text)
+    print("fresh"#Decorated.appendMark())
+}

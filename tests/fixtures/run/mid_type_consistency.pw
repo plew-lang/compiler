@@ -1,0 +1,80 @@
+// Explicit type inconsistencies must fail even when ownership is balanced.
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
+import /Mid with { MidCastKind, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
+fn check(mode: U64) {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val integerName = c.internBytes(s: "I64")
+    val integerTerm = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val boolName = c.internBytes(s: "Bool")
+    val boolTerm = c.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
+    c.enqueueFinalDestruction(typeRef: integerTerm)
+    c.enqueueFinalDestruction(typeRef: boolTerm)
+    val unsignedName = c.internBytes(s: "U64")
+    val unsignedTerm = c.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    c.enqueueFinalDestruction(typeRef: unsignedTerm)
+    val destinationTerm = if mode == 3U64 { give unsignedTerm } else if mode == 1U64 || mode == 4U64 || mode == 7U64 { give boolTerm } else { give integerTerm }
+    val placeTerm = if mode == 2U64 { give boolTerm } else { give destinationTerm }
+    val destination = <MidPlace local=0U64 typeTerm=placeTerm />
+    val value = <MidOperand.Constant value=<MidConstant.Integer value=7U64 isNegative=false isBool=mode == 6U64 typeTerm=integerTerm /> />
+    mut val rvalue = <MidRvalue.Use operand=value />
+    if mode == 4U64 || mode == 5U64 {
+        val identity = c.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
+        rvalue = <MidRvalue.Convert operand=value conversion=identity />
+    }
+    if mode == 7U64 { rvalue = <MidRvalue.Cast operand=value kind=<MidCastKind.IdentityRetag /> targetTerm=destinationTerm /> }
+    val canonical = c.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=destinationTerm sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=[<MidStatement.Assign destination=destination value=rvalue />, <MidStatement.Drop place=destination />] terminator=<MidTerminator.Return /> />] />)
+    assert(c.mid.isWellFormed(body: canonical))
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: canonical).error {
+        MidVerifyError.None => { assert(mode == 0U64 || mode == 5U64) }
+        MidVerifyError.TypeMismatch => { assert(mode != 0U64 && mode != 5U64) }
+        _ => { assert(false) }
+    }
+}
+fn callAndReturn(mode: U64) {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val integerName = c.internBytes(s: "I64")
+    val integer = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val booleanName = c.internBytes(s: "Bool")
+    val boolean = c.simpleTypeRef(nameStart: booleanName.nameStart, nameLen: booleanName.nameLen)
+    c.enqueueFinalDestruction(typeRef: integer)
+    c.enqueueFinalDestruction(typeRef: boolean)
+    val value = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=false typeTerm=integer /> />
+    val destination = <MidPlace local=0U64 typeTerm=integer />
+    mut val instance = 0U64
+    mut val locals: Array[MidLocalDecl] = []
+    mut val blocks: Array[MidBlock] = []
+    if mode < 3U64 {
+        val parameter = if mode == 1U64 { give boolean } else { give integer }
+        val result = if mode == 2U64 { give boolean } else { give integer }
+        c.arena.finalCalleeParameterTypePool.append(parameter)
+        c.arena.finalCallees.append(<CallResolution bodyId=0U64 exprId=0U64 callee=0U64 parameterTypeRefs=<CallResolutionParameterTypeRange start=0U64 len=1U64 /> resultTypeRef=result />)
+        locals = [<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />]
+        blocks = [<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[value] destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.Drop place=destination />] terminator=<MidTerminator.Return /> />]
+    } else {
+        instance = c.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+        val result = if mode == 4U64 { give boolean } else { give integer }
+        c.arena.setBodySignature(bodyId: instance, parameters: [], passings: [], result: result)
+        if mode == 5U64 { blocks = [<MidBlock terminator=<MidTerminator.Return /> />] }
+        else { blocks = [<MidBlock terminator=<MidTerminator.ReturnValue value=value /> />] }
+    }
+    val body = c.mid.store(body: <MidBody bodyInstance=instance locals=locals blocks=blocks />)
+    assert(c.mid.isWellFormed(body: body))
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: body).error {
+        MidVerifyError.None => { assert(mode == 0U64 || mode == 3U64) }
+        MidVerifyError.TypeMismatch => { assert(mode != 0U64 && mode != 3U64) }
+        _ => { assert(false) }
+    }
+}
+fn main() {
+    check(mode: 0U64) check(mode: 1U64) check(mode: 2U64)
+    // I64 and U64 share an LLVM width but remain distinct Plew types.
+    check(mode: 3U64) check(mode: 4U64) check(mode: 5U64) check(mode: 6U64) check(mode: 7U64)
+    callAndReturn(mode: 0U64) callAndReturn(mode: 1U64) callAndReturn(mode: 2U64)
+    callAndReturn(mode: 3U64) callAndReturn(mode: 4U64) callAndReturn(mode: 5U64)
+    print("ok")
+}

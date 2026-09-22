@@ -90,6 +90,7 @@ pub impl LlvmCtx {
         match reason {
             MidVerifyError.None => { return 0U64 }
             MidVerifyError.InvalidTarget => { return 1U64 }
+            MidVerifyError.TypeMismatch => { return 15U64 }
             MidVerifyError.PartialMove => { return 2U64 }
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
@@ -387,7 +388,8 @@ pub impl LlvmCtx {
             2U64 => { eprint(text: "partial-move") } 3U64 => { eprint(text: "move-unavailable") }
             4U64 => { eprint(text: "drop-unavailable") } 5U64 => { eprint(text: "invalid-drop-flag") }
             6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
-            8U64 => { eprint(text: "return-boundary") } _ => { eprint(text: "unknown") }
+            8U64 => { eprint(text: "return-boundary") }
+            15U64 => { eprint(text: "type-mismatch") } _ => { eprint(text: "unknown") }
         }
     }
 
@@ -2853,7 +2855,9 @@ pub impl LlvmCtx {
     }
 
     inout fn traceMidVerificationFailure(c: inout Comp, canonical: MidCanonicalBody, fnIdx: U64, verification: MidVerification) {
-        eprint(text: "[trace-codegen] Mid verification location fn=")
+        eprint(text: "[trace-codegen] Mid verification reason=")
+        self.emitMidCoverageVerify(detail: self.midVerifyCoverageDetail(reason: verification.error))
+        eprint(text: " location fn=")
         self.traceCodegenU64(n: fnIdx)
         eprint(text: " block=")
         self.traceCodegenU64(n: verification.block)

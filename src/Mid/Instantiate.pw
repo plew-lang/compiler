@@ -5,6 +5,7 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
+import ./Types with { midViewTypesMatch }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, SemanticMatchKind, SemanticClosure, SemanticClosureCaptureMode }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
@@ -115,14 +116,18 @@ fn instantiateCanonicalPlace(c: inout Comp, bodyId: U64, placeId: U64, environme
     return c.mid.places.count()
 }
 
-fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
+fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, environment: BodyInstance, error: inout MidInstantiateError, literalType: U64 = 0U64) -> U64 {
     if operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
     val source: MidOperandNode = c.mid.operands[operandId - 1U64]
     mut val place: U64 = 0U64
     if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, error: inout error) }
     mut val accessPlace: U64 = 0U64
     if source.accessPlace != 0U64 { accessPlace = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.accessPlace, environment: environment, error: inout error) }
-    c.mid.operands.append(<MidOperandNode tag=source.tag place=place accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=instantiateMidTerm(c: inout c, typeTerm: source.typeTerm, bodyId: bodyId, environment: environment, error: inout error) accessCandidate=source.accessCandidate />)
+    // Only untyped literal adapters consume the frontend-frozen source type.
+    // Never retag a place or an already typed value to fit the callee.
+    mut val operandType = instantiateMidTerm(c: inout c, typeTerm: source.typeTerm, bodyId: bodyId, environment: environment, error: inout error)
+    if source.tag == 5U64 && source.typeTerm == 0U64 && literalType != 0U64 { operandType = literalType }
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate />)
     return c.mid.operands.count()
 }
 
@@ -300,15 +305,6 @@ fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: Body
     }
     c.mid.rvalues.append(<MidRvalueNode tag=source.tag exprId=source.exprId enumIndex=source.enumIndex variantIndex=source.variantIndex resultTerm=resolution.resultTypeRef fieldCount=source.fieldCount elements=<MidRange start=start len=source.elements.len /> />)
     return c.mid.rvalues.count()
-}
-
-// Removing outer facets must not erase views inside generic arguments or
-// change nominal identity. This check is separate from conversion selection.
-fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
-    if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.typeTermIsClosed(ref: sourceTerm) || !c.typeTermIsClosed(ref: targetTerm) { return false }
-    val source: U64 = c.typeRefWithoutOuterViews(ref: sourceTerm)
-    val target: U64 = c.typeRefWithoutOuterViews(ref: targetTerm)
-    return c.typeRefEq(a: source, b: target)
 }
 
 fn instantiateCanonicalViewBoundary(c: inout Comp, bodyId: U64, rvalueId: U64, environment: BodyInstance, error: inout MidInstantiateError) -> U64 {
@@ -929,7 +925,14 @@ fn canonicalBlockTargets(c: Comp, source: MidBodyNode, bodyId: U64) -> Array[U64
                     val selected: CallResolution = c.arena.finalCallees[resolution - 1U64]
                     mut val argumentI: U64 = 0U64
                     while argumentI < selected.argumentConversions.len {
-                        if !c.conversionProofIsIdentity(id: c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)) {
+                        mut val receiverCleanup = false
+                        if argumentI < selected.arguments.len && c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
+                            match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+                                CallArgumentPassing.Borrow => { receiverCleanup = true }
+                                _ => {}
+                            }
+                        }
+                        if receiverCleanup || !c.conversionProofIsIdentity(id: c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)) {
                             count = count + 1U64
                             argumentI = selected.argumentConversions.len
                         } else {
@@ -1204,7 +1207,9 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
         if !midSignatureArgumentMatches(c: c, signature: signature, index: argumentI, passing: passing) {
             return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> />
         }
-        mut val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, error: inout error)
+        mut val literalType = 0U64
+        if argumentI < selected.arguments.len { literalType = c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).sourceTypeRef }
+        mut val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, error: inout error, literalType: literalType)
         if operand == 0U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
         if !c.conversionProofIsIdentity(id: conversion) {
             match passing {
@@ -1245,6 +1250,25 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
             c.mid.operands.append(<MidOperandNode tag=1U64 place=temporaryPlace />)
             operand = c.mid.operands.count()
             cleanupPlaces.append(temporaryPlace)
+        }
+        if argumentI < selected.arguments.len && c.finalCalleeArgumentAt(arguments: selected.arguments, index: argumentI).adaptsReceiverView {
+            if !c.conversionProofIsIdentity(id: conversion) || !midViewTypesMatch(c: inout c, sourceTerm: canonicalMidOperandTypeRef(c: c, operandId: operand), targetTerm: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
+            val source = c.mid.operands[operand - 1U64]
+            if source.tag != 1U64 && source.tag != 2U64 && source.tag != 5U64 && source.tag != 6U64 && source.tag != 7U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
+            mut val mode = 1U64
+            match passing {
+                CallArgumentPassing.Move => { mode = 2U64 }
+                CallArgumentPassing.Borrow => {}
+                _ => { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
+            }
+            c.mid.places.append(<MidPlaceNode local=nextLocal typeTerm=targetType />)
+            nextLocal += 1U64
+            val temporary = c.mid.places.count()
+            c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=targetType />)
+            c.mid.statements.append(<MidStatementNode tag=1U64 destination=temporary value=c.mid.rvalues.count() />)
+            c.mid.operands.append(<MidOperandNode tag=mode place=temporary />)
+            operand = c.mid.operands.count()
+            if mode == 1U64 { cleanupPlaces.append(temporary) }
         }
         match passing {
             CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand, locals: locals) }

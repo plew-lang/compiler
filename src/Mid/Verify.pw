@@ -4,11 +4,13 @@
 import ../Frontend with { Comp }
 import ../Ir with { MatchSource, SemanticMatchKind }
 import ./Ir with { canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
+import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
 import ./Drop with { analyzeCanonicalMidOwnership }
 
 export enum MidVerifyError {
     None
     InvalidTarget
+    TypeMismatch
     PartialMove
     MoveUnavailable
     DropUnavailable
@@ -635,14 +637,26 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
 
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
-        if !reachable[blockI] { blockI += 1U64
-            continue }
+        if !reachable[blockI] {
+            if executable {
+                val dead = c.mid.blocks[body.blocks.start + blockI]
+                mut val statement = 0U64
+                while statement < dead.statements.len {
+                    if !canonicalMidStatementTypesMatch(c: inout c, body: body, statement: c.mid.statements[dead.statements.start + statement]) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
+                    statement += 1U64
+                }
+                if !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: c.mid.terminators[dead.terminator - 1U64]) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
+            }
+            blockI += 1U64
+            continue
+        }
         mut val states: Array[MidOwnership] = []
         if blockI < incoming.count() { states = incoming[blockI] }
         val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
         mut val statementI: U64 = 0U64
         while statementI < block.statements.len {
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+            if executable && !canonicalMidStatementTypesMatch(c: inout c, body: body, statement: statement) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
             if statement.tag == 13U64 {
                 val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI, executable: executable)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
@@ -785,6 +799,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
         }
         if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+        if executable && !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: term) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
         if term.tag == 2U64 && !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 3U64 {
             val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.discriminant, block: blockI, executable: executable)
