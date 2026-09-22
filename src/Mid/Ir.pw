@@ -98,6 +98,8 @@ pub impl MidSwitchCase { factory }
 // nested enums: their payloads must stay scalar even when the draft enums gain
 // new source-lowering forms.
 export struct MidOperandNode {
+    // Language-level read borrow, distinct from a guaranteed by-value ABI.
+    pub val borrowsStorage: Bool = false
     pub val tag: U64
     pub val place: U64 = 0U64
     // Inout's reserved storage may differ from the ABI temporary used by
@@ -793,7 +795,7 @@ fn midFreezeNormalizedCallArgument(arena: inout MidCanonicalArena, projections: 
         }
         arena.places.append(<MidPlaceNode rootTag=argument.rootTag local=argument.local globalTarget=argument.globalTarget globalMutable=argument.globalMutable projections=<MidRange start=projectionStart len=argument.projections.len /> typeTerm=argument.typeTerm typeRecipe=argument.typeRecipe />)
         val place: U64 = arena.places.count()
-        arena.operands.append(<MidOperandNode tag=argument.tag place=place capability=argument.capability />)
+        arena.operands.append(<MidOperandNode tag=argument.tag place=place borrowsStorage=argument.tag == 3U64 capability=argument.capability />)
         return arena.operands.count()
     }
     if argument.tag == 5U64 {
@@ -832,7 +834,7 @@ fn midFreezeOperand(arena: inout MidCanonicalArena, operand: MidOperand) -> U64 
         }
         MidOperand.Borrow(place: val place, capability: val capability) => {
             match capability {
-                MidBorrowCapability.Read => { arena.operands.append(<MidOperandNode tag=3U64 place=midFreezePlace(arena: inout arena, place: place) capability=1U64 />) }
+                MidBorrowCapability.Read => { arena.operands.append(<MidOperandNode tag=3U64 place=midFreezePlace(arena: inout arena, place: place) borrowsStorage=true capability=1U64 />) }
                 MidBorrowCapability.Inout => { arena.operands.append(<MidOperandNode tag=4U64 place=midFreezePlace(arena: inout arena, place: place) capability=2U64 />) }
             }
         }

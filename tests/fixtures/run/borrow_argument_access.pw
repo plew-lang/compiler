@@ -1,0 +1,34 @@
+// Read/read, distinct cells and disjoint fields preserve language borrows.
+import @Std/Core with { MutableRef, assert }
+import @Std/Io with { print }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell { factory
+    fn read(other: borrow Cell) -> I64 { return self.value + other.value }
+    inout fn update(other: borrow Cell) { self.value += other.value }
+}
+unique struct Holder { pub mut val first: Cell pub mut val second: Cell }
+pub impl Holder { factory }
+fn inspect(item: borrow Cell, other: inout Cell) { other.value += item.value }
+fn reversed(other: inout Cell, item: borrow Cell) { other.value += item.value }
+fn snapshot(other: inout I64, value: I64) { other += value }
+fn main() {
+    mut val first = <Cell value=1I64 />
+    mut val second = <Cell value=2I64 />
+    assert(first.read(other: borrow first) == 2I64)
+    inspect(item: borrow first, other: inout second)
+    reversed(other: inout second, item: borrow first)
+    second.update(other: borrow first)
+    assert(second.value == 5I64)
+    val holder = <MutableRef value=<Holder first=<Cell value=3I64 /> second=<Cell value=4I64 /> /> />
+    val alias = holder
+    assert(holder->first.read(other: borrow alias->first) == 6I64)
+    inspect(item: borrow holder->first, other: inout alias->second)
+    assert(holder->second.value == 7I64)
+    val other = <MutableRef value=<Holder first=<Cell value=8I64 /> second=<Cell value=9I64 /> /> />
+    inspect(item: borrow holder->first, other: inout other->first)
+    assert(other->first.value == 11I64)
+    mut val value = 3I64
+    snapshot(other: inout value, value: value)
+    assert(value == 6I64)
+    print("ok")
+}

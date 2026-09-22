@@ -127,7 +127,7 @@ fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, envir
     // Never retag a place or an already typed value to fit the callee.
     mut val operandType = instantiateMidTerm(c: inout c, typeTerm: source.typeTerm, bodyId: bodyId, environment: environment, error: inout error)
     if source.tag == 5U64 && source.typeTerm == 0U64 && literalType != 0U64 { operandType = literalType }
-    c.mid.operands.append(<MidOperandNode tag=source.tag place=place accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate />)
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place borrowsStorage=source.borrowsStorage accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate />)
     return c.mid.operands.count()
 }
 

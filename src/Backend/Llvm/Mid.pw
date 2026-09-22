@@ -92,6 +92,7 @@ pub impl LlvmCtx {
             MidVerifyError.InvalidTarget => { return 1U64 }
             MidVerifyError.TypeMismatch => { return 15U64 }
             MidVerifyError.ConflictingReceiverAccess => { return 16U64 }
+            MidVerifyError.ConflictingBorrowAccess => { return 17U64 }
             MidVerifyError.PartialMove => { return 2U64 }
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
@@ -1062,12 +1063,12 @@ pub impl LlvmCtx {
         mut val index: U64 = 0U64
         while index < term.args.len {
             val operand: MidOperandNode = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
-            if operand.tag == 4U64 {
-                if receiverOperand != 0U64 { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: c.mid.operands[receiverOperand - 1U64], other: operand) }
+            if operand.tag == 4U64 || (operand.tag == 3U64 && operand.borrowsStorage) {
+                if receiverOperand != 0U64 && (operand.tag == 4U64 || c.mid.operands[receiverOperand - 1U64].tag == 4U64) { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: c.mid.operands[receiverOperand - 1U64], other: operand) }
                 mut val prior: U64 = 0U64
                 while prior < index {
                     val other: MidOperandNode = c.mid.operands[c.mid.callArguments[term.args.start + prior] - 1U64]
-                    if other.tag == 4U64 { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: other, other: operand) }
+                    if (other.tag == 4U64 || (other.tag == 3U64 && other.borrowsStorage)) && (operand.tag == 4U64 || other.tag == 4U64) { self.midCanonicalEmitInoutPair(c: inout c, body: body, operand: other, other: operand) }
                     prior += 1U64
                 }
             }
@@ -2835,6 +2836,11 @@ pub impl LlvmCtx {
                     }
                     MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
                         match verification.error {
+                            MidVerifyError.ConflictingBorrowAccess => {
+                                mut val offset = 0U64
+                                if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                                c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
+                            }
                             MidVerifyError.ConflictingReceiverAccess => {
                                 mut val offset = 0U64
                                 if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }

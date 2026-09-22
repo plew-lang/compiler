@@ -12,6 +12,7 @@ export enum MidVerifyError {
     InvalidTarget
     TypeMismatch
     ConflictingReceiverAccess
+    ConflictingBorrowAccess
     PartialMove
     MoveUnavailable
     DropUnavailable
@@ -77,6 +78,35 @@ fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
         index += 1U64
     }
     return false
+}
+
+// Only language borrows participate here. A guaranteed by-value operand
+// already denotes a snapshot, even though its physical passing is Read.
+fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
+    mut val index = 0U64
+    while index < term.args.len {
+        val operand = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        if operand.tag == 3U64 && operand.borrowsStorage {
+            if term.callReceiver != 0U64 {
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if receiver.tag == 2U64 && canonicalMidReadWriteOverlap(c: c, read: operand, other: c.mid.operands[receiver.operand - 1U64]) { return true }
+            }
+            mut val otherIndex = 0U64
+            while otherIndex < term.args.len {
+                if canonicalMidReadWriteOverlap(c: c, read: operand, other: c.mid.operands[c.mid.callArguments[term.args.start + otherIndex] - 1U64]) { return true }
+                otherIndex += 1U64
+            }
+        }
+        index += 1U64
+    }
+    return false
+}
+
+fn canonicalMidReadWriteOverlap(c: Comp, read: MidOperandNode, other: MidOperandNode) -> Bool {
+    if other.tag != 4U64 && other.tag != 2U64 { return false }
+    mut val storage = other.place
+    if other.accessPlace != 0U64 { storage = other.accessPlace }
+    return canonicalMidValuePlacesOverlap(c: c, leftId: read.place, rightId: storage)
 }
 
 // A global root is a typed address selected by the frontend.  It is not an
@@ -871,6 +901,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 argumentI = argumentI + 1U64
             }
+            if executable && canonicalMidBorrowArgumentConflicts(c: c, term: term) { return <MidVerification error=<MidVerifyError.ConflictingBorrowAccess /> block=blockI /> }
             if executable && canonicalMidReceiverConflicts(c: c, term: term) { return <MidVerification error=<MidVerifyError.ConflictingReceiverAccess /> block=blockI /> }
             if term.destination != 0U64 && term.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]

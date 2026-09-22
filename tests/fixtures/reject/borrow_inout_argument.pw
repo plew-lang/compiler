@@ -1,0 +1,11 @@
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell {
+    factory
+    inout fn update(other: borrow Cell) { self.value += other.value }
+}
+fn inspect(item: borrow Cell, other: inout Cell) { other.value += item.value }
+fn reversed(other: inout Cell, item: borrow Cell) { other.value += item.value }
+fn main() {
+    mut val cell = <Cell value=1I64 />
+    inspect(item: borrow cell, other: inout cell)
+}

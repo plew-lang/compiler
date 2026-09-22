@@ -1264,6 +1264,19 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         return materializeMidClosureValue(c: inout c, state: inout state, closure: closure.closure, expectedType: typeTerm)
     }
     match c.arena.exprs[exprId] {
+        Expr.Move(operand: val sourceExpr, isBorrow: val isBorrow) => {
+            if isBorrow {
+                // Evaluate shared roots and projections through the same path
+                // as receivers; borrowing does not copy the selected payload.
+                val source = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: typeTerm, allowAccessMarker: false)
+                match source.error { MidBuildError.None => {} _ => { return source } }
+                match source.operand {
+                    MidOperand.Copy(place: val place) => { return <MidOperandBuild operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Read /> /> /> }
+                    _ => { return <MidOperandBuild operand=source.operand error=<MidBuildError.UnsupportedCallTemplate /> /> }
+                }
+            }
+            return midOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
+        }
         Expr.Call(nameStart: _, nameLen: _, args: _) => {
             val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)

@@ -1,0 +1,15 @@
+import @Std/Core with { MutableRef }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell {
+    factory
+    inout fn update(other: borrow Cell) { self.value += other.value }
+}
+fn inspect(item: borrow Cell, other: inout Cell) { other.value += item.value }
+fn reversed(other: inout Cell, item: borrow Cell) { other.value += item.value }
+unique struct Holder { pub mut val cell: Cell }
+pub impl Holder { factory }
+fn main() {
+    val cell = <MutableRef value=<Holder cell=<Cell value=1I64 /> /> />
+    val alias = cell
+    cell->cell.update(other: borrow alias->cell)
+}
