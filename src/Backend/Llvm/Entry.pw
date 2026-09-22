@@ -71,16 +71,10 @@ pub impl LlvmCtx {
         } else if bodyId == 0U64 {
             self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: globalOwner)
         } else {
-            val parametric: MidBodyBuild = buildParametricMidGlobalInit(c: inout c)
-            match parametric.error {
-                MidBuildError.None => {
-                    val prepared = self.prepareCanonicalForLlvm(c: inout c, canonical: parametric.canonical, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64)
-                    match prepared {
-                        MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: prepared) }
-                        _ => {}
-                    }
-                }
-                _ => { self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: globalOwner, error: parametric.error) }
+            val prepared = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64)
+            match prepared {
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: prepared) }
+                _ => {}
             }
         }
         if !midReady {
@@ -116,55 +110,10 @@ pub impl LlvmCtx {
         // Mid rather than fabricate a local root if that initialization ever
         // failed to produce the complete declaration-target map.
         if self.gvalRef.count() == c.arena.globals.count() {
-            val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
-            match parametric.error {
-                MidBuildError.None => {
-                    if bodyId != 0U64 {
-                        preparedMid = self.prepareCanonicalForLlvm(c: inout c, canonical: parametric.canonical, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64)
-                        match preparedMid {
-                            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = true }
-                            _ => {}
-                        }
-                    } else {
-                        self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)
-                        if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: missing body instance\n") }
-                    }
-                }
-                MidBuildError.InvalidStatement => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 1U64) }
-                MidBuildError.InvalidBlock => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 2U64) }
-                MidBuildError.InvalidFunction => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 3U64) }
-                MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 4U64) }
-                MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 5U64) }
-                MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
-                MidBuildError.UnsupportedAssign(reason: val reason) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 20U64 + self.midUnsupportedAssignCoverageDetail(reason: reason)) }
-                MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 7U64) }
-                MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 8U64) }
-                MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 9U64) }
-                MidBuildError.UnsupportedPanic => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 10U64) }
-                MidBuildError.UnsupportedGive => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 11U64) }
-                MidBuildError.UnsupportedBreak => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 12U64) }
-                MidBuildError.UnsupportedContinue => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 13U64) }
-                MidBuildError.MissingTerminator => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 14U64) }
-                MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 15U64) }
-                MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 16U64) }
-                _ => {
-                    if c.traceCodegen {
-                        eprint(text: "[trace-codegen] Mid main: build error=")
-                        match parametric.error {
-                            MidBuildError.InvalidStatement => { eprint(text: "invalid-statement") }
-                            MidBuildError.InvalidBlock => { eprint(text: "invalid-block") }
-                            MidBuildError.InvalidFunction => { eprint(text: "invalid-function") }
-                            MidBuildError.MissingSemanticType => { eprint(text: "missing-semantic-type") }
-                            MidBuildError.UnboundLocalIdentifier => { eprint(text: "unbound-local") }
-                            MidBuildError.Unsupported(reason: _) => { eprint(text: "unsupported") }
-                            MidBuildError.MissingTerminator => { eprint(text: "missing-terminator") }
-                            MidBuildError.MissingCallTemplate => { eprint(text: "missing-call-template") }
-                            MidBuildError.UnsupportedCallTemplate => { eprint(text: "unsupported-call-template") }
-                            _ => { eprint(text: "unknown") }
-                        }
-                        eprint(text: "\n")
-                    }
-                }
+            preparedMid = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64)
+            match preparedMid {
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = true }
+                _ => {}
             }
         } else {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Globals />)

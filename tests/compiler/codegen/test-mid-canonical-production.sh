@@ -71,7 +71,7 @@ PYABI
 # Module initialization is also executable Plew code.  It has no user Func
 # row, so keep its synthetic body explicit rather than letting Entry.pw grow a
 # second AST-to-LLVM path that happens to run before `main`.
-global_canonical='declareGlobalStorage buildParametricMidGlobalInit prepareCanonicalForLlvm genLlvmPreparedMidBody'
+global_canonical='declareGlobalStorage prepareCanonicalForLlvm genLlvmPreparedMidBody'
 for symbol in $global_canonical; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer Mid pipeline is missing $symbol" >&2
@@ -82,12 +82,17 @@ done
 # `--require-mid` is a soundness gate, not a preference.  Every synthetic-body
 # failure shape must enter the same closed coverage table that makes the driver
 # reject a legacy fallback.
-for symbol in recordMidMissingBodyInstance recordMidBuildError; do
+for symbol in recordMidMissingBodyInstance; do
     if ! rg -q "\b$symbol\b" src/Backend/Llvm/Entry.pw; then
         echo "global initializer fallback is not covered by $symbol" >&2
         exit 1
     fi
 done
+
+if ! rg -q '\bst.recordMidBuildError\b' src/Backend.pw; then
+    echo "program preparation does not report synthetic body build failures" >&2
+    exit 1
+fi
 
 # All entry kinds share semantic preparation; physical ABI admission stays in LLVM.
 python3 - <<'PYPREPARE'
@@ -140,7 +145,21 @@ for file, name, call in entries:
 backend = Path('src/Backend/Llvm/Mid.pw').read_text()
 for symbol in ['recordMidInstantiate', 'recordMidAccess', 'recordMidVerify', 'recordMidPreflight']:
     assert symbol + '(' in backend, f'shared preparation lost failure coverage: {symbol}'
-assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=canonical />, bodyId: bodyId)' in backend
+program = Path('src/Mid/Program.pw').read_text()
+assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId)' in program
+assert 'self.midProgram.body(bodyId: bodyId)' in backend
+assert 'Array[Optional[MidExecutableBody]]' in program
+assert 'buildParametricMidGlobalInit(' in program
+assert 'ensureParametricMidClosureBody(' in program
+assert 'buildMidBodyForInstance(' in program
+entry = Path('src/Backend.pw').read_text().split('export fn emitLlvm(', 1)[1]
+assert entry.index('MidExecutableProgram.prepare(') < entry.index('LLVMContextCreate()')
+for path in Path('src/Backend').rglob('*.pw'):
+    body = re.sub(r'//[^\n]*', '', path.read_text())
+    for symbol in ['buildParametricMidBody', 'buildMidBodyForInstance',
+                   'buildParametricMidGlobalInit', 'ensureParametricMidClosureBody',
+                   'MidExecutableBody.prepare']:
+        assert symbol + '(' not in body, f'{path}: semantic preparation during LLVM emission'
 assert 'canonical: executable.canonical, abiParameterCount: parameterCount' in backend
 assert 'MidLlvmPrepared.Ready canonical=executable.canonical abiParameterCount=parameterCount' in backend
 PYPREPARE

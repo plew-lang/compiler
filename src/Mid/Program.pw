@@ -1,0 +1,87 @@
+// Prepare the frontend's closed body worklist before any LLVM body exists.
+// BodyInstance identity, rather than emission order, indexes the result.
+import ../Frontend with { Comp, tracePhaseProgress }
+import ../Ir with { InstanceEnvironment }
+import ./Build with { MidBodyBuild, MidBuildError, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
+import ./Prepare with { MidParametricBody, MidExecutableBody, MidPreparationError }
+
+export enum MidProgramError {
+    MissingSignature(bodyId: U64)
+    MissingClosure(bodyId: U64)
+    Build(bodyId: U64, error: MidBuildError)
+    Preparation(bodyId: U64, error: MidPreparationError)
+}
+
+export struct MidExecutableProgram {
+    val bodies: Array[Optional[MidExecutableBody]] = []
+}
+
+pub impl MidExecutableProgram {
+    factory empty { return <MidExecutableProgram /> }
+
+    fn body(bodyId: U64) -> Optional[MidExecutableBody] {
+        if bodyId == 0U64 || bodyId >= self.bodies.count() { return <Optional.None /> }
+        return self.bodies[bodyId]
+    }
+
+    assoc fn prepare(c: inout Comp) -> Result[MidExecutableProgram, MidProgramError] {
+        mut val bodies: Array[Optional[MidExecutableBody]] = []
+        mut val index = 0U64
+        while index <= c.arena.bodyInstanceCount() {
+            bodies.append(<Optional.None />)
+            index += 1U64
+        }
+        mut val closureByKey: Dictionary[U64, U64] = [:]
+        index = 0U64
+        while index < c.decls.semanticClosures.count() {
+            closureByKey[c.decls.semanticClosures[index].bodyKey] = index + 1U64
+            index += 1U64
+        }
+        // Named bodies and synthetic adapters are in the executable worklist.
+        // Global initialization and finalized closure signatures are separate
+        // frontend roots, not source declarations guessed to be reachable.
+        mut val worklist = c.monoWork.bodyInstances
+        if c.arena.globals.count() != 0U64 {
+            val globalBody = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+            if globalBody == 0U64 { return <Result.Err error=<MidProgramError.MissingSignature bodyId=0U64 /> /> }
+            worklist.append(globalBody)
+        }
+        index = 1U64
+        while index <= c.arena.bodyInstanceCount() {
+            if c.arena.bodySignature(bodyId: index).closureSignatureId != 0U64 { worklist.append(index) }
+            index += 1U64
+        }
+        index = 0U64
+        while index < worklist.count() {
+            tracePhaseProgress(c: inout c, label: "mid:program:prepare", count: index, stride: 32U64)
+            val bodyId = worklist[index]
+            match bodies[bodyId] {
+                Optional.Some(v: _) => { index += 1U64
+                    continue }
+                Optional.None => {}
+            }
+            val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+            val signature = c.arena.bodySignature(bodyId: bodyId)
+            if !signature.ready { return <Result.Err error=<MidProgramError.MissingSignature bodyId=bodyId /> /> }
+            val built: MidBodyBuild = if signature.closureSignatureId != 0U64 {
+                val closure = closureByKey.getOr(key: instance.fnIdx, fallback: 0U64)
+                if closure == 0U64 { return <Result.Err error=<MidProgramError.MissingClosure bodyId=bodyId /> /> }
+                give ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[closure - 1U64])
+            } else if instance.fnIdx == 18446744073709551615U64 {
+                give buildParametricMidGlobalInit(c: inout c)
+            } else {
+                give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId)
+            }
+            match built.error {
+                MidBuildError.None => {}
+                _ => { return <Result.Err error=<MidProgramError.Build bodyId=bodyId error=built.error /> /> }
+            }
+            match MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId) {
+                Result.Ok(value: val executable) => { bodies.set(i: bodyId, value: <Optional.Some v=executable />) }
+                Result.Err(error: val error) => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=error /> /> }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=<MidExecutableProgram bodies=bodies /> />
+    }
+}

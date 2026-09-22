@@ -5,14 +5,7 @@ import ../../Mid with { planCanonicalMidAsyncFrame }
 pub impl LlvmCtx {
     inout fn prepareAsyncMidCanonical(c: inout Comp, bodyId: U64) -> MidCanonicalBody {
         val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
-        val built = buildMidBodyForInstance(c: inout c, fnIdx: fi, bodyId: bodyId)
-        match built.error {
-            MidBuildError.None => {}
-            _ => { self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: fi, error: built.error)
-                c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid body construction failed")
-                return <MidCanonicalBody body=0U64 /> }
-        }
-        match self.prepareMidExecutable(c: inout c, canonical: built.canonical, bodyId: bodyId, fnIdx: fi) {
+        match self.prepareMidExecutable(c: inout c, bodyId: bodyId, fnIdx: fi) {
             Optional.Some(v: val executable) => { return executable.canonical }
             Optional.None => {
                 c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid preparation failed")

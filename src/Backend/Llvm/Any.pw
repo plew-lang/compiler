@@ -333,96 +333,17 @@ pub impl LlvmCtx {
         // Mid stage runs.  The stages below must not substitute a source-level
         // function identity or spelling when a frozen instance is unavailable.
 
-        // Select a complete Mid body before beginning LLVM emission.  The
-        // receiver and parameters form the checked Mid-local ABI prefix.
-        // Receiver ownership is carried by ownsAtEntry/isInout and checked
-        // by the same dataflow and LLVM admission as ordinary parameters.
-        mut val midReady: Bool = false
-        mut val preparedMid: MidLlvmPrepared = <MidLlvmPrepared.None />
-        mut val midEligible: Bool = true
-        if f.isAsync {
-            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Async />)
-            midEligible = false
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        mut val abiParameterCount = signature.parameterTypes.count()
+        match signature.receiverPassing {
+            CallReceiverPassing.None => {}
+            _ => { abiParameterCount += 1U64 }
         }
-        if f.isExtern {
-            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Extern />)
-            midEligible = false
+        val preparedMid = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: abiParameterCount)
+        val midReady = match preparedMid {
+            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { give true }
+            _ => { give false }
         }
-        if midEligible {
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] Mid build-start name=")
-                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
-                eprint(text: " fn=")
-                self.traceCodegenU64(n: fi)
-                eprint(text: "\n")
-            }
-            val parametric: MidBodyBuild = buildMidBodyForInstance(c: inout c, fnIdx: fi, bodyId: bodyId)
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] Mid build-done name=")
-                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
-                eprint(text: " fn=")
-                self.traceCodegenU64(n: fi)
-                eprint(text: " body=")
-                self.traceCodegenU64(n: bodyId)
-                eprint(text: "\n")
-            }
-            // Keep the returned build record alive while extracting its scalar
-            // error field.  The trace boundary distinguishes a broken field
-            // projection/return ABI from a broken enum switch in the bootstrap
-            // fixed-point compiler.
-            val parametricError: MidBuildError = parametric.error
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] Mid error-field-ready name=")
-                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
-                eprint(text: " fn=")
-                self.traceCodegenU64(n: fi)
-                eprint(text: "\n")
-            }
-            match parametricError {
-                MidBuildError.None => {
-                    if c.traceCodegen {
-                        eprint(text: "[trace-codegen] Mid build-success name=")
-                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
-                        eprint(text: " fn=")
-                        self.traceCodegenU64(n: fi)
-                        eprint(text: "\n")
-                    }
-                    if bodyId != 0U64 {
-                        val signature = c.arena.bodySignature(bodyId: bodyId)
-                        mut val abiParameterCount: U64 = signature.parameterTypes.count()
-                        match signature.receiverPassing {
-                            CallReceiverPassing.None => {}
-                            _ => { abiParameterCount += 1U64 }
-                        }
-                        preparedMid = self.prepareCanonicalForLlvm(c: inout c, canonical: parametric.canonical, bodyId: bodyId, fnIdx: fi, parameterCount: abiParameterCount)
-                        match preparedMid {
-                            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = true }
-                            _ => {}
-                        }
-                    } else {
-                        self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)
-                        if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: missing body instance\n") }
-                    }
-                }
-                MidBuildError.InvalidStatement => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 1U64) }
-                MidBuildError.InvalidBlock => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 2U64) }
-                MidBuildError.InvalidFunction => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 3U64) }
-                MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 4U64) }
-                MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 5U64) }
-                MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
-                MidBuildError.UnsupportedAssign(reason: val reason) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 20U64 + self.midUnsupportedAssignCoverageDetail(reason: reason)) }
-                MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 7U64) }
-                MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 8U64) }
-                MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 9U64) }
-                MidBuildError.UnsupportedPanic => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 10U64) }
-                MidBuildError.UnsupportedGive => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 11U64) }
-                MidBuildError.UnsupportedBreak => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 12U64) }
-                MidBuildError.UnsupportedContinue => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 13U64) }
-                MidBuildError.MissingTerminator => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 14U64) }
-                MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 15U64) }
-                MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 16U64) }
-            }
-        } else { if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
         if !midReady {
             c.errorAt(offset: f.nameStart, msg: "internal error: function requires verified Mid lowering")
             return

@@ -2789,15 +2789,7 @@ impl LlvmCtx {
 
 pub impl LlvmCtx {
     inout fn prepareSyntheticMidBody(c: inout Comp, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
-        val built = buildMidBodyForInstance(c: inout c, fnIdx: fnIdx, bodyId: bodyId)
-        match built.error {
-            MidBuildError.None => {}
-            _ => {
-                self.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: fnIdx, error: built.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        return self.prepareCanonicalForLlvm(c: inout c, canonical: built.canonical, bodyId: bodyId, fnIdx: fnIdx, parameterCount: parameterCount)
+        return self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fnIdx, parameterCount: parameterCount)
     }
 
 }
@@ -2805,62 +2797,64 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
     // Semantic preparation is shared by every entry. Only this adapter maps
     // Mid failures into backend coverage and diagnostic context.
-    inout fn prepareMidExecutable(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64, fnIdx: U64) -> Optional[MidExecutableBody] {
-        val preparation = MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=canonical />, bodyId: bodyId)
-        match preparation {
-            Result.Ok(value: val executable) => { return <Optional.Some v=executable /> }
-            Result.Err(error: val failure) => {
-                match failure {
-                    MidPreparationError.InstantiationFailed(error: val error) => {
-                        self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: error)
+    inout fn prepareMidExecutable(c: inout Comp, bodyId: U64, fnIdx: U64) -> Optional[MidExecutableBody] {
+        val executable = self.midProgram.body(bodyId: bodyId)
+        match executable {
+            Optional.Some(v: _) => {}
+            Optional.None => { self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fnIdx) }
+        }
+        return executable
+    }
+
+    inout fn recordMidPreparationFailure(c: inout Comp, bodyId: U64, fnIdx: U64, failure: MidPreparationError) {
+        match failure {
+            MidPreparationError.InstantiationFailed(error: val error) => {
+                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: error)
+            }
+            MidPreparationError.AccessFailed(error: val error) => {
+                self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid access error=")
+                    match error {
+                        MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
+                        MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
+                        MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
+                        MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
+                        MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
+                        MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
+                        MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
+                        MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
+                        MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
+                        MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
+                        MidAccessError.None => { eprint(text: "none") }
                     }
-                    MidPreparationError.AccessFailed(error: val error) => {
-                        self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
-                        if c.traceCodegen {
-                            eprint(text: "[trace-codegen] Mid access error=")
-                            match error {
-                                MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
-                                MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
-                                MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
-                                MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
-                                MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
-                                MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
-                                MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
-                                MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
-                                MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
-                                MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
-                                MidAccessError.None => { eprint(text: "none") }
-                            }
-                            eprint(text: "\n")
-                        }
-                    }
-                    MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
-                        match verification.error {
-                            MidVerifyError.ConflictingBorrowAccess => {
-                                mut val offset = 0U64
-                                if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                                c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
-                            }
-                            MidVerifyError.ConflictingReceiverAccess => {
-                                mut val offset = 0U64
-                                if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                                c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
-                            }
-                            _ => {}
-                        }
-                        self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
-                        if c.traceCodegen { self.traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
-                    }
+                    eprint(text: "\n")
                 }
             }
+            MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
+                match verification.error {
+                    MidVerifyError.ConflictingBorrowAccess => {
+                        mut val offset = 0U64
+                        if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                        c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
+                    }
+                    MidVerifyError.ConflictingReceiverAccess => {
+                        mut val offset = 0U64
+                        if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                        c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
+                    }
+                    _ => {}
+                }
+                self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
+                if c.traceCodegen { self.traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
+            }
         }
-        return <Optional.None />
     }
 
     // ABI admission is LLVM-specific and follows semantic verification. Async
     // shares prepareMidExecutable, then computes its own frame before emission.
-    inout fn prepareCanonicalForLlvm(c: inout Comp, canonical: MidCanonicalBody, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
-        match self.prepareMidExecutable(c: inout c, canonical: canonical, bodyId: bodyId, fnIdx: fnIdx) {
+    inout fn prepareCanonicalForLlvm(c: inout Comp, bodyId: U64, fnIdx: U64, parameterCount: U64) -> MidLlvmPrepared {
+        match self.prepareMidExecutable(c: inout c, bodyId: bodyId, fnIdx: fnIdx) {
             Optional.Some(v: val executable) => {
                 val preflight = self.midVerifiedLlvmPreflight(c: inout c, canonical: executable.canonical, abiParameterCount: parameterCount)
                 match preflight {

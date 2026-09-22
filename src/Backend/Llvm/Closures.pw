@@ -206,15 +206,7 @@ pub impl LlvmCtx {
 
     inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> MidLlvmPrepared {
         val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
-        val built: MidBodyBuild = ensureParametricMidClosureBody(c: inout c, closure: fact)
-        match built.error {
-            MidBuildError.None => {}
-            _ => {
-                self.recordMidBuildError(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, error: built.error)
-                return <MidLlvmPrepared.None />
-            }
-        }
-        return self.prepareCanonicalForLlvm(c: inout c, canonical: built.canonical, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
+        return self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
     }
 
     // Captures are borrowed from the environment for this activation. Mutable

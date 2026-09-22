@@ -1,3 +1,4 @@
+import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `runFrontend`) and emits
@@ -162,6 +163,7 @@ struct LlvmValueAbi {
 pub impl LlvmValueAbi { factory }
 
 struct LlvmCtx {
+    pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
     pub mut val valueAbiByvalKind: U32 = 0U32
     pub mut val valueAbis: Array[LlvmValueAbi] = []
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
@@ -657,6 +659,7 @@ fn llvmIntUge() -> U32 { return 35U32 }
 
 export fn emitLlvm(c: inout Comp) {
     tracePhase(c: inout c, label: "backend:emit:start")
+    val programPreparation = MidExecutableProgram.prepare(c: inout c)
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     // Layout-sensitive optimizers must use the same native ABI as the linker.
@@ -684,6 +687,7 @@ export fn emitLlvm(c: inout Comp) {
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
+        midProgram=match programPreparation { Result.Ok(value: val program) => { give program } Result.Err(error: _) => { give <MidExecutableProgram.empty /> } }
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
@@ -696,6 +700,24 @@ export fn emitLlvm(c: inout Comp) {
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+
+    match programPreparation {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val failure) => {
+            match failure {
+                MidProgramError.Build(bodyId: val bodyId, error: val error) => {
+                    st.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, error: error)
+                }
+                MidProgramError.Preparation(bodyId: val bodyId, error: val error) => {
+                    st.recordMidPreparationFailure(c: inout c, bodyId: bodyId, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, failure: error)
+                }
+                _ => {}
+            }
+            c.errorAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
+            return
+        }
+    }
+    tracePhase(c: inout c, label: "mid:program:ready")
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.arena.bytes.count()

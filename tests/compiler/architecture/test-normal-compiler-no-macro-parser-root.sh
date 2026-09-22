@@ -78,7 +78,10 @@ python3 - <<'PYBODY'
 from pathlib import Path
 import re
 body = Path('src/Backend/Llvm/Any.pw').read_text().split('inout fn genLlvmFuncBody(', 1)[1]
-assert 'recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)' in body
+preparation = Path('src/Backend/Llvm/Mid.pw').read_text().split('inout fn prepareMidExecutable(', 1)[1].split('inout fn recordMidPreparationFailure(', 1)[0]
+assert 'self.midProgram.body(bodyId: bodyId)' in preparation
+assert 'Optional.None => { self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fnIdx)' in preparation
+assert 'prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi,' in body
 assert re.search(r'if !midReady\s*\{\s*c\.errorAt\([^\n]+\)\s*return\s*\}', body), 'unprepared body is not rejected'
 assert 'genLlvmBlock(' not in body, 'missing frozen body can fall back to source emission'
 PYBODY
