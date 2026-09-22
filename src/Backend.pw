@@ -1,3 +1,4 @@
+import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `runFrontend`) and emits
 // textual LLVM IR via libLLVM-C; `emitLlvm` is the entry the root `main` calls
@@ -818,6 +819,13 @@ export fn emitLlvm(c: inout Comp) {
         drainRound += 1U64
     }
     tracePhase(c: inout c, label: "backend:drain:done")
+    val conflictingBody = conflictingMidGlobalAccess(c: c)
+    if conflictingBody != 0U64 {
+        val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
+        mut val offset = 0U64
+        if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
+        c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+    }
     if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }

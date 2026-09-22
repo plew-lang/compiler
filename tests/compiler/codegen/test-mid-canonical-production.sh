@@ -103,7 +103,14 @@ for name in passes:
     assert len(calls) == 1, f'{name}: mandatory pass must run once'
     positions.append(calls[0].start())
 assert positions == sorted(positions), 'mandatory pass order changed'
-assert source.index('MidVerifyError.None => { return <Result.Ok') > positions[-1]
+# Isolate the success arm by the next match alternative rather than fixing
+# its whitespace, line count, or the presence of registration before return.
+success_start = source.index('MidVerifyError.None => {')
+success_arm = source[success_start:source.index('_ =>', success_start)]
+assert success_start > positions[-1], 'executable token must follow verification'
+assert 'return <Result.Ok value=<MidExecutableBody canonical=body.canonical /> />' in success_arm
+assert 'registerMidGlobalAccessBody(c: inout c, canonical: body.canonical)' in success_arm
+assert source.count('registerMidGlobalAccessBody(') == 1, 'register only verified bodies'
 for stage in ['MidInstantiatedBody', 'MidAccessResolvedBody', 'MidDropElaboratedBody', 'MidExecutableBody']:
     implementation = source.split(f'pub impl {stage} {{', 1)[1].split('\npub impl ', 1)[0]
     assert 'factory' not in re.sub(r'//[^\n]*', '', implementation), f'{stage}: raw construction must stay private'

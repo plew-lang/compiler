@@ -1,0 +1,3 @@
+mut val number = 1I64
+fn update(value: inout I64) { value += number }
+fn main() { update(value: inout number) }

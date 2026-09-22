@@ -39,7 +39,7 @@ pub impl MidVerification { factory }
 // Compare storage after access elaboration, not source syntax: an Index
 // getter result is an independent local, while inout's accessPlace names the
 // reserved container. Shared-cell identity needs the separate alias tier.
-fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
+export fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
     if leftId == 0U64 || rightId == 0U64 { return false }
     val left = c.mid.places[leftId - 1U64]
     val right = c.mid.places[rightId - 1U64]
@@ -548,7 +548,7 @@ fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool 
 }
 
 // Enumerate reachable blocks once; dead code carries no runtime obligation.
-fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
+export fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
     mut val reached: Array[Bool] = []
     mut val index = 0U64
     while index < body.blocks.len { reached.append(false)

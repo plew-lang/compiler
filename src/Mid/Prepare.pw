@@ -7,6 +7,7 @@ import ./Instantiate with { MidInstantiateError, instantiateCanonicalMidBody }
 import ./Access with { MidAccessError, elaborateCanonicalMidAccesses }
 import ./Optimize with { optimizeCanonicalMidReturns }
 import ./Drop with { elaborateCanonicalMidDrops }
+import ./GlobalAccess with { registerMidGlobalAccessBody }
 import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
 
 // Admission to the beginning of the pipeline makes no validation claim.
@@ -83,7 +84,10 @@ pub impl MidExecutableBody {
     assoc fn verify(c: inout Comp, body: MidDropElaboratedBody) -> Result[MidExecutableBody, MidPreparationError] {
         val verification = verifyExecutableCanonicalMidBody(c: inout c, canonical: body.canonical)
         match verification.error {
-            MidVerifyError.None => { return <Result.Ok value=<MidExecutableBody canonical=body.canonical /> /> }
+            MidVerifyError.None => {
+                registerMidGlobalAccessBody(c: inout c, canonical: body.canonical)
+                return <Result.Ok value=<MidExecutableBody canonical=body.canonical /> />
+            }
             _ => { return <Result.Err error=<MidPreparationError.VerificationFailed body=body.canonical verification=verification /> /> }
         }
     }

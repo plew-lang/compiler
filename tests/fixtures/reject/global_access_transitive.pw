@@ -1,0 +1,4 @@
+mut val number = 1I64
+fn readNumber() -> I64 { return number }
+fn update(value: inout I64) { value += readNumber() }
+fn main() { update(value: inout number) }

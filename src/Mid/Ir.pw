@@ -244,6 +244,8 @@ export struct MidClosureBody {
 pub impl MidClosureBody { factory }
 
 export struct MidCanonicalArena {
+    pub mut val globalAccessState: U64 = 0U64
+    pub mut val globalAccessBodies: Array[U64] = []
     pub mut val bodies: Array[MidBodyNode] = []
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []

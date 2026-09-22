@@ -1,0 +1,22 @@
+// Reborrowing, disjoint fields, value snapshots and explicit FFI stay legal.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+extern(c) { fn foreignValue() -> I64 }
+struct Pair { pub mut val first: I64 pub mut val second: I64 }
+pub impl Pair { factory }
+mut val pair = <Pair first=1I64 second=2I64 />
+fn inner(value: inout I64) { value += pair.second }
+fn outer(value: inout I64) { inner(value: inout value) }
+fn snapshot(value: I64, destination: inout I64) { destination += value }
+fn foreignUpdate(value: inout I64) { value += foreignValue() }
+fn readOnly() -> I64 { return pair.first }
+fn main() {
+    outer(value: inout pair.first)
+    assert(pair.first == 3I64)
+    snapshot(value: pair.first, destination: inout pair.first)
+    assert(pair.first == 6I64)
+    foreignUpdate(value: inout pair.first)
+    assert(pair.first == 10I64)
+    assert(readOnly() == 10I64)
+    print("ok")
+}

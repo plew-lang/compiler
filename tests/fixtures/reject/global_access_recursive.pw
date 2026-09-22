@@ -1,0 +1,8 @@
+mut val number = 1I64
+fn readNumber(count: I64) -> I64 {
+    if count == 0I64 { return number }
+    return step(count: count - 1I64)
+}
+fn step(count: I64) -> I64 { return readNumber(count: count) }
+fn update(value: inout I64) { value += step(count: 2I64) }
+fn main() { update(value: inout number) }
