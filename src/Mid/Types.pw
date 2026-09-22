@@ -6,7 +6,7 @@ import ../Diag with { eprintU64 }
 import ../Frontend with { Comp }
 import ../Ir with { InstanceEnvironment, CallReceiverPassing }
 import @Plew/Syntax with { rangeEquals }
-import ./Ir with { MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
+import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
 
 // Removing outer facets must not erase views inside generic arguments or
 // change nominal identity. This check is separate from conversion selection.
@@ -47,9 +47,9 @@ fn midTypesEqual(c: inout Comp, left: U64, right: U64) -> Bool {
     return equal
 }
 
-fn midOperandType(c: Comp, operandId: U64) -> U64 {
-    val operand = c.mid.operands[operandId - 1U64]
-    if operand.place != 0U64 { return c.mid.places[operand.place - 1U64].typeTerm }
+fn midOperandType(arena: MidCanonicalArena, operandId: U64) -> U64 {
+    val operand = arena.operands[operandId - 1U64]
+    if operand.place != 0U64 { return arena.places[operand.place - 1U64].typeTerm }
     return operand.typeTerm
 }
 
@@ -150,10 +150,10 @@ fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, d
         if !midOperandTypesAreValid(c: inout c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: index)) { return false }
         index += 1U64
     }
-    if value.tag == 1U64 { return midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: value.operand), right: destination) }
-    if value.tag == 6U64 { return midConversionTypesMatch(c: inout c, proofId: value.conversion, source: midOperandType(c: c, operandId: value.operand), target: destination) }
-    if value.tag == 10U64 && !midRetagTypesMatch(c: inout c, source: midOperandType(c: c, operandId: value.operand), target: value.targetTerm) { return false }
-    if value.tag == 2U64 && !midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: value.operand), right: value.targetTerm) { return false }
+    if value.tag == 1U64 { return midTypesEqual(c: inout c, left: midOperandType(arena: c.mid, operandId: value.operand), right: destination) }
+    if value.tag == 6U64 { return midConversionTypesMatch(c: inout c, proofId: value.conversion, source: midOperandType(arena: c.mid, operandId: value.operand), target: destination) }
+    if value.tag == 10U64 && !midRetagTypesMatch(c: inout c, source: midOperandType(arena: c.mid, operandId: value.operand), target: value.targetTerm) { return false }
+    if value.tag == 2U64 && !midTypesEqual(c: inout c, left: midOperandType(arena: c.mid, operandId: value.operand), right: value.targetTerm) { return false }
     if value.tag == 2U64 || (value.tag >= 8U64 && value.tag <= 10U64) {
         return midTypesEqual(c: inout c, left: value.targetTerm, right: destination)
     }
@@ -161,7 +161,7 @@ fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, d
         index = 0U64
         while index < value.elements.len {
             val element = c.mid.aggregateElements[value.elements.start + index]
-            if !midConversionTypesMatch(c: inout c, proofId: element.conversion, source: midOperandType(c: c, operandId: element.operand), target: element.targetTerm) { return false }
+            if !midConversionTypesMatch(c: inout c, proofId: element.conversion, source: midOperandType(arena: c.mid, operandId: element.operand), target: element.targetTerm) { return false }
             index += 1U64
         }
     }
@@ -169,7 +169,7 @@ fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, d
         index = 0U64
         while index < value.elements.len {
             val capture = c.mid.closureCaptures[value.elements.start + index]
-            if !midTypesEqual(c: inout c, left: capture.typeTerm, right: midOperandType(c: c, operandId: capture.operand)) { return false }
+            if !midTypesEqual(c: inout c, left: capture.typeTerm, right: midOperandType(arena: c.mid, operandId: capture.operand)) { return false }
             index += 1U64
         }
     }
@@ -212,7 +212,13 @@ export fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, ter
         if term.args.len != call.parameterTypeRefs.len || call.parameterTypeRefs.start > c.arena.finalCalleeParameterTypePool.count() || call.parameterTypeRefs.len > c.arena.finalCalleeParameterTypePool.count() - call.parameterTypeRefs.start { return false }
         index = 0U64
         while index < term.args.len {
-            if !midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: c.mid.callArguments[term.args.start + index]), right: c.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: index)) { return false }
+            // Read scalar facts before invoking the semantic comparison. The
+            // operand reader needs only Mid storage, not a Comp snapshot held
+            // across evaluation of another argument or an inout call.
+            val operandId = c.mid.callArguments[term.args.start + index]
+            val actual = midOperandType(arena: c.mid, operandId: operandId)
+            val expected = c.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: index)
+            if !midTypesEqual(c: inout c, left: actual, right: expected) { return false }
             index += 1U64
         }
         match call.receiverPassing {
@@ -220,7 +226,7 @@ export fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, ter
             _ => {
                 if term.callReceiver == 0U64 { return false }
                 val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
-                if receiver.operand == 0U64 || !midViewTypesMatch(c: inout c, sourceTerm: midOperandType(c: c, operandId: receiver.operand), targetTerm: call.recvTypeRef) { return false }
+                if receiver.operand == 0U64 || !midViewTypesMatch(c: inout c, sourceTerm: midOperandType(arena: c.mid, operandId: receiver.operand), targetTerm: call.recvTypeRef) { return false }
             }
         }
         if term.destination != 0U64 && !midTypesEqual(c: inout c, left: c.mid.places[term.destination - 1U64].typeTerm, right: call.resultTypeRef) { return false }
@@ -230,7 +236,7 @@ export fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, ter
         if !signature.ready { return false }
         if term.tag == 5U64 { return signature.bodyResultType == 0U64 }
         if term.value == 0U64 { return false }
-        return midTypesEqual(c: inout c, left: midOperandType(c: c, operandId: term.value), right: signature.bodyResultType)
+        return midTypesEqual(c: inout c, left: midOperandType(arena: c.mid, operandId: term.value), right: signature.bodyResultType)
     }
     return true
 }
