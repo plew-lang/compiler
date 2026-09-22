@@ -1110,6 +1110,7 @@ export fn emitLlvmRuntime() {
     // SAME place at runtime (`arr[i]`/`arr[j]` with i==j, two Refs to one cell) — the
     // exclusivity the callee relies on does not hold, so panic loudly at the call.
     write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw(\"overlapping inout: two inout positions of one call overlap in the same shared cell\",82); }\n")
+    write(s: "void plew_read_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw(\"overlapping borrow: read and inout access to the same shared cell\",65); }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
     // LLVM backend matches the C backend's loud overflow/div-zero behaviour.

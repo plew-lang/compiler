@@ -1,0 +1,14 @@
+// A copyable field receiver still borrows shared storage; it is not a snapshot.
+import @Std/Core with { MutableRef }
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    fn inspect(other: inout I64) { other += 1I64 }
+}
+struct Holder { pub mut val counter: Counter }
+pub impl Holder { factory }
+fn main() {
+    val owner = <MutableRef value=<Holder counter=<Counter value=1I64 /> /> />
+    val alias = owner
+    owner->counter.inspect(other: inout alias->counter.value)
+}

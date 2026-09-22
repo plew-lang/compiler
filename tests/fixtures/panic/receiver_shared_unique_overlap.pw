@@ -1,0 +1,12 @@
+// Unique payloads use shared-cell alias checks when reached through Ref.
+import @Std/Core with { MutableRef, Ref }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell {
+    factory
+    fn inspect(other: inout I64) { other += 1I64 }
+}
+fn main() {
+    val owner = <MutableRef value=<Cell value=1I64 /> />
+    val reader: Ref[Cell] = owner.asRef()
+    reader->inspect(other: inout owner->value)
+}

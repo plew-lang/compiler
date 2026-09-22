@@ -1,0 +1,56 @@
+// Distinct cells and disjoint fields remain legal; an Index result owns its value.
+import @Std/Core with { MutableRef, Ref, assert }
+import @Std/Io with { print }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell {
+    factory
+    fn inspect(other: inout I64) -> I64 {
+        other += 10I64
+        return self.value
+    }
+    fn read(extra: I64) -> I64 { return self.value + extra }
+    fn readTwice(peer: Ref[Cell]) -> I64 { return self.value + peer->value }
+}
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    fn inspect(other: inout I64) -> I64 {
+        other += 10I64
+        return self.value
+    }
+}
+pub impl Counter {
+    fn inspectCounter(other: inout Counter) -> I64 {
+        other.value += 10I64
+        return self.value
+    }
+}
+struct Holder {
+    pub mut val first: Counter
+    pub mut val second: Counter
+    pub mut val values: Array[Counter]
+}
+pub impl Holder { factory }
+mut val current = <MutableRef value=<Cell value=30I64 /> />
+fn replace() -> I64 {
+    current = <MutableRef value=<Cell value=40I64 /> />
+    return 0I64
+}
+fn main() {
+    val owner = <MutableRef value=<Cell value=1I64 /> />
+    val other = <MutableRef value=<Cell value=2I64 /> />
+    val reader: Ref[Cell] = owner.asRef()
+    assert(reader->inspect(other: inout other->value) == 1I64)
+    assert(other->value == 12I64)
+    assert(reader->read(extra: owner->value) == 2I64)
+    assert(reader->readTwice(peer: reader) == 2I64)
+    val holder = <MutableRef value=<Holder first=<Counter value=3I64 /> second=<Counter value=4I64 /> values=[<Counter value=5I64 />] /> />
+    val alias = holder
+    assert(holder->first.inspect(other: inout alias->second.value) == 3I64)
+    assert(alias->second.value == 14I64)
+    assert(holder->values[0].inspectCounter(other: inout alias->values[0]) == 5I64)
+    assert(alias->values[0].value == 15I64)
+    assert(current->read(extra: replace()) == 30I64)
+    assert(current->value == 40I64)
+    print("ok")
+}

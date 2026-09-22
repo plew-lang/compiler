@@ -12,12 +12,14 @@ pub impl LlvmCtx {
 
     // Shared by source and canonical callers. Both inputs are evaluated,
     // retained cells; this helper never recovers source expressions.
-    inout fn emitInoutCellCheck(c: inout Comp, cell: LLVMValueRef, otherCell: LLVMValueRef) {
+    inout fn emitInoutCellCheck(c: inout Comp, cell: LLVMValueRef, otherCell: LLVMValueRef, hasReadBorrow: Bool = false) {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_inout_overlap", fnTy: fty)
+        mut val name = "plew_inout_overlap"
+        if hasReadBorrow { name = "plew_read_inout_overlap" }
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: name, fnTy: fty)
         mut val cav: Array[LLVMValueRef] = []
         cav.append(cell)
         cav.append(otherCell)

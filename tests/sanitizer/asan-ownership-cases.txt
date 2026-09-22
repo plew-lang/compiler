@@ -14,3 +14,4 @@ tests/fixtures/run/mid_access_getter_key_cfg_lowering.pw
 tests/fixtures/run/mid_return_shadowed_resource.pw
 tests/fixtures/run/ref_parameter_receiver_lifetime.pw
 tests/fixtures/run/receiver_preparation.pw
+tests/fixtures/run/receiver_shared_access.pw
