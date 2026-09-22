@@ -12,6 +12,8 @@ ir = Path("src/Ir.pw").read_text()
 for required in [
     "export struct CallResolutionArgumentRange",
     "export struct CallEvaluationArgument",
+    "pub val sourceTypeRef: U64",
+    "pub val adaptsReceiverView: Bool",
     "pub val arguments: CallResolutionArgumentRange",
     "pub mut val finalCalleeArgumentPool: Array[CallEvaluationArgument]",
 ]:
@@ -20,7 +22,7 @@ for required in [
 
 mono = Path("src/Codegen/Mono/Call.pw").read_text()
 for required in [
-    "inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument])",
+    "inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64])",
     "inout fn bodyCalleeArgumentRange(exprId: U64",
     "arguments: selection.argumentSources",
     "arguments: argumentSources",
