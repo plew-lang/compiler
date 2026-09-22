@@ -1543,6 +1543,27 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
     }
 }
 
+// A synchronous value parameter borrows its caller-owned value, not storage
+// that the callee can replace through another name. Stabilize ambient roots
+// even when no later argument expression requires an evaluation snapshot.
+fn midArgumentNeedsOwnedHome(state: MidBuildState, operand: MidOperand) -> Bool {
+    val place = match operand {
+        MidOperand.Copy(place: val source) => { give source }
+        _ => { return false }
+    }
+    if place.rootTag == 2U64 && place.globalMutable { return true }
+    if place.rootTag == 1U64 && place.local < state.locals.count() && state.locals[place.local].isCaptureCell { return true }
+    mut val projectionIndex: U64 = 0U64
+    while projectionIndex < place.projections.count() {
+        match place.projections[projectionIndex] {
+            MidProjection.Deref(typeTerm: _) => { return true }
+            _ => {}
+        }
+        projectionIndex += 1U64
+    }
+    return false
+}
+
 fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument, captureValue: Bool) -> MidOperandBuild {
     mut val built: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
     match argument.source {
@@ -1592,7 +1613,7 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             }
         }
     }
-    if captureValue { return <MidOperandBuild operand=midEvaluatedValue(c: inout c, state: inout state, operand: built.operand) /> }
+    if captureValue || midArgumentNeedsOwnedHome(state: state, operand: built.operand) { return <MidOperandBuild operand=midEvaluatedValue(c: inout c, state: inout state, operand: built.operand) /> }
     return built
 }
 

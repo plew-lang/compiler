@@ -1,0 +1,24 @@
+// Diagnostic: a by-value Ref parameter must survive rebinding its caller's owner.
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+unique struct Cell {
+    pub val value: I64
+    deinit { print(self.value) }
+}
+pub impl Cell {
+    factory
+    fn inspect(extra: I64) -> I64 { return self.value + extra }
+}
+mut val current: MutableRef[Cell] = <MutableRef value=<Cell value=11I64 /> />
+fn replaceCurrent() -> I64 {
+    current = <MutableRef value=<Cell value=22I64 /> />
+    return 1I64
+}
+fn read(reference: MutableRef[Cell]) -> I64 {
+    val first = reference->inspect(extra: replaceCurrent())
+    return first + reference->value
+}
+fn main() {
+    print(read(reference: current))
+    print(current->value)
+}

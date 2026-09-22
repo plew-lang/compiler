@@ -15,12 +15,12 @@ sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
 import llvm_link
 
-CASES = {'root': 'item', 'field': 'holder.item', 'index': 'items[0U64]', 'ref': 'reference->'}
+CASES = {'root': 'item', 'field': 'holder.item', 'index': 'items[0U64]', 'ref': 'reference->', 'ref_parameter': 'reference->'}
 
 
 def source(case, mode):
     target = CASES[case]
-    access = target if case == 'ref' else target + '.'
+    access = target if case in ['ref', 'ref_parameter'] else target + '.'
     call = (access + 'inspect(extra: probeStep(iteration))' if mode == 'late'
             else access + 'inspectEarly(iteration: iteration)')
     setup = {
@@ -28,7 +28,12 @@ def source(case, mode):
         'field': 'val holder = <Holder item=<Item value=7I64 data=[11I64, 12I64, 13I64] /> />',
         'index': 'val items: Array[Item] = [<Item value=7I64 data=[11I64, 12I64, 13I64] />]',
         'ref': 'val reference = <MutableRef value=<Item value=7I64 data=[11I64, 12I64, 13I64] /> />',
+        'ref_parameter': 'val reference = <MutableRef value=<Item value=7I64 data=[11I64, 12I64, 13I64] /> />',
     }[case]
+    helper = ''
+    if case == 'ref_parameter':
+        helper = 'fn inspectReference(reference: MutableRef[Item], iteration: I64) -> I64 { return ' + call + ' }'
+        call = 'inspectReference(reference: reference, iteration: iteration)'
     return '''import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 extern(c) {
@@ -49,6 +54,7 @@ pub impl Item {
 }
 struct Holder { pub val item: Item }
 pub impl Holder { factory }
+HELPER
 fn main() {
     SETUP
     val limit = probeLimit()
@@ -62,7 +68,7 @@ fn main() {
     probeReport()
     print(checksum)
 }
-'''.replace('SETUP', setup).replace('CALL', call)
+'''.replace('HELPER', helper).replace('SETUP', setup).replace('CALL', call)
 
 
 SUPPORT = '''#include <stdlib.h>
@@ -83,6 +89,7 @@ def digest(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--compiler', type=Path, default=ROOT/'plewc')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--iterations', type=int, default=20000000)
     parser.add_argument('--runs', type=int, default=7)
@@ -96,7 +103,7 @@ def main():
     env = os.environ.copy()
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     config = env.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
-    compiler = ROOT / 'plewc'
+    compiler = args.compiler.resolve()
     inputs = {str(p): digest(p) for p in [compiler, Path(__file__), ROOT/'Plew.lock', *sorted((ROOT/'scripts/support').glob('*.py')), *sorted((ROOT/'std').rglob('*.pw'))]}
     watch = [sys.executable, str(ROOT/'scripts/support/watch-command.py'), '--']
 
