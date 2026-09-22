@@ -671,8 +671,9 @@ pub impl Comp {
     // arguments remain part of those arguments' semantic identity.
     inout fn typeRefWithoutOuterViews(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        val term = self.arena.typeTerms[ref]
+        if term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 { return ref }
         val base: TypeRef = self.arena.typeAt(index: ref)
-        if base.viewExtId == 0U64 && base.viewIds.count() == 0U64 && base.viewSources.count() == 0U64 { return ref }
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
     }
 

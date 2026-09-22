@@ -22,13 +22,19 @@ for required in [
 
 mono = Path("src/Codegen/Mono/Call.pw").read_text()
 for required in [
-    "inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64])",
+    "inout fn pushFinalCalleeArguments(arguments: Array[CallTemplateArgument], parameterTypes: Array[U64], sourceTypes: Array[U64])",
     "inout fn bodyCalleeArgumentRange(exprId: U64",
     "arguments: selection.argumentSources",
     "arguments: argumentSources",
 ]:
     if required not in mono:
         raise SystemExit(f"final call evaluation plan is not published: {required}")
+
+for method in ["pushFinalCalleeArguments", "callArgumentConversions"]:
+    begin = mono.index("inout fn " + method + "(")
+    end = mono.index("\n    }", begin)
+    if "finalCallArgumentType(" in mono[begin:end] or "groundCallArgumentSource(" in mono[begin:end]:
+        raise SystemExit(f"{method} re-resolves frozen argument source types")
 
 start = mono.index("inout fn bodyCalleeArgumentRange(exprId: U64")
 end = mono.index("inout fn bodyCalleeResultRef", start)

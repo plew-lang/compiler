@@ -11,7 +11,10 @@ import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, 
 // Removing outer facets must not erase views inside generic arguments or
 // change nominal identity. This check is separate from conversion selection.
 export fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
-    if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.typeTermIsClosed(ref: sourceTerm) || !c.typeTermIsClosed(ref: targetTerm) { return false }
+    if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.typeTermIsClosed(ref: sourceTerm) { return false }
+    // Identical closed terms already prove the relation, including all views.
+    if sourceTerm == targetTerm { return true }
+    if !c.typeTermIsClosed(ref: targetTerm) { return false }
     val source: U64 = c.typeRefWithoutOuterViews(ref: sourceTerm)
     val target: U64 = c.typeRefWithoutOuterViews(ref: targetTerm)
     return c.typeRefEq(a: source, b: target)

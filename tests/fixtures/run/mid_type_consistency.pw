@@ -2,8 +2,10 @@
 import @Std/Io with { print }
 import @Std/Core with { assert }
 import /Frontend with { Comp }
-import /Ir with { CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
+import /Ir with { TypeRef, CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
 import /Mid with { MidCastKind, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
+import /Mid/Types with { midViewTypesMatch }
+
 fn check(mode: U64) {
     mut val c: Comp = <Comp />
     c.arena.reserveTypeSentinel()
@@ -70,7 +72,30 @@ fn callAndReturn(mode: U64) {
         _ => { assert(false) }
     }
 }
+fn viewTypeIdentity() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val integerName = c.internBytes(s: "I64")
+    val integer = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val parameterName = c.internBytes(s: "T")
+    val parameter = c.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen args=[] paramId=1U64 />)
+    assert(midViewTypesMatch(c: inout c, sourceTerm: integer, targetTerm: integer))
+    // Equal IDs cannot bypass validity or closedness checks.
+    assert(!midViewTypesMatch(c: inout c, sourceTerm: 0U64, targetTerm: 0U64))
+    val invalid = c.arena.typeCount()
+    assert(!midViewTypesMatch(c: inout c, sourceTerm: invalid, targetTerm: invalid))
+    assert(!midViewTypesMatch(c: inout c, sourceTerm: parameter, targetTerm: parameter))
+    val view = c.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewExtId=41U64 />)
+    assert(midViewTypesMatch(c: inout c, sourceTerm: view, targetTerm: integer))
+    val containerName = c.internBytes(s: "Container")
+    val plain = c.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[integer] />)
+    val nestedView = c.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[view] />)
+    val nestedParameter = c.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[parameter] />)
+    assert(!midViewTypesMatch(c: inout c, sourceTerm: nestedView, targetTerm: plain))
+    assert(!midViewTypesMatch(c: inout c, sourceTerm: nestedParameter, targetTerm: nestedParameter))
+}
 fn main() {
+    viewTypeIdentity()
     check(mode: 0U64) check(mode: 1U64) check(mode: 2U64)
     // I64 and U64 share an LLVM width but remain distinct Plew types.
     check(mode: 3U64) check(mode: 4U64) check(mode: 5U64) check(mode: 6U64) check(mode: 7U64)
