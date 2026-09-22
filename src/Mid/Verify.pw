@@ -11,6 +11,7 @@ export enum MidVerifyError {
     None
     InvalidTarget
     TypeMismatch
+    ConflictingReceiverAccess
     PartialMove
     MoveUnavailable
     DropUnavailable
@@ -33,6 +34,50 @@ export struct MidVerification {
     pub val local: U64 = 0U64
 }
 pub impl MidVerification { factory }
+
+// Compare storage after access elaboration, not source syntax: an Index
+// getter result is an independent local, while inout's accessPlace names the
+// reserved container. Shared-cell identity needs the separate alias tier.
+fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
+    if leftId == 0U64 || rightId == 0U64 { return false }
+    val left = c.mid.places[leftId - 1U64]
+    val right = c.mid.places[rightId - 1U64]
+    if canonicalMidPlaceHasDeref(c: c, place: left) || canonicalMidPlaceHasDeref(c: c, place: right) { return false }
+    if left.rootTag != right.rootTag { return false }
+    if left.rootTag == 1U64 && left.local != right.local { return false }
+    if left.rootTag == 2U64 && left.globalTarget != right.globalTarget { return false }
+    mut val index = 0U64
+    while index < left.projections.len && index < right.projections.len {
+        val projection = c.mid.projections[left.projections.start + index]
+        val other = c.mid.projections[right.projections.start + index]
+        // Index reservations conflict at container granularity. Only a
+        // physical field divergence proves disjointness within one root.
+        if projection.tag == 2U64 || other.tag == 2U64 { return true }
+        if projection.tag == 1U64 && other.tag == 1U64 && projection.index != other.index { return false }
+        if projection.tag != other.tag { return true }
+        index += 1U64
+    }
+    return true
+}
+
+fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
+    if term.callReceiver == 0U64 { return false }
+    val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+    if receiver.tag != 2U64 { return false }
+    val operand = c.mid.operands[receiver.operand - 1U64]
+    if operand.tag != 3U64 { return false }
+    mut val index = 0U64
+    while index < term.args.len {
+        val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        if argument.tag == 4U64 {
+            mut val storage = argument.place
+            if argument.accessPlace != 0U64 { storage = argument.accessPlace }
+            if canonicalMidValuePlacesOverlap(c: c, leftId: operand.place, rightId: storage) { return true }
+        }
+        index += 1U64
+    }
+    return false
+}
 
 // A global root is a typed address selected by the frontend.  It is not an
 // implicit local: only Copy/Borrow may read it, and the sole write protocol is
@@ -826,6 +871,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 argumentI = argumentI + 1U64
             }
+            if executable && canonicalMidReceiverConflicts(c: c, term: term) { return <MidVerification error=<MidVerifyError.ConflictingReceiverAccess /> block=blockI /> }
             if term.destination != 0U64 && term.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
                 if destination.projections.len == 0U64 && destination.local < states.count() {

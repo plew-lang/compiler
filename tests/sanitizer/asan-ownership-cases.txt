@@ -12,3 +12,5 @@ tests/fixtures/run/mid_value_evaluation_order.pw
 tests/fixtures/run/mid_shared_promise_waiters.pw
 tests/fixtures/run/mid_access_getter_key_cfg_lowering.pw
 tests/fixtures/run/mid_return_shadowed_resource.pw
+tests/fixtures/run/ref_parameter_receiver_lifetime.pw
+tests/fixtures/run/receiver_preparation.pw

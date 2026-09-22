@@ -91,6 +91,7 @@ pub impl LlvmCtx {
             MidVerifyError.None => { return 0U64 }
             MidVerifyError.InvalidTarget => { return 1U64 }
             MidVerifyError.TypeMismatch => { return 15U64 }
+            MidVerifyError.ConflictingReceiverAccess => { return 16U64 }
             MidVerifyError.PartialMove => { return 2U64 }
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
@@ -2829,6 +2830,14 @@ pub impl LlvmCtx {
                         }
                     }
                     MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
+                        match verification.error {
+                            MidVerifyError.ConflictingReceiverAccess => {
+                                mut val offset = 0U64
+                                if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                                c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout argument in the same call")
+                            }
+                            _ => {}
+                        }
                         self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
                         if c.traceCodegen { self.traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
                     }

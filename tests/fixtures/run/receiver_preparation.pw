@@ -1,0 +1,31 @@
+// Place receivers read at activation; produced values keep their own storage.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    fn inspect(extra: I64) -> I64 { return self.value + extra }
+    fn inspectAndChange(other: inout Counter) -> I64 {
+        other.value = 20I64
+        return self.value
+    }
+}
+struct Pair { pub mut val first: Counter pub mut val second: Counter }
+pub impl Pair { factory }
+mut val current = <Counter value=1I64 />
+fn replace() -> I64 { current = <Counter value=2I64 /> return 0I64 }
+fn produced() -> Counter { return current }
+fn main() {
+    assert(current.inspect(extra: replace()) == 2I64)
+    current = <Counter value=1I64 />
+    assert(produced().inspect(extra: replace()) == 1I64)
+    mut val pair = <Pair first=<Counter value=3I64 /> second=<Counter value=4I64 /> />
+    assert(pair.first.inspectAndChange(other: inout pair.second) == 3I64)
+    assert(pair.second.value == 20I64)
+    mut val values = [<Counter value=5I64 />]
+    assert(values[0].inspectAndChange(other: inout values[0]) == 5I64)
+    assert(values[0].value == 20I64)
+    assert(produced().inspectAndChange(other: inout current) == 2I64)
+    assert(current.value == 20I64)
+    print("ok")
+}

@@ -1,0 +1,12 @@
+struct Counter { pub mut val value: I64 }
+pub impl Counter {
+    factory
+    fn read(other: inout Counter) -> I64 {
+        other.value = 2I64
+        return self.value
+    }
+}
+mut val counter = <Counter value=1I64 />
+fn main() {
+    counter.read(other: inout counter)
+}
