@@ -27,3 +27,5 @@ part ./Llvm/Mid
 part ./Llvm/Async
 
 part ./Llvm/MidAsync
+
+part ./Llvm/Ambient

@@ -756,7 +756,7 @@ fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term:
     val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: sourceTarget.resolution)
     if target == 0U64 || receiverId == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
     val firstSetter: U64 = canonicalAccessSetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: canonicalAccessMarkerCount(arena: c.mid, term: term) - 1U64, plan: plan)
-    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=firstSetter args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiverId />)
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 accessScope=blockStart + plan.operations.count() + 1U64 accessScopeRole=1U64 target=firstSetter args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiverId />)
     return <MidAccessError.None />
 }
 
@@ -878,7 +878,7 @@ fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, layout: MidCano
     c.mid.callArguments.append(value)
     val setterStart: U64 = canonicalAccessSetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: marker, plan: plan)
     val cleanupBlock: U64 = setterStart + stage * 2U64 + 1U64
-    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=cleanupBlock args=<MidRange start=argumentStart len=2U64 /> destination=destination callTarget=target callReceiver=receiver />)
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 accessScope=blockStart + plan.operations.count() + 1U64 accessScopeRole=if marker == 0U64 && stage + 1U64 == site.chainLen { give 3U64 } else { give 2U64 } target=cleanupBlock args=<MidRange start=argumentStart len=2U64 /> destination=destination callTarget=target callReceiver=receiver />)
     c.mid.blocks.append(<MidBlockNode terminator=c.mid.terminators.count() />)
     val cleanupStart: U64 = c.mid.statements.count()
     c.mid.statements.append(<MidStatementNode tag=3U64 destination=valuePlace />)

@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+mut val value = 7I64
+trait Reader { fn read() -> I64 }
+struct Source { pub val unused: I64 }
+pub impl Source { factory }
+pub impl Source as Reader { fn read() -> I64 { return value } }
+fn update(destination: inout I64, source: any Reader) { destination += source.read() }
+fn main() {
+    val source: any Reader = <Source unused=0I64 />
+    update(destination: inout value, source: source)
+    print(value)
+}

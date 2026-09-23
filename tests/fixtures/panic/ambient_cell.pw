@@ -1,0 +1,12 @@
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+struct Cell { pub mut val value: I64 }
+pub impl Cell { factory }
+fn update(value: inout I64, alias: MutableRef[Cell]) {
+    value += alias->value
+}
+fn main() {
+    val cell = <MutableRef value=<Cell value=7I64 /> />
+    update(value: inout cell->value, alias: cell)
+    print(cell->value)
+}

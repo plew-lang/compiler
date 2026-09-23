@@ -1,3 +1,4 @@
+import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
@@ -162,7 +163,18 @@ struct LlvmValueAbi {
 }
 pub impl LlvmValueAbi { factory }
 
+struct LlvmAmbientScope {
+    pub val group: Optional[LLVMValueRef] = <Optional.None />
+    pub val records: Array[LLVMValueRef] = []
+}
+pub impl LlvmAmbientScope { factory }
+
+
 struct LlvmCtx {
+    pub val ambientProgram: MidAmbientProgram = <MidAmbientProgram.empty />
+    pub mut val ambientBody: MidAmbientBodyPlan = <MidAmbientBodyPlan />
+    pub mut val ambientPermit: Optional[LLVMValueRef] = <Optional.None />
+    pub mut val ambientScopes: Dictionary[U64, LlvmAmbientScope] = [:]
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
     pub mut val valueAbiByvalKind: U32 = 0U32
     pub mut val valueAbis: Array[LlvmValueAbi] = []
@@ -503,6 +515,7 @@ extern(c) {
 
     // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+    fn LLVMConstIntToPtr(value~: LLVMValueRef, type~: LLVMTypeRef) -> LLVMValueRef
     fn LLVMConstNull(ty~: LLVMTypeRef) -> LLVMValueRef
     fn LLVMIsNull(v~: LLVMValueRef) -> I32
     fn LLVMSizeOf(ty~: LLVMTypeRef) -> LLVMValueRef
@@ -660,6 +673,17 @@ fn llvmIntUge() -> U32 { return 35U32 }
 export fn emitLlvm(c: inout Comp) {
     tracePhase(c: inout c, label: "backend:emit:start")
     val programPreparation = MidExecutableProgram.prepare(c: inout c)
+    val ambientProgram = match programPreparation {
+        Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
+        Result.Err(error: _) => { give <MidAmbientProgram.empty /> }
+    }
+    val conflictingBody = conflictingMidGlobalAccess(c: inout c)
+    if conflictingBody != 0U64 {
+        val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
+        mut val offset = 0U64
+        if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
+        c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+    }
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     // Layout-sensitive optimizers must use the same native ABI as the linker.
@@ -686,7 +710,7 @@ export fn emitLlvm(c: inout Comp) {
     promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
-        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
+        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx) ambientProgram=ambientProgram
         midProgram=match programPreparation { Result.Ok(value: val program) => { give program } Result.Err(error: _) => { give <MidExecutableProgram.empty /> } }
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
@@ -841,13 +865,6 @@ export fn emitLlvm(c: inout Comp) {
         drainRound += 1U64
     }
     tracePhase(c: inout c, label: "backend:drain:done")
-    val conflictingBody = conflictingMidGlobalAccess(c: c)
-    if conflictingBody != 0U64 {
-        val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
-        mut val offset = 0U64
-        if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
-        c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
-    }
     if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }
@@ -1141,6 +1158,7 @@ export fn emitLlvmRuntime() {
     // exclusivity the callee relies on does not hold, so panic loudly at the call.
     write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw(\"overlapping inout: two inout positions of one call overlap in the same shared cell\",82); }\n")
     write(s: "void plew_read_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw(\"overlapping borrow: read and inout access to the same shared cell\",65); }\n")
+    write(s: "typedef struct PlewAccess { struct PlewAccess* previous; uint64_t kind; void* root; const uint64_t* path; uint64_t count; uint64_t writes; void* group; } PlewAccess;\nstatic _Thread_local PlewAccess* plew_access_head;\nvoid plew_access_check(uint64_t kind, void* root, const uint64_t* path, uint64_t count, uint64_t writes, void* permit) {\n    for (PlewAccess* access=plew_access_head; access; access=access->previous) {\n        if ((permit && access->group==permit) || access->kind!=kind || access->root!=root || !(writes || access->writes)) continue;\n        uint64_t length=count<access->count?count:access->count, index=0;\n        while(index<length && path[index]==access->path[index]) ++index;\n        if(index==length) { const char* message=\"overlapping access: borrowed storage accessed through an alias\"; plew_panic_raw(message,(long long)strlen(message)); }\n    }\n}\nvoid plew_access_begin(PlewAccess* access, uint64_t kind, void* root, const uint64_t* path, uint64_t count, uint64_t writes, void* group) {\n    plew_access_check(kind,root,path,count,writes,0);\n    *access=(PlewAccess){plew_access_head,kind,root,path,count,writes,group};\n    plew_access_head=access;\n}\nvoid plew_access_end(PlewAccess* access) {\n    if(plew_access_head!=access) { const char* message=\"invalid access scope\"; plew_panic_raw(message,(long long)strlen(message)); }\n    plew_access_head=access->previous;\n}\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
     // LLVM backend matches the C backend's loud overflow/div-zero behaviour.

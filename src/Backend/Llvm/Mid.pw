@@ -511,7 +511,7 @@ pub impl LlvmCtx {
         return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
     }
 
-    inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> LLVMValueRef {
+    inout fn midCanonicalPlacePtrUnchecked(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> LLVMValueRef {
         mut val pointer: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val currentTy: LLVMTypeRef = self.i64ty
         if place.rootTag == 1U64 {
@@ -557,6 +557,11 @@ pub impl LlvmCtx {
             projectionI = projectionI + 1U64
         }
         return pointer
+    }
+
+    inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> LLVMValueRef {
+        self.midAmbientCheck(c: inout c, body: body, place: place, writes: forWrite)
+        return self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: place, forWrite: forWrite)
     }
 
     inout fn midCanonicalReadPlace(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMValueRef {
@@ -1041,10 +1046,13 @@ pub impl LlvmCtx {
         // read receiver and an inout operand can also alias one shared cell,
         // independently of whether its payload is copyable or unique.
         if !self.midCanonicalInoutIsShared(c: c, place: storage) || !self.midCanonicalInoutIsShared(c: c, place: otherStorage) { return }
-        if storage.projections.len > 1U64 && otherStorage.projections.len > 1U64 {
-            val field: MidProjectionNode = c.mid.projections[storage.projections.start + 1U64]
-            val otherField: MidProjectionNode = c.mid.projections[otherStorage.projections.start + 1U64]
-            if field.tag == 1U64 && otherField.tag == 1U64 && field.index != otherField.index { return }
+        mut val fieldIndex = 1U64
+        while fieldIndex < storage.projections.len && fieldIndex < otherStorage.projections.len {
+            val field = c.mid.projections[storage.projections.start + fieldIndex]
+            val otherField = c.mid.projections[otherStorage.projections.start + fieldIndex]
+            if field.tag != 1U64 || otherField.tag != 1U64 { break }
+            if field.index != otherField.index { return }
+            fieldIndex += 1U64
         }
         val cellPlace: MidPlaceNode = <MidPlaceNode local=storage.local projections=<MidRange start=storage.projections.start len=1U64 /> typeTerm=c.mid.projections[storage.projections.start].typeTerm />
         val otherCellPlace: MidPlaceNode = <MidPlaceNode local=otherStorage.local projections=<MidRange start=otherStorage.projections.start len=1U64 /> typeTerm=c.mid.projections[otherStorage.projections.start].typeTerm />
@@ -1998,7 +2006,6 @@ pub impl LlvmCtx {
                     types.append(parameterType)
                     index += 1U64
                 }
-                self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
                 mut val resultType: LLVMTypeRef = self.voidty
                 if requirement.hasRet { resultType = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
                 val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
@@ -2163,7 +2170,7 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+    inout fn midCanonicalEmitCallUnchecked(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
         match self.midCanonicalCellControlPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => { return self.midCanonicalEmitCellControl(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return false } }
         match self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => { return self.midCanonicalEmitStrongCell(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return false } }
         match self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
@@ -2257,7 +2264,6 @@ pub impl LlvmCtx {
             values.append(value)
             argumentI = argumentI + 1U64
         }
-        self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isAsync {
             val slot: U64 = self.asyncEntrySlot(fi: selected.callee)
@@ -2746,8 +2752,13 @@ impl LlvmCtx {
             }
         }
         val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+        self.ambientBody = self.ambientProgram.body(bodyId: body.bodyInstance)
+        val noAmbientScopes: Dictionary[U64, LlvmAmbientScope] = [:]
+        self.ambientScopes = noAmbientScopes
+        self.ambientPermit = <Optional.None />
         if !localsPrepared && !self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart, abiParameterValues: abiParameterValues) { return false }
         if closureBodyId != 0U64 && !self.bindMidClosureCaptures(c: inout c, body: body, bodyId: closureBodyId) { return false }
+        self.midAmbientAllocateScopes(c: inout c, body: body)
         mut val blocks: Array[LLVMBasicBlockRef] = []
         mut val blockI: U64 = 0U64
         while blockI < body.blocks.len {

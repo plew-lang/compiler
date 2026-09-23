@@ -1,0 +1,51 @@
+import @Std/Core with { MutableRef, assert }
+import @Std/Io with { print }
+struct Pair { pub mut val first: I64
+    pub mut val second: I64 }
+pub impl Pair { factory }
+struct Cell { pub mut val pair: Pair }
+pub impl Cell { factory }
+fn inner(value: inout I64) { value += 1I64 }
+fn middle(value: inout I64) { inner(value: inout value) }
+fn outer(value: inout I64) { middle(value: inout value) }
+fn conditional(value: inout I64, alias: MutableRef[Cell], inspect: Bool) {
+    if inspect { value += alias->pair.first }
+    value += 1I64
+}
+fn throughClosure(value: inout I64, read: fn() -> I64, inspect: Bool) {
+    if inspect { value += read() }
+    value += 1I64
+}
+fn distinct(value: inout I64, alias: MutableRef[Cell]) { value += alias->pair.second }
+unique struct Observer {
+    pub val cell: MutableRef[Cell]
+    deinit { print(self.cell->pair.first) }
+}
+pub impl Observer { factory }
+fn conditionalDrop(value: inout I64, cell: MutableRef[Cell], inspect: Bool) {
+    if inspect { val observer = <Observer cell=cell /> }
+    value += 1I64
+}
+fn early(value: inout I64, leave: Bool) {
+    inner(value: inout value)
+    if leave { return }
+    inner(value: inout value)
+}
+fn main() {
+    val cell = <MutableRef value=<Cell pair=<Pair first=7I64 second=10I64 /> /> />
+    mut val index = 0I64
+    while index < 3I64 { outer(value: inout cell->pair.first)
+        index += 1I64 }
+    conditional(value: inout cell->pair.first, alias: cell, inspect: false)
+    assert(cell->pair.first == 11I64)
+    distinct(value: inout cell->pair.first, alias: cell)
+    assert(cell->pair.first == 21I64)
+    mut val captured = 7I64
+    val read = fn() -> I64 { return captured }
+    throughClosure(value: inout captured, read: read, inspect: false)
+    assert(captured == 8I64)
+    conditionalDrop(value: inout cell->pair.first, cell: cell, inspect: false)
+    early(value: inout cell->pair.first, leave: true)
+    assert(cell->pair.first == 23I64)
+    print("ok")
+}

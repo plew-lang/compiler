@@ -50,6 +50,8 @@ fn main() {
     assert(alias->second.value == 14I64)
     assert(holder->values[0].inspectCounter(other: inout alias->values[0]) == 5I64)
     assert(alias->values[0].value == 15I64)
+    assert(holder->values[0].inspect(other: inout alias->values[0].value) == 15I64)
+    assert(alias->values[0].value == 25I64)
     assert(current->read(extra: replace()) == 30I64)
     assert(current->value == 40I64)
     print("ok")

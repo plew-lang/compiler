@@ -1,0 +1,141 @@
+// Closed-world may-effects select reservations, never diagnose execution of
+// an unchosen branch. Unknown dispatch/foreign effects are not purity facts.
+import ../Frontend with { Comp }
+import ../Ir with { ArcClass, CallTarget, RuntimeIntrinsic }
+import ./Ir with { MidTerminatorNode }
+import ./Program with { MidExecutableProgram }
+
+export struct MidAmbientEffects {
+    pub mut val affected: Array[Bool] = []
+    mut val heads: Array[U64] = []
+    mut val edges: Array[U64] = []
+    mut val pending: Array[U64] = []
+    pub val bodyCount: U64
+}
+pub impl MidAmbientEffects {
+    factory
+    inout fn mark(node: U64) {
+        if !self.affected[node] { self.affected[node] = true
+            self.pending.append(node) }
+    }
+    inout fn edge(owner: U64, dependency: U64) {
+        self.edges.append(owner)
+        self.edges.append(self.heads[dependency])
+        self.heads[dependency] = self.edges.count() - 1U64
+    }
+    inout fn destruction(c: inout Comp, owner: U64, type: U64) {
+        if type == 0U64 { return }
+        val contract = c.requireFinalDestruction(typeRef: type)
+        if contract == 0U64 { self.mark(node: owner)
+            return }
+        self.edge(owner: owner, dependency: self.bodyCount + contract)
+    }
+    inout fn close() {
+        mut val index = 0U64
+        while index < self.pending.count() {
+            mut val edge = self.heads[self.pending[index]]
+            while edge != 0U64 {
+                self.mark(node: self.edges[edge - 1U64])
+                edge = self.edges[edge]
+            }
+            index += 1U64
+        }
+    }
+    fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool {
+        val target = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
+        match target.target {
+            CallTarget.Direct => {
+                if target.calleeBodyId != 0U64 && target.calleeBodyId < self.affected.count() { return self.affected[target.calleeBodyId] }
+            }
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic { RuntimeIntrinsic.Numeric(intrinsic: _) => { return false } _ => {} }
+            }
+            _ => {}
+        }
+        return true
+    }
+    assoc fn prepare(c: inout Comp, program: MidExecutableProgram, ambientBodies: Array[U64]) -> Self {
+        val bodyCount = c.arena.bodyInstanceCount()
+        mut val graph = <MidAmbientEffects bodyCount=bodyCount />
+        mut val index = 0U64
+        while index <= bodyCount + c.arena.finalDestructions.count() {
+            graph.affected.append(false)
+            graph.heads.append(0U64)
+            index += 1U64
+        }
+        index = 0U64
+        while index < ambientBodies.count() { graph.mark(node: ambientBodies[index])
+            index += 1U64 }
+        index = 0U64
+        while index < c.arena.finalDestructions.count() {
+            val contract = c.arena.finalDestructions[index]
+            val node = bodyCount + index + 1U64
+            if contract.needsRelease {
+                if contract.deinitCall.bodyId != 0U64 { graph.edge(owner: node, dependency: contract.deinitCall.bodyId) }
+                if contract.underlying != 0U64 { graph.destruction(c: inout c, owner: node, type: contract.underlying) }
+                else {
+                    match contract.ownershipClass {
+                        ArcClass.BufferLike(elem: val element) => { graph.destruction(c: inout c, owner: node, type: element) }
+                        ArcClass.RefCell(inst: val instance) => { graph.destruction(c: inout c, owner: node, type: c.arena.typeAt(index: instance).args[0U64]) }
+                        ArcClass.StructVal(sidx: _) => {
+                            mut val field = 0U64
+                            while field < contract.fieldTypes.count() { graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
+                                field += 1U64 }
+                        }
+                        ArcClass.EnumVal(eidx: _) => {
+                            mut val field = 0U64
+                            while field < contract.fieldTypes.count() { graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
+                                field += 1U64 }
+                        }
+                        ArcClass.ClosureVal => { graph.mark(node: node) }
+                        ArcClass.AnyBox => { graph.mark(node: node) }
+                        ArcClass.PromiseCell(inst: _) => { graph.mark(node: node) }
+                        _ => {}
+                    }
+                }
+            }
+            index += 1U64
+        }
+        mut val bodyId = 1U64
+        while bodyId <= bodyCount {
+            match program.body(bodyId: bodyId) {
+                Optional.None => { graph.mark(node: bodyId) }
+                Optional.Some(v: val executable) => {
+                    val body = c.mid.bodies[executable.canonical.body - 1U64]
+                    mut val blockIndex = 0U64
+                    while blockIndex < body.blocks.len {
+                        val block = c.mid.blocks[body.blocks.start + blockIndex]
+                        mut val statementIndex = 0U64
+                        while statementIndex < block.statements.len {
+                            val statement = c.mid.statements[block.statements.start + statementIndex]
+                            // Replacement releases the old value as well as
+                            // explicit/conditional/capture-cell destruction.
+                            if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+                                graph.destruction(c: inout c, owner: bodyId, type: c.mid.places[statement.destination - 1U64].typeTerm)
+                            }
+                            statementIndex += 1U64
+                        }
+                        val term = c.mid.terminators[block.terminator - 1U64]
+                        if term.tag == 4U64 {
+                            val target = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
+                            match target.target {
+                                CallTarget.Direct => {
+                                    if target.calleeBodyId != 0U64 { graph.edge(owner: bodyId, dependency: target.calleeBodyId) }
+                                    else { graph.mark(node: bodyId) }
+                                }
+                                CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                                    match intrinsic { RuntimeIntrinsic.Numeric(intrinsic: _) => {} _ => { graph.mark(node: bodyId) } }
+                                }
+                                _ => { graph.mark(node: bodyId) }
+                            }
+                        }
+                        blockIndex += 1U64
+                    }
+                }
+            }
+            bodyId += 1U64
+        }
+        graph.close()
+        return graph
+    }
+}

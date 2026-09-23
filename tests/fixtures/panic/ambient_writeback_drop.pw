@@ -1,0 +1,25 @@
+import @Std/Core with { MutableRef, Index, IndexSet }
+import @Std/Io with { print }
+struct Grid { pub mut val value: I64 }
+pub impl Grid { factory }
+struct Owner { pub mut val grid: Grid }
+pub impl Owner { factory }
+val owner = <MutableRef value=<Owner grid=<Grid value=7I64 /> /> />
+unique struct Observer {
+    pub val unused: I64
+    deinit { print(owner->grid.value) }
+}
+pub impl Observer { factory }
+pub impl Grid as Index[U64] {
+    type Output = I64
+    fn index(key: U64) -> I64 { return self.value }
+}
+pub impl Grid as IndexSet[U64] {
+    type Value = I64
+    inout fn indexSet(key: U64, value~: I64) {
+        val observer = <Observer unused=0I64 />
+        self.value = value
+    }
+}
+fn increment(value: inout I64) { value += 1I64 }
+fn main() { increment(value: inout owner->grid[0U64]) }

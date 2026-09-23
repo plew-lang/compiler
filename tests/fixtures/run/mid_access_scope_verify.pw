@@ -1,0 +1,38 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Mid/Ir with { MidCanonicalArena, MidBodyNode, MidBlockNode, MidTerminatorNode, MidRange, MidLocalDecl, MidPlaceNode, MidOperandNode, MidCallReceiverNode }
+import /Mid/AccessScopes with { canonicalMidAccessScopesValid }
+
+fn accepted(mode: U64) -> Bool {
+    mut val arena = <MidCanonicalArena />
+    arena.locals.append(<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />)
+    arena.places.append(<MidPlaceNode local=0U64 />)
+    arena.places.append(<MidPlaceNode rootTag=2U64 local=0U64 globalTarget=1U64 globalMutable=true />)
+    arena.places.append(<MidPlaceNode rootTag=2U64 local=0U64 globalTarget=2U64 globalMutable=true />)
+    arena.operands.append(<MidOperandNode tag=if mode == 4U64 { give 3U64 } else { give 4U64 } place=1U64 accessPlace=2U64 />)
+    arena.operands.append(<MidOperandNode tag=4U64 place=if mode == 3U64 { give 3U64 } else { give 2U64 } />)
+    arena.operands.append(<MidOperandNode tag=1U64 place=2U64 />)
+    arena.callArguments.append(1U64)
+    arena.callArguments.append(3U64)
+    arena.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=2U64 />)
+    val scope = if mode == 1U64 || mode == 7U64 { give 2U64 } else { give 1U64 }
+    val next = if mode == 7U64 { give 0U64 } else { give 1U64 }
+    arena.terminators.append(<MidTerminatorNode tag=4U64 args=<MidRange start=0U64 len=1U64 /> target=next accessScope=scope accessScopeRole=1U64 />)
+    arena.terminators.append(<MidTerminatorNode tag=4U64 callReceiver=1U64 args=<MidRange start=1U64 len=if mode == 5U64 { give 1U64 } else { give 0U64 } /> target=2U64 accessScope=scope accessScopeRole=if mode == 2U64 { give 2U64 } else { give 3U64 } />)
+    arena.terminators.append(<MidTerminatorNode tag=1U64 />)
+    arena.terminators.append(<MidTerminatorNode tag=2U64 target=1U64 />)
+    arena.blocks.append(<MidBlockNode terminator=if mode == 7U64 { give 2U64 } else { give 1U64 } />)
+    arena.blocks.append(<MidBlockNode terminator=if mode == 7U64 { give 1U64 } else { give 2U64 } />)
+    arena.blocks.append(<MidBlockNode terminator=3U64 />)
+    if mode == 6U64 { arena.blocks.append(<MidBlockNode terminator=4U64 />) }
+    val body = <MidBodyNode locals=<MidRange start=0U64 len=1U64 /> blocks=<MidRange start=0U64 len=arena.blocks.count() /> entry=if mode == 7U64 { give 1U64 } else { give 0U64 } />
+    return canonicalMidAccessScopesValid(arena: arena, body: body)
+}
+fn main() {
+    assert(accepted(mode: 0U64))
+    mut val mode = 1U64
+    while mode <= 6U64 { assert(!accepted(mode: mode))
+        mode += 1U64 }
+    assert(accepted(mode: 7U64))
+    print("ok")
+}

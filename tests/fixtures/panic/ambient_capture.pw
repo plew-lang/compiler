@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+fn update(value: inout I64, read: fn() -> I64) { value += read() }
+fn main() {
+    mut val value = 7I64
+    val read: fn() -> I64 = fn() -> I64 { return value }
+    update(value: inout value, read: read)
+    print(value)
+}

@@ -16,3 +16,5 @@ tests/fixtures/run/ref_parameter_receiver_lifetime.pw
 tests/fixtures/run/receiver_preparation.pw
 tests/fixtures/run/receiver_shared_access.pw
 tests/fixtures/run/borrow_argument_access.pw
+tests/fixtures/run/ambient_access.pw
+tests/fixtures/run/mid_access_scope_verify.pw

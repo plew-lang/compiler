@@ -2,7 +2,7 @@
 // only direct Plew call edges and mutable global places, not purity or the
 // absence of effects through closures, shared cells, drops or foreign code.
 import ../Frontend with { Comp }
-import ../Ir with { CallTarget }
+import ../Ir with { CallTarget, ArcClass }
 import ./Ir with { MidCanonicalBody, MidOperandNode }
 import ./Verify with { canonicalMidReachable, canonicalMidValuePlacesOverlap }
 
@@ -72,6 +72,15 @@ fn sameGlobalPath(c: Comp, first: U64, second: U64) -> Bool {
 }
 
 pub impl GlobalAccessGraph {
+    inout fn edge(caller: U64, callee: U64, term: U64 = 0U64) {
+        self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term next=self.incoming[callee] />)
+        self.incoming[callee] = self.calls.count()
+    }
+    inout fn destruction(c: inout Comp, caller: U64, type: U64) {
+        if type == 0U64 { return }
+        val contract = c.requireFinalDestruction(typeRef: type)
+        if contract != 0U64 { self.edge(caller: caller, callee: c.mid.globalAccessBodies.count() + contract - 1U64) }
+    }
     inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
         if !globalPlace(c: c, placeId: place) { return }
         mut val entry = self.heads[body]
@@ -111,7 +120,7 @@ pub impl GlobalAccessGraph {
 // Each body is scanned once. New summary entries form a worklist propagated
 // along reverse call edges, including recursive strongly connected bodies.
 // Return the one-based canonical body containing a conflicting call, or zero.
-export fn conflictingMidGlobalAccess(c: Comp) -> U64 {
+export fn conflictingMidGlobalAccess(c: inout Comp) -> U64 {
     if c.mid.globalAccessBodies.count() == 0U64 { return 0U64 }
     mut val graph = <GlobalAccessGraph />
     mut val bodyMap: Array[U64] = []
@@ -124,6 +133,46 @@ export fn conflictingMidGlobalAccess(c: Comp) -> U64 {
         graph.heads.append(0U64)
         graph.incoming.append(0U64)
         if body.bodyInstance != 0U64 { bodyMap.set(i: body.bodyInstance, value: index + 1U64) }
+        index += 1U64
+    }
+    // Destruction is a graph node too. Recursive aggregate/cell ownership
+    // closes by the same worklist as authored calls; no recursive unfolding.
+    index = 0U64
+    while index < c.arena.finalDestructions.count() {
+        graph.heads.append(0U64)
+        graph.incoming.append(0U64)
+        index += 1U64
+    }
+    index = 0U64
+    while index < c.arena.finalDestructions.count() {
+        val contract = c.arena.finalDestructions[index]
+        val owner = c.mid.globalAccessBodies.count() + index
+        if contract.needsRelease {
+            if contract.deinitCall.bodyId != 0U64 {
+                val callee = bodyMap[contract.deinitCall.bodyId]
+                if callee != 0U64 { graph.edge(caller: owner, callee: callee - 1U64) }
+            }
+            if contract.underlying != 0U64 { graph.destruction(c: inout c, caller: owner, type: contract.underlying) }
+            else {
+                match contract.ownershipClass {
+                    ArcClass.BufferLike(elem: val element) => { graph.destruction(c: inout c, caller: owner, type: element) }
+                    ArcClass.RefCell(inst: val instance) => { graph.destruction(c: inout c, caller: owner, type: c.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.StructVal(sidx: _) => {
+                        mut val field = 0U64
+                        while field < contract.fieldTypes.count() { graph.destruction(c: inout c, caller: owner, type: contract.fieldTypes[field])
+                            field += 1U64 }
+                    }
+                    ArcClass.EnumVal(eidx: _) => {
+                        mut val field = 0U64
+                        while field < contract.fieldTypes.count() { graph.destruction(c: inout c, caller: owner, type: contract.fieldTypes[field])
+                            field += 1U64 }
+                    }
+                    // Erased targets retain dynamic checks; no absent static
+                    // edge is interpreted as a proof of no effect.
+                    _ => {}
+                }
+            }
+        }
         index += 1U64
     }
     index = 0U64
@@ -151,6 +200,9 @@ export fn conflictingMidGlobalAccess(c: Comp) -> U64 {
                             graph.operand(c: c, body: index, operandId: c.mid.rvalueOperandAt(value: value, index: operandIndex))
                             operandIndex += 1U64
                         }
+                    }
+                    if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+                        graph.destruction(c: inout c, caller: index, type: c.mid.places[statement.destination - 1U64].typeTerm)
                     }
                     statementIndex += 1U64
                 }
@@ -197,6 +249,8 @@ export fn conflictingMidGlobalAccess(c: Comp) -> U64 {
     index = 0U64
     while index < graph.calls.count() {
         val call = graph.calls[index]
+        if call.term == 0U64 { index += 1U64
+            continue }
         val term = c.mid.terminators[call.term - 1U64]
         if term.callReceiver != 0U64 {
             val receiver = c.mid.callReceivers[term.callReceiver - 1U64]

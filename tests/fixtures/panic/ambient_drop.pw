@@ -1,0 +1,17 @@
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+struct Cell { pub mut val value: I64 }
+pub impl Cell { factory }
+unique struct Observer {
+    pub val cell: MutableRef[Cell]
+    deinit { print(self.cell->value) }
+}
+pub impl Observer { factory }
+fn update(destination: inout I64, alias: MutableRef[Cell]) {
+    val observer = <Observer cell=alias />
+    destination += 1I64
+}
+fn main() {
+    val cell = <MutableRef value=<Cell value=7I64 /> />
+    update(destination: inout cell->value, alias: cell)
+}

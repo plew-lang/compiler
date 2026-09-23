@@ -772,7 +772,7 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
                 arena.callReceivers.append(arena.callReceivers[term.callReceiver - 1U64])
                 receiver = arena.callReceivers.count()
             }
-            arena.terminators.append(<MidTerminatorNode tag=4U64 target=term.target args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiver />)
+            arena.terminators.append(<MidTerminatorNode tag=4U64 accessScope=term.accessScope accessScopeRole=term.accessScopeRole target=term.target args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiver />)
         }
         5U64 => { arena.terminators.append(<MidTerminatorNode tag=5U64 />) }
         6U64 => { arena.terminators.append(<MidTerminatorNode tag=6U64 value=term.value />) }

@@ -202,6 +202,11 @@ export struct MidStatementNode {
 pub impl MidStatementNode { factory }
 
 export struct MidTerminatorNode {
+    // One-based owner block of an elaborated get-modify-set access.
+    // 1 begins the call reservation, 2 delegates a writeback, 3 ends it
+    // after the final writeback call. Zero is an ordinary call.
+    pub val accessScope: U64 = 0U64
+    pub val accessScopeRole: U64 = 0U64
     pub val tag: U64
     pub val target: U64 = 0U64
     pub val discriminant: U64 = 0U64

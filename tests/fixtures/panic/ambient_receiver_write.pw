@@ -1,0 +1,10 @@
+import @Std/Core with { MutableRef }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell {
+    factory
+    fn inspect(alias: MutableRef[Cell]) { alias->value = 8I64 }
+}
+fn main() {
+    val cell = <MutableRef value=<Cell value=7I64 /> />
+    cell->inspect(alias: cell)
+}

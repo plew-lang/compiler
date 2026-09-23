@@ -1,0 +1,24 @@
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+struct Cell { pub mut val value: I64 }
+pub impl Cell { factory }
+unique struct Observer {
+    pub val cell: MutableRef[Cell]
+    deinit { print(self.cell->value) }
+}
+pub impl Observer { factory }
+trait Action { fn invoke() }
+struct ActionValue { pub val cell: MutableRef[Cell] }
+pub impl ActionValue { factory }
+pub impl ActionValue as Action {
+    fn invoke() { val observer = <Observer cell=self.cell /> }
+}
+fn update(destination: inout I64, action: fn()) { action() }
+val cell = <MutableRef value=<Cell value=7I64 /> />
+val action: any Action = <ActionValue cell=cell />
+fn main() {
+    mut val count = 0I64
+    val callback = fn() { count += 1I64
+        action.invoke() }
+    update(destination: inout cell->value, action: callback)
+}

@@ -471,6 +471,10 @@ fn midNormalizedReferenceArgument(c: inout Comp, state: inout MidBuildState, bas
 }
 
 fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidNormalizedCallArgumentBuild {
+    // Field projections of an Index result carry the same frozen access
+    // recipe as the Index itself, even when their source is a Term.
+    val candidate = c.accessCandidateIndex(readExpr: c.callArgumentExprId(source: argument.source))
+    if candidate < c.decls.accessCandidateCount() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
     match argument.source {
         CallArgumentSource.Term(exprId: val exprId, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
         CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }

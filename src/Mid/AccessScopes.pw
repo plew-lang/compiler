@@ -1,0 +1,129 @@
+// Writeback delegation is a Mid capability, not an inference from LLVM order.
+// Its region is a single-entry linear continuation from the parent call to
+// the final setter. Calls can contain arbitrary control flow in their bodies.
+import ./Ir with { MidCanonicalArena, MidBodyNode, MidTerminatorNode }
+
+fn ownedScopeTemporary(arena: MidCanonicalArena, body: MidBodyNode, placeId: U64) -> Bool {
+    if placeId == 0U64 || placeId > arena.places.count() { return false }
+    val place = arena.places[placeId - 1U64]
+    if place.rootTag != 1U64 || place.local >= body.locals.len { return false }
+    val local = arena.locals[body.locals.start + place.local]
+    if local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell { return false }
+    mut val index = 0U64
+    while index < place.projections.len {
+        val tag = arena.projections[place.projections.start + index].tag
+        if tag != 1U64 && tag != 4U64 { return false }
+        index += 1U64
+    }
+    return true
+}
+
+fn sameScopeStorage(arena: MidCanonicalArena, first: U64, second: U64) -> Bool {
+    if first == 0U64 || second == 0U64 { return false }
+    val value = arena.places[first - 1U64]
+    val other = arena.places[second - 1U64]
+    if value.rootTag != other.rootTag || value.local != other.local || value.globalTarget != other.globalTarget || value.projections.len != other.projections.len { return false }
+    mut val index = 0U64
+    while index < value.projections.len {
+        val projection = arena.projections[value.projections.start + index]
+        val peer = arena.projections[other.projections.start + index]
+        if projection.tag != peer.tag || projection.index != peer.index || projection.indexLocal != peer.indexLocal { return false }
+        index += 1U64
+    }
+    return true
+}
+
+fn delegatesScopeStorage(arena: MidCanonicalArena, parent: MidTerminatorNode, place: U64) -> Bool {
+    mut val index = 0U64
+    while index < arena.terminatorOperandCount(term: parent) {
+        val operand = arena.operands[arena.terminatorOperandAt(term: parent, index: index) - 1U64]
+        if operand.tag == 4U64 && operand.accessPlace != 0U64 && sameScopeStorage(arena: arena, first: operand.accessPlace, second: place) { return true }
+        index += 1U64
+    }
+    return false
+}
+
+fn scopeWritebackValid(arena: MidCanonicalArena, body: MidBodyNode, parent: MidTerminatorNode, term: MidTerminatorNode) -> Bool {
+    if term.callReceiver == 0U64 { return false }
+    val receiver = arena.callReceivers[term.callReceiver - 1U64]
+    if receiver.tag != 2U64 || receiver.operand == 0U64 { return false }
+    val operand = arena.operands[receiver.operand - 1U64]
+    if operand.tag != 4U64 { return false }
+    if !ownedScopeTemporary(arena: arena, body: body, placeId: operand.place) && !delegatesScopeStorage(arena: arena, parent: parent, place: operand.place) { return false }
+    // Keys and values were snapshotted before reservation activation. A
+    // writeback permission must not authorize arbitrary alias arguments.
+    mut val index = 0U64
+    while index < term.args.len {
+        val argument = arena.operands[arena.callArguments[term.args.start + index] - 1U64]
+        if argument.place != 0U64 && !ownedScopeTemporary(arena: arena, body: body, placeId: argument.place) { return false }
+        index += 1U64
+    }
+    return true
+}
+
+export fn canonicalMidAccessScopesValid(arena: MidCanonicalArena, body: MidBodyNode) -> Bool {
+    mut val hasScopes = false
+    mut val index = 0U64
+    while index < body.blocks.len {
+        val term = arena.terminators[arena.blocks[body.blocks.start + index].terminator - 1U64]
+        if term.accessScope != 0U64 || term.accessScopeRole != 0U64 {
+            if term.tag != 4U64 || term.accessScope == 0U64 || term.accessScope > body.blocks.len || term.accessScopeRole == 0U64 || term.accessScopeRole > 3U64 { return false }
+            hasScopes = true
+        }
+        index += 1U64
+    }
+    if !hasScopes { return true }
+    mut val incoming: Array[U64] = []
+    mut val owners: Array[U64] = []
+    index = 0U64
+    while index < body.blocks.len { incoming.append(0U64)
+        owners.append(0U64)
+        index += 1U64 }
+    index = 0U64
+    while index < body.blocks.len {
+        val term = arena.terminators[arena.blocks[body.blocks.start + index].terminator - 1U64]
+        mut val edge = 0U64
+        while edge < term.successorCount() {
+            val target = arena.successorAt(term: term, index: edge)
+            if target >= body.blocks.len { return false }
+            incoming.set(i: target, value: incoming[target] + 1U64)
+            edge += 1U64
+        }
+        index += 1U64
+    }
+    index = 0U64
+    while index < body.blocks.len {
+        val term = arena.terminators[arena.blocks[body.blocks.start + index].terminator - 1U64]
+        if term.accessScopeRole == 1U64 {
+            val scope = index + 1U64
+            if term.accessScope != scope || owners[index] != 0U64 { return false }
+            owners.set(i: index, value: scope)
+            mut val target = term.target
+            mut val ended = false
+            mut val steps = 0U64
+            while !ended && steps < body.blocks.len {
+                if target >= body.blocks.len || target == body.entry || incoming[target] != 1U64 || owners[target] != 0U64 { return false }
+                owners.set(i: target, value: scope)
+                val next = arena.terminators[arena.blocks[body.blocks.start + target].terminator - 1U64]
+                if next.tag == 2U64 {
+                    if next.accessScope != 0U64 { return false }
+                } else if next.tag == 4U64 {
+                    if next.accessScope != scope || next.accessScopeRole < 2U64 { return false }
+                    if !scopeWritebackValid(arena: arena, body: body, parent: term, term: next) { return false }
+                    ended = next.accessScopeRole == 3U64
+                } else { return false }
+                target = next.target
+                steps += 1U64
+            }
+            if !ended { return false }
+        }
+        index += 1U64
+    }
+    index = 0U64
+    while index < body.blocks.len {
+        val term = arena.terminators[arena.blocks[body.blocks.start + index].terminator - 1U64]
+        if term.accessScope != 0U64 && owners[index] != term.accessScope { return false }
+        index += 1U64
+    }
+    return true
+}

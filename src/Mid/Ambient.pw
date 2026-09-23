@@ -1,0 +1,187 @@
+// Logical storage recipes for dynamic exclusivity. Formal value storage is
+// protected by the caller; capture boxes and cells are independent aliases.
+// Paths describe physical fields, never byte intervals (including zero-sized
+// fields). An index reserves its container, not an element address.
+import ../Frontend with { Comp }
+import ./Ir with { MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
+import ./Program with { MidExecutableProgram }
+import ./AmbientEffects with { MidAmbientEffects }
+
+export struct MidAmbientStorage {
+    pub val kind: U64 = 0U64 // 1 shared cell, 2 mutable global, 3 capture box
+    pub val rootLength: U64 = 0U64
+    pub val path: MidRange = <MidRange start=0U64 len=0U64 />
+}
+pub impl MidAmbientStorage { factory }
+
+// Read each earlier reference slot before dereferencing it. The final entry
+// describes the requested access; preceding entries are short read accesses.
+export fn midAmbientStoragePath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
+    mut val result: Array[MidAmbientStorage] = []
+    mut val kind = 0U64
+    if place.rootTag == 2U64 && place.globalMutable { kind = 2U64 }
+    if place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isCaptureCell { kind = 3U64 }
+    mut val rootLength = 0U64
+    mut val pathStart = 0U64
+    mut val pathEnd = place.projections.len
+    mut val index = 0U64
+    while index < place.projections.len {
+        val projection = c.mid.projections[place.projections.start + index]
+        if projection.tag == 2U64 && index < pathEnd { pathEnd = index }
+        if projection.tag == 3U64 {
+            if kind != 0U64 {
+                val end = if pathEnd < index { give pathEnd } else { give index }
+                result.append(<MidAmbientStorage kind=kind rootLength=rootLength path=<MidRange start=place.projections.start + pathStart len=end - pathStart /> />)
+            }
+            kind = 1U64
+            rootLength = index + 1U64
+            pathStart = rootLength
+            pathEnd = place.projections.len
+        }
+        index += 1U64
+    }
+    if kind != 0U64 { result.append(<MidAmbientStorage kind=kind rootLength=rootLength path=<MidRange start=place.projections.start + pathStart len=pathEnd - pathStart /> />) }
+    return result
+}
+
+struct MidAmbientPlaceEntry {
+    pub val place: MidPlaceNode
+    pub val path: Array[MidAmbientStorage]
+    pub val next: U64
+}
+pub impl MidAmbientPlaceEntry { factory }
+fn ambientPlaceKey(place: MidPlaceNode) -> U64 {
+    val root = if place.rootTag == 2U64 { give place.globalTarget } else { give place.local }
+    return (root % 4294967291U64 + place.projections.start % 4294967291U64 * 65537U64 + place.projections.len * 17U64) % 4294967291U64
+}
+fn sameAmbientPlace(first: MidPlaceNode, second: MidPlaceNode) -> Bool {
+    return first.rootTag == second.rootTag && first.local == second.local && first.globalTarget == second.globalTarget && first.globalMutable == second.globalMutable && first.projections.start == second.projections.start && first.projections.len == second.projections.len
+}
+export struct MidAmbientBodyPlan {
+    mut val heads: Dictionary[U64, U64] = [:]
+    mut val entries: Array[MidAmbientPlaceEntry] = []
+}
+pub impl MidAmbientBodyPlan {
+    factory
+    fn hasStorage() -> Bool { return self.entries.count() != 0U64 }
+    fn path(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
+        mut val entry = self.heads.getOr(key: ambientPlaceKey(place: place), fallback: 0U64)
+        while entry != 0U64 {
+            val item = self.entries[entry - 1U64]
+            if sameAmbientPlace(first: item.place, second: place) { return item.path }
+            entry = item.next
+        }
+        // Physical lowering may request a prefix of a verified place (for
+        // example the pinned cell). Its meaning is the same Mid recipe query.
+        return midAmbientStoragePath(c: c, body: body, place: place)
+    }
+    inout fn add(c: Comp, body: MidBodyNode, placeId: U64) {
+        if placeId == 0U64 || placeId > c.mid.places.count() { return }
+        val place = c.mid.places[placeId - 1U64]
+        val key = ambientPlaceKey(place: place)
+        val head = self.heads.getOr(key: key, fallback: 0U64)
+        mut val entry = head
+        while entry != 0U64 {
+            val item = self.entries[entry - 1U64]
+            if sameAmbientPlace(first: item.place, second: place) { return }
+            entry = item.next
+        }
+        val path = midAmbientStoragePath(c: c, body: body, place: place)
+        if path.count() != 0U64 {
+            self.entries.append(<MidAmbientPlaceEntry place=place path=path next=head />)
+            self.heads[key] = self.entries.count()
+        }
+    }
+}
+
+export struct MidAmbientProgram {
+    pub val enabled: Bool = false
+    val bodies: Dictionary[U64, MidAmbientBodyPlan] = [:]
+    val effects: MidAmbientEffects = <MidAmbientEffects bodyCount=0U64 />
+}
+pub impl MidAmbientProgram {
+    factory empty { return <MidAmbientProgram /> }
+    fn body(bodyId: U64) -> MidAmbientBodyPlan { return self.bodies.getOr(key: bodyId, fallback: <MidAmbientBodyPlan />) }
+
+    fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool { return self.effects.callMayAccess(c: c, term: term) }
+
+    assoc fn prepare(c: inout Comp, program: MidExecutableProgram) -> Self {
+        // No aliasable storage means no dynamic obligations. Do not add a
+        // runtime registry operation to ordinary local/by-value accesses.
+        mut val possible = false
+        mut val index = 0U64
+        while index < c.arena.globals.count() {
+            if c.arena.globals[index].mutable { possible = true }
+            index += 1U64
+        }
+        index = 0U64
+        while !possible && index < c.mid.locals.count() {
+            possible = c.mid.locals[index].isCaptureCell
+            index += 1U64
+        }
+        index = 0U64
+        while !possible && index < c.mid.projections.count() {
+            possible = c.mid.projections[index].tag == 3U64
+            index += 1U64
+        }
+        if !possible { return <MidAmbientProgram /> }
+        mut val ambientBodies: Array[U64] = []
+        mut val plans: Dictionary[U64, MidAmbientBodyPlan] = [:]
+        mut val bodyId = 1U64
+        while bodyId <= c.arena.bodyInstanceCount() {
+            match program.body(bodyId: bodyId) {
+                Optional.None => {}
+                Optional.Some(v: val executable) => {
+                    val body = c.mid.bodies[executable.canonical.body - 1U64]
+                    mut val plan = <MidAmbientBodyPlan />
+                    mut val blockIndex = 0U64
+                    while blockIndex < body.blocks.len {
+                        val block = c.mid.blocks[body.blocks.start + blockIndex]
+                        mut val statementIndex = 0U64
+                        while statementIndex < block.statements.len {
+                            val statement = c.mid.statements[block.statements.start + statementIndex]
+                            mut val destination = 0U64
+                            while destination < statement.destinationCount() {
+                                plan.add(c: c, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: destination))
+                                destination += 1U64
+                            }
+                            plan.add(c: c, body: body, placeId: statement.source)
+                            if statement.value != 0U64 {
+                                val value = c.mid.rvalues[statement.value - 1U64]
+                                plan.add(c: c, body: body, placeId: value.place)
+                                mut val operand = 0U64
+                                while operand < value.operandCount() {
+                                    plan.addOperand(c: c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: operand))
+                                    operand += 1U64
+                                }
+                            }
+                            statementIndex += 1U64
+                        }
+                        val term = c.mid.terminators[block.terminator - 1U64]
+                        plan.add(c: c, body: body, placeId: term.destination)
+                        mut val operand = 0U64
+                        while operand < c.mid.terminatorOperandCount(term: term) {
+                            plan.addOperand(c: c, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: operand))
+                            operand += 1U64
+                        }
+                        blockIndex += 1U64
+                    }
+                    if plan.hasStorage() { ambientBodies.append(bodyId) }
+                    plans[bodyId] = plan
+                }
+            }
+            bodyId += 1U64
+        }
+        val effects = MidAmbientEffects.prepare(c: inout c, program: program, ambientBodies: ambientBodies)
+        return <MidAmbientProgram enabled=true bodies=plans effects=effects />
+    }
+}
+
+pub impl MidAmbientBodyPlan {
+    inout fn addOperand(c: Comp, body: MidBodyNode, operandId: U64) {
+        if operandId == 0U64 { return }
+        val operand = c.mid.operands[operandId - 1U64]
+        self.add(c: c, body: body, placeId: operand.place)
+        self.add(c: c, body: body, placeId: operand.accessPlace)
+    }
+}
