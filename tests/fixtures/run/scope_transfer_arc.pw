@@ -1,0 +1,24 @@
+// Branch temporaries transfer into the enclosing scope; shared resources must
+// survive the branch cleanup, and CoW mutation must preserve the other value.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+unique struct Resource[T] {
+    pub val value: T
+    deinit { print("drop") }
+}
+pub impl[T] Resource[T] { factory }
+fn exercise(flag: Bool) {
+    val resource = if flag {
+        give <Ref value=<Resource[String] value="first" + " branch" /> />
+    } else {
+        give <Ref value=<Resource[String] value="second" + " branch" /> />
+    }
+    mut val items = if flag { give ["left" + " value"] } else { give ["right" + " value"] }
+    val shared = items
+    items.set(i: 0U64, value: "changed")
+    print(resource->value)
+    print(shared[0U64])
+    print(items[0U64])
+    print("body end")
+}
+fn main() { exercise(flag: true) exercise(flag: false) }

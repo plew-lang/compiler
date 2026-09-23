@@ -2,7 +2,7 @@
 import @Std/Core with { assert }
 import @Std/Io with { write }
 import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidPlace, MidBorrowCapability, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidScope }
-import /Mid/Optimize with { optimizeCanonicalMidReturns }
+import /Mid/Optimize with { optimizeCanonicalMidCopies }
 
 fn check(mode: U64) {
     mut val arena: MidCanonicalArena = <MidCanonicalArena />
@@ -40,7 +40,7 @@ fn check(mode: U64) {
     if mode == 22U64 { blocks.append(<MidBlock statements=[<MidStatement.EndBinding local=0U64 />] terminator=<MidTerminator.Return /> />) }
     val body: MidBody = <MidBody bodyInstance=bodyInstance locals=[temporary, returned, unused] scopes=[<MidScope firstLocal=0U64 localCount=3U64 />] blocks=blocks />
     val original: MidCanonicalBody = arena.store(body: body)
-    val optimized: MidCanonicalBody = optimizeCanonicalMidReturns(arena: inout arena, canonical: original)
+    val optimized: MidCanonicalBody = optimizeCanonicalMidCopies(arena: inout arena, canonical: original)
     val before = arena.bodies[original.body - 1U64]
     val after = arena.bodies[optimized.body - 1U64]
     mut val blockIndex: U64 = 0U64

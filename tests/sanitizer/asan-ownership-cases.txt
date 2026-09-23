@@ -23,3 +23,4 @@ tests/fixtures/run/index_evaluation_custom_key.pw
 
 tests/fixtures/run/generic_deinit_lifetimes.pw
 tests/fixtures/run/view_parenthesized_places.pw
+tests/fixtures/run/scope_transfer_arc.pw

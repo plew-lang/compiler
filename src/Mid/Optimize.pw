@@ -147,11 +147,42 @@ fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: Mid
     return value.operand
 }
 
-// A single-definition owned temporary whose sole use is an identity return
-// has no remaining observer. Forward that ownership instead of creating an
-// extra share and immediately destroying the temporary. Parameters, named
-// locals, borrowed storage and nonidentity conversions are not candidates.
-export fn optimizeCanonicalMidReturns(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+// Full-expression cleanup kills the source immediately after this copy. The
+// destination stays owned across that same cleanup, so moving instead cannot
+// advance the last-owner destruction. There is no intervening user code or
+// loop edge. The source has exactly one occurrence across the entire body;
+// address-taking, captures, projections and explicit destruction disqualify it.
+fn scopeTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, statementIndex: U64, definitions: Array[U64], uses: Array[U64]) -> U64 {
+    if statementIndex + 1U64 >= block.statements.len { return 0U64 }
+    val cleanup = arena.statements[block.statements.start + statementIndex + 1U64]
+    if cleanup.tag != 6U64 || cleanup.scope >= body.scopes.len { return 0U64 }
+    val statement = arena.statements[block.statements.start + statementIndex]
+    if statement.tag != 1U64 || statement.destination == 0U64 || statement.value == 0U64 { return 0U64 }
+    val value = arena.rvalues[statement.value - 1U64]
+    if value.tag != 1U64 || value.operand == 0U64 { return 0U64 }
+    val operand = arena.operands[value.operand - 1U64]
+    if operand.tag != 1U64 || operand.place == 0U64 || operand.accessPlace != 0U64 { return 0U64 }
+    val source = arena.places[operand.place - 1U64]
+    val destination = arena.places[statement.destination - 1U64]
+    if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= body.locals.len { return 0U64 }
+    if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len { return 0U64 }
+    if source.typeTerm != destination.typeTerm || source.local == destination.local { return 0U64 }
+    val local = arena.locals[body.locals.start + source.local]
+    if local.sourceNameStart != 0U64 || local.isUnique || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
+    val target = arena.locals[body.locals.start + destination.local]
+    if target.isParameter || target.isBorrowed || target.isInout || target.isCaptureCell || target.isDropFlag { return 0U64 }
+    if definitions[source.local] != 1U64 || uses[source.local] != 1U64 { return 0U64 }
+    val scope = arena.scopes[body.scopes.start + cleanup.scope]
+    if local.sourceScope != cleanup.scope || source.local < scope.firstLocal || source.local - scope.firstLocal >= scope.localCount { return 0U64 }
+    if destination.local >= scope.firstLocal && destination.local - scope.firstLocal < scope.localCount { return 0U64 }
+    return value.operand
+}
+
+// Forward sole-use temporary ownership at proven cleanup boundaries: an
+// identity return or an immediately following source ScopeExit. Each candidate
+// uses the same whole-body occurrence analysis. No raw ARC operations are
+// introduced, and ordinary drop elaboration/verifiers remain authoritative.
+export fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return canonical }
     val body = arena.bodies[canonical.body - 1U64]
     mut val definitions: Array[U64] = []
@@ -166,6 +197,7 @@ export fn optimizeCanonicalMidReturns(arena: inout MidCanonicalArena, canonical:
     // Plan before appending: a body with no applicable transfer allocates no
     // replacement rows. Only changed statement ranges are copied below.
     mut val transfers: Array[U64] = []
+    mut val transferCounts: Array[U64] = []
     mut val changed: Bool = false
     mut val blockIndex: U64 = 0U64
     while blockIndex < body.blocks.len {
@@ -173,28 +205,32 @@ export fn optimizeCanonicalMidReturns(arena: inout MidCanonicalArena, canonical:
         mut val transfer: U64 = 0U64
         mut val index: U64 = 0U64
         while index < block.statements.len {
-            if returnTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 {
-                transfer = index + 1U64
+            if returnTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 || scopeTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 {
+                transfers.append(index)
+                transfer += 1U64
                 changed = true
             }
             index += 1U64
         }
-        transfers.append(transfer)
+        transferCounts.append(transfer)
         blockIndex += 1U64
     }
     if !changed { return canonical }
     val blockStart: U64 = arena.blocks.count()
+    mut val transferIndex: U64 = 0U64
     blockIndex = 0U64
     while blockIndex < body.blocks.len {
         val block = arena.blocks[body.blocks.start + blockIndex]
-        if transfers[blockIndex] == 0U64 {
+        val transferEnd = transferIndex + transferCounts[blockIndex]
+        if transferIndex == transferEnd {
             arena.blocks.append(block)
         } else {
             val statementStart: U64 = arena.statements.count()
             mut val index: U64 = 0U64
             while index < block.statements.len {
                 val statement = arena.statements[block.statements.start + index]
-                if index + 1U64 == transfers[blockIndex] {
+                if transferIndex < transferEnd && index == transfers[transferIndex] {
+                    transferIndex += 1U64
                     val value = arena.rvalues[statement.value - 1U64]
                     arena.operands.append(<MidOperandNode tag=2U64 place=arena.operands[value.operand - 1U64].place />)
                     arena.rvalues.append(<MidRvalueNode tag=value.tag operand=arena.operands.count() exprId=value.exprId targetTerm=value.targetTerm />)

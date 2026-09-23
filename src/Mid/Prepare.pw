@@ -5,7 +5,7 @@ import ../Frontend with { Comp }
 import ./Ir with { MidCanonicalArena, MidCanonicalBody }
 import ./Instantiate with { MidInstantiateError, instantiateCanonicalMidBody }
 import ./Access with { MidAccessError, elaborateCanonicalMidAccesses }
-import ./Optimize with { optimizeCanonicalMidReturns }
+import ./Optimize with { optimizeCanonicalMidCopies }
 import ./Drop with { elaborateCanonicalMidDrops }
 import ./GlobalAccess with { registerMidGlobalAccessBody }
 import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
@@ -62,8 +62,8 @@ pub impl MidAccessResolvedBody {
 
     // An optional optimization preserves the stage; it is not an admission
     // requirement and must remain separate from ownership correctness.
-    fn optimizedReturns(arena: inout MidCanonicalArena) -> MidAccessResolvedBody {
-        val optimized = optimizeCanonicalMidReturns(arena: inout arena, canonical: self.canonical)
+    fn optimizedCopies(arena: inout MidCanonicalArena) -> MidAccessResolvedBody {
+        val optimized = optimizeCanonicalMidCopies(arena: inout arena, canonical: self.canonical)
         return <MidAccessResolvedBody canonical=optimized />
     }
 }
@@ -101,7 +101,7 @@ pub impl MidExecutableBody {
             Result.Ok(value: val value) => { give value }
             Result.Err(error: val failure) => { return <Result.Err error=failure /> }
         }
-        val optimized = accesses.optimizedReturns(arena: inout c.mid)
+        val optimized = accesses.optimizedCopies(arena: inout c.mid)
         val dropped = match MidDropElaboratedBody.elaborate(arena: inout c.mid, body: optimized) {
             Result.Ok(value: val value) => { give value }
             Result.Err(error: val failure) => { return <Result.Err error=failure /> }

@@ -100,7 +100,7 @@ from pathlib import Path
 import re
 source = Path('src/Mid/Prepare.pw').read_text()
 passes = ['instantiateCanonicalMidBody', 'elaborateCanonicalMidAccesses',
-          'optimizeCanonicalMidReturns', 'elaborateCanonicalMidDrops',
+          'optimizeCanonicalMidCopies', 'elaborateCanonicalMidDrops',
           'verifyExecutableCanonicalMidBody']
 positions = []
 for name in passes:
@@ -121,7 +121,7 @@ for stage in ['MidInstantiatedBody', 'MidAccessResolvedBody', 'MidDropElaborated
     assert 'factory' not in re.sub(r'//[^\n]*', '', implementation), f'{stage}: raw construction must stay private'
 pipeline = source.split('assoc fn prepare(', 1)[1]
 transitions = ['MidInstantiatedBody.instantiate(', 'MidAccessResolvedBody.elaborate(',
-               '.optimizedReturns(', 'MidDropElaboratedBody.elaborate(', 'MidExecutableBody.verify(']
+               '.optimizedCopies(', 'MidDropElaboratedBody.elaborate(', 'MidExecutableBody.verify(']
 assert all(pipeline.count(name) == 1 for name in transitions), 'pipeline must run each typed transition once'
 assert [pipeline.index(name) for name in transitions] == sorted(pipeline.index(name) for name in transitions)
 assert 'body: MidParametricBody' in pipeline.split('->', 1)[0], 'pipeline admission must be typed'

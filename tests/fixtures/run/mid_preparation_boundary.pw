@@ -15,7 +15,7 @@ fn typedStages(compiler: inout Comp, input: MidParametricBody, instance: U64) ->
         Result.Ok(value: val body) => { give body }
         Result.Err(error: _) => { return false }
     }
-    val optimized = accesses.optimizedReturns(arena: inout compiler.mid)
+    val optimized = accesses.optimizedCopies(arena: inout compiler.mid)
     val dropped = match MidDropElaboratedBody.elaborate(arena: inout compiler.mid, body: optimized) {
         Result.Ok(value: val body) => { give body }
         Result.Err(error: _) => { return false }
