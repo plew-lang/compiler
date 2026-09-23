@@ -473,6 +473,7 @@ fn canonicalMidCliffFromPredecessors(body: MidBodyNode, predecessors: MidDropPre
 // are pass-local analysis state, not part of the canonical body schema.
 struct MidCanonicalDropPlan {
     pub val needsFlag: Array[Bool] = []
+    pub val hasCliffs: Bool = false
     pub val cliffAtEntry: Array[Array[Bool]] = []
 }
 pub impl MidCanonicalDropPlan { factory }
@@ -488,6 +489,7 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
         localI = localI + 1U64
     }
     mut val cliffs: Array[Array[Bool]] = []
+    mut val hasCliffs = false
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         mut val blockOwnership: Array[MidOwnership] = []
@@ -512,6 +514,7 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
                     _ => {}
                 }
             }
+            if cliff { hasCliffs = true }
             blockCliffs.append(cliff)
             localI += 1U64
         }
@@ -535,7 +538,7 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
         cliffs.append(blockCliffs)
         blockI = blockI + 1U64
     }
-    return <MidCanonicalDropPlan needsFlag=needsFlag cliffAtEntry=cliffs />
+    return <MidCanonicalDropPlan needsFlag=needsFlag hasCliffs=hasCliffs cliffAtEntry=cliffs />
 }
 
 // Flag locals are appended after the source local prefix.  Their mapping is
@@ -795,7 +798,13 @@ export fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: 
     val ownership: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)
     val accessibility: Array[Array[MidAccessibility]] = analyzeCanonicalMidAccessibility(arena: arena, canonical: canonical)
     val plan: MidCanonicalDropPlan = canonicalMidDropPlan(arena: arena, canonical: canonical, ownership: ownership, accessibility: accessibility)
-    val ownershipAfterCliffs: Array[Array[MidOwnership]] = canonicalMidOwnershipAfterCliffs(arena: arena, canonical: canonical, plan: plan)
+    // With no added cliff, the transfer function and entry state are unchanged.
+    // Reuse their fixed point; plans that consume owners still require refinement.
+    val ownershipAfterCliffs: Array[Array[MidOwnership]] = if plan.hasCliffs {
+        give canonicalMidOwnershipAfterCliffs(arena: arena, canonical: canonical, plan: plan)
+    } else {
+        give ownership
+    }
     val locals: MidRange = canonicalMidAppendDropLocals(arena: inout arena, body: source, plan: plan)
     val scopeStart: U64 = arena.scopes.count()
     mut val scopeI: U64 = 0U64
