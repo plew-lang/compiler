@@ -43,6 +43,26 @@ void* plew_arr_reserve(void* data, long long elemSize, long long mincap){ long l
 void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }
 void plew_bounds(long long i, long long n){ if(i<0||i>=n) plew_panic_raw("index out of bounds",19); }
 void plew_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw("overlapping inout: two inout positions of one call overlap in the same shared cell",82); }
+void plew_read_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw("overlapping borrow: read and inout access to the same shared cell",65); }
+typedef struct PlewAccess { struct PlewAccess* previous; uint64_t kind; void* root; const uint64_t* path; uint64_t count; uint64_t writes; void* group; } PlewAccess;
+static _Thread_local PlewAccess* plew_access_head;
+void plew_access_check(uint64_t kind, void* root, const uint64_t* path, uint64_t count, uint64_t writes, void* permit) {
+    for (PlewAccess* access=plew_access_head; access; access=access->previous) {
+        if ((permit && access->group==permit) || access->kind!=kind || access->root!=root || !(writes || access->writes)) continue;
+        uint64_t length=count<access->count?count:access->count, index=0;
+        while(index<length && path[index]==access->path[index]) ++index;
+        if(index==length) { const char* message="overlapping access: borrowed storage accessed through an alias"; plew_panic_raw(message,(long long)strlen(message)); }
+    }
+}
+void plew_access_begin(PlewAccess* access, uint64_t kind, void* root, const uint64_t* path, uint64_t count, uint64_t writes, void* group) {
+    plew_access_check(kind,root,path,count,writes,0);
+    *access=(PlewAccess){plew_access_head,kind,root,path,count,writes,group};
+    plew_access_head=access;
+}
+void plew_access_end(PlewAccess* access) {
+    if(plew_access_head!=access) { const char* message="invalid access scope"; plew_panic_raw(message,(long long)strlen(message)); }
+    plew_access_head=access->previous;
+}
 int8_t plew_i8Add(int8_t a, int8_t b){ int8_t r; if(__builtin_add_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
 int8_t plew_i8Sub(int8_t a, int8_t b){ int8_t r; if(__builtin_sub_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
 int8_t plew_i8Mul(int8_t a, int8_t b){ int8_t r; if(__builtin_mul_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
