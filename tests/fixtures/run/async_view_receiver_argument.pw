@@ -1,0 +1,21 @@
+// Receiver storage is chosen before awaiting an argument; borrow starts later.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+import @Std/Core with { MutableRef }
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+struct Holder { pub mut val counter: Counter }
+pub impl Holder { factory }
+extension Writable {
+    pub impl Counter { inout fn bump(extra: I64) { self.value += 10I64 print(self.value) } }
+}
+mut val current = <MutableRef value=<Holder counter=<Counter value=1I64 /> /> />
+async fn replace() -> Promise[I64] {
+    await sleep(ms: 1)
+    current = <MutableRef value=<Holder counter=<Counter value=3I64 /> /> />
+    return 0I64
+}
+async fn main() {
+    (current->counter#Writable).bump(extra: await replace())
+    print(current->counter.value)
+}

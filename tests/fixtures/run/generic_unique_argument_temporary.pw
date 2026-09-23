@@ -1,0 +1,17 @@
+// A generic unique owner lives in the frame; its copied result outlives deinit.
+import @Std/Io with { print }
+unique struct Resource[T] {
+    pub val value: T
+    pub val id: I64
+    deinit { print(self.id) }
+}
+pub impl[T] Resource[T] { factory }
+fn retained[T](resource: move Resource[T]) -> T {
+    return resource.value
+}
+fn main() {
+    val text = retained(resource: <Resource value="generic" + " frame" id=1I64 />)
+    print(text)
+    val number = retained(resource: <Resource value=7I64 id=2I64 />)
+    print(number)
+}

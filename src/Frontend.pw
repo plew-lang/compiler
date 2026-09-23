@@ -1656,7 +1656,6 @@ export fn runFrontend(c: inout Comp) {
     // before impl++method lists merge.)
     c.checkFieldDefaults()
     c.checkParamDefaults()
-    c.checkAllParamModes()
     c.checkArrayElemsNotUnique()
     // match pattern soundness (spec/11): a variant/struct pattern must name real
     // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
@@ -1686,6 +1685,7 @@ export fn runFrontend(c: inout Comp) {
     c.checkUseVisibility()
     c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
+    c.checkAllParamModes()
     c.checkDeinitOnlyOnUnique()
     c.checkPublicApiClosure()
     tracePhase(c: inout c, label: "declaration-checks:done")

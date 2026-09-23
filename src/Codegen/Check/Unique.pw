@@ -462,14 +462,10 @@ pub impl Comp {
                 // Ownership modes describe the lexical parameter type, not
                 // the spelling Self in an inherited public signature.
                 val term = self.groundTermInEnvironment(ref: p.ty, params: [], values: [], selfRef: selfRef)
-                mut val typeStart = p.tyStart
-                mut val typeLen = p.tyLen
-                if term != 0U64 {
-                    val resolved = self.arena.typeAt(index: term)
-                    typeStart = resolved.nameStart
-                    typeLen = resolved.nameLen
-                }
-                if self.typeIsUnique(start: typeStart, len: typeLen) {
+                // Declaration identity is resolved before this check. A generic
+                // application is unique because of its nominal declaration,
+                // not because a name-only lookup happens to find an instance.
+                if self.typeTermIsUnique(ref: term) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
                         self.errorAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
@@ -479,7 +475,7 @@ pub impl Comp {
                     // lang-item generic surfaces such as `Ref.factory(value: move T)`;
                     // allow an explicit ownership mode there and let each call/instance
                     // decide whether it is meaningful.
-                    if !(self.isTypeParamName(start: typeStart, len: typeLen)) {
+                    if term == 0U64 || term >= self.arena.typeCount() || self.arena.typeTerms[term].paramId == 0U64 {
                         if p.isMove {
                             self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
                         }

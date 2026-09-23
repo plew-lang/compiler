@@ -1,0 +1,17 @@
+// A mutable capture cell and a captured Ref survive suspension together.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+import @Std/Core with { Ref }
+unique struct Resource { pub val text: String deinit { print("drop") } }
+pub impl Resource { factory }
+async fn main() {
+    mut val number = 1I64
+    val resource = <Ref value=<Resource text="captured" + " frame" /> />
+    val next: fn() -> I64 = fn() -> I64 { number += 1I64 return number }
+    val read: fn() -> String = fn() -> String { return resource->text }
+    await sleep(ms: 1)
+    print(next())
+    print(read())
+    await sleep(ms: 1)
+    print(number)
+}

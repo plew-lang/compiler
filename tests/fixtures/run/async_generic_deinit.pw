@@ -1,0 +1,18 @@
+// A generic unique owner lives in the frame; its copied result outlives deinit.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+unique struct Resource[T] {
+    pub val value: T
+    pub val id: I64
+    deinit { print(self.id) }
+}
+pub impl[T] Resource[T] { factory }
+async fn retained(resource: move Resource[I64]) -> Promise[I64] {
+    await sleep(ms: 1)
+    return resource.value
+}
+async fn main() {
+    val resource = <Resource value=7I64 id=2I64 />
+    val number = await retained(resource: move resource)
+    print(number)
+}
