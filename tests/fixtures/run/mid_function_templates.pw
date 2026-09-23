@@ -1,0 +1,31 @@
+// Reuse only an immutable declaration template within one preparation.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Block, Func }
+import /Mid/Build with { MidFunctionTemplates, MidBuildError }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.blocks.append(<Block stmtStart=0U64 stmtLen=0U64 />)
+    val parameters = compiler.pushFuncParams(params: [])
+    val function = <Func nameStart=0U64 nameLen=0U64 params=parameters hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+    compiler.arena.registerFunction(function)
+    compiler.arena.registerFunction(function)
+    mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
+    val first = templates.body(c: inout compiler, function: 0U64)
+    match first.error { MidBuildError.None => {} _ => { assert(false) } }
+    val count = compiler.mid.bodies.count()
+    val second = templates.body(c: inout compiler, function: 0U64)
+    assert(first.canonical.body == second.canonical.body)
+    assert(compiler.mid.bodies.count() == count)
+    assert(compiler.mid.isWellFormed(body: first.canonical))
+    val other = templates.body(c: inout compiler, function: 1U64)
+    assert(other.canonical.body != first.canonical.body)
+    match templates.body(c: inout compiler, function: 99U64).error {
+        MidBuildError.InvalidFunction => {}
+        _ => { assert(false) }
+    }
+    mut val fresh: MidFunctionTemplates = <MidFunctionTemplates />
+    assert(fresh.body(c: inout compiler, function: 0U64).canonical.body != first.canonical.body)
+    print("function-templates")
+}

@@ -2886,7 +2886,31 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
     return <MidOperand.Borrow place=place capability=<MidBorrowCapability.Read /> />
 }
 
-export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> MidBodyBuild {
+// One preparation owns this table. Function declarations and semantic facts
+// are frozen during that preparation; only immutable parametric snapshots
+// are shared. Grounded adapters and synthetic bodies remain instance-owned.
+export struct MidFunctionTemplates {
+    val bodies: Array[U64] = []
+}
+pub impl MidFunctionTemplates {
+    factory
+    inout fn body(c: inout Comp, function: U64) -> MidBodyBuild {
+        if function >= c.arena.functionCount() { return buildParametricMidBody(c: inout c, fnIdx: function) }
+        if function < self.bodies.count() && self.bodies[function] != 0U64 {
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: function) canonical=<MidCanonicalBody body=self.bodies[function] /> />
+        }
+        val built = buildParametricMidBody(c: inout c, fnIdx: function)
+        match built.error {
+            MidBuildError.None => {}
+            _ => { return built }
+        }
+        while self.bodies.count() <= function { self.bodies.append(0U64) }
+        self.bodies[function] = built.canonical.body
+        return built
+    }
+}
+
+export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64, templates: inout MidFunctionTemplates) -> MidBodyBuild {
     if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
     match c.arena.bodyOrigin(bodyId: bodyId) {
         BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val closureBodyId) => { return buildMidClosureEnvironmentDrop(c: inout c, bodyId: bodyId, closureBodyId: closureBodyId) }
@@ -2894,7 +2918,7 @@ export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64) -> Mid
         BodyOrigin.Callable => {}
     }
     val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
-    if instance.adapterTargetBodyId == 0U64 { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
+    if instance.adapterTargetBodyId == 0U64 { return templates.body(c: inout c, function: fnIdx) }
     val target = c.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
     val surface = c.arena.bodySignature(bodyId: bodyId)
     val executable = c.arena.bodySignature(bodyId: instance.adapterTargetBodyId)

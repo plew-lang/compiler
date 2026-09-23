@@ -2,7 +2,7 @@
 // BodyInstance identity, rather than emission order, indexes the result.
 import ../Frontend with { Comp, tracePhaseProgress }
 import ../Ir with { InstanceEnvironment }
-import ./Build with { MidBodyBuild, MidBuildError, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
+import ./Build with { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
 import ./Prepare with { MidParametricBody, MidExecutableBody, MidPreparationError }
 
 export enum MidProgramError {
@@ -25,6 +25,7 @@ pub impl MidExecutableProgram {
     }
 
     assoc fn prepare(c: inout Comp) -> Result[MidExecutableProgram, MidProgramError] {
+        mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
         mut val bodies: Array[Optional[MidExecutableBody]] = []
         mut val index = 0U64
         while index <= c.arena.bodyInstanceCount() {
@@ -70,7 +71,7 @@ pub impl MidExecutableProgram {
             } else if instance.fnIdx == 18446744073709551615U64 {
                 give buildParametricMidGlobalInit(c: inout c)
             } else {
-                give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId)
+                give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId, templates: inout templates)
             }
             match built.error {
                 MidBuildError.None => {}
