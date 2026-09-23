@@ -59,3 +59,17 @@ Dead symbol-pool entries are reclaimed after resource removal (included in
 removal timing), so neither measurement records nor old interned symbol names
 intentionally accumulate in the measured process. Log output is outside the
 reported update latency. Python summarizes results after the host exits.
+
+To measure the existing full source-to-LLVM path on a generated benchmark:
+
+```sh
+/usr/bin/python3 -B scripts/support/watch-command.py -- /usr/bin/python3 -B scripts/diagnostics/orc-restart/source-baseline.py --source tmp/orc-restart/delta/cow-3.pw --out tmp/orc-restart/source-cow
+```
+
+Run `bench.py` first to generate that input. The outer watchdog supervises the
+worker and its compiler children. Each sample launches the adopted compiler;
+startup, source loading/checking, LLVM emission, output-file writes and process
+exit are included. JIT and application restart are excluded. The first sample
+is reported separately; subsequent samples are warm-filesystem but fresh-process
+measurements. Identical output hashes are checked. This is neither a pure
+frontend timing nor a prediction of a persistent incremental compiler's speed.
