@@ -1,8 +1,9 @@
+import /Ir with { FinalDestruction }
 // Copy-to-move requires an immediate source-only cleanup, not just one use.
 import @Std/Core with { assert }
 import @Std/Io with { print }
 import /Mid/Ir with { MidCanonicalArena, MidCanonicalBody, MidPlace, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidScope }
-import /Mid/Optimize with { optimizeCanonicalMidCopies }
+import /Mid/Optimize with { MidCopyCosts, optimizeCanonicalMidCopies }
 fn check(mode: U64) {
     mut val arena: MidCanonicalArena = <MidCanonicalArena />
     val source = <MidPlace local=0U64 typeTerm=1U64 />
@@ -24,11 +25,13 @@ fn check(mode: U64) {
     mut val sourceCount = 1U64
     if mode == 7U64 { sourceCount = 2U64 }
     val original = arena.store(body: <MidBody locals=[temporary, destination] scopes=[<MidScope firstLocal=0U64 localCount=2U64 />, <MidScope firstLocal=0U64 localCount=sourceCount />] blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] />)
-    val optimized = optimizeCanonicalMidCopies(arena: inout arena, canonical: original)
+    mut val costs = <MidCopyCosts />
+    if mode >= 9U64 { costs = <MidCopyCosts destructionIds=[0U64, 1U64] destructions=[<FinalDestruction typeRef=1U64 ready=mode != 11U64 needsRelease=mode == 10U64 />] /> }
+    val optimized = optimizeCanonicalMidCopies(arena: inout arena, canonical: original, costs: costs)
     val body = arena.bodies[optimized.body - 1U64]
     val block = arena.blocks[body.blocks.start]
     val value = arena.rvalues[arena.statements[block.statements.start + transferIndex].value - 1U64]
-    if mode == 0U64 { assert(arena.operands[value.operand - 1U64].tag == 2U64) }
+    if mode == 0U64 || mode == 10U64 || mode == 11U64 { assert(arena.operands[value.operand - 1U64].tag == 2U64) }
     else { assert(optimized.body == original.body) }
     val before = arena.bodies[original.body - 1U64]
     val beforeBlock = arena.blocks[before.blocks.start]
@@ -54,7 +57,7 @@ fn multiple() {
         index += 1U64
     }
     val original = arena.store(body: <MidBody locals=locals scopes=scopes blocks=[<MidBlock statements=statements terminator=<MidTerminator.Return /> />] />)
-    val optimized = optimizeCanonicalMidCopies(arena: inout arena, canonical: original)
+    val optimized = optimizeCanonicalMidCopies(arena: inout arena, canonical: original, costs: <MidCopyCosts />)
     val body = arena.bodies[optimized.body - 1U64]
     val block = arena.blocks[body.blocks.start]
     index = 0U64
@@ -67,7 +70,7 @@ fn multiple() {
 }
 fn main() {
     mut val mode = 0U64
-    while mode < 9U64 { check(mode: mode) mode += 1U64 }
+    while mode < 12U64 { check(mode: mode) mode += 1U64 }
     multiple()
     print("scope-transfer")
 }

@@ -1,3 +1,4 @@
+import /Mid/Optimize with { MidCopyCosts }
 // Shared semantic preparation publishes an executable body only on success.
 // A builder handle alone is insufficient; failures keep their stage and cause.
 import @Std/Io with { print }
@@ -15,7 +16,7 @@ fn typedStages(compiler: inout Comp, input: MidParametricBody, instance: U64) ->
         Result.Ok(value: val body) => { give body }
         Result.Err(error: _) => { return false }
     }
-    val optimized = accesses.optimizedCopies(arena: inout compiler.mid)
+    val optimized = accesses.optimizedCopies(arena: inout compiler.mid, costs: <MidCopyCosts />)
     val dropped = match MidDropElaboratedBody.elaborate(arena: inout compiler.mid, body: optimized) {
         Result.Ok(value: val body) => { give body }
         Result.Err(error: _) => { return false }

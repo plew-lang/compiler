@@ -3,6 +3,27 @@
 // the input remains available to verification and other body instances.
 import ./Ir with { MidCanonicalArena, MidCanonicalBody, MidBodyNode, MidRange, MidBlockNode, MidStatementNode, MidRvalueNode, MidOperandNode }
 
+import ../Ir with { FinalDestruction }
+
+// Profitability facts are frozen by the frontend, not inferred from names or
+// LLVM layout. Missing facts only lose a cheap-copy exclusion; they never
+// relax the ownership proof or classify an unknown type as release-free.
+export struct MidCopyCosts {
+    pub val destructionIds: Array[U64] = []
+    pub val destructions: Array[FinalDestruction] = []
+}
+pub impl MidCopyCosts {
+    factory
+    fn mayRelease(typeTerm: U64) -> Bool {
+        if typeTerm == 0U64 { return false }
+        if typeTerm >= self.destructionIds.count() { return true }
+        val identity = self.destructionIds[typeTerm]
+        if identity == 0U64 || identity > self.destructions.count() { return true }
+        if !self.destructions[identity - 1U64].ready { return true }
+        return self.destructions[identity - 1U64].needsRelease
+    }
+}
+
 fn countLocal(counts: inout Array[U64], local: U64) {
     if local < counts.count() && counts[local] < 2U64 {
         counts.set(i: local, value: counts[local] + 1U64)
@@ -152,7 +173,7 @@ fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: Mid
 // advance the last-owner destruction. There is no intervening user code or
 // loop edge. The source has exactly one occurrence across the entire body;
 // address-taking, captures, projections and explicit destruction disqualify it.
-fn scopeTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, statementIndex: U64, definitions: Array[U64], uses: Array[U64]) -> U64 {
+fn scopeTransferOperand(arena: MidCanonicalArena, costs: MidCopyCosts, body: MidBodyNode, block: MidBlockNode, statementIndex: U64, definitions: Array[U64], uses: Array[U64]) -> U64 {
     if statementIndex + 1U64 >= block.statements.len { return 0U64 }
     val cleanup = arena.statements[block.statements.start + statementIndex + 1U64]
     if cleanup.tag != 6U64 || cleanup.scope >= body.scopes.len { return 0U64 }
@@ -167,6 +188,7 @@ fn scopeTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: MidB
     if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= body.locals.len { return 0U64 }
     if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= body.locals.len { return 0U64 }
     if source.typeTerm != destination.typeTerm || source.local == destination.local { return 0U64 }
+    if !costs.mayRelease(typeTerm: source.typeTerm) { return 0U64 }
     val local = arena.locals[body.locals.start + source.local]
     if local.sourceNameStart != 0U64 || local.isUnique || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
     val target = arena.locals[body.locals.start + destination.local]
@@ -182,7 +204,7 @@ fn scopeTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: MidB
 // identity return or an immediately following source ScopeExit. Each candidate
 // uses the same whole-body occurrence analysis. No raw ARC operations are
 // introduced, and ordinary drop elaboration/verifiers remain authoritative.
-export fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+export fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: MidCanonicalBody, costs: MidCopyCosts) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return canonical }
     val body = arena.bodies[canonical.body - 1U64]
     mut val definitions: Array[U64] = []
@@ -205,7 +227,7 @@ export fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: 
         mut val transfer: U64 = 0U64
         mut val index: U64 = 0U64
         while index < block.statements.len {
-            if returnTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 || scopeTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 {
+            if returnTransferOperand(arena: arena, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 || scopeTransferOperand(arena: arena, costs: costs, body: body, block: block, statementIndex: index, definitions: definitions, uses: uses) != 0U64 {
                 transfers.append(index)
                 transfer += 1U64
                 changed = true
