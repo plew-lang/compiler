@@ -55,7 +55,13 @@ pub impl LlvmCtx {
                     while pi < signature.parameterTypes.count() {
                         match signature.parameterPassings[pi] {
                             CallArgumentPassing.Inout => { c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry does not support inout parameters") }
-                            _ => {}
+                            CallArgumentPassing.Borrow => {
+                                val contract = c.requireFinalDestruction(typeRef: signature.parameterTypes[pi])
+                                if contract != 0U64 && c.arena.finalDestructions[contract - 1U64].isUnique {
+                                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry cannot copy a borrowed unique parameter")
+                                }
+                            }
+                            CallArgumentPassing.Move => {}
                         }
                         ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[pi]))
                         pi += 1

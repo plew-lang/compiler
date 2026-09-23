@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+unique struct Resource { pub val value: I64 deinit { print(2I64) } }
+pub impl Resource { factory }
+async fn retained(resource: borrow Resource) -> Promise[I64] {
+    await sleep(ms: 1)
+    return resource.value
+}
+async fn main() {
+    val resource = <Resource value=7I64 />
+    print(await retained(resource: borrow resource))
+}

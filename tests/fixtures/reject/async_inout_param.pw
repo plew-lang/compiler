@@ -1,0 +1,2 @@
+async fn invalid(values: inout Array[I64]) {}
+fn main() {}

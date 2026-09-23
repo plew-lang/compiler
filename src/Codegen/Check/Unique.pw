@@ -454,10 +454,15 @@ pub impl Comp {
     // with by-value). `inout` is valid for both. Array params are containers
     // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
     // declaration offset (Param.nameStart is interned = maps to no source file).
-    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64) {
+    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64, isAsync: Bool) {
         mut val i: U64 = 0
         while i < params.count() {
             val p: Param = self.funcParamAt(params: params, index: i)
+            // Async entry owns values independently of the caller's synchronous
+            // borrow scope. Explicit storage loans cannot escape into its frame.
+            if isAsync && (p.isBorrow || p.isInout) {
+                self.errorAt(offset: anchor, msg: "an async function cannot have borrow or inout parameters; pass an owned value instead")
+            }
             if !(p.tyIsArray) {
                 // Ownership modes describe the lexical parameter type, not
                 // the spelling Self in an inherited public signature.
@@ -568,7 +573,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val function = self.arena.functionAt(index: i)
-            self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function))
+            self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function), isAsync: function.isAsync)
             i += 1
         }
     }

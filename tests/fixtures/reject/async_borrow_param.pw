@@ -1,0 +1,3 @@
+unique struct Resource { val value: I64 }
+async fn invalid(resource: borrow Resource) {}
+fn main() {}
