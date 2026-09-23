@@ -207,6 +207,7 @@ pub impl Comp {
             ExprAst.ExtView(val recv, val src, srcSpan: _, val strip, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
                 result = self.pushExpr(e: <Expr.ExtView recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) strip=strip />)
+                self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: r), expressionCount: self.arena.exprs.count())
             }
             ExprAst.Index(val base, val index, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
@@ -561,7 +562,9 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Await operand=self.lowerSyntaxExpr(id: e.child0) />)
             }
             SyntaxExprKind.ExtView => {
-                result = self.pushExpr(e: <Expr.ExtView recv=self.lowerSyntaxExpr(id: e.child0) source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)
+                val receiver = self.lowerSyntaxExpr(id: e.child0)
+                result = self.pushExpr(e: <Expr.ExtView recv=receiver source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)
+                self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: receiver), expressionCount: self.arena.exprs.count())
             }
             SyntaxExprKind.Closure => {
                 val params: Array[Param] = self.lowerSyntaxExprParams(expr: e)

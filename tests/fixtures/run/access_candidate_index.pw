@@ -13,7 +13,8 @@ fn check(table: Decls, rows: Array[AccessCandidate], limit: U64) {
             index += 1U64
         }
         if table.accessCandidateForExpr(exprId: expression) != expected { panic "candidate index differs from first-match oracle" }
-        if table.accessCandidateForRead(exprId: expression) != expectedRead { panic "read index differs from first-match oracle" }
+        val source = if expectedRead < rows.count() { give rows[expectedRead].placeExpr } else { give expression }
+        if table.placeSource(exprId: expression) != source { panic "storage provenance differs from first-match oracle" }
         expression += 1U64
     }
     if table.accessCandidateForExpr(exprId: 18446744073709551615U64) != rows.count() { panic "unknown expression" }
@@ -46,5 +47,9 @@ fn main() {
     copy.registerAccessCandidate(<AccessCandidate readExpr=1004U64 placeExpr=1005U64 writeExpr=1006U64 />, expressionCount: 1024U64)
     if table.accessCandidateForExpr(exprId: 1004U64) != table.accessCandidateCount() { panic "copy changed original" }
     if table.accessCandidateAt(index: 257U64).originSerial != 900U64 { panic "provenance changed" }
+    table.registerPlaceSource(exprId: 1100U64, source: table.placeSource(exprId: 3U64), expressionCount: 1200U64)
+    table.registerPlaceSource(exprId: 1101U64, source: table.placeSource(exprId: 1100U64), expressionCount: 1200U64)
+    if table.placeSource(exprId: 1101U64) != 4U64 { panic "nested view lost indexed storage" }
+    if copy.placeSource(exprId: 1101U64) != 1101U64 { panic "view provenance escaped its copy" }
     write(s: "access-candidate-index-ok\n")
 }

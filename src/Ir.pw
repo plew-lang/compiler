@@ -2954,7 +2954,7 @@ export struct Decls {
     pub mut val syntheticCallSiteByExpr: Array[U64] = []
     mut val accessCandidateRows: Array[AccessCandidate] = []
     mut val accessCandidateByExpr: Array[U64] = []
-    mut val accessCandidateByRead: Array[U64] = []
+    mut val placeSourceByExpr: Array[U64] = []
     pub mut val accessUses: Array[AccessUse] = []
     // Parametric aggregate facts selected by Record. Unlike AST MakeField,
     // these carry physical layout identity and no field/variant spelling.

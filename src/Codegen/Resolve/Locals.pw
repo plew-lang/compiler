@@ -535,16 +535,8 @@ pub impl Comp {
     // second lookup: it only recovers the Lower-published place so checking
     // can accept a later selected `inout` use which Mid will materialize and
     // write back through that exact candidate.
-    inout fn materializablePlace(id: U64) -> U64 {
-        // A view changes method selection, not the storage path used by
-        // mutability and exclusivity checks (including nested projections).
-        match self.arena.exprs[id] {
-            Expr.ExtView(recv: val base, source: _, strip: _) => { return self.materializablePlace(id: base) }
-            _ => {}
-        }
-        val candidate = self.decls.accessCandidateForRead(exprId: id)
-        if candidate < self.decls.accessCandidateCount() { return self.decls.accessCandidateAt(index: candidate).placeExpr }
-        return id
+    fn materializablePlace(id: U64) -> U64 {
+        return self.decls.placeSource(exprId: id)
     }
 
     inout fn placeIsMutable(id: U64) -> Bool {
