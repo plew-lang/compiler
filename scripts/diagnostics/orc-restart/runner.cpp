@@ -34,8 +34,10 @@ int main(int argc, char **argv) {
   optimize(*module, *target, argv[3]);
   check(jit->addIRModule(ThreadSafeModule(std::move(module), context)));
   check(jit->initialize(jit->getMainJITDylib()));
-  auto entry = take(jit->lookup("main")).toPtr<int (*)()>();
-  int result = entry();
+  auto entry = take(jit->lookup("main")).toPtr<int (*)(int, char **)>();
+  char program[] = "plew-orc-probe";
+  char *applicationArgs[] = {program, nullptr};
+  int result = entry(1, applicationArgs);
   check(jit->deinitialize(jit->getMainJITDylib()));
   return result;
 }

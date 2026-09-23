@@ -20,7 +20,8 @@ from clang_environment import apply
 
 CASES = ['cow_struct', 'closure_capture_heap', 'closure_generic_instance_abi',
          'arc_deinit_order', 'generic_deinit', 'async_unique_frame',
-         'async_enum_param_arc', 'mid_ffi_intrinsic_calls', 'ffi_extern_c']
+         'async_enum_param_arc', 'mid_ffi_intrinsic_calls', 'ffi_extern_c',
+         'runtime_intrinsic_process_smoke', 'mid_process_intrinsic_calls']
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
