@@ -113,10 +113,16 @@ pub impl Comp {
     // The `deinit` method index of struct `sidx`, or funcs.count() if it has none.
     // (The Comp-level canonical; the backend's structDeinitFi free fn delegates here.)
     inout fn structOwnDeinitFi(sidx: U64) -> U64 {
-        val sd: StructDef = self.arena.structAt(index: sidx)
-        val b: Bind = self.kwSpan(kw: "deinit", kwLen: 6U64)
-        val noArgs: Array[Arg] = []
-        return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: self.pushArgs(args: noArgs))
+        val declaration = self.arena.structAt(index: sidx).defOffset
+        mut val index = 0U64
+        while index < self.decls.deinits.count() {
+            val functionIndex = self.decls.deinits[index]
+            val function = self.arena.functionAt(index: functionIndex)
+            val receiver = self.arena.typeAt(index: function.recvTy)
+            if receiver.hasDecl && receiver.declOffset == declaration { return functionIndex }
+            index += 1U64
+        }
+        return self.arena.functionCount()
     }
 
     // Whether destroying a value of (grounded) type `ref` performs ANY ARC action —

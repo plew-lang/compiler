@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+// Ground each destructor body and release generic fields after the body.
+unique struct Resource[T] {
+    pub val value: T
+    pub val id: I64
+    deinit { print(self.id) }
+}
+pub impl[T] Resource[T] { factory }
+fn early() { val item = <Resource[String] value="owned" id=1I64 /> return }
+fn shared() {
+    val first = <Ref value=<Resource[String] value="shared" id=2I64 /> />
+    val second = first
+    print("shared body")
+}
+fn main() {
+    early()
+    shared()
+    val scalar = <Resource[I64] value=7I64 id=3I64 />
+    val text = <Resource[String] value="text" id=4I64 />
+    print("end")
+}

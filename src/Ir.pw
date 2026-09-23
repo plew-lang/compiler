@@ -2891,8 +2891,8 @@ pub impl DestructureSite { factory }
 // `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
 // decls, recorded conformances, and `via` requirement→witness redirects.
 // `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
-// Trait` bounds keyed by function index. `deinits`: types with a `deinit` (Bind
-// = receiver type span). `assocBindings`: `type Item = Concrete` lines from
+// Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
+// type carries the resolved nominal identity. `assocBindings`: `type Item = Concrete` lines from
 // conformances. `pubFactories`: interned ids of types with a `pub factory`.
 // `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
 // with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
@@ -2939,7 +2939,7 @@ export struct Decls {
     // Struct declaration / field position selects an independent default body.
     pub mut val fieldDefaultGeneratorRanges: Array[DefaultGeneratorRange] = []
     pub mut val fieldDefaultGeneratorFunctions: Array[U64] = []
-    pub mut val deinits: Array[Bind] = []
+    pub mut val deinits: Array[U64] = []
     pub mut val assocBindings: Array[AssocBinding] = []
     pub mut val pubFactories: Array[U64] = []
     pub mut val namespaces: Array[Bind] = []

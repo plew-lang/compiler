@@ -165,12 +165,12 @@ pub impl Comp {
         // an unknown / another generic's type parameter (which unifies at instantiation,
         // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
         // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
-        val eTp: Bool = self.isTypeParamOf(fnIdx: self.cur.checkFn, start: te.nameStart, len: te.nameLen)
-        val iTp: Bool = self.isTypeParamOf(fnIdx: self.cur.checkFn, start: tin.nameStart, len: tin.nameLen)
+        val eTp: Bool = self.isTypeParamTermOf(fnIdx: self.cur.checkFn, term: exp)
+        val iTp: Bool = self.isTypeParamTermOf(fnIdx: self.cur.checkFn, term: inferred)
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.
-                return spansEqual(c: inout self, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
+                return te.paramId == tin.paramId
             }
             // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
             if self.isConcreteTypeName(start: tin.nameStart, len: tin.nameLen) {

@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+fn accept[T](value: T) {}
+fn caller[T](value: T) {
+    accept(value: "separate binder")
+    accept(value: 3I64)
+    print("checked")
+}
+fn main() { caller(value: true) }

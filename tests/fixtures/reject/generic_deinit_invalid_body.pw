@@ -1,0 +1,3 @@
+// An unused destructor must still respect its abstract field type.
+unique struct Resource[T] { pub val value: T deinit { val invalid: I64 = self.value } }
+fn main() {}

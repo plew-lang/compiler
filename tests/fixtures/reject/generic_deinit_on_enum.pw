@@ -1,0 +1,4 @@
+// Destructor validity is checked even without an instantiated value.
+unique enum Resource[T] { Item(value: T) }
+impl[T] Resource[T] { deinit {} }
+fn main() {}

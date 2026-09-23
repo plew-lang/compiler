@@ -1,0 +1,3 @@
+// Destructor validity is checked even without an instantiated value.
+struct Resource[T] { pub val value: T deinit {} }
+fn main() {}

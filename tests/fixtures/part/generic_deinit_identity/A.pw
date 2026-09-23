@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+// Same spelling in another module must never select this destructor.
+unique struct Resource[T] { pub val value: T deinit { print("first") } }
+pub impl[T] Resource[T] { factory }
+export fn first() { val item = <Resource[I64] value=1I64 /> }

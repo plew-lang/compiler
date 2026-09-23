@@ -390,26 +390,28 @@ pub impl Comp {
     // run deinit on every CoW copy = double-free, and v1 deliberately rejects explicit
     // enum deinit bodies even for `unique enum`. Enum payloads are still destroyed by
     // the synthesized enum payload walker.
-    // Each user `deinit { }` registers a c.decls.deinits entry (the type name); reject
-    // any whose target is an enum or is not a unique struct. Reported at the type decl.
+    // Validate the resolved receiver declaration, independently of generic arity.
     inout fn checkDeinitOnlyOnUnique() {
-        mut val i: U64 = 0
-        while i < self.decls.deinits.count() {
-            val d: Bind = self.decls.deinits[i]
-            val ei: U64 = self.enumIdxByName(start: d.nameStart, len: d.nameLen)
-            if ei < self.arena.enumCount() {
-                self.errorAt(offset: self.arena.enumAt(index: ei).defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
+        mut val index = 0U64
+        while index < self.decls.deinits.count() {
+            val function = self.arena.functionAt(index: self.decls.deinits[index])
+            val receiver = self.arena.typeAt(index: function.recvTy)
+            mut val structure = self.arena.structCount()
+            mut val enumeration = self.arena.enumCount()
+            if receiver.hasDecl {
+                structure = self.arena.structIndexByOffset(offset: receiver.declOffset)
+                enumeration = self.arena.enumIndexByOffset(offset: receiver.declOffset)
+            }
+            if enumeration < self.arena.enumCount() {
+                self.errorAt(offset: self.arena.enumAt(index: enumeration).defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
             } else {
-                if !(self.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
-                    val si: U64 = self.structIndexByName(start: d.nameStart, len: d.nameLen)
-                    mut val off: U64 = d.nameStart
-                    if si < self.arena.structCount() {
-                        off = self.arena.structAt(index: si).defOffset
-                    }
-                    self.errorAt(offset: off, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)")
+                mut val isUnique = false
+                if structure < self.arena.structCount() { isUnique = self.arena.structAt(index: structure).isUnique }
+                if !isUnique {
+                    self.errorAt(offset: function.defOffset, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)")
                 }
             }
-            i += 1
+            index += 1U64
         }
     }
 

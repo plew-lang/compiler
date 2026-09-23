@@ -1654,7 +1654,6 @@ export fn runFrontend(c: inout Comp) {
     // enum's own explicit deinit body is v1-rejected; active payloads still drop.
     // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
     // before impl++method lists merge.)
-    c.checkDeinitOnlyOnUnique()
     c.checkFieldDefaults()
     c.checkParamDefaults()
     c.checkAllParamModes()
@@ -1687,6 +1686,7 @@ export fn runFrontend(c: inout Comp) {
     c.checkUseVisibility()
     c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
+    c.checkDeinitOnlyOnUnique()
     c.checkPublicApiClosure()
     tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner
