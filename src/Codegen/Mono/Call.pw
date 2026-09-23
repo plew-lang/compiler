@@ -4819,6 +4819,9 @@ pub impl Comp {
             candidateI += 1U64
         }
         match self.arena.exprs[exprId] {
+            Expr.ExtView(recv: val base, source: _, strip: _) => {
+                return self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)
+            }
             Expr.Ident(start: _, len: _) => {
                 if exprId >= self.typeCache.identTarget.count() { return 0U64 }
                 match self.recordedGlobalAddress(exprId: exprId) {
@@ -4875,6 +4878,10 @@ pub impl Comp {
         }
         if exprId >= self.arena.exprs.count() || exprId >= self.arena.semanticExprTypes.count() { return 0U64 }
         match self.arena.exprs[exprId] {
+            // Views select a callable, but do not add a storage projection.
+            Expr.ExtView(recv: val base, source: _, strip: _) => {
+                return self.freezeFinalAccessProjection(rootExpr: rootExpr, exprId: base)
+            }
             Expr.Field(base: val base, nameStart: _, nameLen: _) => {
                 val semantic: SemanticExprType = self.arena.semanticExprTypes[exprId]
                 if !semantic.hasFieldProjection { return 0U64 }

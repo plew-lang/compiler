@@ -1,0 +1,4 @@
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+extension Writable { pub impl Counter { inout fn bump(other: inout Counter) { self.value += 1I64 } } }
+fn main() { mut val counter = <Counter value=1I64 /> (counter#Writable).bump(other: inout counter) }

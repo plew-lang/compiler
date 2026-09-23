@@ -20,3 +20,6 @@ tests/fixtures/run/ambient_access.pw
 tests/fixtures/run/mid_access_scope_verify.pw
 tests/fixtures/run/index_evaluation_inout_reference_index.pw
 tests/fixtures/run/index_evaluation_custom_key.pw
+
+tests/fixtures/run/generic_deinit_lifetimes.pw
+tests/fixtures/run/view_parenthesized_places.pw

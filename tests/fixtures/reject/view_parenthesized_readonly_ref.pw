@@ -1,0 +1,7 @@
+import @Std/Core with { Ref }
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+extension Writable { pub impl Counter { inout fn bump() { self.value += 1I64 } } }
+struct Holder { pub mut val counter: Counter }
+pub impl Holder { factory }
+fn main() { val counter = <Ref value=<Holder counter=<Counter value=1I64 /> /> /> (counter->counter#Writable).bump() }

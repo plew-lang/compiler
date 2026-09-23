@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+import @Std/Core with { MutableRef }
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+struct Holder { pub mut val counter: Counter pub mut val items: Array[Counter] }
+pub impl Holder { factory }
+extension Writable { pub impl Counter { inout fn bump(extra: I64) { self.value += 10I64 } } }
+mut val current = <MutableRef value=<Holder counter=<Counter value=1I64 /> items=[<Counter value=2I64 />] /> />
+mut val calls = 0I64
+fn key() -> U64 { calls += 1I64 return 0U64 }
+fn replace() -> I64 { current = <MutableRef value=<Holder counter=<Counter value=3I64 /> items=[<Counter value=4I64 />] /> /> return 0I64 }
+fn main() {
+    mut val holder = <Holder counter=<Counter value=5I64 /> items=[<Counter value=6I64 />] />
+    (holder.counter#Writable).bump(extra: 0I64)
+    (holder.items[key()]#Writable).bump(extra: 0I64)
+    print(holder.counter.value)
+    print(holder.items[0U64].value)
+    val original = current
+    (current->items[key()]#Writable).bump(extra: replace())
+    print(original->items[0U64].value)
+    print(current->items[0U64].value)
+    print(calls)
+}

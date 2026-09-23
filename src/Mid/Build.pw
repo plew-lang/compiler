@@ -496,6 +496,7 @@ fn midPrepareAccessPlace(c: inout Comp, state: inout MidBuildState, exprId: U64)
     val candidate = c.decls.accessCandidateForExpr(exprId: exprId)
     val source = if candidate < c.decls.accessCandidateCount() { give c.decls.accessCandidateAt(index: candidate).placeExpr } else { give exprId }
     match c.arena.exprs[source] {
+        Expr.ExtView(recv: val base, source: _, strip: _) => { return midPrepareAccessPlace(c: inout c, state: inout state, exprId: base) }
         Expr.Index(base: val base, index: val key) => {
             val error = midPrepareAccessPlace(c: inout c, state: inout state, exprId: base)
             match error { MidBuildError.None => {} _ => { return error } }
@@ -1356,10 +1357,13 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.ExtView(recv: val sourceExpr, source: _, strip: _) => {
-            // A value temporary is not the source's writable place. Capability
-            // views require place lowering and must not borrow this copy.
+            // The selected call already carries its semantic view. A capability
+            // operand retains the original storage type, place and prepared
+            // access inputs; no value retag or temporary copy is introduced.
             if allowAccessMarker {
-                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
+                val storageTerm = c.semanticExprTerm(exprId: sourceExpr)
+                if storageTerm == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
+                return midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: storageTerm, allowAccessMarker: true)
             }
             // Source-set resolution is already frozen by Record. Preserve the
             // operand's copy/move mode and use the ordinary temporary lifetime.
