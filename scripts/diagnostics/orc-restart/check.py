@@ -44,7 +44,7 @@ def main():
     fixtures = ROOT / 'tests/fixtures/run'
     sources = [fixtures / (name + '.pw') for name in CASES]
     inputs = [compiler, config, clang, prefix / 'lib/libLLVM.dylib',
-              ROOT / 'Plew.toml', ROOT / 'Plew.lock', *HERE.glob('*.cpp'),
+              ROOT / 'Plew.toml', ROOT / 'Plew.lock', *HERE.glob('*.cpp'), *HERE.glob('*.hpp'),
               *HERE.glob('*.py'), *sources,
               *(source.with_suffix('.out') for source in sources),
               *(source.with_suffix('.c') for source in sources if source.with_suffix('.c').exists()),
