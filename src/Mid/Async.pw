@@ -137,8 +137,16 @@ fn unionLocals(locals: inout Array[Bool], input: Array[Bool]) -> Bool {
 fn borrowedOwners(c: Comp, body: MidBodyNode) -> Array[Array[Bool]] {
     mut val owners: Array[Array[Bool]] = []
     mut val index: U64 = 0U64
-    while index < body.locals.len { owners.append(emptyLocalSet(count: body.locals.len))
-        index += 1U64 }
+    while index < body.locals.len {
+        // Only borrowed aliases have dependency edges. An empty row denotes
+        // no edges; do not allocate a quadratic matrix for ordinary locals.
+        if c.mid.locals[body.locals.start + index].isBorrowed {
+            owners.append(emptyLocalSet(count: body.locals.len))
+        } else {
+            owners.append([])
+        }
+        index += 1U64
+    }
     mut val blockIndex: U64 = 0U64
     while blockIndex < body.blocks.len {
         val block = c.mid.blocks[body.blocks.start + blockIndex]
@@ -166,7 +174,7 @@ fn includeBorrowedOwners(locals: inout Array[Bool], owners: Array[Array[Bool]]) 
         changed = false
         mut val index: U64 = 0U64
         while index < locals.count() {
-            if locals[index] {
+            if locals[index] && owners[index].count() != 0U64 {
                 if unionLocals(locals: inout locals, input: owners[index]) { changed = true }
             }
             index += 1U64

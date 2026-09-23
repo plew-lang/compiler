@@ -78,6 +78,23 @@ fn main() {
     assert(borrowed.storedLocals[5U64])
     assert(!borrowed.storedLocals[6U64])
 
+    // Transitive aliases retain each intermediate home and their root. Empty
+    // rows for ordinary locals must not stop dependency closure early.
+    val chain = compiler.mid.store(body: <MidBody locals=[local(), local(), local(), local(borrowed: true), local(borrowed: true)] blocks=[
+        <MidBlock statements=[
+            <MidStatement.Assign destination=<MidPlace local=3U64 /> value=<MidRvalue.Use operand=<MidOperand.Borrow place=<MidPlace local=1U64 /> capability=<MidBorrowCapability.Read /> /> /> />,
+            <MidStatement.Assign destination=<MidPlace local=4U64 /> value=<MidRvalue.Use operand=<MidOperand.Borrow place=<MidPlace local=3U64 /> capability=<MidBorrowCapability.Read /> /> /> />
+        ] terminator=suspend(resume: 1U64) />,
+        <MidBlock terminator=<MidTerminator.ReturnValue value=<MidOperand.Copy place=<MidPlace local=4U64 /> /> /> />
+    ] />)
+    val chainPlan = planCanonicalMidAsyncFrame(c: compiler, canonical: chain)
+    assert(chainPlan.valid)
+    assert(chainPlan.storedLocals[0U64])
+    assert(chainPlan.storedLocals[1U64])
+    assert(!chainPlan.storedLocals[2U64])
+    assert(chainPlan.storedLocals[3U64])
+    assert(chainPlan.storedLocals[4U64])
+
     // Identity returns preserve a grounded ABI boundary in canonical Mid.
     // Its operand remains a use, but a parametric boundary is not accepted.
     val returns = [
