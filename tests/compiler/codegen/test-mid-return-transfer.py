@@ -58,8 +58,8 @@ for index, name in enumerate(cases, 1):
             row['golden_equal'] = (output / (name + '.out')).read_bytes() == source.with_suffix('.out').read_bytes()
     if name == 'mid_return_bytes_cow' and compiled.returncode == 0:
         # This fixture has one raw-buffer-to-Array wrapper (Array.overBuffer).
-        # Discover its symbol/type from its ABI, not unstable gf/gs numbering.
-        wrappers = [match.group() for match in re.finditer(r'define (%gs[0-9]+) @[^ (]+\(ptr %0\) \{\n.*?\n\}', llvm.read_text(), re.S)
+        # Discover its symbol/type from its ABI, not generated symbol/type names or internal linkage.
+        wrappers = [match.group() for match in re.finditer(r'define (?:internal )?(%[^ ]+) @[^ (]+\(ptr %0\) \{\n.*?\n\}', llvm.read_text(), re.S)
                     if 'insertvalue ' + match.group(1) in match.group()]
         row['buffer_wrapper_count'] = len(wrappers)
         row['minimal_return_arc'] = len(wrappers) == 1 and wrappers[0].count('@plew_rawbuf_retain(') == 1 and not re.search(r'@(?:pwdrop|plew_rawbuf_drop)', wrappers[0])
