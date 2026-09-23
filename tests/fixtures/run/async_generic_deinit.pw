@@ -11,8 +11,16 @@ async fn retained(resource: move Resource[I64]) -> Promise[I64] {
     await sleep(ms: 1)
     return resource.value
 }
+async fn retainedText(resource: move Resource[String]) -> Promise[I64] {
+    await sleep(ms: 1)
+    print(resource.value)
+    return 1I64
+}
 async fn main() {
     val resource = <Resource value=7I64 id=2I64 />
     val number = await retained(resource: move resource)
     print(number)
+    val text = <Resource value="generic" + " frame" id=3I64 />
+    print(await retainedText(resource: move text))
+    print(await retained(resource: <Resource value=9I64 id=4I64 />))
 }

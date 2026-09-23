@@ -1613,7 +1613,10 @@ pub impl Comp {
             args.append(argRef)
             pi += 1
         }
-        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        // Inference selects the arguments of this declaration; it must not
+        // erase its nominal identity. Mid ownership classification and later
+        // substitutions consume that identity without repeating name lookup.
+        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=sd.defOffset args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     // The TypeRef for the value supplied to the make-field named `fieldNameId`, or 0 when

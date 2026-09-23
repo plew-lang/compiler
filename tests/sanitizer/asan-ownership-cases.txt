@@ -24,3 +24,7 @@ tests/fixtures/run/index_evaluation_custom_key.pw
 tests/fixtures/run/generic_deinit_lifetimes.pw
 tests/fixtures/run/view_parenthesized_places.pw
 tests/fixtures/run/scope_transfer_arc.pw
+tests/fixtures/run/generic_unique_argument_temporary.pw
+tests/fixtures/run/async_generic_deinit.pw
+tests/fixtures/run/async_capture_frame.pw
+tests/fixtures/run/async_view_receiver_argument.pw
