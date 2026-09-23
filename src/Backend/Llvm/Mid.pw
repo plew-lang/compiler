@@ -2278,7 +2278,7 @@ pub impl LlvmCtx {
         return true
     }
 
-    inout fn midCanonicalEmitDrop(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+    inout fn midCanonicalDropSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
         if placeId == 0U64 || placeId > c.mid.places.count() { return false }
         val place: MidPlaceNode = c.mid.places[placeId - 1U64]
         if place.rootTag == 1U64 {
@@ -2292,13 +2292,29 @@ pub impl LlvmCtx {
             if tag != 1U64 && tag != 3U64 { return false }
             projectionI = projectionI + 1U64
         }
+        return true
+    }
+
+    inout fn midCanonicalEmitDrop(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+        if !self.midCanonicalDropSupported(c: inout c, body: body, placeId: placeId) { return false }
+        val place = c.mid.places[placeId - 1U64]
+        if !c.finalNeedsRelease(typeRef: place.typeTerm) {
+            // Drop still carries an access obligation for shared/global
+            // storage, even when the payload has no physical destruction.
+            self.midAmbientCheck(c: inout c, body: body, place: place, writes: true)
+            return true
+        }
         val value: LLVMValueRef = llvmLoad(self.b, self.midCanonicalPlaceTy(c: inout c, body: body, place: place), self.midCanonicalPlacePtr(c: inout c, body: body, place: place, forWrite: true), anon())
         self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: false)
         return true
     }
 
     inout fn midCanonicalEmitConditionalDrop(c: inout Comp, body: MidBodyNode, placeId: U64, flag: U64) -> Bool {
-        if flag >= body.locals.len { return false }
+        if flag >= body.locals.len || !self.midCanonicalDropSupported(c: inout c, body: body, placeId: placeId) { return false }
+        val place = c.mid.places[placeId - 1U64]
+        // A conditional access check must remain conditional. Only erase the
+        // branch when both destruction and dynamic access work are empty.
+        if !c.finalNeedsRelease(typeRef: place.typeTerm) && (!self.ambientProgram.enabled || self.ambientBody.path(c: c, body: body, place: place).count() == 0U64) { return true }
         val flagValue: LLVMValueRef = llvmLoad(self.b, self.i1ty, self.midCanonicalLocalPtr(body: body, local: flag), anon())
         val thenBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop"))
         val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop.cont"))

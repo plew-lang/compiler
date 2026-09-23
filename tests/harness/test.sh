@@ -299,6 +299,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-canonical-production"
 fi
 
+# Runtime output cannot reveal dead cleanup loads in unoptimized LLVM.
+if python3 ./tests/compiler/codegen/test-mid-trivial-drop.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-trivial-drop"
+fi
+
 # The compiler parser must not hide the old value-AST → freeze path behind the
 # immutable syntax arena.  This is a structural complement to the runtime
 # SyntaxFile accessor corpus.

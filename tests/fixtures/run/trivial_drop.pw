@@ -1,0 +1,8 @@
+// Dropping a release-free value must not load its unused payload into LLVM.
+struct Plain { pub val number: I64 }
+pub impl Plain { factory }
+fn made() -> Plain { return <Plain number=7I64 /> }
+fn main() {
+    val created = made()
+    val scalar = 11I64
+}
