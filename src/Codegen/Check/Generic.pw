@@ -50,10 +50,8 @@ pub impl Comp {
     }
 
     // A term belongs to its lexical binder, never another same-spelled binder.
-    fn isTypeParamTermOf(fnIdx: U64, term: U64) -> Bool {
-        if fnIdx >= self.arena.functionCount() || term == 0U64 || term >= self.arena.typeCount() { return false }
-        val identity = self.arena.typeAt(index: term).paramId
-        if identity == 0U64 { return false }
+    fn isTypeParamIdentityOf(fnIdx: U64, identity: U64) -> Bool {
+        if identity == 0U64 || fnIdx >= self.arena.functionCount() { return false }
         val parameters = self.arena.functionAt(index: fnIdx).typeParams
         mut val index = 0U64
         while index < parameters.count() {
@@ -792,7 +790,7 @@ pub impl Comp {
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {
-            if self.isTypeParamTermOf(fnIdx: self.cur.checkFn, term: expectedRef) || self.isSelfTypeInProvided(start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen) {
+            if self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[expectedRef].paramId) || self.isSelfTypeInProvided(start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen) {
                 match self.arena.exprs[valueExpr] {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                         if !(isBool) {
