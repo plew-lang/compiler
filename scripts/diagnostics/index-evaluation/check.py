@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
-CASES = Path(__file__).resolve().parent
+CASES = ROOT / "tests/fixtures/run"
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--asan', action='store_true')
@@ -30,7 +30,7 @@ flags = ['-fsanitize=address'] if args.asan else []
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-inputs = [compiler, Path(__file__).resolve(), *sorted(CASES.glob('*.pw')), *sorted(CASES.glob('*.out'))]
+inputs = [compiler, Path(__file__).resolve(), *sorted(CASES.glob('index_evaluation_*.pw')), *sorted(CASES.glob('index_evaluation_*.out'))]
 hashes = {str(path): digest(path) for path in inputs}
 
 def execute(command, stdout, stderr):
@@ -42,7 +42,7 @@ assert execute([str(compiler), '--runtime'], out/'runtime.c', out/'runtime.log')
 assert execute([clang, *flags, '-w', '-c', str(out/'runtime.c'), '-o', str(out/'runtime.o')],
                out/'runtime-build.out', out/'runtime-build.log') == 0
 results = []
-for source in sorted(CASES.glob('*.pw')):
+for source in sorted(CASES.glob('index_evaluation_*.pw')):
     name = source.stem
     llvm = out / (name + '.ll')
     expected = source.with_suffix('.out').read_text()

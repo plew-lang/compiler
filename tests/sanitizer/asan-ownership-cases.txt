@@ -18,3 +18,5 @@ tests/fixtures/run/receiver_shared_access.pw
 tests/fixtures/run/borrow_argument_access.pw
 tests/fixtures/run/ambient_access.pw
 tests/fixtures/run/mid_access_scope_verify.pw
+tests/fixtures/run/index_evaluation_inout_reference_index.pw
+tests/fixtures/run/index_evaluation_custom_key.pw

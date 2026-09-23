@@ -198,7 +198,7 @@ fn midNormalizeCallArgument(state: inout MidBuildState, operand: MidOperand) -> 
                 MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val term) => { return <MidCallArgument tag=7U64 stringStart=start stringLen=len typeTerm=term /> }
             }
         }
-        MidOperand.Access(candidate: val candidate) => { return <MidCallArgument tag=8U64 accessCandidate=candidate /> }
+        MidOperand.Access(candidate: val candidate, inputs: val inputs) => { return <MidCallArgument tag=8U64 accessCandidate=candidate preparedInputs=inputs /> }
     }
 }
 pub impl MidBuildState {
@@ -284,9 +284,9 @@ export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTe
 // Temporaries normally hold copyable evaluation results. A temporary that is
 // the owner of a unique aggregate must retain that fact too: it can only leave
 // the evaluation as Move, and drop elaboration must account for the transfer.
-fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
+fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64, preparedExpr: U64 = 0U64) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 preparedExpr=preparedExpr />)
     return local
 }
 
@@ -470,18 +470,69 @@ fn midNormalizedReferenceArgument(c: inout Comp, state: inout MidBuildState, bas
     return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=4U64 local=local projections=<MidRange start=start len=state.callArgumentProjections.count() - start /> capability=2U64 typeTerm=typeTerm /> />
 }
 
+// Prepare values where the source place is evaluated. The range is local to
+// this occurrence, so reused source expressions/defaults do not share values.
+fn midPrepareAccessValue(c: inout Comp, state: inout MidBuildState, exprId: U64) -> MidBuildError {
+    val term = c.semanticExprTerm(exprId: exprId)
+    val value = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: false)
+    match value.error { MidBuildError.None => {} _ => { return value.error } }
+    mut val valueTerm = term
+    mut val recipe = 0U64
+    match value.operand {
+        MidOperand.Copy(place: val place) => { valueTerm = place.typeTerm
+            recipe = place.typeRecipe }
+        MidOperand.Move(place: val place) => { valueTerm = place.typeTerm
+            recipe = place.typeRecipe }
+        _ => {}
+    }
+    val ownsUnique = midTermIsUnique(c: inout c, term: valueTerm)
+    val local = addMidTemporary(state: inout state, typeTerm: valueTerm, isUnique: ownsUnique, typeRecipe: recipe, preparedExpr: exprId + 1U64)
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=<MidPlace local=local typeTerm=valueTerm typeRecipe=recipe /> value=<MidRvalue.Use operand=value.operand /> />)
+    return <MidBuildError.None />
+}
+
+fn midPrepareAccessPlace(c: inout Comp, state: inout MidBuildState, exprId: U64) -> MidBuildError {
+    if exprId >= c.arena.exprs.count() { return <MidBuildError.InvalidStatement /> }
+    val candidate = c.decls.accessCandidateForExpr(exprId: exprId)
+    val source = if candidate < c.decls.accessCandidateCount() { give c.decls.accessCandidateAt(index: candidate).placeExpr } else { give exprId }
+    match c.arena.exprs[source] {
+        Expr.Index(base: val base, index: val key) => {
+            val error = midPrepareAccessPlace(c: inout c, state: inout state, exprId: base)
+            match error { MidBuildError.None => {} _ => { return error } }
+            return midPrepareAccessValue(c: inout c, state: inout state, exprId: key)
+        }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => { return midPrepareAccessPlace(c: inout c, state: inout state, exprId: base) }
+        Expr.Arrow(base: val base, nameStart: _, nameLen: _) => { return midPrepareAccessValue(c: inout c, state: inout state, exprId: base) }
+        Expr.Deref(base: val base) => { return midPrepareAccessValue(c: inout c, state: inout state, exprId: base) }
+        Expr.Ident(start: _, len: _) => { return <MidBuildError.None /> }
+        _ => { return midPrepareAccessValue(c: inout c, state: inout state, exprId: source) }
+    }
+}
+
+fn midPrepareAccess(c: inout Comp, state: inout MidBuildState, candidate: U64) -> MidOperandBuild {
+    val start = state.locals.count()
+    val error = midPrepareAccessPlace(c: inout c, state: inout state, exprId: c.decls.accessCandidateAt(index: candidate).placeExpr)
+    return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=<MidRange start=start len=state.locals.count() - start /> /> error=error />
+}
+
 fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidNormalizedCallArgumentBuild {
     // Field projections of an Index result carry the same frozen access
     // recipe as the Index itself, even when their source is a Term.
     val candidate = c.accessCandidateIndex(readExpr: c.callArgumentExprId(source: argument.source))
-    if candidate < c.decls.accessCandidateCount() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
+    if candidate < c.decls.accessCandidateCount() {
+        val prepared = midPrepareAccess(c: inout c, state: inout state, candidate: candidate)
+        return <MidNormalizedCallArgumentBuild argument=midNormalizeCallArgument(state: inout state, operand: prepared.operand) error=prepared.error />
+    }
     match argument.source {
         CallArgumentSource.Term(exprId: val exprId, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
         CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term) }
         CallArgumentSource.Legacy(exprId: val exprId, info: _) => { return midNormalizedInoutPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId)) }
         CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => {
             val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
-            if candidate < c.decls.accessCandidateCount() { return <MidNormalizedCallArgumentBuild argument=<MidCallArgument tag=8U64 accessCandidate=candidate /> /> }
+            if candidate < c.decls.accessCandidateCount() {
+                val prepared = midPrepareAccess(c: inout c, state: inout state, candidate: candidate)
+                return <MidNormalizedCallArgumentBuild argument=midNormalizeCallArgument(state: inout state, operand: prepared.operand) error=prepared.error />
+            }
             return <MidNormalizedCallArgumentBuild error=<MidBuildError.UnsupportedCallTemplate /> />
         }
     }
@@ -782,7 +833,7 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
     }
     val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
     if candidate < c.decls.accessCandidateCount() {
-        return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
+        return midPrepareAccess(c: inout c, state: inout state, candidate: candidate)
     }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
@@ -1254,7 +1305,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         return materializeMidIndexValue(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
     }
     if candidate < c.decls.accessCandidateCount() {
-        if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
+        if allowAccessMarker { return midPrepareAccess(c: inout c, state: inout state, candidate: candidate) }
         val readExpr: U64 = c.decls.accessCandidateAt(index: candidate).readExpr
         val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr)
         return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
@@ -1408,8 +1459,8 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val place: MidPlace = match baseValue.operand {
                 MidOperand.Copy(place: val source) => { give source }
                 MidOperand.Move(place: val source) => { give source }
-                MidOperand.Access(candidate: val candidate) => {
-                    if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
+                MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
+                    if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs /> /> }
                     return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> />
                 }
                 _ => { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> /> }
@@ -1604,7 +1655,7 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             // correctly never published.
             val candidate: U64 = c.decls.accessCandidateForExpr(exprId: exprId)
             if argument.isInout && candidate < c.decls.accessCandidateCount() {
-                built = <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
+                built = midPrepareAccess(c: inout c, state: inout state, candidate: candidate)
             } else {
                 built = materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: siteKey)
             }
@@ -1620,10 +1671,10 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             MidOperand.Copy(place: val place) => {
                 return <MidOperandBuild operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> />
             }
-            MidOperand.Access(candidate: val candidate) => {
+            MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
                 // The instance-specific access elaborator supplies the
                 // materialized temporary and its Inout borrow.
-                return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
+                return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs /> />
             }
             _ => {
                 return <MidOperandBuild operand=built.operand error=<MidBuildError.UnsupportedCallTemplate /> />
@@ -1729,7 +1780,8 @@ fn midPriorCallReceiver(c: inout Comp, state: inout MidBuildState, priorExpr: U6
     if directInout {
         val candidate: U64 = c.decls.accessCandidateForExpr(exprId: priorExpr)
         if candidate < c.decls.accessCandidateCount() {
-            return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
+            val prepared = midPrepareAccess(c: inout c, state: inout state, candidate: candidate)
+            return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=prepared.operand /> error=prepared.error />
         }
     }
     val built: MidOperandBuild = materializeMidCallValue(c: inout c, state: inout state, exprId: priorExpr, siteKey: priorSite)
@@ -1810,10 +1862,10 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
                 val receiver: MidCallReceiver = <MidCallReceiver.Value operand=borrowed />
                 return <MidReceiverBuild receiver=receiver />
             }
-            MidOperand.Access(candidate: val candidate) => {
+            MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
                 // Access elaboration replaces this marker with the mutable
                 // temporary borrowed by the selected inout receiver.
-                return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
+                return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate inputs=inputs /> /> />
             }
             _ => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
         }
@@ -1847,7 +1899,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     mut val hasInoutArgument: Bool = false
     mut val delayedAccess = false
     match receiver.receiver {
-        MidCallReceiver.Value(operand: val operand) => { match operand { MidOperand.Access(candidate: _) => { delayedAccess = true } _ => {} } }
+        MidCallReceiver.Value(operand: val operand) => { match operand { MidOperand.Access(candidate: _, inputs: _) => { delayedAccess = true } _ => {} } }
         _ => {}
     }
     mut val captures: Array[Bool] = []

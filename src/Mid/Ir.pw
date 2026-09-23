@@ -114,6 +114,8 @@ export struct MidOperandNode {
     pub val stringLen: U64 = 0U64
     pub val typeTerm: U64 = 0U64
     pub val accessCandidate: U64 = 0U64
+    // Body-local range containing this occurrence's evaluated key/owner homes.
+    pub val preparedInputs: MidRange = <MidRange start=0U64 len=0U64 />
 }
 pub impl MidOperandNode { factory }
 
@@ -427,7 +429,7 @@ export enum MidOperand {
     // A Lower-published indexed read that has not yet been expanded into its
     // instance-specific get-modify-set CFG. It is valid only between the
     // parametric builder and access elaboration; verifier/backend reject it.
-    Access(candidate: U64)
+    Access(candidate: U64, inputs: MidRange)
 }
 
 // A call is a high-fanout ownership boundary.  Its draft arguments must not
@@ -458,6 +460,8 @@ export struct MidCallArgument {
     // Mutually exclusive with typeTerm.
     pub val typeRecipe: U64 = 0U64
     pub val accessCandidate: U64 = 0U64
+    // Body-local range containing this occurrence's evaluated key/owner homes.
+    pub val preparedInputs: MidRange = <MidRange start=0U64 len=0U64 />
 }
 pub impl MidCallArgument { factory }
 
@@ -731,6 +735,8 @@ export struct MidLocalDecl {
     // lexical scope: a value is copied/moved here before cleanup, then
     // transferred by `ReturnValue` without any source-name recovery.
     pub val isReturnPlace: Bool = false
+    // Build-only evaluation identity; consumed by Access after instantiation.
+    pub val preparedExpr: U64 = 0U64
     pub val sourceNameStart: U64 = 0U64
 }
 pub impl MidLocalDecl { factory }
@@ -814,7 +820,7 @@ fn midFreezeNormalizedCallArgument(arena: inout MidCanonicalArena, projections: 
         return arena.operands.count()
     }
     if argument.tag == 8U64 {
-        arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=argument.accessCandidate />)
+        arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=argument.accessCandidate preparedInputs=argument.preparedInputs />)
         return arena.operands.count()
     }
     return 0U64
@@ -858,8 +864,8 @@ fn midFreezeOperand(arena: inout MidCanonicalArena, operand: MidOperand) -> U64 
                 }
             }
         }
-        MidOperand.Access(candidate: val candidate) => {
-            arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=candidate />)
+        MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
+            arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=candidate preparedInputs=inputs />)
         }
     }
     return arena.operands.count()

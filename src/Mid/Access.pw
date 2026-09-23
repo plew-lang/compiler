@@ -29,6 +29,7 @@ export struct MidCanonicalAccessElaboration {
 pub impl MidCanonicalAccessElaboration { factory }
 
 struct MidCanonicalAccessSite {
+    pub val preparedInputs: MidRange = <MidRange start=0U64 len=0U64 />
     pub val candidate: U64 = 0U64
     pub val role: U64 = 0U64
     pub val parentResolution: U64 = 0U64
@@ -51,6 +52,8 @@ struct MidCanonicalAccessOperation {
 pub impl MidCanonicalAccessOperation { factory }
 
 struct MidCanonicalAccessPlan {
+    pub mut val preparedInputs: Array[U64] = []
+    pub mut val preparedLocals: Array[U64] = []
     pub mut val operations: Array[MidCanonicalAccessOperation] = []
     // Getter inputs are unique within one source call evaluation.  Their
     // stable local homes make a getter key available again to its setter
@@ -87,6 +90,17 @@ fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, roo
     if inputId == 0U64 || inputId > c.arena.semanticAccessInputs.count() { return 0U64 }
     val input: SemanticAccessInput = c.arena.semanticAccessInputs[inputId - 1U64]
     match input.tag {
+        8U64 => {
+            mut val i = 0U64
+            while i < plan.preparedInputs.count() {
+                if plan.preparedInputs[i] == inputId {
+                    c.mid.places.append(<MidPlaceNode local=plan.preparedLocals[i] typeTerm=input.typeTerm />)
+                    return c.mid.places.count()
+                }
+                i += 1U64
+            }
+            return 0U64
+        }
         1U64 => { return canonicalAccessLocalPlace(c: inout c, body: body, declarationTarget: input.declarationTarget, typeTerm: input.typeTerm) }
         5U64 => { return canonicalAccessGlobalPlace(c: inout c, declarationTarget: input.declarationTarget, typeTerm: input.typeTerm, mutable: input.globalMutable) }
         3U64 => {
@@ -171,18 +185,32 @@ fn canonicalAccessPlanHasValue(plan: MidCanonicalAccessPlan, inputId: U64) -> Bo
 // Append a value-recipe getter after its dependencies.  The bounded recursion
 // is a fail-closed malformed-fact guard; valid frozen recipes descend through
 // source child expressions and are acyclic.
-fn canonicalAccessPlanInput(c: Comp, inputId: U64, depth: U64, plan: inout MidCanonicalAccessPlan) -> MidCanonicalAccessPlan {
+fn canonicalAccessPlanInput(c: Comp, body: MidBodyNode, inputs: MidRange, inputId: U64, depth: U64, plan: inout MidCanonicalAccessPlan) -> MidCanonicalAccessPlan {
     if !plan.valid || inputId == 0U64 || inputId > c.arena.semanticAccessInputs.count() || depth > c.arena.semanticAccessInputs.count() {
         return <MidCanonicalAccessPlan operations=plan.operations materializedInputs=plan.materializedInputs valid=false />
     }
     val input: SemanticAccessInput = c.arena.semanticAccessInputs[inputId - 1U64]
     match input.tag {
+        8U64 => {
+            mut val i = 0U64
+            while i < inputs.len {
+                val local = inputs.start + i
+                if local >= body.locals.len { return <MidCanonicalAccessPlan valid=false /> }
+                if c.mid.locals[body.locals.start + local].preparedExpr == input.sourceExpr + 1U64 {
+                    plan.preparedInputs.append(inputId)
+                    plan.preparedLocals.append(local)
+                    return plan
+                }
+                i += 1U64
+            }
+            return <MidCanonicalAccessPlan valid=false />
+        }
         3U64 => {
-            return canonicalAccessPlanInput(c: c, inputId: input.base, depth: depth + 1U64, plan: inout plan)
+            return canonicalAccessPlanInput(c: c, body: body, inputs: inputs, inputId: input.base, depth: depth + 1U64, plan: inout plan)
         }
         7U64 => {
             if canonicalAccessPlanHasValue(plan: plan, inputId: inputId) { return plan }
-            val afterBase: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, inputId: input.base, depth: depth + 1U64, plan: inout plan)
+            val afterBase: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, body: body, inputs: inputs, inputId: input.base, depth: depth + 1U64, plan: inout plan)
             if !afterBase.valid { return afterBase }
             if input.base == 0U64 || input.base > c.arena.semanticAccessInputs.count() { return <MidCanonicalAccessPlan operations=plan.operations materializedInputs=plan.materializedInputs valid=false /> }
             plan.materializedInputs.append(inputId)
@@ -191,9 +219,9 @@ fn canonicalAccessPlanInput(c: Comp, inputId: U64, depth: U64, plan: inout MidCa
         }
         6U64 => {
             if canonicalAccessPlanHasValue(plan: plan, inputId: inputId) { return plan }
-            val afterBase: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, inputId: input.base, depth: depth + 1U64, plan: inout plan)
+            val afterBase: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, body: body, inputs: inputs, inputId: input.base, depth: depth + 1U64, plan: inout plan)
             if !afterBase.valid { return afterBase }
-            val afterKey: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, inputId: input.key, depth: depth + 1U64, plan: inout plan)
+            val afterKey: MidCanonicalAccessPlan = canonicalAccessPlanInput(c: c, body: body, inputs: inputs, inputId: input.key, depth: depth + 1U64, plan: inout plan)
             if !afterKey.valid { return afterKey }
             plan.materializedInputs.append(inputId)
             plan.operations.append(<MidCanonicalAccessOperation tag=1U64 inputId=inputId />)
@@ -222,9 +250,9 @@ fn canonicalAccessPlanForTerm(c: Comp, body: MidBodyNode, term: MidTerminatorNod
             val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
             if accessId == 0U64 || accessId > c.arena.semanticAccesses.count() { return <MidCanonicalAccessPlan operations=plan.operations materializedInputs=plan.materializedInputs valid=false /> }
             val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
-            plan = canonicalAccessPlanInput(c: c, inputId: access.baseInput, depth: 0U64, plan: inout plan)
+            plan = canonicalAccessPlanInput(c: c, body: body, inputs: site.preparedInputs, inputId: access.baseInput, depth: 0U64, plan: inout plan)
             if !plan.valid { return plan }
-            plan = canonicalAccessPlanInput(c: c, inputId: access.keyInput, depth: 0U64, plan: inout plan)
+            plan = canonicalAccessPlanInput(c: c, body: body, inputs: site.preparedInputs, inputId: access.keyInput, depth: 0U64, plan: inout plan)
             if !plan.valid { return plan }
             plan.operations.append(<MidCanonicalAccessOperation tag=2U64 marker=marker stage=stage accessId=accessId />)
         }
@@ -259,6 +287,7 @@ fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, or
     if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCanonicalAccessSite /> }
     val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
     if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCanonicalAccessSite /> }
+    mut val inputs: MidRange = <MidRange start=0U64 len=0U64 />
     mut val candidate: U64 = 0U64
     mut val role: U64 = 0U64
     mut val seen: U64 = 0U64
@@ -269,6 +298,7 @@ fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, or
             if operand.tag == 8U64 {
                 if seen == ordinal {
                     candidate = operand.accessCandidate
+                    inputs = operand.preparedInputs
                     role = 1U64
                 }
                 seen = seen + 1U64
@@ -284,6 +314,7 @@ fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, or
                 if operand.tag == 8U64 {
                     if seen == ordinal {
                         candidate = operand.accessCandidate
+                        inputs = operand.preparedInputs
                         role = 2U64
                     }
                     seen = seen + 1U64
@@ -295,7 +326,7 @@ fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, or
     if role == 0U64 { return <MidCanonicalAccessSite /> }
     val chainLen: U64 = canonicalAccessChainLen(c: c, bodyId: body.bodyInstance, parentResolution: target.resolution, candidate: candidate)
     if chainLen == 0U64 { return <MidCanonicalAccessSite role=role parentResolution=target.resolution /> }
-    return <MidCanonicalAccessSite candidate=candidate role=role parentResolution=target.resolution chainLen=chainLen />
+    return <MidCanonicalAccessSite candidate=candidate role=role parentResolution=target.resolution chainLen=chainLen preparedInputs=inputs />
 }
 
 fn canonicalAccessSite(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> MidCanonicalAccessSite {

@@ -2665,10 +2665,13 @@ pub impl SemanticAccess { factory }
 // 5 Global declaration address, 6 GetterValue(selected Index.index call
 // whose `base` and `key` are recipes), 7 Dereference(strong reference
 // value recipe in `base`; typeTerm is the pointee type). Dereference
-// preserves storage provenance; it does not grant write capability. `typeTerm`
+// preserves storage provenance; it does not grant write capability.
+// 8 PreparedValue names a Build-evaluated key or reference owner. `typeTerm`
 // is already final for the body instance; there is no AST/type query after
 // this freeze boundary.
 export struct SemanticAccessInput {
+    // Stable evaluation identity, resolved to an owned Mid input before Access.
+    pub val sourceExpr: U64 = 0U64
     pub val tag: U64
     pub val declarationTarget: U64 = 0U64
     pub val globalMutable: Bool = false

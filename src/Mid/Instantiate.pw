@@ -127,7 +127,7 @@ fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, envir
     // Never retag a place or an already typed value to fit the callee.
     mut val operandType = instantiateMidTerm(c: inout c, typeTerm: source.typeTerm, bodyId: bodyId, environment: environment, error: inout error)
     if source.tag == 5U64 && source.typeTerm == 0U64 && literalType != 0U64 { operandType = literalType }
-    c.mid.operands.append(<MidOperandNode tag=source.tag place=place borrowsStorage=source.borrowsStorage accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate />)
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place borrowsStorage=source.borrowsStorage accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate preparedInputs=source.preparedInputs />)
     return c.mid.operands.count()
 }
 
@@ -867,7 +867,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
                 blockI = blockI + 1U64
             }
         }
-        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart />)
+        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart preparedExpr=sourceLocal.preparedExpr />)
         localI = localI + 1U64
     }
     return <MidRange start=localStart len=localCount />

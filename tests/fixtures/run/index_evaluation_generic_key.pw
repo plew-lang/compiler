@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+fn key[T](witness: T) -> U64 { return 0U64 }
+fn increment(value: inout I64) { value += 10I64 }
+fn update[T](values: inout Array[I64], witness: T) {
+    increment(value: inout values[key(witness: witness)])
+}
+fn main() {
+    mut val numbers = [1I64]
+    update(values: inout numbers, witness: 9I64)
+    update(values: inout numbers, witness: "different instance")
+    print(numbers[0U64])
+}

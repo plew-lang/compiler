@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+fn key() -> U64 { print("key") return 0U64 }
+fn effect() -> I64 { print("effect") return 0I64 }
+fn increment(value: inout I64, extra: I64) { value += 10I64 }
+fn main() {
+    mut val items: Array[Array[I64]] = [[1I64, 2I64]]
+    increment(value: inout items[key()][key() + 1U64], extra: effect())
+    print(items[0U64][1U64])
+    val order = [1U64]
+    increment(value: inout items[0U64][order[key()]], extra: effect())
+    print(items[0U64][1U64])
+}

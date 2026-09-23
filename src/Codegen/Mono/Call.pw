@@ -4782,14 +4782,15 @@ pub impl Comp {
         return self.finalCalleeCount()
     }
 
-    // Freeze the narrow value vocabulary accepted by Mid access elaboration.
-    // This is semantic provenance, not a second expression-lowering pass:
-    // locals carry their resolver identity, fields their selected physical
-    // slot, integer literals their already-selected term, and an indexed
-    // value carries its already-selected getter plus recursively frozen
-    // receiver/key recipes.  In particular, a key may itself be an indexed
-    // value; treating only the receiver as nestable loses ordinary programs
-    // such as `rows[order[0]][0]`.
+    // Values are evaluated by Mid Build through its ordinary expression
+    // lowering. Access only connects that occurrence's saved local to the
+    // finalized key/owner type; it does not interpret value-expression syntax.
+    inout fn freezeFinalAccessValue(exprId: U64) -> U64 {
+        if exprId >= self.arena.exprs.count() { return 0U64 }
+        self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=8U64 sourceExpr=exprId typeTerm=self.semanticExprTerm(exprId: exprId) />)
+        return self.arena.semanticAccessInputs.count()
+    }
+
     inout fn freezeFinalAccessInput(bodyId: U64, parent: CallResolution, exprId: U64) -> U64 {
         if exprId >= self.arena.exprs.count() { return 0U64 }
         val term: U64 = self.semanticExprTerm(exprId: exprId)
@@ -4807,7 +4808,7 @@ pub impl Comp {
                 match self.arena.exprs[candidate.placeExpr] {
                     Expr.Index(base: val baseExpr, index: val keyExpr) => {
                         val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: baseExpr)
-                        val keyInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: keyExpr)
+                        val keyInput: U64 = self.freezeFinalAccessValue(exprId: keyExpr)
                         if baseInput == 0U64 || keyInput == 0U64 { return 0U64 }
                         self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=6U64 base=baseInput key=keyInput readResolution=readResolution candidateIndex=candidateI typeTerm=term />)
                         return self.arena.semanticAccessInputs.count()
@@ -4843,7 +4844,7 @@ pub impl Comp {
             Expr.Deref(base: val base) => {
                 val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
                 if referenceTerm == 0U64 || !self.isStrongRefInst(ref: referenceTerm) { return 0U64 }
-                val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)
+                val baseInput: U64 = self.freezeFinalAccessValue(exprId: base)
                 if baseInput == 0U64 { return 0U64 }
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=term />)
             }
@@ -4853,7 +4854,7 @@ pub impl Comp {
                 if !semantic.hasFieldProjection { return 0U64 }
                 val referenceTerm: U64 = self.semanticExprTerm(exprId: base)
                 if referenceTerm == 0U64 || !self.isStrongRefInst(ref: referenceTerm) { return 0U64 }
-                val baseInput: U64 = self.freezeFinalAccessInput(bodyId: bodyId, parent: parent, exprId: base)
+                val baseInput: U64 = self.freezeFinalAccessValue(exprId: base)
                 if baseInput == 0U64 { return 0U64 }
                 self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=7U64 base=baseInput typeTerm=self.arena.typeAt(index: referenceTerm).args[0U64] />)
                 val dereference: U64 = self.arena.semanticAccessInputs.count()
@@ -4942,7 +4943,7 @@ pub impl Comp {
                                     } else {
                                         baseInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: baseExpr)
                                     }
-                                    keyInput = self.freezeFinalAccessInput(bodyId: parent.bodyId, parent: parent, exprId: keyExpr)
+                                    keyInput = self.freezeFinalAccessValue(exprId: keyExpr)
                                     accessInput = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
                                 }
                                 if use.write && (baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64) {

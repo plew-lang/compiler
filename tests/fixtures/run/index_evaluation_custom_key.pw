@@ -1,0 +1,35 @@
+import @Std/Io with { print }
+import @Std/Core with { Index, IndexSet }
+struct Key { pub val name: String }
+pub impl Key { factory }
+struct Grid { pub mut val first: I64 pub mut val second: I64 }
+pub impl Grid { factory }
+pub impl Grid as Index[Key] {
+    type Output = I64
+    fn index(key: Key) -> I64 {
+        print(key.name)
+        if key.name == "first" { return self.first }
+        return self.second
+    }
+}
+pub impl Grid as IndexSet[Key] {
+    type Value = I64
+    inout fn indexSet(key: Key, value~: I64) {
+        print(key.name)
+        if key.name == "first" { self.first = value } else { self.second = value }
+    }
+}
+fn key() -> Key { print("key") return <Key name="first" /> }
+fn adjust(value: inout I64, selected: inout Key) {
+    value += 10I64
+    selected = <Key name="second" />
+}
+fn main() {
+    mut val grid = <Grid first=1I64 second=2I64 />
+    mut val selected = key()
+    adjust(value: inout grid[selected], selected: inout selected)
+    print(grid.first)
+    print(grid.second)
+    adjust(value: inout grid[key()], selected: inout selected)
+    print(grid.first)
+}
