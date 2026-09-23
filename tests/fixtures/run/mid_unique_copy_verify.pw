@@ -1,0 +1,33 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp }
+import /Ir with { StructDef, TypeRef }
+import /Mid with { MidBody, MidBlock, MidTerminator, MidOperand, MidPlace, MidLocalDecl, MidVerifyError, verifyExecutableCanonicalMidBody }
+
+fn check(noncopyable: Bool, transfer: Bool) {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Resource")
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=noncopyable isExtern=false defOffset=100U64 />)
+    val type = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    compiler.enqueueFinalDestruction(typeRef: type)
+    val contract = compiler.finalDestructionIndex(typeRef: type)
+    assert(compiler.arena.finalDestructions[contract - 1U64].isUnique == noncopyable)
+    // Even a trivial noncopyable type without deinit cannot be copied.
+    assert(!compiler.finalNeedsRelease(typeRef: type))
+    val place = <MidPlace local=0U64 typeTerm=type />
+    val value = if transfer { give <MidOperand.Move place=place /> } else { give <MidOperand.Copy place=place /> }
+    // Deliberately stale local metadata must not authorize a noncopyable Copy.
+    val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=type sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=transfer />] blocks=[<MidBlock terminator=<MidTerminator.ReturnValue value=value /> />] />)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => { assert(!noncopyable || transfer) }
+        MidVerifyError.UniqueCopy => { assert(noncopyable && !transfer) }
+        _ => { assert(false) }
+    }
+}
+fn main() {
+    check(noncopyable: false, transfer: false)
+    check(noncopyable: true, transfer: false)
+    check(noncopyable: true, transfer: true)
+    print("ok")
+}

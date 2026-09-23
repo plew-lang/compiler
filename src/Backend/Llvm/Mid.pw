@@ -97,6 +97,7 @@ pub impl LlvmCtx {
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
             MidVerifyError.MissingOwnershipContract => { return 12U64 }
+            MidVerifyError.UniqueCopy => { return 18U64 }
             MidVerifyError.OutstandingOwnership => { return 13U64 }
             MidVerifyError.LiveInitialization => { return 14U64 }
             MidVerifyError.InvalidDropFlag => { return 5U64 }
@@ -391,7 +392,8 @@ pub impl LlvmCtx {
             4U64 => { eprint(text: "drop-unavailable") } 5U64 => { eprint(text: "invalid-drop-flag") }
             6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
             8U64 => { eprint(text: "return-boundary") }
-            15U64 => { eprint(text: "type-mismatch") } _ => { eprint(text: "unknown") }
+            15U64 => { eprint(text: "type-mismatch") }
+            18U64 => { eprint(text: "unique-copy") } _ => { eprint(text: "unknown") }
         }
     }
 

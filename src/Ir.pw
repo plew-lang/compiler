@@ -3117,6 +3117,8 @@ export struct FinalDestructorCall {
 pub impl FinalDestructorCall { factory }
 
 export struct FinalDestruction {
+    // Nominal copyability is independent of whether releasing does any work.
+    pub val isUnique: Bool = false
     pub val needsRelease: Bool = false
     pub val typeRef: U64
     pub val ownershipClass: ArcClass = <ArcClass.Scalar />

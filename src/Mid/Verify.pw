@@ -18,6 +18,7 @@ export enum MidVerifyError {
     MoveUnavailable
     DropUnavailable
     MissingOwnershipContract
+    UniqueCopy
     OutstandingOwnership
     LiveInitialization
     InvalidDropFlag
@@ -162,8 +163,9 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
     if executable && operand.tag == 1U64 {
         if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         val source = c.mid.places[operand.place - 1U64]
-        if !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: source.typeTerm) {
-            return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block local=source.local />
+        match canonicalMidCopyContractError(c: inout c, typeTerm: source.typeTerm) {
+            MidVerifyError.None => {}
+            val error => { return <MidVerification error=error block=block local=source.local /> }
         }
     }
     if operand.place != 0U64 && operand.place <= c.mid.places.count() {
@@ -509,6 +511,19 @@ export fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonica
 
 export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
     return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: false)
+}
+
+// Copy requires a copyable semantic value, not merely available retain/drop
+// glue. Consume the frozen type contract; a local's cached ownership flag is
+// not evidence that duplicating a nominal unique value is legal.
+fn canonicalMidCopyContractError(c: inout Comp, typeTerm: U64) -> MidVerifyError {
+    if typeTerm == 0U64 { return <MidVerifyError.None /> }
+    val contract = c.finalDestructionIndex(typeRef: typeTerm)
+    if contract == 0U64 || !c.arena.finalDestructions[contract - 1U64].ready { return <MidVerifyError.MissingOwnershipContract /> }
+    if c.arena.finalDestructions[contract - 1U64].isUnique { return <MidVerifyError.UniqueCopy /> }
+    val call = c.arena.finalDestructions[contract - 1U64].deinitCall
+    if call.bodyId != 0U64 && !call.ready { return <MidVerifyError.MissingOwnershipContract /> }
+    return <MidVerifyError.None />
 }
 
 fn canonicalMidOwnershipContractIsReady(c: inout Comp, typeTerm: U64) -> Bool {
