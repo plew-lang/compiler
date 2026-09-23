@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+unique struct Resource[T] {
+    pub val value: T
+}
+pub impl[T] Resource[T] { factory }
+fn main() {
+    val item: Resource[I64] = <Resource value=7I64 />
+    print("body")
+}

@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+unique struct Resource {
+    pub val value: I64
+    deinit { print("drop") }
+}
+pub impl Resource { factory }
+fn main() {
+    val item: Resource = <Resource value=7I64 />
+    print("body")
+}
