@@ -708,10 +708,10 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-    if executable && !canonicalMidAccessScopesValid(arena: c.mid, body: body) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val incoming: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
     val reachable = canonicalMidReachable(c: c, body: body)
 
+    mut val hasAccessScopes = false
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         if !reachable[blockI] {
@@ -722,7 +722,9 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                     if !canonicalMidStatementTypesMatch(c: inout c, body: body, statement: c.mid.statements[dead.statements.start + statement]) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
                     statement += 1U64
                 }
-                if !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: c.mid.terminators[dead.terminator - 1U64]) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
+                val term = c.mid.terminators[dead.terminator - 1U64]
+                if term.accessScope != 0U64 || term.accessScopeRole != 0U64 { hasAccessScopes = true }
+                if !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: term) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
             }
             blockI += 1U64
             continue
@@ -876,6 +878,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
         }
         if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+        if term.accessScope != 0U64 || term.accessScopeRole != 0U64 { hasAccessScopes = true }
         if executable && !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: term) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
         if term.tag == 2U64 && !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 3U64 {
@@ -943,5 +946,8 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
         }
         blockI = blockI + 1U64
     }
+    // Discover metadata in the mandatory walk, including dead blocks. Never
+    // trust an authored absence flag to bypass capability verification.
+    if executable && hasAccessScopes && !canonicalMidAccessScopesValid(arena: c.mid, body: body) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     return verifyCanonicalMidFlagOwnership(c: c, body: body)
 }

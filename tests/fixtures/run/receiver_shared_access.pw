@@ -31,6 +31,11 @@ struct Holder {
     pub mut val values: Array[Counter]
 }
 pub impl Holder { factory }
+struct Layer { pub mut val first: Counter
+    pub mut val second: Counter }
+pub impl Layer { factory }
+struct Shell { pub mut val layer: Layer }
+pub impl Shell { factory }
 mut val current = <MutableRef value=<Cell value=30I64 /> />
 fn replace() -> I64 {
     current = <MutableRef value=<Cell value=40I64 /> />
@@ -54,5 +59,9 @@ fn main() {
     assert(alias->values[0].value == 25I64)
     assert(current->read(extra: replace()) == 30I64)
     assert(current->value == 40I64)
+    val shell = <MutableRef value=<Shell layer=<Layer first=<Counter value=7I64 /> second=<Counter value=8I64 /> /> /> />
+    val peer = shell
+    assert(shell->layer.first.inspect(other: inout peer->layer.second.value) == 7I64)
+    assert(peer->layer.second.value == 18I64)
     print("ok")
 }
