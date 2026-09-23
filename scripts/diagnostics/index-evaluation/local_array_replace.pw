@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+struct Item { pub val values: Array[I64] }
+pub impl Item {
+    factory
+    fn inspect(extra: I64) -> I64 { return self.values[0] }
+}
+fn replace(items: inout Array[Item]) -> I64 { items = [] return 0I64 }
+fn main() { mut val items = [<Item values=[7I64] />] print(items[0U64].inspect(extra: replace(items: inout items))) print(items.count()) }

@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory inout fn bump(extra: I64) { self.value += 10I64 } }
+fn change(key: inout U64) -> I64 { key = 1U64 return 0I64 }
+fn main() { mut val key = 0U64 mut val items = [<Counter value=1I64 />, <Counter value=2I64 />]
+ items[key].bump(extra: change(key: inout key)) print(items[0U64].value) print(items[1U64].value)
+}

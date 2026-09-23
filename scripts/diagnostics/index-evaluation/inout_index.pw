@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+struct Item { pub val values: Array[I64] }
+pub impl Item {
+    factory
+    fn inspect(extra: I64) -> I64 { return self.values[0] }
+}
+fn change(key: inout U64) -> I64 { key = 1U64 return 0I64 }
+fn increment(value: inout I64, extra: I64) { value += 10I64 }
+fn main() { mut val key = 0U64 mut val items = [1I64, 2I64]
+ increment(value: inout items[key], extra: change(key: inout key))
+ print(items[0U64]) print(items[1U64]) print(key)
+}

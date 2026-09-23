@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+fn increment(value: inout I64, extra: I64) { value += 10I64 }
+fn main() { mut val key = 0U64 mut val items = [1I64, 2I64]
+ val selected = key key = 1U64 increment(value: inout items[selected], extra: 0I64)
+ print(items[0U64]) print(items[1U64]) print(key)
+}

@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+fn adjust(value: inout I64, key: inout U64) {
+    value += 10I64
+    key = 1U64
+}
+fn main() {
+    mut val key = 0U64
+    mut val items = [1I64, 2I64]
+    adjust(value: inout items[key], key: inout key)
+    print(items[0U64])
+    print(items[1U64])
+}

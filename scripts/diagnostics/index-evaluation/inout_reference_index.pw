@@ -1,0 +1,8 @@
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+struct Holder { pub mut val items: Array[I64] pub mut val value: I64 }
+pub impl Holder { factory }
+mut val current = <MutableRef value=<Holder items=[1I64] value=1I64 /> />
+fn replace() -> I64 { current = <MutableRef value=<Holder items=[2I64] value=2I64 /> /> return 0I64 }
+fn increment(value: inout I64, extra: I64) { value += 10I64 }
+fn main() { val original = current increment(value: inout current->items[0U64], extra: replace()) print(original->items[0U64]) print(current->items[0U64]) }
