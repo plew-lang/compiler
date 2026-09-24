@@ -48,7 +48,7 @@ def main():
             run([Path(query('--bindir')) / 'clang++', '-std=c++17', '-O2',
                  '-isystem', query('--includedir'), ROOT / 'native/llvm_backend.cpp',
                  ROOT / 'native/llvm_object_main.cpp', '-L' + str(library), '-lLLVM', '-o', worker])
-        runtime = directory / 'runtime.c' 
+        runtime = directory / 'runtime.c'
         runtime.write_bytes(run([compiler, '--runtime']).stdout)
         runtime_object = directory / 'runtime.o'
         run(['/usr/bin/clang', '-O2', '-c', runtime, '-o', runtime_object])
