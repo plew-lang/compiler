@@ -16,7 +16,8 @@ def main():
     parser.add_argument('--runtime-object', type=Path, required=True)
     args = parser.parse_args()
     worker = args.worker.resolve()
-    compiler = args.compiler.resolve()
+    # Preserve a multicall entry name such as the plewc compatibility symlink.
+    compiler = args.compiler.absolute()
     runtime = args.runtime_object.resolve()
     wrapper = [sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--']
 

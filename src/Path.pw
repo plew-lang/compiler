@@ -5,7 +5,7 @@
 // `../Name`) into a file path; the rest are byte/path helpers it builds on.
 
 import @Std/Io with { fileExists }
-import ./SourceAccess with { SourceAccess }
+import ./SourceAccess with { SourceAccess, isEmbeddedSourcePath }
 import @Plew/Syntax with { rangeEquals }
 import ./Ir with { Bind, appendBytes }
 export ./Ir with { Bind }
@@ -135,7 +135,11 @@ export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[
         }
     }
     val dirLen: U64 = stripParents(path: importer, baseLen: baseLen, n: parents)
-    appendBytes(into: inout out, from: extractSpan(buf: importer, start: 0, len: dirLen))
+    val directory = extractSpan(buf: importer, start: 0, len: dirLen)
+    if isEmbeddedSourcePath(path: importer) && !isEmbeddedSourcePath(path: directory) {
+        return []
+    }
+    appendBytes(into: inout out, from: directory)
     appendBytes(into: inout out, from: extractSpan(buf: src, start: rest, len: end - rest))
     return finishModulePath(base: out, sources: sources)
 }
@@ -182,6 +186,9 @@ export fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
 // absolute imports (→ `<pkgDir>src/`) and for parsing `<pkgDir>Plew.toml` to
 // resolve `@dep` imports.
 export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
+    // Logical resources do not participate in filesystem ancestor discovery.
+    // In particular, the consumer's cwd manifest cannot govern embedded Std.
+    if isEmbeddedSourcePath(path: entry) { return [] }
     mut val dirLen: U64 = dirPrefixLen(path: entry)
     mut val go: Bool = true
     while go {

@@ -3,6 +3,17 @@
 // or neighboring checkout is needed to resolve imports and parts in that space.
 import @Std/Io with { readFileBytes, fileExists }
 
+export fn isEmbeddedSourcePath(path: Array[U8]) -> Bool {
+    val prefix = "plew:std/".bytes()
+    if path.count() < prefix.count() { return false }
+    mut val index: U64 = 0U64
+    while index < prefix.count() {
+        if path[index] != prefix[index] { return false }
+        index += 1U64
+    }
+    return true
+}
+
 export struct SourceResource {
     pub val path: Array[U8]
     pub val text: String
@@ -15,17 +26,6 @@ export struct SourceAccess {
 }
 pub impl SourceAccess {
     factory
-
-    fn isResource(path: Array[U8]) -> Bool {
-        val prefix = "plew:std/".bytes()
-        if path.count() < prefix.count() { return false }
-        mut val index: U64 = 0U64
-        while index < prefix.count() {
-            if path[index] != prefix[index] { return false }
-            index += 1U64
-        }
-        return true
-    }
 
     fn resourceIndex(path: Array[U8]) -> U64 {
         mut val index: U64 = 0U64
@@ -45,14 +45,14 @@ pub impl SourceAccess {
     }
 
     fn exists(path: Array[U8]) -> Bool {
-        if self.isResource(path: path) {
+        if isEmbeddedSourcePath(path: path) {
             return self.resourceIndex(path: path) < self.resources.count()
         }
         return fileExists(path: path)
     }
 
     fn read(path: Array[U8]) -> String {
-        if self.isResource(path: path) {
+        if isEmbeddedSourcePath(path: path) {
             val index = self.resourceIndex(path: path)
             if index < self.resources.count() { return self.resources[index].text }
             return ""
