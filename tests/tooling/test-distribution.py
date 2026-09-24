@@ -5,6 +5,7 @@ This is a local isolation test, not proof of compatibility with another machine.
 The distribution build separately rejects non-OS dynamic library dependencies.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--build-record', type=Path, help='default: build.json beside the original binary')
     args = parser.parse_args()
+    record = json.loads((args.build_record or args.binary.parent / 'build.json').read_text())
+    assert record['status'] == 'success'
+    assert hashlib.sha256(args.binary.read_bytes()).hexdigest() == record['binary_sha256']
+    expected_notices = []
+    assert record['licenses'], 'distribution must include LLVM license text'
+    for name, expected_hash in record['licenses'].items():
+        path = Path(name)
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash
+        expected_notices.append('=== ' + path.name + ' ===\n' + path.read_text())
     evidence = args.evidence.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
     environment = {**os.environ, 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'}
@@ -47,7 +58,7 @@ def main():
         version = run('version', [binary, '--version'], extra_env={'PATH': ''})
         assert version.startswith(b'plew dev-') and b'LLVM 20.1.1' in version
         notices = run('licenses', [binary, '--licenses'], extra_env={'PATH': ''})
-        assert b'Apache License' in notices and b'Zstandard' in notices
+        assert notices == ('\n\n'.join(expected_notices) + '\n').encode()
         run('help', [binary, '--help'])
         run('missing-command', [binary], expected=1)
         run('missing-source', [binary, 'build', 'Missing.pw'], expected=1)
