@@ -7,6 +7,7 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 
@@ -18,9 +19,10 @@ import clang_environment
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'plewc')))
-    parser.add_argument('--worker', type=Path, required=True)
+    parser.add_argument('--worker', type=Path)
+    parser.add_argument('--llvm-config', default=os.environ.get('LLVM_CONFIG', 'llvm-config'))
     args = parser.parse_args()
-    compiler, worker = args.compiler.absolute(), args.worker.absolute()
+    compiler = args.compiler.absolute()
     clang_environment.apply()
     wrapper = [sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--']
 
@@ -31,7 +33,21 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix='plew direct object ') as temporary:
         directory = Path(temporary)
-        runtime = directory / 'runtime.c'
+        worker = args.worker.absolute() if args.worker else directory / 'llvm-object'
+        if not args.worker:
+            config = shutil.which(args.llvm_config)
+            if not config and args.llvm_config == 'llvm-config':
+                config = '/opt/homebrew/opt/llvm/bin/llvm-config'
+            def query(option):
+                return subprocess.check_output([config, option], text=True).strip()
+            prefix = Path(config).parent.parent
+            library = prefix / 'lib'
+            if not (library / 'libLLVM.dylib').is_file():
+                library = Path(query('--libdir'))
+            run([Path(query('--bindir')) / 'clang++', '-std=c++17', '-O2',
+                 '-isystem', query('--includedir'), ROOT / 'native/llvm_backend.cpp',
+                 ROOT / 'native/llvm_object_main.cpp', '-L' + str(library), '-lLLVM', '-o', worker])
+        runtime = directory / 'runtime.c' 
         runtime.write_bytes(run([compiler, '--runtime']).stdout)
         runtime_object = directory / 'runtime.o'
         run(['/usr/bin/clang', '-O2', '-c', runtime, '-o', runtime_object])

@@ -165,6 +165,12 @@ else
     fail=$((fail + 1)); failed="$failed standalone-build"
 fi
 
+if python3 -B ./tests/tooling/test-direct-object.py --compiler "$PLEWC" --llvm-config "$LC"; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed direct-object"
+fi
+
 if sh ./tests/tooling/test-cli-options.sh; then
     :
 else

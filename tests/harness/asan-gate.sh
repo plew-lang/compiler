@@ -94,6 +94,9 @@ python3 ./scripts/support/watch-command.py -- "$LLVM/bin/clang++" -std=c++17 -O1
 python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.bc" "$RT" "$LIB" "$TMP/llvm-backend.o" -lc++ -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
+# Exercise ownership of the LLVM module and context through native output too.
+python3 -B ./tests/tooling/test-direct-object.py --compiler ./plewc_asan --llvm-config "$LC"
+
 # Prepare the raw compiler alongside A/B; join before C reuses all CPU slots.
 export PLEW_TEST_JOBS="$JOBS"
 if ! python3 -B ./tests/sanitizer/asan-schedule.py; then
