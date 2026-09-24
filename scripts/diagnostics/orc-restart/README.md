@@ -178,6 +178,6 @@ the ASan IR pass before materialization; the verifier still runs. The JIT's
 init/deinit hooks register and unregister sanitizer globals before code removal.
 ASAN_OPTIONS enables leak detection. Instrumented JIT controls must detect both
 a use-after-free and a deliberate leak (expected exit 1). The normal 101-generation
-lifecycle and 21 replacements plus readiness-failure/recovery must exit cleanly
+lifecycle and 21 loads plus readiness-failure/recovery must exit cleanly
 with the expected outputs. LLVM itself is a prebuilt unsanitized dependency.
 These are targeted diagnostics, not the compiler repository's whole ASan suite.
