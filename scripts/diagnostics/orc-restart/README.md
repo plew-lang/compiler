@@ -73,3 +73,36 @@ exit are included. JIT and application restart are excluded. The first sample
 is reported separately; subsequent samples are warm-filesystem but fresh-process
 measurements. Identical output hashes are checked. This is neither a pure
 frontend timing nor a prediction of a persistent incremental compiler's speed.
+
+Managed execution-region lifecycle probe:
+
+```sh
+/usr/bin/python3 -B scripts/diagnostics/orc-restart/region-check.py --runs 101 --out tmp/orc-restart/region
+```
+
+`Region.pw` owns a mutable global counter, global Array, captured Array closure,
+and suspended async frame/timer. Normal AOT must print the continuation; the
+region host must print only the initial values on every generation. An empty
+process argument exercises the runtime's immortal empty-string cache.
+
+This diagnostic wraps allocation calls in the generated C runtime with a
+single-threaded allocation ledger. At a quiescent host boundary it disables
+further dispatch, clears the known runtime roots, frees remaining region
+allocations without running application cleanup, and removes the generation's
+JITDylib. The standard allocator/ARC behavior during execution is retained;
+region disposal is a separate development-environment termination operation.
+The normal event-loop drain is exposed as `probe_drain`, while generated main's
+automatic drain is held by the host. The empty-string cache is epoch-invalidated
+using an exact, checked source adaptation. Dictionary random seed stays host-lived.
+
+macOS can retain a dylib after `dlclose` (observed here with this runtime), so
+explicit runtime state reset is required. Unloading is not used as proof of reset.
+The counter and app globals belong to the newly generated application module.
+The ledger deliberately rejects unknown/double frees; its linear searches are
+for lifecycle diagnosis, not the chosen production allocator design.
+
+This tests one active environment with no live native stack and no external
+callbacks/resources. It does not implement general FFI teardown, isolated
+concurrent generations, update rollback, source-to-restart timing, or a final
+runtime ABI. No sanitizer claim is made. The normal compiler/runtime/seed are
+unchanged; adaptations are confined to this diagnostic build.

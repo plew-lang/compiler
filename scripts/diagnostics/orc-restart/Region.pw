@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+import @Std/Process with { argAt }
+
+mut val counter: I64 = 0I64
+val initial: Array[I64] = [3I64, 5I64]
+
+fn captured(values: Array[I64]) -> fn() -> I64 {
+    return fn() -> I64 { return values[0] + values[1] }
+}
+
+async fn main() {
+    print(argAt(999I64))
+    counter += 1I64
+    val values: Array[I64] = [counter, initial[1]]
+    val callback = captured(values: values)
+    print(counter)
+    print(callback())
+    await sleep(ms: 1000000I64)
+    print(999I64)
+    print(callback())
+}
