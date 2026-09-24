@@ -9,6 +9,11 @@ fn captured(values: Array[I64]) -> fn() -> I64 {
     return fn() -> I64 { return values[0] + values[1] }
 }
 
+fn event(input: I64) -> I64 {
+    counter += 1I64
+    return counter + input + 7000000I64
+}
+
 async fn main() {
     print(argAt(999I64))
     counter += 1I64
@@ -16,6 +21,7 @@ async fn main() {
     val callback = captured(values: values)
     print(counter)
     print(callback())
+    print(event(input: 10I64))
     await sleep(ms: 1000000I64)
     print(999I64)
     print(callback())

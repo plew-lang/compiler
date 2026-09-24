@@ -101,8 +101,23 @@ The counter and app globals belong to the newly generated application module.
 The ledger deliberately rejects unknown/double frees; its linear searches are
 for lifecycle diagnosis, not the chosen production allocator design.
 
-This tests one active environment with no live native stack and no external
-callbacks/resources. It does not implement general FFI teardown, isolated
-concurrent generations, update rollback, source-to-restart timing, or a final
+This tests one active environment with no live native stack and a simulated
+host event transport. It does not implement general FFI teardown, isolated
+concurrent runtimes, source-to-restart timing, or a final
 runtime ABI. No sanitizer claim is made. The normal compiler/runtime/seed are
 unchanged; adaptations are confined to this diagnostic build.
+
+The lifecycle host also models an external event transport with generation IDs
+and scalar payloads only. It looks up a marked Plew event function (exported for
+this diagnostic) and verifies that current events execute, while old events are
+rejected during shutdown, after code removal, and after the next generation
+starts. No old function pointer is retained by the simulated transport. This
+covers that host boundary, not arbitrary native callback APIs or concurrent
+arrival from other threads.
+
+An intentionally unresolved candidate JITDylib is materialized while the old
+application is still suspended. Its lookup must fail, its resources are removed,
+and the old application's event handler and pending work must remain usable.
+The expected missing-symbol diagnostic is saved in the lifecycle stderr log.
+This covers link failure before publication; source rejection and initialization
+failure are separate remaining end-to-end cases.

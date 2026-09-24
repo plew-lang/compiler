@@ -43,12 +43,12 @@ def main():
         ir = out/'app.ll'; ir.write_bytes(run('app',[ROOT/'plewc',HERE/'Region.pw']))
         aot = out/'aot'
         run('aot-build', [prefix/'bin/clang','-w','-O0',ir,normal,'-o',aot])
-        if run('aot', [aot]) != b'\n1\n6\n999\n6\n': raise RuntimeError('normal AOT oracle mismatch')
+        if run('aot', [aot]) != b'\n1\n6\n7000012\n999\n6\n': raise RuntimeError('normal AOT oracle mismatch')
         flags = shlex.split(subprocess.check_output([prefix/'bin/llvm-config','--cxxflags'],text=True))
         host = out/'region'
         run('host',[prefix/'bin/clang++',*flags,'-O2',HERE/'region.cpp','-L'+str(prefix/'lib'),'-lLLVM','-o',host])
         result = run('lifecycle',[host,ir,library,args.runs])
-        if result != b'\n1\n6\n'*args.runs: raise RuntimeError('stale state or post-shutdown callback output')
+        if result != b'\n1\n6\n7000012\n'*args.runs: raise RuntimeError('stale state or post-shutdown callback output')
         if any(digest(Path(p))!=sha for p,sha in hashes.items()): raise RuntimeError('inputs changed')
         report.update(status='passed',output_sha=__import__('hashlib').sha256(result).hexdigest())
         print(f'PASS {args.runs} suspended generations reclaimed')
