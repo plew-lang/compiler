@@ -6,6 +6,43 @@ They do not publish the standalone distribution or change its resource bundle.
 
 ## Single-file candidate
 
+Build distribution libraries with explicit optimization before packaging. A
+`Release` label from an arbitrary `llvm-config` does not prove that the archive's
+machine code was optimized: a packager may convert LTO bitcode afterward with
+different code-generation flags. The pinned source recipe avoids this conversion.
+
+```sh
+python3 -B scripts/build/llvm-distribution.py \
+  --source-archive /path/to/llvm-project-20.1.1.src.tar.xz \
+  --llvm-tools-config /opt/homebrew/opt/llvm/bin/llvm-config \
+  --output "$PWD/tmp/optimized-llvm"
+```
+
+The source URL is printed by `--help`; its SHA256 is pinned in the script. CMake
+and LLVM 20.1.1 build tools are required. LLVM is built with `-O3 -DNDEBUG`, no
+LTO conversion, and an explicit macOS SDK. Static libraries and a diagnostic
+dylib share the same compiled objects. AArch64, ORC, IR verification, optimization,
+and object generation are retained. Optional non-OS compression/XML/editing/FFI
+dependencies are disabled. Nothing is installed into Homebrew or the system.
+`build.json` records inputs and commands; `build.log` contains actual CMake
+compile/link/install progress, monitored with the standard 60-second watchdog.
+Use `--jobs` to control build concurrency (default half the CPU cores to limit
+C++ build memory). The output directory must be new.
+
+Package using those libraries and matching build-machine tools:
+
+```sh
+python3 -B scripts/build/standalone.py --distribution \
+  --llvm-config "$PWD/tmp/optimized-llvm/install/bin/llvm-config" \
+  --llvm-tools-config /opt/homebrew/opt/llvm/bin/llvm-config \
+  --output "$PWD/tmp/standalone/optimized-candidate"
+```
+
+`--llvm-config` selects headers and libraries; optional `--llvm-tools-config`
+selects build-machine clang/opt of the same LLVM version. These tools are not
+runtime dependencies. Use the following only for an explicit external-toolchain
+comparison, recording its archive build conditions:
+
 From the compiler checkout:
 
 ```sh
