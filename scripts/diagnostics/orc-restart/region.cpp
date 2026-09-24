@@ -57,6 +57,7 @@ int main(int argc, char **argv) {
             }
     require(!eventName.empty(), "event function missing");
     module->getFunction(eventName)->setLinkage(GlobalValue::ExternalLinkage);
+    instrumentForSanitizer(*module);
     check(jit->addIRModule(generation, ThreadSafeModule(std::move(module), context)));
     check(jit->initialize(generation));
     auto entry = take(jit->lookup(generation, "main")).toPtr<int (*)(int, char **)>();

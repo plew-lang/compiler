@@ -71,6 +71,7 @@ int main(int argc, char **argv) {
             }
     require(!eventName.empty(), "event marker absent");
     module->getFunction(eventName)->setLinkage(GlobalValue::ExternalLinkage);
+    instrumentForSanitizer(*module);
     auto created = jit->createJITDylib("candidate_" + std::to_string(++serial));
     if (!created) check(created.takeError());
     auto &candidate = *created;

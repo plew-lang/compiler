@@ -164,3 +164,20 @@ flat form completed. The harness records the generated module texts and case
 kind per revision. Full source compilation covers these dependency changes;
 these results do not establish a correct incremental invalidation algorithm.
 Commands emit phase progress and checkpoint the report before child execution.
+
+Sanitizer diagnostics (separate from latency):
+
+```sh
+/usr/bin/python3 -B scripts/diagnostics/orc-restart/sanitizer-check.py --out tmp/orc-restart/asan
+```
+
+The host and C runtime are built with LLVM22 clang ASan, while the ORC API and
+JIT instrumentation pass use the default LLVM20 library. LLVM20's sanitizer
+runtime is not used. `ORC_PROBE_ASAN` marks every defined JIT function and runs
+the ASan IR pass before materialization; the verifier still runs. The JIT's
+init/deinit hooks register and unregister sanitizer globals before code removal.
+ASAN_OPTIONS enables leak detection. Instrumented JIT controls must detect both
+a use-after-free and a deliberate leak (expected exit 1). The normal 101-generation
+lifecycle and 21 replacements plus readiness-failure/recovery must exit cleanly
+with the expected outputs. LLVM itself is a prebuilt unsanitized dependency.
+These are targeted diagnostics, not the compiler repository's whole ASan suite.

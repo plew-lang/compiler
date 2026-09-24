@@ -46,3 +46,15 @@ static void optimize(Module &module, TargetMachine &target, StringRef pipeline) 
   passes.run(module, modules);
   verify(module);
 }
+
+static void instrumentForSanitizer(Module &module) {
+#ifdef ORC_PROBE_ASAN
+  for (auto &function : module)
+    if (!function.isDeclaration()) function.addFnAttr(Attribute::SanitizeAddress);
+  auto builder = take(JITTargetMachineBuilder::detectHost());
+  auto target = take(builder.createTargetMachine());
+  optimize(module, *target, "asan");
+  require(module.getFunction("__asan_report_load8") || module.getFunction("__asan_report_load1"),
+          "ASan instrumentation missing");
+#endif
+}
