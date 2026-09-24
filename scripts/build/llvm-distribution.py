@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
+import llvm_lto
 
 VERSION = '20.1.1'
 SOURCE_SHA256 = '4d5ebbd40ce1e984a650818a4bb5ae86fc70644dec2e6d54e78b4176db3332e0'
@@ -78,14 +80,18 @@ def build(args):
     if not cmake:
         raise ValueError('cmake is unavailable')
     environment = clang_environment.apply()
+    lto = llvm_lto.settings(config, args.jobs) if args.lto == 'thin' else None
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     prefix, build_dir = output / 'install', output / 'build'
     record = output / 'build.json'
     manifest = dict(source_url=SOURCE_URL, source_sha256=SOURCE_SHA256,
-                    environment=environment, commands=[], status='building',
+                    environment=environment, commands=[], status='building', lto=lto,
                     tools={str(p): digest(p) for p in [Path(cmake), Path(config),
                            tools / 'clang', tools / 'clang++', tools / 'llvm-tblgen']})
+    if lto:
+        for name in ('library', 'archiver'):
+            manifest['tools'][lto[name]] = digest(lto[name])
     def run(command):
         manifest['commands'].append(command)
         record.write_text(json.dumps(manifest, indent=2) + '\n')
@@ -100,9 +106,14 @@ def build(args):
                        if any(m.name.startswith(top + name + '/') for name in ('llvm', 'cmake', 'third-party'))]
             source.extractall(output, members=members, filter='data')
         source_dir = output / f'llvm-project-{VERSION}.src' / 'llvm'
-        run([cmake, '-S', str(source_dir), '-B', str(build_dir),
-             *configure_options(str(tools / 'clang'), str(tools / 'clang++'),
-                                str(tools / 'llvm-tblgen'), environment['SDKROOT'], str(prefix))])
+        options = configure_options(str(tools / 'clang'), str(tools / 'clang++'),
+                                    str(tools / 'llvm-tblgen'), environment['SDKROOT'], str(prefix))
+        if lto:
+            options.remove('-DLLVM_ENABLE_LTO=OFF')
+            options.extend(['-DLLVM_ENABLE_LTO=Thin', f'-DCMAKE_LIBTOOL={lto["archiver"]}',
+                            '-DCMAKE_EXE_LINKER_FLAGS=' + shlex.join(lto['flags']),
+                            '-DCMAKE_SHARED_LINKER_FLAGS=' + shlex.join(lto['flags'])])
+        run([cmake, '-S', str(source_dir), '-B', str(build_dir), *options])
         run([cmake, '--build', str(build_dir), '--parallel', str(args.jobs),
              '--target', 'LLVM', 'llvm-config', 'opt'])
         built_config = build_dir / 'bin/llvm-config'
@@ -137,6 +148,7 @@ def main():
     parser.add_argument('--llvm-tools-config', required=True)
     parser.add_argument('--output', required=True, help='new isolated directory')
     parser.add_argument('--jobs', type=int, default=max(1, (os.cpu_count() or 1) // 2))
+    parser.add_argument('--lto', choices=('off', 'thin'), default='off')
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error('--jobs must be positive')
