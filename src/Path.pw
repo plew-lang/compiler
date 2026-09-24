@@ -5,6 +5,7 @@
 // `../Name`) into a file path; the rest are byte/path helpers it builds on.
 
 import @Std/Io with { fileExists }
+import ./SourceAccess with { SourceAccess }
 import @Plew/Syntax with { rangeEquals }
 import ./Ir with { Bind, appendBytes }
 export ./Ir with { Bind }
@@ -42,11 +43,11 @@ export fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 // neither exists, returns the `.pw` form so the loader reports the missing file. When
 // `base` already ends with `/` (the bare-`/` root import = `src/`), the directory form
 // is `<base>_.pw` (no doubled slash).
-export fn finishModulePath(base: Array[U8]) -> Array[U8] {
+export fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAccess />) -> Array[U8] {
     mut val withPw: Array[U8] = []
     appendBytes(into: inout withPw, from: base)
     appendBytes(into: inout withPw, from: ".pw".bytes())
-    if fileExists(path: withPw) {
+    if sources.exists(path: withPw) {
         return withPw
     }
     mut val under: Array[U8] = []
@@ -60,7 +61,7 @@ export fn finishModulePath(base: Array[U8]) -> Array[U8] {
     } else {
         appendBytes(into: inout under, from: "/_.pw".bytes())
     }
-    if fileExists(path: under) {
+    if sources.exists(path: under) {
         return under
     }
     return withPw
@@ -70,7 +71,7 @@ export fn finishModulePath(base: Array[U8]) -> Array[U8] {
 // (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
 // Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
 // importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
-export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64) -> Array[U8] {
+export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64, sources: SourceAccess = <SourceAccess />) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen == 0 {
         return out
@@ -99,7 +100,7 @@ export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[
         }
         appendBytes(into: inout out, from: srcRoot)
         appendBytes(into: inout out, from: extractSpan(buf: src, start: pStart + 1, len: end - (pStart + 1)))
-        return finishModulePath(base: out)
+        return finishModulePath(base: out, sources: sources)
     }
     // relative ('.')
     mut val rest: U64 = pStart
@@ -136,7 +137,7 @@ export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[
     val dirLen: U64 = stripParents(path: importer, baseLen: baseLen, n: parents)
     appendBytes(into: inout out, from: extractSpan(buf: importer, start: 0, len: dirLen))
     appendBytes(into: inout out, from: extractSpan(buf: src, start: rest, len: end - rest))
-    return finishModulePath(base: out)
+    return finishModulePath(base: out, sources: sources)
 }
 
 // Copy a byte span out of `buf` into a fresh array (paths live in a shared

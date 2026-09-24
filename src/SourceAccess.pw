@@ -1,0 +1,62 @@
+// Compiler source input boundary. Filesystem paths keep normal IO behavior;
+// embedded standard sources live in a distinct logical namespace. No extraction
+// or neighboring checkout is needed to resolve imports and parts in that space.
+import @Std/Io with { readFileBytes, fileExists }
+
+export struct SourceResource {
+    pub val path: Array[U8]
+    pub val text: String
+}
+pub impl SourceResource { factory }
+
+export struct SourceAccess {
+    pub val stdRoot: Array[U8] = []
+    pub val resources: Array[SourceResource] = []
+}
+pub impl SourceAccess {
+    factory
+
+    fn isResource(path: Array[U8]) -> Bool {
+        val prefix = "plew:std/".bytes()
+        if path.count() < prefix.count() { return false }
+        mut val index: U64 = 0U64
+        while index < prefix.count() {
+            if path[index] != prefix[index] { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    fn resourceIndex(path: Array[U8]) -> U64 {
+        mut val index: U64 = 0U64
+        while index < self.resources.count() {
+            val candidate = self.resources[index].path
+            if candidate.count() == path.count() {
+                mut val offset: U64 = 0U64
+                while offset < path.count() {
+                    if candidate[offset] != path[offset] { break }
+                    offset += 1U64
+                }
+                if offset == path.count() { return index }
+            }
+            index += 1U64
+        }
+        return self.resources.count()
+    }
+
+    fn exists(path: Array[U8]) -> Bool {
+        if self.isResource(path: path) {
+            return self.resourceIndex(path: path) < self.resources.count()
+        }
+        return fileExists(path: path)
+    }
+
+    fn read(path: Array[U8]) -> String {
+        if self.isResource(path: path) {
+            val index = self.resourceIndex(path: path)
+            if index < self.resources.count() { return self.resources[index].text }
+            return ""
+        }
+        return readFileBytes(path)
+    }
+}

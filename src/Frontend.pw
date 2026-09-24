@@ -1,3 +1,4 @@
+import ./SourceAccess with { SourceAccess }
 import @Std/Set with { Set }
 import ./TraitCycleGraph with { TraitCycleGraph }
 import ./KeywordSpans with { KeywordSpans }
@@ -1052,7 +1053,7 @@ fn recordSemanticExpressionTypes(c: inout Comp) {
 // monomorphization, and final-callable closure.  The state is intentionally not
 // returned by value: `CallResolution` is semantic analysis output consumed by LLVM,
 // so it must retain one owner across the frontend/backend boundary.
-export fn runFrontend(c: inout Comp) {
+export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false
@@ -1062,7 +1063,7 @@ export fn runFrontend(c: inout Comp) {
     mut val tracePhases: Bool = false
     mut val emitMidCoverage: Bool = false
     mut val requireMid: Bool = false
-    mut val entryArgIdx: I64 = 1
+    mut val entryArgIdx: I64 = firstArgument
     while entryArgIdx < argCount() {
         val option: String = argAt(entryArgIdx)
         mut val recognized: Bool = false
@@ -1139,7 +1140,7 @@ export fn runFrontend(c: inout Comp) {
         // Loud-fail on a missing entry file: without this readFileBytes returns an
         // empty string and the compiler silently emits an empty program (exit 0),
         // which hides a typo'd path. (Acceptance soundness: never silently accept.)
-        if !(fileExists(path: entryBytes)) {
+        if !(sources.exists(path: entryBytes)) {
             eprint(text: "plewc: error: cannot open source file: ")
             eprint(text: rootPath)
             eprint(text: "\n")
@@ -1155,7 +1156,11 @@ export fn runFrontend(c: inout Comp) {
         // not the entry's — the right foundation for transitive resolution.
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
-        val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes())
+        val stdRoot: Array[U8] = if sources.stdRoot.count() != 0U64 {
+            give sources.stdRoot
+        } else {
+            give computeStdRoot(arg0: argAt(0).bytes())
+        }
         // the global package cache root (for git `@dep` source lookup via the lock),
         // resolved once for the whole build.
         val cacheRootBytes: Array[U8] = cacheRoot()
@@ -1185,7 +1190,7 @@ export fn runFrontend(c: inout Comp) {
         mut val langPath: Array[U8] = []
         appendBytes(into: inout langPath, from: stdRoot)
         appendBytes(into: inout langPath, from: "Lang.pw".bytes())
-        if fileExists(path: langPath) {
+        if sources.exists(path: langPath) {
             val lps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: langPath)
             loaded.append(<Bind nameStart=lps nameLen=langPath.count() fieldStart=nextModuleId fieldLen=langPath.count() />)
@@ -1202,7 +1207,7 @@ export fn runFrontend(c: inout Comp) {
         mut val corePath: Array[U8] = []
         appendBytes(into: inout corePath, from: stdRoot)
         appendBytes(into: inout corePath, from: "Core.pw".bytes())
-        if fileExists(path: corePath) {
+        if sources.exists(path: corePath) {
             val cps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: corePath)
             loaded.append(<Bind nameStart=cps nameLen=corePath.count() fieldStart=nextModuleId fieldLen=corePath.count() />)
@@ -1218,7 +1223,7 @@ export fn runFrontend(c: inout Comp) {
         mut val hashPath: Array[U8] = []
         appendBytes(into: inout hashPath, from: stdRoot)
         appendBytes(into: inout hashPath, from: "Hash.pw".bytes())
-        if fileExists(path: hashPath) {
+        if sources.exists(path: hashPath) {
             val hps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: hashPath)
             loaded.append(<Bind nameStart=hps nameLen=hashPath.count() fieldStart=nextModuleId fieldLen=hashPath.count() />)
@@ -1248,7 +1253,7 @@ export fn runFrontend(c: inout Comp) {
             // this mode only; normal builds retain ordinary import-driven loading.
             // The BFS records its module id below, so this is still the same
             // declaration-identity path as a source import.
-            if fileExists(path: ioPath) {
+            if sources.exists(path: ioPath) {
                 val iops: U64 = pathBuf.count()
                 appendBytes(into: inout pathBuf, from: ioPath)
                 loaded.append(<Bind nameStart=iops nameLen=ioPath.count() fieldStart=nextModuleId fieldLen=ioPath.count() />)
@@ -1261,7 +1266,7 @@ export fn runFrontend(c: inout Comp) {
             // loaded. Its `part`s + `import @Std/Core` are followed by the BFS below; a
             // target file that also imports it dedups via pathSeen.
             if synPath.count() != 0 {
-                if fileExists(path: synPath) {
+                if sources.exists(path: synPath) {
                     if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
                         val sys: U64 = pathBuf.count()
                         appendBytes(into: inout pathBuf, from: synPath)
@@ -1372,7 +1377,7 @@ export fn runFrontend(c: inout Comp) {
                 c.modules.packageRoots.append(<Bind nameStart=moduleId nameLen=0 fieldStart=pkgRootModule fieldLen=0 />)
             }
             tracePhaseCount(c: inout c, label: "load:read", count: qi)
-            val src: String = readFileBytes(path)
+            val src: String = sources.read(path: path)
             val sb: Array[U8] = src.bytes()
             tracePhaseCount(c: inout c, label: "load:source-appended", count: qi)
             if c.arena.bytes.count() > 0 {
@@ -1410,7 +1415,7 @@ export fn runFrontend(c: inout Comp) {
                 match syntaxTopItemKind(file: c.syntax, item: item) {
                     SyntaxTopItemKind.Import => {
                         val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
-                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
+                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count(), sources: sources)
                         // a non-`@Std` `@dep` import is unresolved by @Path (returns
                         // empty); resolve it against this package's [dependencies] —
                         // path deps directly, git deps via the lock's pinned commit in
@@ -1446,7 +1451,7 @@ export fn runFrontend(c: inout Comp) {
                                 // a resolved path that names no file on disk = a typo'd
                                 // import/part path — reject loudly (acceptance soundness:
                                 // never silently load nothing).
-                                if !(fileExists(path: childPath)) {
+                                if !(sources.exists(path: childPath)) {
                                     c.errorAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file")
                                 }
                                 // a `part` (isImport=false) joins this module; an
@@ -1480,7 +1485,7 @@ export fn runFrontend(c: inout Comp) {
                         // (its declarations + own exports must exist for the forward to
                         // resolve). It always starts a fresh module (like an import). Binds
                         // nothing locally — that's lowerReExport's job (export surface only).
-                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
+                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count(), sources: sources)
                         // a re-export may forward a dependency's lib face (`export @Dep
                         // with { … }`); resolve `@dep` the same way as an import.
                         if rePath.count() == 0 {
@@ -1496,7 +1501,7 @@ export fn runFrontend(c: inout Comp) {
                         }
                         if rePath.count() != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
-                                if !(fileExists(path: rePath)) {
+                                if !(sources.exists(path: rePath)) {
                                     c.errorAt(offset: imp.path.start, msg: "cannot open module file: the re-export path does not resolve to an existing file")
                                 }
                                 val rm: U64 = nextModuleId
@@ -1548,7 +1553,7 @@ export fn runFrontend(c: inout Comp) {
                 if sawDirective {
                     val genPath: Array[U8] = genSiblingPath(path: path)
                     if genPath.count() != 0 {
-                        if fileExists(path: genPath) {
+                        if sources.exists(path: genPath) {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: genPath)) {
                                 val gs: U64 = pathBuf.count()
                                 appendBytes(into: inout pathBuf, from: genPath)

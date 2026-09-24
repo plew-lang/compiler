@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { stringFromBytesUnchecked }
+import /SourceAccess with { SourceResource, SourceAccess }
+import /Path with { finishModulePath }
+
+fn main() {
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Example.pw".bytes() text="embedded file" />,
+        <SourceResource path="plew:std/Directory/_.pw".bytes() text="embedded directory" />
+    ] />
+    print(sources.exists(path: "plew:std/Example.pw".bytes()))
+    print(sources.read(path: "plew:std/Example.pw".bytes()))
+    val directory = finishModulePath(base: "plew:std/Directory".bytes(), sources: sources)
+    print(stringFromBytesUnchecked(directory))
+    print(sources.read(path: directory))
+    print(sources.exists(path: "plew:std/Missing.pw".bytes()))
+    print(sources.read(path: "plew:std/Missing.pw".bytes()) == "")
+}

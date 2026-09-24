@@ -1,30 +1,6 @@
-// The entry module of the self-hosted Plew compiler — thin orchestration only.
-// It imports the three layers it ties together: `./Ir` (the shared IR data),
-// `./Frontend` (`runFrontend` = load + analyze → `Comp`), and `./Backend`
-// (`emitLlvm` = lower the analyzed `Comp` to textual LLVM IR). `main` runs the
-// front-end then the backend; the module graph is a DAG: Ir ← Frontend ← Backend.
-// The compiler links libLLVM (the emitter calls libLLVM-C) and emits textual LLVM
-// IR, which clang lowers to an object/executable.
-//
-// Bootstrap from the checked-in IR seed: see bootstrap.sh. Fast in-place dev
-// rebuild (current compiler/plewc recompiles this source): see dev-rebuild.sh.
-//   compiler/plewc compiler/src/_.pw > out.ll
-//   clang out.ll <runtime> $(llvm-config --ldflags --libs core) -o compiler/plewc
-
-import @Std/Process with { argCount, argAt }
-import ./Frontend with { Comp, runFrontend }
-import ./Backend with { emitLlvm, emitLlvmRuntime }
+// Development entry; distribution supplies embedded sources to the same driver.
+import ./Compiler with { runCompiler }
 
 fn main() {
-    // `plewc --runtime` emits the companion C runtime the generated IR links
-    // against (no front-end needed — the runtime is program-independent so far).
-    if argCount() > 1 {
-        if argAt(1) == "--runtime" {
-            emitLlvmRuntime()
-            return
-        }
-    }
-    mut val c: Comp = <Comp />
-    runFrontend(c: inout c)
-    emitLlvm(c: inout c)
+    runCompiler()
 }
