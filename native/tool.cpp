@@ -2,7 +2,6 @@
 // resolution remain in Plew; self-spawned workers isolate their one-shot state.
 #include "resources.h"
 #include <llvm/Config/llvm-config.h>
-#include <llvm/Support/CommandLine.h>
 #include <mach-o/dyld.h>
 #include <spawn.h>
 #include <sys/wait.h>
@@ -262,10 +261,6 @@ extern "C" long long plew_tool_main(long long count, char **arguments) {
     if (first >= static_cast<size_t>(count)) { usage(); return 1; }
     TemporaryDirectory temporary;
     bool trace = std::getenv("PLEW_TRACE_BUILD") != nullptr;
-    if (trace) {
-      const char *options[] = {"plew", "-debug-pass=Executions"};
-      llvm::cl::ParseCommandLineOptions(2, options);
-    }
     auto sourceAt = [&](size_t index) {
       auto source = fs::absolute(arguments[index]);
       if (source.extension() != ".pw" || !fs::is_regular_file(source))

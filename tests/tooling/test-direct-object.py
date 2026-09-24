@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'plewc')))
     parser.add_argument('--worker', type=Path)
+    parser.add_argument('--sanitizer-output', action='store_true')
     parser.add_argument('--llvm-config', default=os.environ.get('LLVM_CONFIG', 'llvm-config'))
     args = parser.parse_args()
     compiler = args.compiler.absolute()
@@ -60,6 +61,7 @@ def main():
             result = run([compiler, '--emit-object', direct, '--target-cpu', 'apple-m1', '--trace-phases', source])
             assert result.stdout == b'', case
             assert b'backend:drain:done' in result.stderr and b'Running pass:' in result.stderr, case
+            assert b'Executing Pass' in result.stderr, case
             assert b'backend:print-module' not in result.stderr and b'backend:write:' not in result.stderr, case
             text = run([compiler, '--trace-phases', source])
             assert b'backend:print-module:done' in text.stderr, case
@@ -81,6 +83,17 @@ def main():
         print('PASS direct-object frontend error preserves output', flush=True)
         run([compiler, '--emit-object', directory / 'missing/output.o', source], expected=1)
         print('PASS direct-object output error propagates', flush=True)
+        if args.sanitizer_output:
+            config = shutil.which(args.llvm_config)
+            clang = Path(subprocess.check_output([config, '--bindir'], text=True).strip()) / 'clang'
+            source = ROOT / 'tests/fixtures/run/unique_enum_arc.pw'
+            run([compiler, '--emit-object', direct, '--asan', source])
+            symbols = run(['/usr/bin/nm', direct]).stdout
+            assert b'__asan_' in symbols
+            binary = directory / 'asan-app'
+            run([clang, '-fsanitize=address', direct, runtime, '-o', binary])
+            assert run([binary]).stdout.rstrip(b'\n') == source.with_suffix('.out').read_bytes().rstrip(b'\n')
+            print('PASS direct-object ASan instrumentation and execution', flush=True)
 
 
 if __name__ == '__main__':

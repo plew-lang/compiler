@@ -2,7 +2,6 @@
 // This executable is not a separate user distribution requirement.
 #include "llvm_backend.h"
 #include <llvm-c/IRReader.h>
-#include <llvm/Support/CommandLine.h>
 #include <cstdio>
 #include <cstring>
 
@@ -16,12 +15,7 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "plew: unknown option: %s\n", argv[4]);
     return 1;
   }
-  // The one-shot worker owns LLVM's process-global diagnostic settings.
-  // Actual code-generation pass events are consumed by the existing watchdog.
-  if (trace) {
-    const char *arguments[] = {"plew", "-debug-pass=Executions"};
-    llvm::cl::ParseCommandLineOptions(2, arguments);
-  }
+  plew_llvm_initialize_worker(trace);
   LLVMContextRef context = LLVMContextCreate();
   LLVMMemoryBufferRef buffer = nullptr;
   LLVMModuleRef module = nullptr;

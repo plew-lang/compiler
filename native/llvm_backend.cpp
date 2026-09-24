@@ -2,6 +2,7 @@
 #include "llvm_pipeline.h"
 
 #include <llvm-c/Analysis.h>
+#include <llvm/Support/CommandLine.h>
 #include <llvm-c/Error.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
@@ -36,6 +37,13 @@ bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
   return false;
 }
 } // namespace
+
+extern "C" void plew_llvm_initialize_worker(int trace) {
+  if (trace) {
+    const char *arguments[] = {"plew-object", "-debug-pass=Executions"};
+    llvm::cl::ParseCommandLineOptions(2, arguments);
+  }
+}
 
 extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                                      const char *cpu, int trace) {
@@ -80,6 +88,15 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
   if (!verify(module))
     return 1;
 
+  bool sanitize = false;
+  auto sanitizeKind = LLVMGetEnumAttributeKindForName("sanitize_address", 16);
+  for (auto function = LLVMGetFirstFunction(module); function;
+       function = LLVMGetNextFunction(function)) {
+    if (LLVMGetEnumAttributeAtIndex(function, LLVMAttributeFunctionIndex, sanitizeKind)) {
+      sanitize = true;
+      break;
+    }
+  }
   auto options = std::unique_ptr<LLVMOpaquePassBuilderOptions,
                                 decltype(&LLVMDisposePassBuilderOptions)>(
       LLVMCreatePassBuilderOptions(), LLVMDisposePassBuilderOptions);
@@ -88,6 +105,7 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
   // the shared opt pipeline followed by clang's O2 IR optimization.
   if (!optimize(module, machine.get(), PLEW_LLVM_PIPELINE, options.get()) ||
       !optimize(module, machine.get(), "default<O2>", options.get()) ||
+      (sanitize && !optimize(module, machine.get(), "asan", options.get())) ||
       !verify(module))
     return 1;
 

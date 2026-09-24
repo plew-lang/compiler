@@ -4,6 +4,10 @@ import ./Frontend with { Comp, runFrontend }
 import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu }
 import ./SourceAccess with { SourceAccess }
 
+extern(c) {
+    fn plew_llvm_initialize_worker(trace~: I32)
+}
+
 export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     if argCount() > firstArgument {
         if argAt(firstArgument) == "--emit-object" {
@@ -35,6 +39,7 @@ export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I
 export fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
     mut val compiler: Comp = <Comp />
     runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
+    plew_llvm_initialize_worker(if compiler.tracePhases { give 1I32 } else { give 0I32 })
     mut val module = lowerLlvm(c: inout compiler)
     return module.writeObject(output: output, cpu: cpu, trace: compiler.tracePhases)
 }

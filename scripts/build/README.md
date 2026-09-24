@@ -19,8 +19,9 @@ python3 -B scripts/build/standalone.py --distribution \
 The output directory must not exist. `plew` is the only user executable to copy
 out of that directory. Compiler, resolver, LLVM optimization/object generation,
 standard sources, runtime object, version identity, and dependency license texts
-are embedded. The build's `llvm-object` worker and intermediate files are not
-user dependencies. Omit `--distribution` to build a low-level static `plewc`
+are embedded. The build's `llvm-object` reference worker and intermediate files are not
+user dependencies. The carrier emits the compiler object directly; it must
+support `--emit-object` (bootstrap older carriers before building a distribution). Omit `--distribution` to build a low-level static `plewc`
 candidate with a staging `std/` symlink instead.
 
 The initial recipe targets **macOS 26/arm64**, Apple M1, and LLVM 20.1.1. Build
@@ -46,7 +47,11 @@ The executable can also be installed directly.
   by this packaging work.
 - `plew gen file.pw...` and `plew resolve [directory|file]` share the existing
   Plew macro compiler and resolver. Outputs are replaced only after success.
-- `plew --compiler [options] file.pw` is the low-level LLVM-text compiler entry;
+- `plew --compiler --emit-object output.o [--target-cpu cpu] [options] file.pw`
+  emits an optimized native object in the compiler worker. The development CLI
+  and `dev-rebuild.sh` use the same direct entry. Default CPU is the host CPU;
+  distribution builds explicitly use the recipe CPU.
+- `plew --compiler [options] file.pw` is the diagnostic/seed LLVM-text entry;
   `--compiler --runtime` emits the C runtime. A `plewc` symlink selects this mode
   for existing development/test scripts.
 - `plew --version` identifies the bundled inputs and LLVM version;
@@ -58,8 +63,10 @@ The executable can also be installed directly.
 
 Compiler semantics and resolution remain in Plew modules. `distribution/_.pw`
 selects their worker entries; `native/tool.cpp` owns OS process, output, and linker
-operations. Workers are self-spawned from the same executable, so compiler state
-is reclaimed at process exit. Native linkers see object files, not Plew LLVM IR.
+operations. Workers are self-spawned from the same executable. Each worker lowers to an
+owned `LlvmModule`, calls the native backend with the live module, then disposes
+the module and its context in that order. The parent receives an object file;
+there is no LLVM text serialization or parsing on this path. Native linkers see object files, not Plew LLVM IR.
 The runtime object is compiled at distribution-build time, never per user build.
 
 ## LLVM and evidence
@@ -69,7 +76,11 @@ optimization, and native PIC object generation. It rejects incompatible target
 triples/layouts. `native/llvm_pipeline.h` is shared with the development link
 helper; the additional `default<O2>` supplies the subsequent IR optimization
 formerly run by clang. The build-machine `llvm_object_main.cpp` worker uses this
-same API. Raw fixed-point materials are preserved on disk.
+same API for explicit LLVM-file tests. Raw fixed-point materials remain text;
+ordinary object builds do not generate an intermediate `.ll`. Workers initialize
+LLVM machine-pass diagnostics when tracing is enabled. Modules marked
+`sanitize_address` are instrumented after optimization; linking those objects
+requires the matching ASan runtime.
 
 `build.json` records compiler/source/dependency/tool/archive/license hashes,
 recipe, commands, pipeline, and output inspection. Compiler/LLVM steps use the
