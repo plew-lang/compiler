@@ -59,7 +59,7 @@ def check_reader():
 def main():
     check_reader()
     root = Path(__file__).resolve().parents[3]
-    compiler = str(Path(os.environ.get('PLEWC', root / 'plewc')).resolve())
+    compiler = str(Path(os.environ.get('PLEWC', root / 'plewc')).absolute())
     source = str(root / 'tests/fixtures/run/generic_extension_receiver_record_direct_field.pw')
     observed = subprocess.run([compiler, '--emit-mid-coverage', source], cwd=root, capture_output=True, text=True, timeout=55)
     if observed.returncode:

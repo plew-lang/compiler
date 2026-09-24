@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).resolve()
+compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 source = root / 'tests/fixtures/run/mid_index_place_runtime_cfg_lowering.pw'
 result = subprocess.run([str(compiler), '--require-mid', str(source)], capture_output=True, timeout=55)
 if result.returncode:

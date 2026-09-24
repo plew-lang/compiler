@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).resolve()
+compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 cases = [('async_basic', 3, 'I64'), ('async_bool', 1, 'Bool'), ('async_control', 3, 'I64')]
 for index, (name, expected_count, payload) in enumerate(cases, 1):
     source = root / 'tests/fixtures/run' / (name + '.pw')

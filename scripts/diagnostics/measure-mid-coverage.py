@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     os.chdir(root)
-    compiler = Path(args.compiler).resolve()
+    compiler = Path(args.compiler).absolute()
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     if args.jobs < 1:

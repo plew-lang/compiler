@@ -103,7 +103,7 @@ def main():
     env = os.environ.copy()
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     config = env.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
-    compiler = args.compiler.resolve()
+    compiler = args.compiler.absolute()
     inputs = {str(p): digest(p) for p in [compiler, Path(__file__), ROOT/'Plew.lock', *sorted((ROOT/'scripts/support').glob('*.py')), *sorted((ROOT/'std').rglob('*.pw'))]}
     watch = [sys.executable, str(ROOT/'scripts/support/watch-command.py'), '--']
 

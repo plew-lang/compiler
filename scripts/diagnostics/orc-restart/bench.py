@@ -42,7 +42,7 @@ def main():
         parser.error('--runs must be >= 3 (first update is reported separately)')
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    prefix, compiler = args.llvm_prefix.resolve(), args.compiler.resolve()
+    prefix, compiler = args.llvm_prefix.resolve(), args.compiler.absolute()
     config, clang = prefix / 'bin/llvm-config', prefix / 'bin/clang'
     apply()
     watch = [sys.executable, '-B', str(ROOT / 'scripts/support/watch-command.py'), '--']

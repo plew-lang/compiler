@@ -35,7 +35,7 @@ def main():
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    compiler = args.compiler.resolve()
+    compiler = args.compiler.absolute()
     prefix = args.llvm_prefix.resolve()
     config = prefix / 'bin/llvm-config'
     clang = prefix / 'bin/clang'

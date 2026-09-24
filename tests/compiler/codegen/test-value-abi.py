@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).resolve()
+compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 result = subprocess.run([str(compiler), '--require-mid', str(root / 'tests/fixtures/run/mid_value_abi.pw')], capture_output=True, text=True, timeout=55)
 if result.returncode:
     raise SystemExit(result.stderr)

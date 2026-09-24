@@ -21,7 +21,7 @@ names = ['generic_deinit', 'generic_deinit_impl', 'generic_deinit_unused', 'gene
 sources = sorted(CASES.glob('*.pw')) if args.cases else [CASES / (name + '.pw') for name in names]
 out = args.out.resolve()
 out.mkdir(parents=True, exist_ok=False)
-compiler = args.compiler.resolve()
+compiler = args.compiler.absolute()
 clang = str(args.llvm_prefix / 'bin/clang')
 watch = [sys.executable, '-B', str(ROOT / 'scripts/support/watch-command.py'), '--']
 env = dict(os.environ, CLANG_NO_DEFAULT_CONFIG='1')

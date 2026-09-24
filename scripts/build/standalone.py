@@ -93,7 +93,9 @@ def build(args):
     archives = [static_archive(path) for path in shlex.split(
         query(config, '--link-static', '--libfiles', *recipe['components']))]
     archives.extend(static_archive(path) for path in args.static_dependency)
-    carrier = Path(args.carrier).resolve(strict=True)
+    carrier = Path(args.carrier).absolute()
+    if not carrier.is_file() or not os.access(carrier, os.X_OK):
+        raise ValueError(f"compiler not executable: {carrier}")
     output = Path(args.output).resolve()
     # A fresh directory is the output contract; no merge with previous evidence.
     output.mkdir(parents=True, exist_ok=False)

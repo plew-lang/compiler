@@ -13,7 +13,7 @@ parser.add_argument('--output', required=True, type=Path)
 parser.add_argument('--asan', action='store_true')
 parser.add_argument('--case', action='append', dest='cases')
 args = parser.parse_args()
-compiler = args.compiler.resolve()
+compiler = args.compiler.absolute()
 output = args.output.resolve()
 output.mkdir(parents=True, exist_ok=False)
 clang = '/opt/homebrew/opt/llvm@22/bin/clang' if args.asan else 'clang'

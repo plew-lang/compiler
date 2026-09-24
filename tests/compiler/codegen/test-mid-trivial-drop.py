@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).resolve()
+compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 result = subprocess.run(
     [sys.executable, '-B', str(root / 'scripts/support/watch-command.py'), '--',
      str(compiler), str(root / 'tests/fixtures/run/trivial_drop.pw')],

@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get("PLEWC", root / "plewc")).resolve()
+compiler = Path(os.environ.get("PLEWC", root / "plewc")).absolute()
 cases = ["closure_capture_heap", "closure_mut_capture", "closure_capture_receiver_arc", "mid_closure_environment_drop"]
 failures = []
 with tempfile.TemporaryDirectory(prefix="plew-closure-env-mid-") as directory:

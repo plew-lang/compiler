@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).resolve()
+compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 cases = [
     'any_basic', 'any_self_return', 'any_heap_self_member_return',
     'any_inout', 'mid_existential_call_ownership', 'mid_unit_call_results',

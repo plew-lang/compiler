@@ -8,7 +8,7 @@ import clang_environment
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True);p.add_argument('--compiler',type=Path,default=ROOT/'plewc');a=p.parse_args()
- out=a.out.resolve();out.mkdir(parents=True,exist_ok=False);compiler=a.compiler.resolve();clang_environment.apply();env=dict(os.environ,ASAN_OPTIONS='detect_leaks=1:abort_on_error=0:exitcode=86',PYTHONDONTWRITEBYTECODE='1');rows=[]
+ out=a.out.resolve();out.mkdir(parents=True,exist_ok=False);compiler=a.compiler.absolute();clang_environment.apply();env=dict(os.environ,ASAN_OPTIONS='detect_leaks=1:abort_on_error=0:exitcode=86',PYTHONDONTWRITEBYTECODE='1');rows=[]
  def run(name,args):
   with (out/(name+'.out')).open('wb') as o,(out/(name+'.err')).open('wb') as e:r=subprocess.run([sys.executable,ROOT/'scripts/support/watch-command.py','--',*args],cwd=ROOT,env=env,stdout=o,stderr=e)
   rows.append({'step':name,'exit':r.returncode});return r.returncode
