@@ -1,7 +1,7 @@
 // Low-level compiler driver shared by the development and distributed entries.
 import @Std/Process with { argCount, argAt, exit }
 import ./Frontend with { Comp, runFrontend }
-import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu }
+import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu, LlvmModule }
 import ./SourceAccess with { SourceAccess }
 
 extern(c) {
@@ -34,12 +34,25 @@ export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I
     emitLlvm(c: inout compiler)
 }
 
+// The frontend arena is scoped to lowering, not the lifetime of LLVM passes.
+unique struct Compilation {
+    pub mut val module: LlvmModule
+    pub val trace: Bool
+}
+pub impl Compilation { factory }
+
+fn compileSource(sources: SourceAccess, firstArgument: I64) -> Compilation {
+    mut val compiler: Comp = <Comp />
+    runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
+    val module = lowerLlvm(c: inout compiler)
+    return <Compilation module=move module trace=compiler.tracePhases />
+}
+
 // Object mode keeps lowering and native optimization in one process. A failed
 // native output returns normally so the owned LLVM context is still reclaimed.
 export fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
-    mut val compiler: Comp = <Comp />
-    runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
-    plew_llvm_initialize_worker(if compiler.tracePhases { give 1I32 } else { give 0I32 })
-    mut val module = lowerLlvm(c: inout compiler)
-    return module.writeObject(output: output, cpu: cpu, trace: compiler.tracePhases)
+    mut val compilation = compileSource(sources: sources, firstArgument: firstArgument)
+    val trace = compilation.trace
+    plew_llvm_initialize_worker(if trace { give 1I32 } else { give 0I32 })
+    return compilation.module.writeObject(output: output, cpu: cpu, trace: trace)
 }

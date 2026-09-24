@@ -48,7 +48,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     state = dict(schema='self-host-measure-v2', status='running', carrier=str(carrier),
                  carrier_sha256=digest(carrier), source=str(source), runs=runs, clang_environment=clang_settings,
-                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<optimized-llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '-o', '<compiler>'],
+                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<optimized-llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '<native-backend.o>', '-lc++' if sys.platform == 'darwin' else '-lstdc++', '-o', '<compiler>'],
                  llvm_config=config, llvm_version=subprocess.check_output([config, '--version'], text=True).strip(),
                  clang_version=subprocess.check_output([clang, '--version'], text=True).strip(),
                  optimization_command=llvm_link.optimization_command(config, '<llvm>', '<optimized-llvm>'),

@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 TRACE = ROOT / 'scripts/support/trace-command.py'
 sys.path.insert(0, str(ROOT / 'scripts/support'))
-from llvm_link import PIPELINE
+from llvm_link import PIPELINE, compiler_backend
 
 
 def sha(path):
@@ -120,6 +120,7 @@ def main():
             candidate_irs = {'O1': ir, 'preopt-O1': candidate}
             state['preopt_pipeline'] = PIPELINE
             state['preopt_instrumented_ir_sha256'] = sha(candidate)
+        backend_libraries = compiler_backend(str(llvm / 'bin/llvm-config'), out / 'native-backend.o', sanitize=True)
         for level, binary in binaries.items():
             if args.prepared and level != 'preopt-O1':
                 continue
@@ -127,7 +128,7 @@ def main():
                 raise RuntimeError(f'refusing to overwrite {binary}')
             run('link-' + level, [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions',
                                  '-O1' if level == 'preopt-O1' else '-' + level, '-fno-omit-frame-pointer', '-fsanitize=address', '-w',
-                                 candidate_irs[level], out / 'runtime.c', llvm / 'lib/libLLVM.dylib', '-o', binary])
+                                 candidate_irs[level], out / 'runtime.c', llvm / 'lib/libLLVM.dylib', *backend_libraries, '-o', binary])
         state['binaries'] = {level: dict(path=str(p), sha256=sha(p)) for level, p in binaries.items()}
 
         # Volatile accesses keep the deliberate defects observable after optimization.
