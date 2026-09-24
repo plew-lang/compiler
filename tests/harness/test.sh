@@ -159,6 +159,12 @@ for gate in \
 done
 
 # Keep phase tracing composable with both coverage modes used for self-hosting.
+if python3 -B ./tests/tooling/test-standalone-build.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed standalone-build"
+fi
+
 if sh ./tests/tooling/test-cli-options.sh; then
     :
 else

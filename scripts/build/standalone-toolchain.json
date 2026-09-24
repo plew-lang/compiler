@@ -1,0 +1,8 @@
+{
+  "llvm_version": "20.1.1",
+  "platform": "darwin",
+  "machine": "arm64",
+  "components": ["core", "native", "orcjit", "passes"],
+  "system_libraries": ["-lc++", "-lz", "-lm", "-lxml2"],
+  "link_flags": ["-Wl,-dead_strip"]
+}
