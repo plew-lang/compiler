@@ -83,6 +83,9 @@ def build(args):
     version = query(config, '--version')
     if version != recipe['llvm_version']:
         raise ValueError(f'expected LLVM {recipe["llvm_version"]}, got {version}')
+    tools_config = shutil.which(args.llvm_tools_config or args.llvm_config)
+    if not tools_config or query(tools_config, '--version') != version:
+        raise ValueError('build tools must match the selected LLVM library version')
     licenses = []
     if args.distribution:
         if len(args.static_dependency) != len(args.static_license):
@@ -106,14 +109,15 @@ def build(args):
         'scope': 'single-file tool candidate' if args.distribution else 'static compiler candidate',
         'recipe': recipe, 'recipe_sha256': digest(recipe_path),
         'llvm_config': config, 'llvm_config_sha256': digest(config), 'llvm_version': version,
+        'llvm_tools_config': tools_config, 'llvm_tools_config_sha256': digest(tools_config),
         'host_target': query(config, '--host-target'),
         'carrier': str(carrier), 'carrier_sha256': digest(carrier),
         'source_inputs': source_inputs,
         'archives': {path: digest(path) for path in archives},
         'licenses': {str(path): digest(path) for path in licenses},
         'environment': clang_environment.apply(),
-        'optimizer': llvm_link.optimizer(config),
-        'clang': llvm_link.selected_clang(config),
+        'optimizer': llvm_link.optimizer(tools_config),
+        'clang': llvm_link.selected_clang(tools_config),
         'pipeline': llvm_link.PIPELINE,
         'commands': [],
     }
@@ -149,7 +153,7 @@ def build(args):
     # This build worker is not a second distributed executable. Its library API
     # is the same entry the single-file driver will call directly.
     worker = output / 'llvm-object'
-    clangxx = str(Path(query(config, '--bindir')) / 'clang++')
+    clangxx = str(Path(query(tools_config, '--bindir')) / 'clang++')
     manifest['clangxx_sha256'] = digest(clangxx)
     print('[standalone] build native object backend', file=sys.stderr, flush=True)
     run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
@@ -189,7 +193,7 @@ def build(args):
     for path, expected in {**manifest['archives'], **manifest['licenses']}.items():
         if digest(path) != expected:
             raise ValueError(f'build dependency changed: {path}')
-    for name in ('llvm_config', 'optimizer', 'clang'):
+    for name in ('llvm_config', 'llvm_tools_config', 'optimizer', 'clang'):
         if digest(manifest[name]) != manifest[name + '_sha256']:
             raise ValueError(f'build tool changed: {name}')
     manifest.update(binary_sha256=digest(binary), binary_bytes=binary.stat().st_size,
@@ -201,6 +205,7 @@ def build(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--llvm-config', required=True)
+    parser.add_argument('--llvm-tools-config', help='matching build-machine clang/opt toolchain; defaults to --llvm-config')
     parser.add_argument('--carrier', default=str(ROOT / 'plewc'))
     parser.add_argument('--output', required=True, help='new staging directory')
     parser.add_argument('--distribution', action='store_true', help='bundle native CLI, resolver and resources')
