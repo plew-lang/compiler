@@ -121,3 +121,36 @@ and the old application's event handler and pending work must remain usable.
 The expected missing-symbol diagnostic is saved in the lifecycle stderr log.
 This covers link failure before publication; source rejection and initialization
 failure are separate remaining end-to-end cases.
+
+Source-to-ready restart probe:
+
+```sh
+/usr/bin/python3 -B scripts/support/watch-command.py -- /usr/bin/python3 -B scripts/diagnostics/orc-restart/restart-check.py --runs 21 --out tmp/orc-restart/restart
+```
+
+A persistent ORC host keeps the old app while Python saves a changed source.
+Timing starts at the explicit request, before invoking the compiler. It includes
+compiler/watchdog launch, full source processing, LLVM file output, host command
+transport, parsing/verifying/materializing the complete candidate, old region
+termination, new main/global initialization, and a successful current-generation
+Plew event call. No compile runs on save. Initial host/runtime setup is outside
+this already-running-app measurement; the first app load is reported separately.
+There is no lazy compile deferred beyond READY. Normal source checks and the LLVM
+verifier remain enabled. The current configuration uses no explicit LLVM IR
+optimization pipeline and LLJIT's default native codegen.
+
+Every revision changes the event function's result, and every revision's LLVM is
+also linked and checked with normal AOT outside the timed path. Full recompilation
+avoids an unproven dependency cache; this is not a completed incremental frontend.
+READY requires an actual successful event dispatch, not just a published pointer.
+The report retains all timings and hashes, with warm median/p95/max and counts
+over 500 ms; first load is separate. The deadline is evaluated from that report,
+not encoded as a correctness assertion.
+
+A source type error and invalid LLVM leave the old event handler usable. An
+injected host readiness failure after main returns disposes the new region and
+leaves no active application; the next valid request recovers. This is not
+catching a Plew panic, an OS fault, or an arbitrary constructor failure. Candidate
+link-failure preservation remains covered by `region-check.py`. Native LLVM
+constructors are explicitly unsupported in this diagnostic. Protocol paths must
+not contain whitespace. The same managed-region and FFI limitations apply.
