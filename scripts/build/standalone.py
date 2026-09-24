@@ -59,8 +59,8 @@ def audit_dependencies(output):
 def input_files():
     # Record source inputs, not generated candidates or unrelated scratch files.
     files = [ROOT / 'Plew.toml', ROOT / 'Plew.lock']
-    for directory in ('src', 'std'):
-        files.extend(sorted((ROOT / directory).rglob('*.pw')))
+    for directory in ('src', 'std', 'native'):
+        files.extend(sorted(path for path in (ROOT / directory).rglob('*') if path.is_file()))
     return {str(path.relative_to(ROOT)): digest(path) for path in files}
 
 
@@ -123,11 +123,29 @@ def build(args):
     run([str(carrier), '--trace-phases', str(ROOT / 'src/_.pw')], raw, 'compile.log')
     run([str(carrier), '--runtime'], runtime)
     libraries = [*archives, *recipe['system_libraries'], *recipe['link_flags']]
-    # Keep exactly the development/self-host optimization pipeline.
-    run([sys.executable, str(ROOT / 'scripts/support/llvm_link.py'),
-         '--config', config, '--log-prefix', str(output / 'link'),
-         '--llvm', str(raw), '--runtime', str(runtime), '--output', str(binary),
-         '--', *libraries])
+    deployment = '-mmacosx-version-min=' + recipe['minimum_macos']
+    # This build worker is not a second distributed executable. Its library API
+    # is the same entry the single-file driver will call directly.
+    worker = output / 'llvm-object'
+    clangxx = str(Path(query(config, '--bindir')) / 'clang++')
+    manifest['clangxx_sha256'] = digest(clangxx)
+    print('[standalone] build native object backend', file=sys.stderr, flush=True)
+    run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
+         '-isystem', query(config, '--includedir'), deployment,
+         str(ROOT / 'native/llvm_backend.cpp'), str(ROOT / 'native/llvm_object_main.cpp'),
+         *archives, *[flag for flag in recipe['system_libraries'] if flag != '-lc++'],
+         *recipe['link_flags'], '-o', str(worker)])
+    manifest['worker_dynamic_dependencies'] = audit_dependencies(
+        subprocess.check_output(['/usr/bin/otool', '-L', str(worker)], text=True))
+    print('[standalone] emit native object', file=sys.stderr, flush=True)
+    run([str(worker), str(raw), str(output / 'compiler.o'), recipe['target_cpu'], '--trace'],
+        trace='object.log')
+    # The user-side linker sees only native objects. Compilation of runtime C
+    # belongs to the distribution build and will become an embedded resource.
+    run(['/usr/bin/clang', deployment, '-O2', '-c', str(runtime),
+         '-o', str(output / 'runtime.o')])
+    run(['/usr/bin/clang', deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
+         *libraries, '-o', str(binary)])
     print('[standalone] audit dynamic dependencies', file=sys.stderr, flush=True)
     inspection = subprocess.check_output(['/usr/bin/otool', '-L', str(binary)], text=True)
     (output / 'dependencies.txt').write_text(inspection)

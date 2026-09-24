@@ -2,6 +2,7 @@
 """Shared optimized link of raw Plew LLVM; raw fixed-point materials stay intact."""
 import argparse
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,8 +14,13 @@ import clang_environment
 # Finish ordinary module optimization before any sanitizer instrumentation.
 # Field splitting alone can leave byval snapshots that ASan turns into copies.
 # Keep fixpoint verification enabled; generated bodies can need several rounds.
-PIPELINE = 'function(sroa,early-cse,instcombine<verify-fixpoint;max-iterations=8>),cgscc(argpromotion),default<O1>'
 ROOT = Path(__file__).resolve().parents[2]
+PIPELINE_HEADER = ROOT / 'native/llvm_pipeline.h'
+_pipeline_definition = re.findall(r'^#define PLEW_LLVM_PIPELINE "([^"\\]+)"$',
+                                  PIPELINE_HEADER.read_text(), re.MULTILINE)
+if len(_pipeline_definition) != 1:
+    raise ValueError('invalid shared LLVM optimization pipeline definition')
+PIPELINE = _pipeline_definition[0]
 
 
 def optimizer(config):

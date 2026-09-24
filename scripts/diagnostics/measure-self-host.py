@@ -74,6 +74,7 @@ def main():
         for root in (Path('std'), Path('../syntax')):
             paths.update(p for p in root.rglob('*') if p.suffix == '.pw' or p.name in ('Plew.toml', 'Plew.lock'))
         paths.update(Path(p) for p in ('Plew.toml', 'Plew.lock'))
+        paths.add(llvm_link.PIPELINE_HEADER)
         paths.update((carrier, Path(config), Path(clang), Path(opt)))
         paths.update(Path(p) for p in ('scripts/support/clang_environment.py', 'scripts/support/llvm_link.py', 'scripts/support/trace-command.py', 'scripts/diagnostics/measure-self-host.py', 'scripts/diagnostics/measure-self-host.sh', 'scripts/diagnostics/measure-self-compile.sh', 'measure-self-compile.py'))
         paths.update(Path(libdir).glob('libLLVM*.dylib'))

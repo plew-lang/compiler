@@ -2,7 +2,9 @@
   "llvm_version": "20.1.1",
   "platform": "darwin",
   "machine": "arm64",
-  "components": ["core", "native", "orcjit", "passes"],
+  "components": ["core", "native", "orcjit", "passes", "irreader"],
+  "target_cpu": "apple-m1",
+  "minimum_macos": "26.0",
   "system_libraries": ["-lc++", "-lz", "-lm", "-lxml2"],
   "link_flags": ["-Wl,-dead_strip"]
 }
