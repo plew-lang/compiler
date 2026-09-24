@@ -12,12 +12,17 @@ import sys
 import time
 sys.dont_write_bytecode = True
 from check import ROOT, HERE, digest, apply
+from source_variants import variant
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--runs', type=int, default=21)
+    parser.add_argument('--scenario', choices=['body','mixed'], default='body')
+    parser.add_argument('--functions', type=int, default=0)
+    parser.add_argument('--expression-shape', choices=['flat','deep'], default='flat')
     args = parser.parse_args()
+    if args.functions < 0: parser.error('functions must be nonnegative')
     if args.runs < 3: parser.error('runs must be >= 3')
     out = args.out.resolve(); out.mkdir(parents=True, exist_ok=False)
     prefix = Path('/opt/homebrew/opt/llvm').resolve(); apply()
@@ -26,9 +31,12 @@ def main():
               *sorted((ROOT/'std').rglob('*.pw')), prefix/'lib/libLLVM.dylib', prefix/'bin/clang']
     hashes = {str(p):digest(p) for p in inputs if p.is_file()}
     report = dict(status='running', host=platform.platform(), inputs=hashes, samples=[], checks=[], commands=[],
-                  scope='explicit source-to-ready, full compile, persistent ORC, diagnostic managed region')
+                  scope='explicit source-to-ready, full compile, persistent ORC, diagnostic managed region',
+                  scenario=args.scenario, extra_functions=args.functions, expression_shape=args.expression_shape)
     process = None
     def run(label, command, accepted=0):
+        (out/'results.json').write_text(json.dumps(report,indent=2)+'\n')
+        print('[restart-check] '+label,flush=True)
         with (out/(label+'.stdout')).open('wb') as stdout, (out/(label+'.stderr')).open('wb') as stderr:
             result = subprocess.run(watch+list(map(str,command)),cwd=ROOT,stdout=stdout,stderr=stderr)
         report['commands'].append(dict(label=label,argv=list(map(str,command)),exit=result.returncode))
@@ -56,7 +64,8 @@ def main():
         source=out/'App.pw'
         for revision in range(args.runs):
             # Saving happens before the request; nothing compiles on save.
-            text=template.replace('input + 7000000I64','input + 7000000I64 + '+str(revision)+'I64')
+            text, modules, kind=variant(template, revision, args.scenario, args.functions, args.expression_shape)
+            for name, contents in modules.items(): (out/name).write_text(contents)
             source.write_text(text)
             start=time.perf_counter_ns()  # Explicit Restart request.
             ir=out/f'{revision}.ll'
@@ -66,7 +75,7 @@ def main():
             ready=time.perf_counter_ns()
             expected=f'\n1\n6\n{7000012+revision}\nREADY {7000023+revision}\n'
             if output!=expected: raise RuntimeError(f'generation {revision} output mismatch: {output!r}')
-            report['samples'].append(dict(revision=revision,total_ms=(ready-start)/1e6,
+            report['samples'].append(dict(revision=revision,kind=kind,modules=modules,total_ms=(ready-start)/1e6,
                 source_to_ir_ms=(compiled-start)/1e6,ir_to_ready_ms=(ready-compiled)/1e6,
                 source_sha=digest(source),ir_sha=digest(ir),output=output))
             (out/f'{revision}.pw').write_text(text)

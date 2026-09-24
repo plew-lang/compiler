@@ -154,3 +154,13 @@ catching a Plew panic, an OS fault, or an arbitrary constructor failure. Candida
 link-failure preservation remains covered by `region-check.py`. Native LLVM
 constructors are explicitly unsupported in this diagnostic. Protocol paths must
 not contain whitespace. The same managed-region and FFI limitations apply.
+
+`--scenario mixed` alternates record layout, helper signature, generic record
+layout/instantiation, and imported module body changes. `--functions 100` adds
+100 live helper calls in separate statements; `--expression-shape deep` instead
+puts them into one nested addition expression. Preserve the distinction: the
+deep form stalled before LLVM output under the 60-second watchdog, while the
+flat form completed. The harness records the generated module texts and case
+kind per revision. Full source compilation covers these dependency changes;
+these results do not establish a correct incremental invalidation algorithm.
+Commands emit phase progress and checkpoint the report before child execution.
