@@ -1,0 +1,62 @@
+// Single-file tool entry. Compiler and resolver remain Plew modules; native
+// glue owns OS process/link operations and the LLVM object backend.
+import @Std/Process with { argCount, argAt, exit }
+import @Std/Io with { print }
+import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
+import ../src/Compiler with { runCompiler }
+import ../src/SourceAccess with { SourceAccess, SourceResource }
+import ../resolve/Resolver with { runResolver, needsResolution }
+
+extern(c) {
+    fn plew_tool_main(count~: I64, arguments~: CPtr[CPtr[U8]]) -> I64
+    fn plew_embedded_source_count() -> U64
+    fn plew_embedded_source_path(index~: U64) -> CPtr[U8]
+    fn plew_embedded_source_text(index~: U64) -> CPtr[U8]
+    fn plew_tool_std_root() -> CPtr[U8]
+}
+
+fn embeddedSources() -> SourceAccess {
+    val overrideRoot = stringFromCString(plew_tool_std_root())
+    if overrideRoot != "" {
+        return <SourceAccess stdRoot=overrideRoot.bytes() />
+    }
+    mut val resources: Array[SourceResource] = []
+    mut val index: U64 = 0U64
+    while index < plew_embedded_source_count() {
+        resources.append(<SourceResource
+            path=stringFromCString(plew_embedded_source_path(index)).bytes()
+            text=stringFromCString(plew_embedded_source_text(index)) />)
+        index += 1U64
+    }
+    return <SourceAccess stdRoot="plew:std/".bytes() resources=resources />
+}
+
+fn main() {
+    if argCount() > 1I64 {
+        if argAt(1I64) == "--compiler" {
+            runCompiler(sources: embeddedSources(), firstArgument: 2I64)
+            return
+        }
+        if argAt(1I64) == "--resolve-worker" {
+            runResolver()
+            return
+        }
+        if argAt(1I64) == "--needs-resolve-worker" {
+            print(needsResolution())
+            return
+        }
+    }
+    mut val arguments: Array[CPtr[U8]] = []
+    mut val index: I64 = 0I64
+    while index < argCount() {
+        arguments.append(cString(argAt(index)))
+        index += 1I64
+    }
+    val status = plew_tool_main(argCount(), arrayCPtr(arguments))
+    mut val position: U64 = 0U64
+    while position < arguments.count() {
+        cFree(arguments[position])
+        position += 1U64
+    }
+    exit(code: status)
+}

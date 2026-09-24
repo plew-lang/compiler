@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
 import llvm_link
+import embedded_resources
 
 
 def digest(path):
@@ -59,9 +60,16 @@ def audit_dependencies(output):
 def input_files():
     # Record source inputs, not generated candidates or unrelated scratch files.
     files = [ROOT / 'Plew.toml', ROOT / 'Plew.lock']
-    for directory in ('src', 'std', 'native'):
-        files.extend(sorted(path for path in (ROOT / directory).rglob('*') if path.is_file()))
-    return {str(path.relative_to(ROOT)): digest(path) for path in files}
+    for directory in ('src', 'std', 'native', 'distribution', 'resolve', 'scripts/build', 'scripts/support'):
+        files.extend(sorted(path for path in (ROOT / directory).rglob('*')
+                            if path.is_file() and path.suffix in ('.pw', '.cpp', '.h', '.py', '.sh', '.json')))
+    result = {str(path.relative_to(ROOT)): digest(path) for path in files}
+    from dependency_inputs import dependency_inputs
+    for index, dependency in enumerate(dependency_inputs(ROOT, os.environ)):
+        for path in sorted(dependency.rglob('*')):
+            if path.is_file() and (path.suffix == '.pw' or path.name in ('Plew.toml', 'Plew.lock')):
+                result[f'dependency/{index}/{path.relative_to(dependency)}'] = digest(path)
+    return result
 
 
 def build(args):
@@ -75,6 +83,13 @@ def build(args):
     version = query(config, '--version')
     if version != recipe['llvm_version']:
         raise ValueError(f'expected LLVM {recipe["llvm_version"]}, got {version}')
+    licenses = []
+    if args.distribution:
+        if len(args.static_dependency) != len(args.static_license):
+            raise ValueError('each static support dependency needs a --static-license')
+        llvm_license = Path(args.llvm_license or (Path(query(config, '--prefix')) / 'LICENSE.TXT'))
+        licenses = [llvm_license.resolve(strict=True),
+                    *[Path(path).resolve(strict=True) for path in args.static_license]]
     archives = [static_archive(path) for path in shlex.split(
         query(config, '--link-static', '--libfiles', *recipe['components']))]
     archives.extend(static_archive(path) for path in args.static_dependency)
@@ -82,16 +97,18 @@ def build(args):
     output = Path(args.output).resolve()
     # A fresh directory is the output contract; no merge with previous evidence.
     output.mkdir(parents=True, exist_ok=False)
-    (output / 'std').symlink_to(ROOT / 'std', target_is_directory=True)
+    if not args.distribution:
+        (output / 'std').symlink_to(ROOT / 'std', target_is_directory=True)
     source_inputs = input_files()
     manifest = {
-        'scope': 'static compiler candidate; resources/CLI not yet bundled',
+        'scope': 'single-file tool candidate' if args.distribution else 'static compiler candidate',
         'recipe': recipe, 'recipe_sha256': digest(recipe_path),
-        'llvm_config': config, 'llvm_version': version,
+        'llvm_config': config, 'llvm_config_sha256': digest(config), 'llvm_version': version,
         'host_target': query(config, '--host-target'),
         'carrier': str(carrier), 'carrier_sha256': digest(carrier),
         'source_inputs': source_inputs,
         'archives': {path: digest(path) for path in archives},
+        'licenses': {str(path): digest(path) for path in licenses},
         'environment': clang_environment.apply(),
         'optimizer': llvm_link.optimizer(config),
         'clang': llvm_link.selected_clang(config),
@@ -118,9 +135,11 @@ def build(args):
 
     raw = output / 'compiler.ll'
     runtime = output / 'runtime.c'
-    binary = output / 'plewc'
+    binary = output / ('plew' if args.distribution else 'plewc')
     print('[standalone] compile source', file=sys.stderr, flush=True)
-    run([str(carrier), '--trace-phases', str(ROOT / 'src/_.pw')], raw, 'compile.log')
+    entry = ROOT / ('distribution/_.pw' if args.distribution else 'src/_.pw')
+    manifest['entry'] = str(entry)
+    run([str(carrier), '--trace-phases', str(entry)], raw, 'compile.log')
     run([str(carrier), '--runtime'], runtime)
     libraries = [*archives, *recipe['system_libraries'], *recipe['link_flags']]
     deployment = '-mmacosx-version-min=' + recipe['minimum_macos']
@@ -144,6 +163,20 @@ def build(args):
     # belongs to the distribution build and will become an embedded resource.
     run(['/usr/bin/clang', deployment, '-O2', '-c', str(runtime),
          '-o', str(output / 'runtime.o')])
+    if args.distribution:
+        notices = '\n\n'.join('=== ' + path.name + ' ===\n' + path.read_text() for path in licenses)
+        embedded_resources.generate(ROOT, output / 'resources.cpp', output / 'runtime.o',
+                                    recipe, {'sources': source_inputs, 'recipe': recipe,
+                                             'archives': list(manifest['archives'].values()),
+                                             'licenses': list(manifest['licenses'].values())}, notices)
+        for name, source in [('backend', ROOT / 'native/llvm_backend.cpp'),
+                             ('tool', ROOT / 'native/tool.cpp'),
+                             ('resources', output / 'resources.cpp')]:
+            compiled = output / (name + '.o')
+            run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
+                 '-isystem', query(config, '--includedir'), '-I' + str(ROOT / 'native'),
+                 deployment, '-c', str(source), '-o', str(compiled)])
+            libraries.insert(0, str(compiled))
     run(['/usr/bin/clang', deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
          *libraries, '-o', str(binary)])
     print('[standalone] audit dynamic dependencies', file=sys.stderr, flush=True)
@@ -152,6 +185,12 @@ def build(args):
     manifest['dynamic_dependencies'] = audit_dependencies(inspection)
     if source_inputs != input_files() or manifest['carrier_sha256'] != digest(carrier):
         raise ValueError('compiler inputs changed during build')
+    for path, expected in {**manifest['archives'], **manifest['licenses']}.items():
+        if digest(path) != expected:
+            raise ValueError(f'build dependency changed: {path}')
+    for name in ('llvm_config', 'optimizer', 'clang'):
+        if digest(manifest[name]) != manifest[name + '_sha256']:
+            raise ValueError(f'build tool changed: {name}')
     manifest.update(binary_sha256=digest(binary), binary_bytes=binary.stat().st_size,
                     raw_llvm_sha256=digest(raw), runtime_sha256=digest(runtime), status='success')
     record.write_text(json.dumps(manifest, indent=2) + '\n')
@@ -163,6 +202,9 @@ def main():
     parser.add_argument('--llvm-config', required=True)
     parser.add_argument('--carrier', default=str(ROOT / 'plewc'))
     parser.add_argument('--output', required=True, help='new staging directory')
+    parser.add_argument('--distribution', action='store_true', help='bundle native CLI, resolver and resources')
+    parser.add_argument('--llvm-license', help='LLVM license text (default: selected LLVM prefix/LICENSE.TXT)')
+    parser.add_argument('--static-license', action='append', default=[], help='license text for each --static-dependency')
     parser.add_argument('--static-dependency', action='append', default=[],
                         help='explicit support .a, e.g. libzstd.a; repeatable')
     args = parser.parse_args()

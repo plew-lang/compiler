@@ -4,8 +4,10 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts/build'))
 spec = importlib.util.spec_from_file_location('standalone', ROOT / 'scripts/build/standalone.py')
 standalone = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(standalone)

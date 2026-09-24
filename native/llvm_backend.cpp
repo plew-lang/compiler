@@ -68,6 +68,13 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
   }
   LLVMSetTarget(module, triple.get());
   auto layout = LLVMCreateTargetDataLayout(machine.get());
+  Message layoutText(LLVMCopyStringRepOfTargetData(layout));
+  const char *moduleLayout = LLVMGetDataLayoutStr(module);
+  if (moduleLayout[0] && std::strcmp(moduleLayout, layoutText.get()) != 0) {
+    LLVMDisposeTargetData(layout);
+    std::fprintf(stderr, "plew: incompatible LLVM data layout\n");
+    return 1;
+  }
   LLVMSetModuleDataLayout(module, layout);
   LLVMDisposeTargetData(layout);
   if (!verify(module))

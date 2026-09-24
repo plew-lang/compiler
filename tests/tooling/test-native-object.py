@@ -33,6 +33,7 @@ def main():
         invalid_modules = [
             ('syntax', 'not LLVM IR', b'error:'),
             ('target', 'target triple = "wasm32-unknown-unknown"\ndefine i32 @main() { ret i32 0 }', b'requires native triple'),
+            ('layout', 'target datalayout = "e-p:32:32"\ndefine i32 @main() { ret i32 0 }', b'incompatible LLVM data layout'),
             ('dominance', 'define i32 @main() {\nentry: br label %end\nbad: %x = add i32 1, 2\nbr label %end\nend: ret i32 %x\n}', b'does not dominate'),
         ]
         for name, text, diagnostic in invalid_modules:
