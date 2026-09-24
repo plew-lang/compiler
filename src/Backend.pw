@@ -3,14 +3,14 @@ import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `runFrontend`) and emits
-// textual LLVM IR via libLLVM-C; `emitLlvm` is the entry the root `main` calls
-// after `runFrontend`, `emitLlvmRuntime` emits the companion C runtime. It `import`s
+// an owned LLVM module via libLLVM-C. Text is an explicit diagnostic/seed
+// output; object emission borrows the same module. `emitLlvmRuntime` emits C. It `import`s
 // the IR data (`./Ir`) and the front-end query/analysis API (`./Frontend`) — a
 // one-way dependency (Ir ← Frontend ← Backend), so the module graph is a DAG.
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
-import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
+import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
@@ -447,8 +447,12 @@ extern(c) {
     fn plew_pointer_equal(first~: LLVMTypeRef, second~: LLVMTypeRef) -> I32
 
     // Context / module.
+    fn LLVMGetHostCPUName() -> CPtr[U8]
     fn LLVMContextCreate() -> LLVMContextRef
     fn LLVMModuleCreateWithNameInContext(name~: CPtr[U8], ctx~: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMDisposeModule(module~: LLVMModuleRef)
+    fn LLVMContextDispose(context~: LLVMContextRef)
+    fn plew_llvm_emit_object(module~: LLVMModuleRef, output~: CPtr[U8], cpu~: CPtr[U8], trace~: I32) -> I32
     fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMDisposeMessage(msg~: CPtr[U8])
 
@@ -670,7 +674,55 @@ fn llvmIntUgt() -> U32 { return 34U32 }
 
 fn llvmIntUge() -> U32 { return 35U32 }
 
+export fn nativeCpu() -> String {
+    val name = LLVMGetHostCPUName()
+    val cpu = stringFromCString(name)
+    LLVMDisposeMessage(name)
+    return cpu
+}
+
+// One owner keeps the context alive until its module has been consumed. Native
+// output may mutate the module, but never takes ownership of either handle.
+export unique struct LlvmModule {
+    val context: LLVMContextRef
+    val module: LLVMModuleRef
+    deinit {
+        LLVMDisposeModule(self.module)
+        LLVMContextDispose(self.context)
+    }
+}
+impl LlvmModule {
+    factory owned(context: LLVMContextRef, module: LLVMModuleRef) {
+        return <LlvmModule context=context module=module />
+    }
+}
+pub impl LlvmModule {
+    fn writeText(c: inout Comp) {
+        tracePhase(c: inout c, label: "backend:print-module:start")
+        val ir = LLVMPrintModuleToString(self.module)
+        tracePhase(c: inout c, label: "backend:print-module:done")
+        tracePhase(c: inout c, label: "backend:write:start")
+        write(s: stringFromCString(ir))
+        tracePhase(c: inout c, label: "backend:write:done")
+        LLVMDisposeMessage(ir)
+    }
+
+    inout fn writeObject(output: String, cpu: String, trace: Bool) -> I32 {
+        val outputPath = cString(output)
+        val targetCpu = cString(cpu)
+        val status = plew_llvm_emit_object(self.module, outputPath, targetCpu, if trace { give 1I32 } else { give 0I32 })
+        cFree(targetCpu)
+        cFree(outputPath)
+        return status
+    }
+}
+
 export fn emitLlvm(c: inout Comp) {
+    val module = lowerLlvm(c: inout c)
+    module.writeText(c: inout c)
+}
+
+export fn lowerLlvm(c: inout Comp) -> LlvmModule {
     tracePhase(c: inout c, label: "backend:emit:start")
     val programPreparation = MidExecutableProgram.prepare(c: inout c)
     val ambientProgram = match programPreparation {
@@ -738,7 +790,6 @@ export fn emitLlvm(c: inout Comp) {
                 _ => {}
             }
             c.errorAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
-            return
         }
     }
     tracePhase(c: inout c, label: "mid:program:ready")
@@ -889,13 +940,6 @@ export fn emitLlvm(c: inout Comp) {
             fh = LLVMGetNextFunction(fh)
         }
     }
-    tracePhase(c: inout c, label: "backend:print-module:start")
-    val ir: CPtr[U8] = LLVMPrintModuleToString(st.mod)
-    tracePhase(c: inout c, label: "backend:print-module:done")
-    tracePhase(c: inout c, label: "backend:write:start")
-    write(s: stringFromCString(ir))
-    tracePhase(c: inout c, label: "backend:write:done")
-    LLVMDisposeMessage(ir)
     if c.emitMidCoverage || c.requireMid {
         mut val coverage: U64 = 0U64
         while coverage < st.midCoverageBodyIds.count() {
@@ -906,6 +950,8 @@ export fn emitLlvm(c: inout Comp) {
             exit(code: 1)
         }
     }
+    LLVMDisposeBuilder(st.b)
+    return <LlvmModule.owned context=ctx module=m />
 }
 
 // A unique, stable LLVM symbol for the module-level variable at lowering index `idx`

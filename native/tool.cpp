@@ -1,8 +1,6 @@
 // Native host services for the Plew tool. Compilation semantics and package
 // resolution remain in Plew; self-spawned workers isolate their one-shot state.
-#include "llvm_backend.h"
 #include "resources.h"
-#include <llvm-c/IRReader.h>
 #include <llvm/Config/llvm-config.h>
 #include <llvm/Support/CommandLine.h>
 #include <mach-o/dyld.h>
@@ -181,34 +179,14 @@ void resolveIfNeeded(const std::string &self, const fs::path &source,
   }
 }
 
-void compileObject(const fs::path &source, const fs::path &output, bool trace) {
-  LLVMContextRef context = LLVMContextCreate();
-  LLVMMemoryBufferRef buffer = nullptr;
-  LLVMModuleRef module = nullptr;
-  char *error = nullptr;
-  int status = 1;
-  if (LLVMCreateMemoryBufferWithContentsOfFile(source.c_str(), &buffer, &error) ||
-      LLVMParseIRInContext(context, buffer, &module, &error)) {
-    std::cerr << "plew: " << error << '\n';
-    LLVMDisposeMessage(error);
-  } else {
-    status = plew_llvm_emit_object(module, output.c_str(), plew_distribution_cpu(), trace);
-    LLVMDisposeModule(module);
-  }
-  LLVMContextDispose(context);
-  if (status) throw CommandFailure{status};
-}
-
 void build(const std::string &self, const fs::path &source, const fs::path &output,
            const fs::path &temporary, bool gen, bool trace) {
-  auto ir = temporary / "input.ll";
-  std::vector<std::string> command = {self, "--compiler"};
+  auto object = temporary / "program.o";
+  std::vector<std::string> command = {self, "--compile-object", object.string()};
   if (gen) command.push_back("--gen");
   if (trace) command.push_back("--trace-phases");
   command.push_back(source.string());
-  checked(command, ir);
-  auto object = temporary / "program.o";
-  compileObject(ir, object, trace);
+  checked(command);
   auto runtime = temporary / "runtime.o";
   std::ofstream stream(runtime, std::ios::binary);
   stream.write(reinterpret_cast<const char *>(plew_embedded_runtime_data()),

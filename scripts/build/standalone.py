@@ -135,13 +135,14 @@ def build(args):
         else:
             subprocess.run(watched, check=True, cwd=ROOT)
 
-    raw = output / 'compiler.ll'
+    object_file = output / 'compiler.o'
     runtime = output / 'runtime.c'
     binary = output / ('plew' if args.distribution else 'plewc')
     print('[standalone] compile source', file=sys.stderr, flush=True)
     entry = ROOT / ('distribution/_.pw' if args.distribution else 'src/_.pw')
     manifest['entry'] = str(entry)
-    run([str(carrier), '--trace-phases', str(entry)], raw, 'compile.log')
+    run([str(carrier), '--emit-object', str(object_file), '--target-cpu', recipe['target_cpu'],
+         '--trace-phases', str(entry)], trace='compile.log')
     run([str(carrier), '--runtime'], runtime)
     libraries = [*archives, *recipe['system_libraries'], *recipe['link_flags']]
     deployment = '-mmacosx-version-min=' + recipe['minimum_macos']
@@ -158,9 +159,6 @@ def build(args):
          *recipe['link_flags'], '-o', str(worker)])
     manifest['worker_dynamic_dependencies'] = audit_dependencies(
         subprocess.check_output(['/usr/bin/otool', '-L', str(worker)], text=True))
-    print('[standalone] emit native object', file=sys.stderr, flush=True)
-    run([str(worker), str(raw), str(output / 'compiler.o'), recipe['target_cpu'], '--trace'],
-        trace='object.log')
     # The user-side linker sees only native objects. Compilation of runtime C
     # belongs to the distribution build and will become an embedded resource.
     run(['/usr/bin/clang', deployment, '-O2', '-c', str(runtime),
@@ -171,14 +169,15 @@ def build(args):
                                     recipe, {'sources': source_inputs, 'recipe': recipe,
                                              'archives': list(manifest['archives'].values()),
                                              'licenses': list(manifest['licenses'].values())}, notices)
-        for name, source in [('backend', ROOT / 'native/llvm_backend.cpp'),
-                             ('tool', ROOT / 'native/tool.cpp'),
-                             ('resources', output / 'resources.cpp')]:
-            compiled = output / (name + '.o')
-            run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
-                 '-isystem', query(config, '--includedir'), '-I' + str(ROOT / 'native'),
-                 deployment, '-c', str(source), '-o', str(compiled)])
-            libraries.insert(0, str(compiled))
+    native_sources = [('backend', ROOT / 'native/llvm_backend.cpp')]
+    if args.distribution:
+        native_sources += [('tool', ROOT / 'native/tool.cpp'), ('resources', output / 'resources.cpp')]
+    for name, source in native_sources:
+        compiled = output / (name + '.o')
+        run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
+             '-isystem', query(config, '--includedir'), '-I' + str(ROOT / 'native'),
+             deployment, '-c', str(source), '-o', str(compiled)])
+        libraries.insert(0, str(compiled))
     run(['/usr/bin/clang', deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
          *libraries, '-o', str(binary)])
     print('[standalone] audit dynamic dependencies', file=sys.stderr, flush=True)
@@ -194,7 +193,7 @@ def build(args):
         if digest(manifest[name]) != manifest[name + '_sha256']:
             raise ValueError(f'build tool changed: {name}')
     manifest.update(binary_sha256=digest(binary), binary_bytes=binary.stat().st_size,
-                    raw_llvm_sha256=digest(raw), runtime_sha256=digest(runtime), status='success')
+                    compiler_object_sha256=digest(object_file), runtime_sha256=digest(runtime), status='success')
     record.write_text(json.dumps(manifest, indent=2) + '\n')
     print(f'[standalone] PASS: {binary} ({manifest["binary_bytes"]} bytes)', flush=True)
 

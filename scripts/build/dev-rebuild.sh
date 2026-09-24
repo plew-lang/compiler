@@ -8,7 +8,7 @@
 # `plewc`. Never create `/tmp/plewcN`.
 #
 # The selected input compiler (LLVM backend) recompiles the new source into
-# LLVM IR; clang + libLLVM links it into the new binary. This is the fast
+# a native object; clang + libLLVM links it into the new binary. This is the fast
 # inner-loop rebuild (no fixpoint check, no reseed). It does NOT replace
 # `./scripts/build/bootstrap.sh`: once a change is verified, run `./scripts/build/bootstrap.sh --reseed`
 # (regenerate the IR seed) + `./scripts/build/bootstrap.sh` (fixpoint) + `./tests/harness/test.sh` before
@@ -38,8 +38,8 @@ LDLIBS="-L$LLVM_LIBDIR -lLLVM"
 # the binary roughly halves rebuild/compile time (the emitted IR is unaffected).
 TRACE_DIR="${DEV_REBUILD_LOG_DIR:-tmp/dev-rebuild}"
 mkdir -p "$TRACE_DIR"
-python3 ./scripts/support/trace-command.py "$TRACE_DIR/compile.log" -- "$PLEWC" --trace-phases src/_.pw > /tmp/_plewc.ll
+python3 ./scripts/support/trace-command.py "$TRACE_DIR/compile.log" -- "$PLEWC" --emit-object /tmp/_plewc.o --trace-phases src/_.pw
 "$PLEWC" --runtime > /tmp/_plewc.runtime.c
-python3 ./scripts/support/llvm_link.py --config "$LC" --log-prefix "$TRACE_DIR/link" --llvm /tmp/_plewc.ll --runtime /tmp/_plewc.runtime.c --output /tmp/_plewc.new -- $LDLIBS
+python3 ./scripts/support/llvm_link.py --compiler-backend --config "$LC" --log-prefix "$TRACE_DIR/link" --object /tmp/_plewc.o --runtime /tmp/_plewc.runtime.c --output /tmp/_plewc.new -- $LDLIBS
 mv -f /tmp/_plewc.new plewc
 echo "rebuilt plewc from current source"

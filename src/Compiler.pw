@@ -1,11 +1,25 @@
 // Low-level compiler driver shared by the development and distributed entries.
-import @Std/Process with { argCount, argAt }
+import @Std/Process with { argCount, argAt, exit }
 import ./Frontend with { Comp, runFrontend }
-import ./Backend with { emitLlvm, emitLlvmRuntime }
+import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu }
 import ./SourceAccess with { SourceAccess }
 
 export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     if argCount() > firstArgument {
+        if argAt(firstArgument) == "--emit-object" {
+            if argCount() <= firstArgument + 2I64 { exit(code: 1I64) }
+            mut val sourceArgument = firstArgument + 2I64
+            mut val cpu = nativeCpu()
+            if argAt(sourceArgument) == "--target-cpu" {
+                if argCount() <= sourceArgument + 2I64 { exit(code: 1I64) }
+                cpu = argAt(sourceArgument + 1I64)
+                sourceArgument += 2I64
+            }
+            val status = compileObject(sources: sources, firstArgument: sourceArgument,
+                output: argAt(firstArgument + 1I64), cpu: cpu)
+            if status != 0I32 { exit(code: 1I64) }
+            return
+        }
         if argAt(firstArgument) == "--runtime" {
             emitLlvmRuntime()
             return
@@ -14,4 +28,13 @@ export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I
     mut val compiler: Comp = <Comp />
     runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
     emitLlvm(c: inout compiler)
+}
+
+// Object mode keeps lowering and native optimization in one process. A failed
+// native output returns normally so the owned LLVM context is still reclaimed.
+export fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
+    mut val compiler: Comp = <Comp />
+    runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
+    mut val module = lowerLlvm(c: inout compiler)
+    return module.writeObject(output: output, cpu: cpu, trace: compiler.tracePhases)
 }

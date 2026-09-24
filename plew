@@ -55,9 +55,9 @@ RESOLVER="$ROOT/plew-resolve"
 RESOLVER_SRC="$ROOT/resolve/_.pw"
 ensure_resolver() {
     if [ ! -x "$RESOLVER" ] || [ "$RESOLVER_SRC" -nt "$RESOLVER" ]; then
-        "$PLEWC" "$RESOLVER_SRC" > "$tmp/resolve.ll"
+        "$PLEWC" --emit-object "$tmp/resolve.o" "$RESOLVER_SRC"
         "$PLEWC" --runtime > "$tmp/rrt.c"
-        "$CC" -w "$tmp/resolve.ll" "$tmp/rrt.c" -o "$RESOLVER"
+        "$CC" -w "$tmp/resolve.o" "$tmp/rrt.c" -o "$RESOLVER"
     fi
 }
 # Walk up from a path's directory to the nearest ancestor holding Plew.toml.
@@ -93,7 +93,7 @@ fi
 [ -n "$1" ] || usage
 
 # ── gen: run derive macros (spec/16). Version-agnostic String→String step —
-# `plewc --gen` emits the harness IR, clang builds it (libc only), running it
+# `plewc --emit-object ... --gen` builds the harness object, clang links it; running it
 # prints the generated source to <file>.gen.pw (committed; the normal build
 # auto-parts it whenever a file carries `@[…]`). ──
 if [ "$mode" = gen ]; then
@@ -106,8 +106,8 @@ if [ "$mode" = gen ]; then
         esac
         [ -f "$pw" ] || { echo "plew gen: no such file: $pw" >&2; exit 1; }
         out="${pw%.pw}.gen.pw"
-        "$PLEWC" --gen "$pw" > "$tmp/harness.ll"
-        "$CC" -w "$tmp/harness.ll" "$tmp/runtime.c" -o "$tmp/harness"
+        "$PLEWC" --emit-object "$tmp/harness.o" --gen "$pw"
+        "$CC" -w "$tmp/harness.o" "$tmp/runtime.c" -o "$tmp/harness"
         "$tmp/harness" > "$out"
         echo "plew gen: $pw -> $out"
     done
@@ -134,14 +134,14 @@ if [ "$mode" = build ]; then
     [ -n "$out" ] || out=$(basename "${src%.pw}")
 fi
 
-"$PLEWC" "$src" > "$tmp/out.ll"
+"$PLEWC" --emit-object "$tmp/out.o" "$src"
 "$PLEWC" --runtime > "$tmp/rt.c"
 
 if [ "$mode" = run ]; then
     bin="$tmp/a.out"
-    "$CC" -w "$tmp/out.ll" "$tmp/rt.c" -o "$bin"
+    "$CC" -w "$tmp/out.o" "$tmp/rt.c" -o "$bin"
     "$bin" "$@"
 else
-    "$CC" -w "$tmp/out.ll" "$tmp/rt.c" -o "$out"
+    "$CC" -w "$tmp/out.o" "$tmp/rt.c" -o "$out"
     echo "plew: $src -> $out"
 fi

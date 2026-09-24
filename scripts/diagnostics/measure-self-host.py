@@ -75,6 +75,7 @@ def main():
             paths.update(p for p in root.rglob('*') if p.suffix == '.pw' or p.name in ('Plew.toml', 'Plew.lock'))
         paths.update(Path(p) for p in ('Plew.toml', 'Plew.lock'))
         paths.add(llvm_link.PIPELINE_HEADER)
+        paths.update(Path('native').glob('llvm_backend.*'))
         paths.update((carrier, Path(config), Path(clang), Path(opt)))
         paths.update(Path(p) for p in ('scripts/support/clang_environment.py', 'scripts/support/llvm_link.py', 'scripts/support/trace-command.py', 'scripts/diagnostics/measure-self-host.py', 'scripts/diagnostics/measure-self-host.sh', 'scripts/diagnostics/measure-self-compile.sh', 'measure-self-compile.py'))
         paths.update(Path(libdir).glob('libLLVM*.dylib'))
@@ -109,7 +110,7 @@ def main():
             # progress and bound inactivity, rather than killing a progressing
             # optimized link after an arbitrary total wall time.
             llvm_link.link(config, directory / 'link', directory / 'compiler.ll',
-                           directory / 'runtime.c', successor, ['-L' + libdir, '-lLLVM'], clang)
+                           directory / 'runtime.c', successor, ['-L' + libdir, '-lLLVM'], clang, with_backend=True)
             check_inputs()
             (successor.parent / 'std').symlink_to(Path('std').absolute(), target_is_directory=True)
             row['successor'] = str(successor)

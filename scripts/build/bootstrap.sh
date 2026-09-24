@@ -67,7 +67,9 @@ link() {
     runtime=$3
     output=$4
     shift 4
-    python3 ./scripts/support/llvm_link.py --config "$LC" --log-prefix "$TRACE_DIR/$stage" --llvm "$llvm" --runtime "$runtime" --output "$output" -- "$@"
+    backend=""
+    if [ "$1" = "--compiler-backend" ]; then backend=--compiler-backend; shift; fi
+    python3 ./scripts/support/llvm_link.py ${backend:+"$backend"} --config "$LC" --log-prefix "$TRACE_DIR/$stage" --llvm "$llvm" --runtime "$runtime" --output "$output" -- "$@"
 }
 
 [ -f "$SEED_LL" ] || { echo "missing $SEED_LL — cannot bootstrap" >&2; exit 1; }
@@ -76,7 +78,7 @@ link() {
 echo "[1/4] clang the IR seed -> plewc0..."
 # Built at plewc0 so it resolves @Std from std/ (the std
 # root is the binary's directory + std/, see computeStdRoot).
-link seed-link "$SEED_LL" "$SEED_RT" plewc0 $LDLIBS
+link seed-link "$SEED_LL" "$SEED_RT" plewc0 --compiler-backend $LDLIBS
 
 echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # The resolver (resolve/_.pw) imports only the arena-free toolchain leaves
@@ -96,7 +98,7 @@ python3 ./scripts/support/validation-checkpoint.py
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
 trace compiler-compile ./plewc0 --trace-phases "$PW" > plewc.ll
 ./plewc0 --runtime > plewc.runtime.c
-link compiler-link plewc.ll plewc.runtime.c plewc $LDLIBS
+link compiler-link plewc.ll plewc.runtime.c plewc --compiler-backend $LDLIBS
 
 if [ "$1" = "--reseed" ]; then
     cp plewc.ll "$SEED_LL"

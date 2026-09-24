@@ -46,7 +46,7 @@ def main(mode="all"):
             if 'ERROR: AddressSanitizer: heap-use-after-free' not in diagnostics:
                 raise RuntimeError('nonvolatile UAF control did not detect heap-use-after-free')
             command('instrument', [opt, '-debug-pass-manager', '-passes=asan', Path(os.environ['TMP']) / 'pc.ll', '-o', tmp / 'compiler.bc'])
-            command('link', [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-O1', '-fno-omit-frame-pointer', '-fsanitize=address', '-w', tmp / 'compiler.bc', os.environ['RT'], str(Path(opt).parent.parent / 'lib/libLLVM.dylib'), '-o', binary])
+            command('link', [clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-O1', '-fno-omit-frame-pointer', '-fsanitize=address', '-w', tmp / 'compiler.bc', os.environ['RT'], str(Path(opt).parent.parent / 'lib/libLLVM.dylib'), Path(os.environ['TMP']) / 'llvm-backend.o', '-lc++', '-o', binary])
             prepared = True
             if mode == "prepare":
                 return

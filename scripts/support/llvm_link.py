@@ -50,14 +50,30 @@ def optimization_command(config, source, destination, clang=None):
             '-S', str(source), '-o', str(destination)]
 
 
-def link(config, log_prefix, source, runtime, destination, libraries=(), clang=None):
+def compiler_backend(config, output, sanitize=False):
+    """Build the native module consumer against the compiler's selected LLVM."""
+    clangxx = Path(subprocess.check_output([config, '--bindir'], text=True).strip()) / 'clang++'
+    include = subprocess.check_output([config, '--includedir'], text=True).strip()
+    command = [str(clangxx), '-std=c++17', '-O2', '-isystem', include,
+               '-c', str(ROOT / 'native/llvm_backend.cpp'), '-o', str(output)]
+    if sanitize:
+        command += ['-fsanitize=address', '-fno-omit-frame-pointer']
+    subprocess.run([sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--', *command], check=True)
+    return [str(output), '-lc++' if sys.platform == 'darwin' else '-lstdc++']
+
+
+def link(config, log_prefix, source, runtime, destination, libraries=(), clang=None, *, with_backend=False, object_input=False):
     prefix = Path(log_prefix)
     prefix.parent.mkdir(parents=True, exist_ok=True)
+    if with_backend:
+        libraries = [*libraries, *compiler_backend(config, Path(str(prefix) + '.backend.o'))]
     optimized = Path(str(prefix) + '.optimized.ll')
-    steps = [
+    steps = [] if object_input else [
         (str(prefix) + '.opt.log', optimization_command(config, source, optimized, clang=clang)),
+    ]
+    steps += [
         (str(prefix) + '.log', [clang or selected_clang(config), '-Xclang', '-fdebug-pass-manager',
-                               '-mllvm', '-debug-pass=Executions', '-w', '-O2', str(optimized),
+                               '-mllvm', '-debug-pass=Executions', '-w', '-O2', str(source if object_input else optimized),
                                str(runtime), *libraries, '-o', str(destination)]),
     ]
     for log, command in steps:
@@ -69,7 +85,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True)
     parser.add_argument('--log-prefix', required=True)
-    parser.add_argument('--llvm', required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument('--llvm')
+    inputs.add_argument('--object')
+    parser.add_argument('--compiler-backend', action='store_true')
     parser.add_argument('--runtime', required=True)
     parser.add_argument('--output', required=True)
     parser.add_argument('libraries', nargs=argparse.REMAINDER)
@@ -79,7 +98,7 @@ def main():
         config = shutil.which(args.config)
         if not config:
             raise ValueError('selected llvm-config unavailable')
-        link(config, args.log_prefix, args.llvm, args.runtime, args.output, libraries)
+        link(config, args.log_prefix, args.object or args.llvm, args.runtime, args.output, libraries, with_backend=args.compiler_backend, object_input=bool(args.object))
     except subprocess.CalledProcessError as error:
         return error.returncode if error.returncode >= 0 else 128 - error.returncode
     except (ValueError, OSError) as error:
