@@ -7,9 +7,13 @@ import @Std/Io with { print }
 
 fn checkSource(path: String, asan: Bool) {
     mut val compiler: Comp = <Comp />
-    analyzeFrontend(c: inout compiler,
+    val analysis = analyzeFrontend(c: inout compiler,
         input: <FrontendInput.Text text="fn main() {}" path=path />,
         sources: <SourceAccess />, options: <FrontendOptions asan=asan />)
+    match analysis {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
     match PreparedProgram.prepare(c: inout compiler) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { reportProgramPreparationError(c: inout compiler, error: error) }
@@ -19,6 +23,13 @@ fn checkSource(path: String, asan: Bool) {
 }
 
 fn main() {
+    mut val missing: Comp = <Comp />
+    match analyzeFrontend(c: inout missing,
+        input: <FrontendInput.File path="/nonexistent/plew-input-test.pw" />,
+        sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("missing input was accepted") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+    }
     checkSource(path: "First.pw", asan: false)
     checkSource(path: "Second.pw", asan: true)
 }

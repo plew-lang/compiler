@@ -11,6 +11,10 @@ assert 'argAt(entryArgIdx)' not in analysis
 assert 'FrontendInput.File(path:' in analysis
 assert 'FrontendInput.Text(text:' in analysis
 assert 'sources.stdRoot' in analysis
+entry = analysis.split('// Whether the literal', 1)[0]
+assert '-> Result[(), CompileDiagnostic]' in entry
+assert 'c.errorAt(' not in entry and 'exit(' not in entry
+assert 'match analysis {' in driver and 'emitDiagnostic(diagnostic: diagnostic)' in driver
 assert 'analyzeFrontend(c: inout c, input: input, sources: configuredSources' in driver
 assert 'readStdin()' in driver and 'computeStdRoot(arg0:' in driver
 print('PASS explicit frontend inputs and CLI ownership')

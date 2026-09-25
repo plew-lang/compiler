@@ -1070,7 +1070,7 @@ pub impl FrontendOptions { factory }
 
 // Source roots are explicit: analysis never consults argv or reads stdin.
 export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAccess,
-                         options: FrontendOptions = <FrontendOptions />) {
+                         options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
     val genMode = options.genMode
     val tcLog = options.tcLog
     val asan = options.asan
@@ -1116,10 +1116,8 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
         // empty string and the compiler silently emits an empty program (exit 0),
         // which hides a typo'd path. (Acceptance soundness: never silently accept.)
         if !(sources.exists(path: entryBytes)) {
-            eprint(text: "plewc: error: cannot open source file: ")
-            eprint(text: rootPath)
-            eprint(text: "\n")
-            exit(code: 1)
+            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Unpositioned />
+                message="cannot open source file: " + rootPath /> />
         }
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
@@ -1402,7 +1400,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
                         // you may only import what the manifest declares + `@Std`).
                         if childPath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
-                                c.errorAt(offset: imp.path.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
+                                return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)") />
                             }
                         }
                         if childPath.count() != 0 {
@@ -1415,7 +1413,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
                             // instead: importing the same module from many places is fine.)
                             if !(imp.isImport) {
                                 if seen {
-                                    c.errorAt(offset: imp.path.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)")
+                                    return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)") />
                                 }
                             }
                             if !seen {
@@ -1423,7 +1421,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
                                 // import/part path — reject loudly (acceptance soundness:
                                 // never silently load nothing).
                                 if !(sources.exists(path: childPath)) {
-                                    c.errorAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file")
+                                    return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file") />
                                 }
                                 // a `part` (isImport=false) joins this module; an
                                 // `import` (true) starts a fresh module.
@@ -1467,13 +1465,13 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
                         }
                         if rePath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
-                                c.errorAt(offset: imp.path.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
+                                return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)") />
                             }
                         }
                         if rePath.count() != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
                                 if !(sources.exists(path: rePath)) {
-                                    c.errorAt(offset: imp.path.start, msg: "cannot open module file: the re-export path does not resolve to an existing file")
+                                    return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "cannot open module file: the re-export path does not resolve to an existing file") />
                                 }
                                 val rm: U64 = nextModuleId
                                 nextModuleId = nextModuleId + 1
@@ -1741,7 +1739,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     tracePhase(c: inout c, label: "default-call-completion:start")
     val incompleteDefaults = c.completeRecordedDefaultCalls()
     if incompleteDefaults != 0U64 {
-        c.errorAt(offset: 0U64, msg: "internal error: default argument plans are incomplete")
+        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: default argument plans are incomplete") />
     }
     tracePhase(c: inout c, label: "default-call-completion:done")
     if !c.genMode { c.closeProgramCallTemplates() }
@@ -1761,6 +1759,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCallees.count())
     c.traceFinalBodyInstanceSummary()
     tracePhase(c: inout c, label: "finalize-callables:done")
+    return <Result.Ok value=() />
 }
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
 // an integer type of the given width and signedness. Span-free core of

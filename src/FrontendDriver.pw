@@ -1,7 +1,8 @@
 // CLI adapter only. Embedders call analyzeFrontend with explicit inputs.
 import @Std/Io with { readStdin }
-import @Std/Process with { argCount, argAt }
+import @Std/Process with { argCount, argAt, exit }
 import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+import ./Diag with { emitDiagnostic }
 import ./SourceAccess with { SourceAccess }
 import ./Path with { computeStdRoot }
 
@@ -63,6 +64,13 @@ export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, f
     val configuredSources = <SourceAccess
         stdRoot=if sources.stdRoot.count() != 0U64 { give sources.stdRoot } else { give computeStdRoot(arg0: argAt(0).bytes()) }
         resources=sources.resources />
-    analyzeFrontend(c: inout c, input: input, sources: configuredSources,
+    val analysis = analyzeFrontend(c: inout c, input: input, sources: configuredSources,
         options: <FrontendOptions genMode=genMode tcLog=tcLog asan=asan traceCodegen=traceCodegen tracePhases=tracePhases emitMidCoverage=emitMidCoverage requireMid=requireMid />)
+    match analysis {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => {
+            emitDiagnostic(diagnostic: diagnostic)
+            exit(code: 1)
+        }
+    }
 }

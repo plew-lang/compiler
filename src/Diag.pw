@@ -58,6 +58,7 @@ export fn eprintU64(n: U64) {
 // Diagnostics own their source identity and message, independent of an arena.
 // Constructing or displaying one does not terminate the embedding process.
 export enum DiagnosticLocation {
+    Unpositioned
     Line(line: I64)
     File(path: String, line: I64)
 }
@@ -71,6 +72,11 @@ pub impl CompileDiagnostic { factory }
 export fn emitDiagnostic(diagnostic: CompileDiagnostic) {
     eprint(text: "plewc: error: ")
     match diagnostic.location {
+        DiagnosticLocation.Unpositioned => {
+            eprint(text: diagnostic.message)
+            eprint(text: "\n")
+            return
+        }
         DiagnosticLocation.Line(line: val line) => {
             eprint(text: "line ")
             eprintInt(n: line)
