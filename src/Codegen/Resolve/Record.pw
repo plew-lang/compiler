@@ -2084,9 +2084,9 @@ pub impl Comp {
 
     // Demand preparation preserves the same lexical phases as the eager
     // frontend. Specialization may consume this owner only after completion.
-    inout fn prepareLexicalBody(fnIdx: U64) {
+    inout fn prepareLexicalBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         val owner = self.semanticBodyOwner(fnIdx: fnIdx)
-        if self.callTemplatesClosedForBody(fnIdx: owner) { return }
+        if self.callTemplatesClosedForBody(fnIdx: owner) { return <Result.Ok value=() /> }
         val saved = self.cur
         self.cur.bodyFnIdx = owner
         self.cur.bodyEnvironment = <InstanceEnvironment />
@@ -2094,15 +2094,16 @@ pub impl Comp {
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
-        self.checkGenericFunction(fnIdx: owner)
-        self.verifyFunctionDeclaration(fnIdx: owner)
+        try self.checkGenericFunction(fnIdx: owner)
+        try self.verifyFunctionDeclaration(fnIdx: owner)
         self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
         self.cur.recordCallTemplates = false
         if self.completeRecordedDefaultCalls() != 0U64 {
-            self.errorAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans")
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }
         self.closeCallTemplatesForBody(fnIdx: owner)
         self.cur = saved
+        return <Result.Ok value=() />
     }
 
     // Record every function body's parametric types. Skips: externs / requirement

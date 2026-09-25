@@ -23,7 +23,7 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyExpr(id: U64) {
+    inout fn verifyExpr(id: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 // verify the closure BODY with the closure's own return type as context —
@@ -59,7 +59,7 @@ pub impl Comp {
                 // target an enclosing loop, so reset the loop depth across its body.
                 val sLoopDepth: U64 = self.cur.verifyLoopDepth
                 self.cur.verifyLoopDepth = 0U64
-                self.verifyBlock(blockId: body)
+                try self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = sLoopDepth
                 // a closure with a declared NON-unit return type must return on every path,
                 // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
@@ -71,7 +71,7 @@ pub impl Comp {
                     }
                     if !(retIsUnit) {
                         if !(self.blockDiverges(blkId: body)) {
-                            self.errorAt(offset: self.exprOffset(id: id), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)") />
                         }
                     }
                 }
@@ -84,11 +84,11 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 self.verifyFieldReadVis(exprId: id, base: base, nameStart: nameStart, nameLen: nameLen)
-                self.verifyExpr(id: base)
+                try self.verifyExpr(id: base)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.verifyRecv(recv: recv)
-                self.verifyArgs(args: args)
+                try self.verifyRecv(recv: recv)
+                try self.verifyArgs(args: args)
                 // Do not recover the receiver through `typeOf` here: during
                 // abstract checking that cache can already carry a concrete
                 // instantiation from another phase.  The installed local
@@ -113,7 +113,7 @@ pub impl Comp {
                 }
                 if boundLen != 0U64 {
                     if self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, tpStart: boundStart, tpLen: boundLen, nameStart: nameStart, nameLen: nameLen, args: args) {
-                        return
+                        return <Result.Ok value=() />
                     }
                 }
                 val mf: U64 = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -131,13 +131,13 @@ pub impl Comp {
                     val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
                     val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
                     if source.kind == 0U64 {
-                        self.errorAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier")
+                        return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier") />
                     }
                     val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                     self.recordResolvedMethodCallee(id: id, callee: mf)
                     self.checkResolvedMethodArgs(mf: mf, args: args)
-                    self.verifyArgs(args: args)
-                    return
+                    try self.verifyArgs(args: args)
+                    return <Result.Ok value=() />
                 }
                 self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
@@ -153,7 +153,7 @@ pub impl Comp {
                         // already-resolved call into a false ambiguity or a
                         // false nonconformance.
                         if recvRef != 0U64 && !(self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: self.copyFuncTypes(types: selectedFn.recvTraitArgs))) {
-                            self.errorAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance")
+                            return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance") />
                         }
                     }
                 }
@@ -162,8 +162,8 @@ pub impl Comp {
                     self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
                     self.checkResolvedMethodArgs(mf: mf, args: args)
                 }
-                self.verifyExpr(id: recv)
-                self.verifyArgs(args: args)
+                try self.verifyExpr(id: recv)
+                try self.verifyArgs(args: args)
             }
             Expr.ExtView(val recv, source: val sourceSelector, val strip) => {
                 // When this node is the receiver of `Type#View.member()`, the
@@ -172,18 +172,18 @@ pub impl Comp {
                 // ordinary value read.  A standalone type view remains
                 // rejected by its enclosing expression's normal value checks.
                 if self.assocRecvName(recv: id).nameLen != 0U64 {
-                    return
+                    return <Result.Ok value=() />
                 }
                 val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
                 self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = self.typeOf(id: id)
-                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: sourceSelector.writtenStart)
+                    try self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: sourceSelector.writtenStart)
                 }
-                self.verifyExpr(id: recv)
+                try self.verifyExpr(id: recv)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                self.verifyArgs(args: args)
+                try self.verifyArgs(args: args)
                 self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -209,7 +209,7 @@ pub impl Comp {
                             vk += 1
                         }
                         if !(vfound) {
-                            self.errorAt(offset: self.exprOffset(id: id), msg: "unknown enum variant in construction (this enum has no such variant)")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "unknown enum variant in construction (this enum has no such variant)") />
                         }
                         val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                         if cvi < self.arena.enumAt(index: cei).variants.count() {
@@ -222,7 +222,7 @@ pub impl Comp {
                             mut val cfi: U64 = 0
                             while cfi < cfs.count() {
                                 if !(self.makeFieldsCoverField(fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
-                                    self.errorAt(offset: self.exprOffset(id: id), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "variant construction is missing a payload field; every field of the variant must be set") />
                                 }
                                 if !(enumIsGen) {
                                     mut val mfk: U64 = 0
@@ -264,7 +264,7 @@ pub impl Comp {
                         }
                         if tpCount <= self.arena.structCount() + self.arena.enumCount() {
                             if tr.args.count() != tpCount {
-                                self.errorAt(offset: self.exprOffset(id: id), msg: "wrong number of type arguments for this generic type")
+                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "wrong number of type arguments for this generic type") />
                             }
                         }
                     }
@@ -274,7 +274,7 @@ pub impl Comp {
                 val selectedMakeType = self.parametricExprTerm(exprId: id)
                 if !isEnum && (selectedMakeType == 0U64 || self.arena.typeAt(index: selectedMakeType).args.count() == 0U64) {
                     if self.genericStructIndex(nameStart: typeStart, nameLen: typeLen) < self.arena.structCount() {
-                        self.errorAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)") />
                     }
                 }
                 self.tcCheckMakeFields(expectedRef: selectedMakeType, makeId: id)
@@ -298,7 +298,7 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    self.verifyExpr(id: field.value)
+                    try self.verifyExpr(id: field.value)
                     if nonGenSidx < self.arena.structCount() {
                         val cfs: Array[FieldDef] = self.arena.structAt(index: nonGenSidx).fields
                         mut val fk: U64 = 0
@@ -317,7 +317,7 @@ pub impl Comp {
                     while j < i {
                         val prior: MakeField = self.makeFieldAt(fields: fields, index: j)
                         if spansEqual(c: inout self, aStart: prior.nameStart, aLen: prior.nameLen, bStart: field.nameStart, bLen: field.nameLen) {
-                            self.errorAt(offset: field.offset, msg: "duplicate field in construction; each field may be set at most once")
+                            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "duplicate field in construction; each field may be set at most once") />
                         }
                         j += 1U64
                     }
@@ -326,40 +326,40 @@ pub impl Comp {
             }
             Expr.Cast(val operand, val tyStart, val tyLen, ty: val targetTerm) => {
                 self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen, targetTerm: targetTerm)
-                self.verifyExpr(id: operand)
+                try self.verifyExpr(id: operand)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                self.verifyExpr(id: lhs)
-                self.verifyExpr(id: rhs)
+                try self.verifyExpr(id: lhs)
+                try self.verifyExpr(id: rhs)
                 self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
                 self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
             }
             Expr.Unary(val op, val operand) => {
-                self.verifyExpr(id: operand)
+                try self.verifyExpr(id: operand)
                 self.tcCheckUnary(op: op, operand: operand)
             }
             Expr.Index(val base, val index) => {
-                self.verifyExpr(id: base)
-                self.verifyExpr(id: index)
+                try self.verifyExpr(id: base)
+                try self.verifyExpr(id: index)
                 self.tcCheckArrayIndex(base: base, index: index)
                 self.checkIndexKeyType(base: base, index: index)
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
-                    self.verifyExpr(id: self.exprAt(exprs: elems, index: i))
+                    try self.verifyExpr(id: self.exprAt(exprs: elems, index: i))
                     i += 1
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                self.verifyExpr(id: base)
+                try self.verifyExpr(id: base)
                 // `r->field` is strong-ref-only: a weak ref field read/write must go through
                 // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
                 // (typeOf, not exprType: cached; only `.ref` is read here and an int context's
                 // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
                 val abt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefLikeInst(ref: abt.ref) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if self.isStrongRefInst(ref: abt.ref) {
                     // `->` touches the POINTEE's field, so it obeys the pointee type's field
                     // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
@@ -373,7 +373,7 @@ pub impl Comp {
                 }
             }
             Expr.Deref(val base) => {
-                self.verifyExpr(id: base)
+                try self.verifyExpr(id: base)
                 // `->` is the POINTEE operator and is strong-ref-only (spec/03). A weak ref has no
                 // direct deref — its referent may be dead — so it must be `upgrade()`d to an
                 // `Optional` strong reference first. Reject `w->…` with a pointed message rather than the
@@ -381,13 +381,13 @@ pub impl Comp {
                 // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
                 val bt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefLikeInst(ref: bt.ref) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if !(self.isStrongRefInst(ref: bt.ref)) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` or `MutableRef[T]` on the left (it dereferences a reference cell's pointee)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` or `MutableRef[T]` on the left (it dereferences a reference cell's pointee)") />
                 }
             }
             Expr.OptChain(val base, cont: _) => {
-                self.verifyExpr(id: base)
+                try self.verifyExpr(id: base)
                 // `?.` desugars (spec/12) to a match over `base.chain()` — the Chain
                 // trait. The rewrite runs in Mono BEFORE Verify, replacing this node with
                 // the match whenever `base` IS a Chain type. So an OptChain that SURVIVES
@@ -404,12 +404,12 @@ pub impl Comp {
                     }
                 }
                 if !(baseIsChain) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "the left of `?.` must fully implement `Chain`: a `chain()` returning an `Optional`, plus `fromValue(value:)` and `empty()` factories (spec/12). `Optional` and user Chain types qualify; a plain struct/scalar does not, and `Result` is not Chain (use `try`)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "the left of `?.` must fully implement `Chain`: a `chain()` returning an `Optional`, plus `fromValue(value:)` and `empty()` factories (spec/12). `Optional` and user Chain types qualify; a plain struct/scalar does not, and `Result` is not Chain (use `try`)") />
                 }
             }
             Expr.ChainHole => {}
             Expr.Try(val expr) => {
-                self.verifyExpr(id: expr)
+                try self.verifyExpr(id: expr)
                 // `try` is only valid in a function that RETURNS a Result (spec/13): it
                 // early-returns the enclosing function's Result on `Err`. In a void /
                 // non-Result function this used to crash the backend (it indexed the
@@ -423,7 +423,7 @@ pub impl Comp {
                     }
                 }
                 if !(retIsResult) {
-                    self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` is only valid in a function that returns a Result (spec/13)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` is only valid in a function that returns a Result (spec/13)") />
                 }
                 // `try` works only on a Result (spec/13). The operand being some OTHER
                 // registered enum (notably `Optional`) used to crash the backend (it
@@ -437,7 +437,7 @@ pub impl Comp {
                     }
                     if isEnum {
                         if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
-                            self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
                         }
                     }
                     // the operand's error type E' must either match the enclosing
@@ -470,7 +470,7 @@ pub impl Comp {
                                                     // the source type is essential — a `from` taking some
                                                     // other type would reinterpret E' bits.
                                                     if !(self.typeRefHasFromFactory(errRef: fnR.args[1], srcRef: opR.args[1])) {
-                                                        self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)")
+                                                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)") />
                                                     }
                                                 }
                                             }
@@ -484,10 +484,10 @@ pub impl Comp {
             }
             Expr.MatchExpr(val scrut, val arms) => {
                 self.checkMatchAccessMode(scrut: scrut, arms: arms)
-                self.verifyExpr(id: scrut)
+                try self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
-                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") />
                 }
                 mut val ai: U64 = 0
                 while ai < arms.len {
@@ -496,17 +496,17 @@ pub impl Comp {
                     self.checkDestructureComplete(a: arm, scrut: scrut)
                     self.verifyAddArmBinds(a: arm, scrut: scrut)
                     self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
-                    self.verifyBlock(blockId: arm.body)
+                    try self.verifyBlock(blockId: arm.body)
                     self.popLocals(mark: armMark)
                     ai += 1
                 }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                self.verifyExpr(id: cond)
+                try self.verifyExpr(id: cond)
                 self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
                 self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
-                self.verifyBlock(blockId: thenBlk)
-                self.verifyBlock(blockId: elseBlk)
+                try self.verifyBlock(blockId: thenBlk)
+                try self.verifyBlock(blockId: elseBlk)
             }
             Expr.Ident(val start, val len) => {
                 // an identifier in read position must resolve to a value in scope: `self`, a
@@ -523,15 +523,15 @@ pub impl Comp {
                 val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.functionCount())
                 if !(self.bindIsValue(code: bindCode)) {
                     if bindCode == identFnCode() {
-                        self.errorAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)")
+                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)") />
                     } else {
-                        self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
                     }
                 }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
                     if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {
-                        self.errorAt(offset: start, msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
+                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)") />
                     }
                 }
             }
@@ -543,12 +543,12 @@ pub impl Comp {
                 // drop-elaboration dataflow lands.
                 if !(isBorrow) {
                     if self.moveOperandIsAggregatePartial(id: operand) {
-                        self.errorAt(offset: self.exprOffset(id: operand), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)") />
                     } else {
                         match self.arena.exprs[operand] {
                             Expr.Ident(val start, val len) => {
                                 if self.isSelfRef(start: start, len: len) {
-                                    self.errorAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported")
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported") />
                                 }
                                 if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
                                     // Conditional move is valid affine ownership.
@@ -559,7 +559,7 @@ pub impl Comp {
                                 }
                             }
                             _ => {
-                                self.errorAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a whole local variable in v1")
+                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a whole local variable in v1") />
                             }
                         }
                     }
@@ -567,7 +567,7 @@ pub impl Comp {
                 // verify the operand FIRST (a second `move u` / a read after move resolves
                 // through the Ident arm below and reports the use-after-move), THEN record
                 // the move so later uses are caught. spec/03.
-                self.verifyExpr(id: operand)
+                try self.verifyExpr(id: operand)
                 if !(isBorrow) {
                     match self.arena.exprs[operand] {
                         Expr.Ident(val start, val len) => {
@@ -579,6 +579,7 @@ pub impl Comp {
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     // Verify a method/assoc receiver. A bare type / primitive name here is a valid assoc-
@@ -586,21 +587,22 @@ pub impl Comp {
     // no value check. Any other receiver is an ordinary value and is verified normally (its
     // Ident arm runs the value check). A non-generic body has no type parameters in scope,
     // so pass the funcs.count() sentinel to identIsTypeQualifier.
-    inout fn verifyRecv(recv: U64) {
+    inout fn verifyRecv(recv: U64) -> Result[(), CompileDiagnostic] {
         if self.assocRecvName(recv: recv).nameLen != 0U64 {
             // A type-qualified associated call can carry `#` view selectors.
             // It is not a value read, so descending into its base Ident would
             // incorrectly demand a local named `Sample`.
-            return
+            return <Result.Ok value=() />
         }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
                 if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount())) {
-                    self.verifyExpr(id: recv)
+                    try self.verifyExpr(id: recv)
                 }
             }
-            _ => { self.verifyExpr(id: recv) }
+            _ => { try self.verifyExpr(id: recv) }
         }
+        return <Result.Ok value=() />
     }
 }
 

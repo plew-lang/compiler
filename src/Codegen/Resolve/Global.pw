@@ -90,24 +90,25 @@ pub impl Comp {
         self.seedGlobalLocals(useMod: self.moduleOf(offset: self.exprOffset(id: init)))
     }
 
-    inout fn prepareGlobalInitializer(target: U64) {
-        if self.globalInitializerPrepared(target: target) { return }
+    inout fn prepareGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
+        if self.globalInitializerPrepared(target: target) { return <Result.Ok value=() /> }
         val saved = self.cur
         self.enterGlobalInitializer(target: target)
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
         self.recordStmt(stmtId: stmt)
         self.enterGlobalInitializer(target: target)
-        self.verifyStmt(stmtId: stmt)
+        try self.verifyStmt(stmtId: stmt)
         self.enterGlobalInitializer(target: target)
         self.cur.recordCallTemplates = true
         self.recordStmt(stmtId: stmt)
         self.cur.recordCallTemplates = false
         if self.completeRecordedDefaultCalls() != 0U64 {
-            self.errorAt(offset: target, msg: "internal error: global default argument plans are incomplete")
+            return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
         self.preparedGlobalTargets.append(target)
         self.cur = saved
+        return <Result.Ok value=() />
     }
 
     inout fn retainSelectedGlobals() {

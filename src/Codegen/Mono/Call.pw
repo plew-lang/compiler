@@ -4522,20 +4522,20 @@ pub impl Comp {
         self.cur.bodyId = savedBody
     }
 
-    inout fn scanFinalBodyInstance(bodyId: U64) {
+    inout fn scanFinalBodyInstance(bodyId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.bodyOrigin(bodyId: bodyId) {
-            BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return }
+            BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return <Result.Ok value=() /> }
             BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
                 self.finalizeExistentialWitness(bodyId: bodyId, resolutionIndex: resolution, memberIndex: member)
-                return
+                return <Result.Ok value=() />
             }
             BodyOrigin.Callable => {}
         }
         val instance: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-        if self.genMode { self.prepareLexicalBody(fnIdx: instance.fnIdx) }
+        if self.genMode { try self.prepareLexicalBody(fnIdx: instance.fnIdx) }
         if !self.callTemplatesClosedForBody(fnIdx: instance.fnIdx) {
-            self.errorAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: body finalization requires closed lexical call templates")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: body finalization requires closed lexical call templates") />
+            return <Result.Ok value=() />
         }
         val f: Func = self.arena.functionAt(index: instance.fnIdx)
         if self.tracePhases {
@@ -4614,6 +4614,7 @@ pub impl Comp {
             self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { self.scanBlockInsts(blkId: f.body) }
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
+        return <Result.Ok value=() />
     }
 
     // Trace the instance fan-out by callable, not merely its total. The normal
@@ -4973,7 +4974,7 @@ pub impl Comp {
     // Mono discovery lists still decide which generic layouts are required; this
     // pass adds the missing invariant: every emitted body instance has resolved
     // every static call exactly once in its own concrete environment.
-    inout fn finalizeCallables() {
+    inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
         self.arena.finalDestructions = []
         self.arena.finalDestructionIds = []
         val noDestructionHeads: Dictionary[U64, U64] = [:]
@@ -5067,7 +5068,7 @@ pub impl Comp {
         while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() || storageI < self.arena.finalStorages.count() {
             if bodyI < self.monoWork.bodyInstances.count() {
                 val bodyId = self.monoWork.bodyInstances[bodyI]
-                self.scanFinalBodyInstance(bodyId: bodyId)
+                try self.scanFinalBodyInstance(bodyId: bodyId)
                 val signature = self.arena.bodySignature(bodyId: bodyId)
                 // The selected body's receiver can carry a different view
                 // from the caller's value and is not an explicit parameter.
@@ -5082,7 +5083,7 @@ pub impl Comp {
             }
             if globalI < self.selectedGlobalTargets.count() {
                 val target: U64 = self.selectedGlobalTargets[globalI]
-                self.prepareGlobalInitializer(target: target)
+                try self.prepareGlobalInitializer(target: target)
                 self.enterGlobalInitializer(target: target)
                 val index: U64 = self.globalIndexForDeclarationTarget(target: target)
                 self.scanStmtInsts(stmtId: self.arena.globals[index].letStmt)
@@ -5135,6 +5136,7 @@ pub impl Comp {
         self.enterBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
+        return <Result.Ok value=() />
     }
 
     inout fn captureSupported(lo: Local) -> Bool {

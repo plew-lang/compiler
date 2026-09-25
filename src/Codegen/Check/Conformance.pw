@@ -434,7 +434,7 @@ pub impl Comp {
     // `activeExtIds` is empty for the declaration-time bare graph.  A view
     // passes its complete extension-source set, making extensions edge-active
     // only when the programmer explicitly selected them.
-    inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) {
+    inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val graph = self.buildTraitCycleGraph(activeExtIds: activeExtIds)
         val components = graph.components()
         mut val edgeId: U64 = 1U64
@@ -447,7 +447,7 @@ pub impl Comp {
                 if !(self.traitCycleEdgeIsNonIncreasing(cf: edge)) {
                     mut val report: U64 = edge.defOffset
                     if offset != 0U64 { report = offset }
-                    self.errorAt(offset: report, msg: "trait-to-trait conformance edge grows within a cycle")
+                    return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance edge grows within a cycle") />
                 }
             }
             val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyConformTypes(types: edge.subjectArgs) scope=ci />
@@ -456,10 +456,11 @@ pub impl Comp {
             if self.traitCyclePathReaches(start: source, node: target, binds: binds, graph: graph) {
                 mut val report: U64 = edge.defOffset
                 if offset != 0U64 { report = offset }
-                self.errorAt(offset: report, msg: "trait-to-trait conformance cycle")
+                return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance cycle") />
             }
             edgeId += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // A named extension is one module-crossing bundle.  Validate every
@@ -468,24 +469,25 @@ pub impl Comp {
     // declaration order.  `checkTraitSubjectCycles` already treats bare
     // edges as present for every source-set; supplying one bundle id gives
     // exactly `bare ∪ bundle`.
-    inout fn checkTraitSubjectCycleBundles() {
+    inout fn checkTraitSubjectCycleBundles() -> Result[(), CompileDiagnostic] {
         mut val seen: Set[U64] = Set.new()
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
             if cf.extId != 0U64 && !seen.contains(cf.extId) {
                 seen.insert(cf.extId)
-                self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
+                try self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
             }
             ci += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // View cycle validity is structural too: once syntax has normalized a
     // source-set, extension names select their registered bundles regardless
     // of whether a particular receiver can use every member.  Applicability is
     // checked separately by the view validator.
-    inout fn checkTraitSubjectViewCycles(viewIds: Array[U64], offset: U64) {
+    inout fn checkTraitSubjectViewCycles(viewIds: Array[U64], offset: U64) -> Result[(), CompileDiagnostic] {
         mut val extIds: Array[U64] = []
         mut val i: U64 = 0U64
         while i < viewIds.count() {
@@ -504,7 +506,8 @@ pub impl Comp {
             }
             i += 1U64
         }
-        self.checkTraitSubjectCycles(activeExtIds: extIds, offset: offset)
+        try self.checkTraitSubjectCycles(activeExtIds: extIds, offset: offset)
+        return <Result.Ok value=() />
     }
 
     inout fn isMacrointerfaceCompatConform(cf: Conform) -> Bool {

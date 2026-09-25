@@ -1607,8 +1607,8 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // A trait-to-trait cycle is invalid as a declaration graph. Check it before
     // the concrete-conformance fixpoint, whose idempotent fact deduplication is
     // intentionally not a substitute for this diagnostic.
-    c.checkTraitSubjectCycles(activeExtIds: [])
-    c.checkTraitSubjectCycleBundles()
+    try c.checkTraitSubjectCycles(activeExtIds: [])
+    try c.checkTraitSubjectCycleBundles()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided
@@ -1709,7 +1709,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
     tracePhase(c: inout c, label: "generic-body-check:start")
-    if !c.genMode { c.checkGenericBodies() }
+    if !c.genMode { try c.checkGenericBodies() }
     tracePhase(c: inout c, label: "generic-body-check:done")
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
@@ -1721,7 +1721,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // emission works. Runs AFTER the typed-AST cache so the operator-witness /
     // visibility checks see recovered expression types.
     tracePhase(c: inout c, label: "verify:start")
-    c.verifyProgram(includeBodies: !c.genMode)
+    try c.verifyProgram(includeBodies: !c.genMode)
     tracePhase(c: inout c, label: "verify:done")
     tracePhase(c: inout c, label: "default-generators:start")
     try c.prepareDefaultArgumentGenerators()
@@ -1751,7 +1751,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.traceExprInstScans = 0U64
     c.traceFinalBodyScans = 0U64
     c.inCollection = true
-    c.finalizeCallables()
+    try c.finalizeCallables()
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "finalize-callables:scan-exprs", count: c.traceExprInstScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-scans", count: c.traceFinalBodyScans)

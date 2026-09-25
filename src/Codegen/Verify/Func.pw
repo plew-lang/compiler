@@ -21,7 +21,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn verifyFunc(f: Func) {
+    inout fn verifyFunc(f: Func) -> Result[(), CompileDiagnostic] {
         if f.hasRet {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart
@@ -56,7 +56,7 @@ pub impl Comp {
                 // would emit invalid IR. Reject loudly instead.
                 if !(self.isIntType(start: rStart, len: rLen)) {
                     if !(rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Bool")) {
-                        self.errorAt(offset: self.fnAnchor(f: f), msg: "an async fn can only return an integer or Bool for now (the Promise payload is passed through a type-erased i64 slot; String / struct / array / float payloads are not yet supported)")
+                        return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "an async fn can only return an integer or Bool for now (the Promise payload is passed through a type-erased i64 slot; String / struct / array / float payloads are not yet supported)") />
                     }
                 }
             }
@@ -94,11 +94,12 @@ pub impl Comp {
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
             pi += 1
         }
-        self.verifyBlock(blockId: f.body)
+        try self.verifyBlock(blockId: f.body)
         self.cur.hasRecv = false
         self.cur.recvStart = 0
         self.cur.recvLen = 0
         self.cur.extId = 0
+        return <Result.Ok value=() />
     }
 
     inout fn verifyMarkMoved(idx: U64) {
@@ -147,15 +148,16 @@ pub impl Comp {
         self.cur.verifyMovedIdx = kept
     }
 
-    inout fn verifyBlock(blockId: U64) {
+    inout fn verifyBlock(blockId: U64) -> Result[(), CompileDiagnostic] {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blockId) {
-            self.verifyStmt(stmtId: self.blockStmtAt(blkId: blockId, index: i))
+            try self.verifyStmt(stmtId: self.blockStmtAt(blkId: blockId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)
         self.verifyDropMovedAbove(mark: mark)
+        return <Result.Ok value=() />
     }
 
     inout fn checkCondBool(cond: U64) {

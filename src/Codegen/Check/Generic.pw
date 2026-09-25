@@ -296,15 +296,16 @@ pub impl Comp {
     // so Verify's authored-type walk intentionally skips them.  Visit the
     // complete type tree here: a view source-set nested in Array[T#E#F], a
     // tuple, or a function type is no less structural than a top-level view.
-    inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return }
-        self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: ref), offset: offset)
+    inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        try self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: ref), offset: offset)
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0U64
         while i < t.args.count() {
-            self.checkGenericTypeViewCycles(ref: t.args[i], offset: offset)
+            try self.checkGenericTypeViewCycles(ref: t.args[i], offset: offset)
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // Walk a method/assoc receiver in a generic body. A bare type / primitive / type-
@@ -1026,7 +1027,7 @@ pub impl Comp {
 
     // Check one lexical declaration under its authored abstract bounds.
     // Selection belongs to the caller; generated provided copies remain excluded.
-    inout fn checkGenericFunction(fnIdx: U64) {
+    inout fn checkGenericFunction(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fnIdx)
         // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
         // block). Generic externs like `arrayPush[T]` would otherwise have block 0
@@ -1067,10 +1068,10 @@ pub impl Comp {
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
                 val param: Param = self.funcParamAt(params: f.params, index: pi)
-                self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
+                try self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
                 pi += 1U64
             }
-            self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
+            try self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
             val noArgs: Array[U64] = []
             self.cur.locals = []
             self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
@@ -1124,12 +1125,13 @@ pub impl Comp {
             }
             self.checkBoundsBlock(blkId: f.body)
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkGenericBodies() {
+    inout fn checkGenericBodies() -> Result[(), CompileDiagnostic] {
         mut val fi: U64 = 0
         while fi < self.arena.functionCount() {
-            self.checkGenericFunction(fnIdx: fi)
+            try self.checkGenericFunction(fnIdx: fi)
             fi += 1
         }
         self.cur.locals = []
@@ -1138,5 +1140,6 @@ pub impl Comp {
         self.cur.selfRef = 0
         self.cur.itemRef = 0
         self.cur.checkFn = self.arena.functionCount()
+        return <Result.Ok value=() />
     }
 }

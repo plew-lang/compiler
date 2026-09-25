@@ -5,10 +5,10 @@
 // run via checkLitCtx -> checkCallArgs -> checkUniqueArgModes).
 
 pub impl Comp {
-    inout fn verifyArgs(args: ArgRange) {
+    inout fn verifyArgs(args: ArgRange) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < args.len {
-            self.verifyExpr(id: self.argAt(args: args, index: i).expr)
+            try self.verifyExpr(id: self.argAt(args: args, index: i).expr)
             i += 1
         }
         // overlapping `inout` (spec/03, Swift-equivalent granularity): two or more
@@ -29,6 +29,7 @@ pub impl Comp {
             }
             a += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // One PAIR of `inout` places (spec/03 overlapping-inout, the static tier):

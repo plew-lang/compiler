@@ -38,7 +38,7 @@ pub impl Comp {
         return count
     }
 
-    inout fn verifyProgram(includeBodies: Bool = true) {
+    inout fn verifyProgram(includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
         // global initializers first: module-level `val g = …` is program code too, and
         // the acceptance rules (literal context/range, array-element consistency,
         // unique-copy, generic arity) reach it exactly like a function body. Without
@@ -57,7 +57,7 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
-        self.checkTypeViewSources()
+        try self.checkTypeViewSources()
         mut val gvi: U64 = 0
         while !self.genMode && gvi < self.arena.globals.count() {
             if self.tracePhases {
@@ -65,7 +65,7 @@ pub impl Comp {
                 traceU64(n: gvi)
                 eprint(text: "\n")
             }
-            self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
+            try self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
         self.cur.locals = []
@@ -89,16 +89,17 @@ pub impl Comp {
             // operator witness `Add[U64]` in SipHasher said to be loaded only on import) is
             // moot — Core is force-loaded WITH its witnesses (see Frontend force-load), so a
             // no-import program resolves them fine. extern fns have no body to verify.
-            self.verifyFunctionDeclaration(fnIdx: fi)
+            try self.verifyFunctionDeclaration(fnIdx: fi)
             fi += 1
         }
         if self.tracePhases { eprint(text: "[trace-phase] verify:decl-shapes\n") }
         self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
+        return <Result.Ok value=() />
     }
 
     // Verify one concrete lexical declaration. Generic and trait templates use
     // checkGenericFunction under their authored abstract environment.
-    inout fn verifyFunctionDeclaration(fnIdx: U64) {
+    inout fn verifyFunctionDeclaration(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fnIdx)
         if !(f.isExtern) {
             if f.typeParams.count() > 0U64 {
@@ -124,10 +125,11 @@ pub impl Comp {
                     traceU64(n: f.defOffset)
                     eprint(text: "\n")
                 }
-                self.verifyFunc(f: f)
+                try self.verifyFunc(f: f)
             }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // The source-selection proof for both `value#Name` and `Type#Name`.
@@ -172,7 +174,7 @@ pub impl Comp {
         self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
     }
 
-    inout fn checkTypeViewSources() {
+    inout fn checkTypeViewSources() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: i)
@@ -180,7 +182,7 @@ pub impl Comp {
             // annotation site. Every user-written `Type#Name` does.
             if t.siteOffset != 0U64 {
                 val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: i)
-                self.checkTraitSubjectViewCycles(viewIds: self.viewSourceIds(sources: sources), offset: t.siteOffset)
+                try self.checkTraitSubjectViewCycles(viewIds: self.viewSourceIds(sources: sources), offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64
                 while vi < sources.count() {
@@ -193,11 +195,12 @@ pub impl Comp {
                     vi += 1U64
                 }
                 if selectedCount > 1U64 {
-                    self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                    return <Result.Err error=self.diagnosticAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
                 }
             }
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
