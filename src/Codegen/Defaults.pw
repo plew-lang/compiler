@@ -360,8 +360,8 @@ pub impl Comp {
     // The caller must transfer default-expression ownership to these bodies
     // when enabling this phase; recording the same expression as both a parent
     // default and a generator body would give it conflicting local identities.
-    inout fn prepareDefaultArgumentGenerators() {
-        if self.decls.defaultGeneratorRanges.count() != 0U64 { return }
+    inout fn prepareDefaultArgumentGenerators() -> Result[(), CompileDiagnostic] {
+        if self.decls.defaultGeneratorRanges.count() != 0U64 { return <Result.Ok value=() /> }
         val declarationLimit: U64 = self.arena.functionCount()
         val boundLimit: U64 = self.decls.funcBounds.count()
         mut val owners: Array[U64] = []
@@ -394,7 +394,7 @@ pub impl Comp {
                 val destination: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[owner]
                 val source: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[lexicalOwner]
                 if destination.len != source.len {
-                    self.errorAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: provided default parameter shape differs from its source")
+                    return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: provided default parameter shape differs from its source") />
                 }
                 mut val parameterIndex: U64 = 0U64
                 while parameterIndex < destination.len {
@@ -405,6 +405,7 @@ pub impl Comp {
             owner += 1U64
         }
         self.copyDefaultGeneratorBounds(boundLimit: boundLimit, owners: owners)
+        return <Result.Ok value=() />
     }
 
     // Walk authored bounds once, not once per generator. Each relevant row is

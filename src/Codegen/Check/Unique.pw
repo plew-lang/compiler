@@ -243,10 +243,11 @@ pub impl Comp {
     // so it must not reference a sibling field, another parameter, or `self`. Without
     // this the reference only fails at a construction / call site, so a type/function
     // that is never used would silently keep a spec-invalid default (`val b: I64 = a`).
-    inout fn checkDefaultSelfContained(exprId: U64, forbidden: Array[U64], offset: U64, what: String) {
+    inout fn checkDefaultSelfContained(exprId: U64, forbidden: Array[U64], offset: U64, what: String) -> Result[(), CompileDiagnostic] {
         if self.exprMentionsAny(exprId: exprId, forbidden: forbidden) {
-            self.errorAt(offset: offset, msg: what)
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: what) />
         }
+        return <Result.Ok value=() />
     }
 
     inout fn exprContainsAwait(exprId: U64) -> Bool {
@@ -381,10 +382,11 @@ pub impl Comp {
         }
     }
 
-    inout fn checkDefaultDoesNotSuspend(exprId: U64, offset: U64, what: String) {
+    inout fn checkDefaultDoesNotSuspend(exprId: U64, offset: U64, what: String) -> Result[(), CompileDiagnostic] {
         if self.exprContainsAwait(exprId: exprId) {
-            self.errorAt(offset: offset, msg: what)
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: what) />
         }
+        return <Result.Ok value=() />
     }
 
     // `deinit` is only valid on a `unique struct` (spec/03,05): a copyable type would
@@ -417,7 +419,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkFieldDefaults() {
+    inout fn checkFieldDefaults() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: i)
@@ -434,8 +436,8 @@ pub impl Comp {
             while j < s.fields.count() {
                 val f: FieldDef = s.fields[j]
                 if f.hasDefault {
-                    self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
-                    self.checkDefaultDoesNotSuspend(exprId: f.defaultVal, offset: f.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
+                    try self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
+                    try self.checkDefaultDoesNotSuspend(exprId: f.defaultVal, offset: f.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
                     self.checkLitSpan(id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
                     // checkLitSpan accepts a `true`/`false` (and other category-mismatched
                     // values) regardless of the field type, so a default of the wrong type
@@ -448,6 +450,7 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Access-mode validity on parameters (spec/03): a unique-type parameter needs a
@@ -588,7 +591,7 @@ pub impl Comp {
     // the default must fit T exactly as an explicit argument would — `fn f(x: I64 =
     // true)` is a category error (checkLitSpan accepts a bool literal regardless of T,
     // so the full type-check catches it). Skipped for array params (separate machinery).
-    inout fn checkParamDefaults() {
+    inout fn checkParamDefaults() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val ps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: i).params)
@@ -605,8 +608,8 @@ pub impl Comp {
             while j < ps.count() {
                 val p: Param = ps[j]
                 if p.hasDefault {
-                    self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
-                    self.checkDefaultDoesNotSuspend(exprId: p.defaultExpr, offset: p.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
+                    try self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
+                    try self.checkDefaultDoesNotSuspend(exprId: p.defaultExpr, offset: p.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
                     self.checkLitSpan(id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                     if !(p.tyIsArray) {
                         self.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
@@ -616,5 +619,6 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }

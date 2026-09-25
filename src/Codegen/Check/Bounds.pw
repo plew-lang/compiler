@@ -995,7 +995,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkConformances() {
+    inout fn checkConformances() -> Result[(), CompileDiagnostic] {
         mut val ci: U64 = 0
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
@@ -1011,7 +1011,7 @@ pub impl Comp {
             if ti < self.decls.traitCount() {
                 val t: TraitDef = self.decls.traitAt(index: ti)
                 if !self.confWitnessesAll(cf: cf, t: t) {
-                    self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
+                    return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
                 }
                 // supertraits (spec/08): conforming to Sub requires conforming to
                 // each Super (a constraint, not auto-implemented).
@@ -1019,17 +1019,18 @@ pub impl Comp {
                 while sti < t.supertraits.count() {
                     val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
                     if !(self.bareConformanceCoversSubject(subject: cf, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
-                        self.errorAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
+                        return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") />
                     }
                     sti += 1
                 }
             } else {
-                self.errorAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)")
+                return <Result.Err error=self.diagnosticAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
             }
             ci += 1
             }
         }
-        self.checkViaTargets()
+        try self.checkViaTargets()
+        return <Result.Ok value=() />
     }
 
     inout fn typeHasMember(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
@@ -1058,15 +1059,16 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkViaTargets() {
+    inout fn checkViaTargets() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.decls.methodAliases.count() {
             val al: MethodAlias = self.decls.methodAliases[i]
             if !(self.typeHasMember(recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
-                self.errorAt(offset: al.aliasStart, msg: "`via` target is not a member of this type")
+                return <Result.Err error=self.diagnosticAt(offset: al.aliasStart, msg: "`via` target is not a member of this type") />
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn typeConformsTo(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {

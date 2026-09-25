@@ -6,41 +6,42 @@
 // separate concern — e.g. a match on a type parameter).
 
 pub impl Comp {
-    inout fn checkArmBinds(a: MatchArm) {
+    inout fn checkArmBinds(a: MatchArm) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
-            return
+            return <Result.Ok value=() />
         }
         if a.isStruct {
             val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
             if si < self.arena.structCount() {
-                self.checkBindsInFields(binds: a.binds, fields: self.arena.structAt(index: si).fields)
+                try self.checkBindsInFields(binds: a.binds, fields: self.arena.structAt(index: si).fields)
             }
-            return
+            return <Result.Ok value=() />
         }
         val ei: U64 = self.enumIndexByName(start: a.enumStart, len: a.enumLen)
         if ei >= self.arena.enumCount() {
-            return
+            return <Result.Ok value=() />
         }
         val variants: Array[Variant] = self.arena.enumAt(index: ei).variants
         val qVar: U64 = intern(c: inout self, start: a.variantStart, len: a.variantLen)
         mut val vi: U64 = 0
         while vi < variants.count() {
             if variants[vi].nameId == qVar {
-                self.checkBindsInFields(binds: a.binds, fields: variants[vi].fields)
-                return
+                try self.checkBindsInFields(binds: a.binds, fields: variants[vi].fields)
+                return <Result.Ok value=() />
             }
             vi += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkMatchBinds() {
+    inout fn checkMatchBinds() -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < self.arena.stmts.count() {
             match self.arena.stmts[si] {
                 Stmt.Match(val scrut, val arms) => {
                     mut val ai: U64 = 0
                     while ai < arms.len {
-                        self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
+                        try self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
                         ai += 1
                     }
                 }
@@ -54,7 +55,7 @@ pub impl Comp {
                 Expr.MatchExpr(val scrut, val arms) => {
                     mut val ai: U64 = 0
                     while ai < arms.len {
-                        self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
+                        try self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
                         ai += 1
                     }
                 }
@@ -62,5 +63,6 @@ pub impl Comp {
             }
             xi += 1
         }
+        return <Result.Ok value=() />
     }
 }

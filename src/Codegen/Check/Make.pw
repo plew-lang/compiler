@@ -93,7 +93,7 @@ pub impl Comp {
         }
     }
 
-    inout fn checkBindsInFields(binds: BindRange, fields: Array[FieldDef]) {
+    inout fn checkBindsInFields(binds: BindRange, fields: Array[FieldDef]) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < binds.len {
             val bd: Bind = self.bindAt(binds: binds, index: i)
@@ -113,9 +113,10 @@ pub impl Comp {
                 if off == 0 {
                     off = bd.fieldStart
                 }
-                self.errorAt(offset: off, msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+                return <Result.Err error=self.diagnosticAt(offset: off, msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)") />
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }
