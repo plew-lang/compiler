@@ -4,7 +4,8 @@
 // normal self-host recovery; src/_.pw must compile and run afterwards.
 import @Std/Process with { argCount, argAt }
 import @Plew/Syntax with { SyntaxFile }
-import ../src/Frontend with { Comp, runFrontend }
+import ../src/Frontend with { Comp }
+import ../src/FrontendDriver with { runFrontend }
 import ../src/Backend with { emitLlvm, emitLlvmRuntime }
 
 fn main() {

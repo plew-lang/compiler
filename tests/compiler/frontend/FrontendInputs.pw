@@ -1,0 +1,23 @@
+// Exercise the embedding entry without reading this process's argv or stdin.
+import ../../../src/Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/PreparedProgram with { PreparedProgram, reportProgramPreparationError }
+import @Std/Io with { print }
+
+fn checkSource(path: String, asan: Bool) {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.Text text="fn main() {}" path=path />,
+        sources: <SourceAccess />, options: <FrontendOptions asan=asan />)
+    match PreparedProgram.prepare(c: inout compiler) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { reportProgramPreparationError(c: inout compiler, error: error) }
+    }
+    print(compiler.modules.sourceFilePath(index: 0U64))
+    print(compiler.asan == asan)
+}
+
+fn main() {
+    checkSource(path: "First.pw", asan: false)
+    checkSource(path: "Second.pw", asan: true)
+}

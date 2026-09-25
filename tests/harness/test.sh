@@ -291,6 +291,12 @@ fi
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.
+if python3 -B ./tests/compiler/architecture/test-frontend-input-boundary.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed frontend-input-boundary"
+fi
+
 if sh ./tests/compiler/architecture/test-mid-assign-diagnostics.sh; then
     :
 else

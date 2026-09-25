@@ -27,4 +27,16 @@ for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_ret
  results.append({'case':name,'exit':result.returncode});print('PASS',name,flush=True)
 deps=subprocess.check_output(['/usr/bin/otool','-L',str(out/'check')],text=True)
 assert 'LLVM' not in deps,deps
+
+# Explicit requests must ignore the CLI environment and remain independent.
+with (out/'inputs-compile.stderr').open('wb') as log:
+ subprocess.run([sys.executable,'-B',str(c/'scripts/support/trace-command.py'),str(out/'inputs-compile.log'),'--',str(carrier),'--emit-object',str(out/'inputs.o'),'--trace-phases',str(Path(__file__).with_name('FrontendInputs.pw'))],cwd=c,stderr=log,check=True)
+subprocess.run([*watch,'/usr/bin/clang','-O2',str(out/'inputs.o'),str(out/'runtime.c'),'-o',str(out/'inputs')],check=True)
+result=subprocess.run([*watch,str(out/'inputs'),'/nonexistent/ignored.pw'],input=b'invalid source input',capture_output=True)
+assert result.returncode==0,(result.returncode,result.stderr)
+assert result.stdout==Path(__file__).with_name('FrontendInputs.out').read_bytes(),result.stdout
+input_deps=subprocess.check_output(['/usr/bin/otool','-L',str(out/'inputs')],text=True)
+assert 'LLVM' not in input_deps,input_deps
+print('PASS explicit frontend inputs',flush=True)
+(out/'inputs-results.json').write_text(json.dumps({'status':'passed','dependencies':input_deps},indent=2))
 (out/'results.json').write_text(json.dumps({'status':'passed','cases':results,'dependencies':deps},indent=2))

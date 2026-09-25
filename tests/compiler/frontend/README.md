@@ -57,3 +57,9 @@ CoW/async/closure preparation and borrow/receiver/global conflict diagnostics
 with the selected compiler. It does not execute the checked application's main
 or claim whole-target checking of unused bodies. This is a manual test outside
 the standard fixture suite.
+
+`FrontendInputs.pw` exercises explicit in-memory input with two independent
+Comp instances, source names, and options. The same test-program-preparation.py
+command compiles and links it without LLVM, passes a nonexistent source argument
+and invalid stdin, and compares with FrontendInputs.out: analysis must use only
+the supplied requests.

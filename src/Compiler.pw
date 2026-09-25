@@ -1,6 +1,7 @@
 // Low-level compiler driver shared by the development and distributed entries.
 import @Std/Process with { argCount, argAt, exit }
-import ./Frontend with { Comp, runFrontend }
+import ./Frontend with { Comp }
+import ./FrontendDriver with { runFrontend }
 import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu, LlvmModule }
 import ./SourceAccess with { SourceAccess }
 

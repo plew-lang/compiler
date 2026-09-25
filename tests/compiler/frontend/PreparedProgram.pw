@@ -1,4 +1,5 @@
-import ../../../src/Frontend with { Comp, runFrontend }
+import ../../../src/Frontend with { Comp }
+import ../../../src/FrontendDriver with { runFrontend }
 import ../../../src/PreparedProgram with { PreparedProgram, reportProgramPreparationError }
 import @Std/Io with { print }
 fn main() {

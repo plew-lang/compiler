@@ -5,8 +5,7 @@ import ./KeywordSpans with { KeywordSpans }
 // @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler. It
 // DEFINES the shared compiler state `Comp` (＋ the name interner) and all analysis
 // over it: parsing (Parser), Codegen analysis (lower / resolve / check / infer /
-// mono / verify), the file Loader, and the Driver (`runFrontend` runs load → analyze
-// and returns the populated `Comp`). It `import`s the pure IR data vocabulary `./Ir`
+// mono / verify), the file Loader, and explicit-input analysis (`analyzeFrontend` fills the caller-owned `Comp`). It `import`s the pure IR data vocabulary `./Ir`
 // (Expr/Stmt/TypeRef/… and the arena/table sub-structs that are Comp's fields) and is
 // imported by `./Backend` (which consumes Comp) and the entry `_.pw`.
 //
@@ -15,8 +14,8 @@ import ./KeywordSpans with { KeywordSpans }
 // impl must sit in the type's defining module (spec/15). The passes are mutually
 // recursive, so they are split across `part` files of this one module.
 
-import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
-import @Std/Process with { argCount, argAt, exit }
+import @Std/Io with { print, write, writeByte, readFile, readFileBytes, eprint, fileExists }
+import @Std/Process with { exit }
 import ./Ir with { SemanticGlobalAddress, ImportOrigin, PatternBindInput, PatternTypeInput }
 import ./Ir with { FinalDestruction, FinalDestructorCall }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
@@ -39,7 +38,7 @@ import ./Ir with { CallParameterBinding, DefaultGeneratorRange, CachedCallee }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Toml with { bytesEq }
-import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
+import ./Path with { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
@@ -1053,56 +1052,32 @@ fn recordSemanticExpressionTypes(c: inout Comp) {
 // monomorphization, and final-callable closure.  The state is intentionally not
 // returned by value: `CallResolution` is semantic analysis output consumed by LLVM,
 // so it must retain one owner across the frontend/backend boundary.
-export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
-    // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
-    // instead of compiling the user program. The entry path then sits at argv[2].
-    mut val genMode: Bool = false
-    mut val tcLog: Bool = false
-    mut val asan: Bool = false
-    mut val traceCodegen: Bool = false
-    mut val tracePhases: Bool = false
-    mut val emitMidCoverage: Bool = false
-    mut val requireMid: Bool = false
-    mut val entryArgIdx: I64 = firstArgument
-    while entryArgIdx < argCount() {
-        val option: String = argAt(entryArgIdx)
-        mut val recognized: Bool = false
-        if option == "--gen" {
-            genMode = true
-            recognized = true
-        }
-        // `plewc --tc-log <file>`: run the new TypeRef-based type checker in
-        // log-only mode (print mismatches, reject nothing) for development/triage.
-        if option == "--tc-log" {
-            tcLog = true
-            recognized = true
-        }
-        // `plewc --asan <file>`: emit a module that a downstream `opt -passes=asan`
-        // can actually instrument (host target triple + `sanitize_address` on every
-        // defined function). See Comp.asan and Backend emitLlvm.
-        if option == "--asan" {
-            asan = true
-            recognized = true
-        }
-        if option == "--trace-codegen" {
-            traceCodegen = true
-            recognized = true
-        }
-        if option == "--trace-phases" {
-            tracePhases = true
-            recognized = true
-        }
-        if option == "--emit-mid-coverage" {
-            emitMidCoverage = true
-            recognized = true
-        }
-        if option == "--require-mid" {
-            requireMid = true
-            recognized = true
-        }
-        if !recognized { break }
-        entryArgIdx += 1
-    }
+export enum FrontendInput {
+    File(path: String)
+    Text(text: String, path: String)
+}
+
+export struct FrontendOptions {
+    pub val genMode: Bool = false
+    pub val tcLog: Bool = false
+    pub val asan: Bool = false
+    pub val traceCodegen: Bool = false
+    pub val tracePhases: Bool = false
+    pub val emitMidCoverage: Bool = false
+    pub val requireMid: Bool = false
+}
+pub impl FrontendOptions { factory }
+
+// Source roots are explicit: analysis never consults argv or reads stdin.
+export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+                         options: FrontendOptions = <FrontendOptions />) {
+    val genMode = options.genMode
+    val tcLog = options.tcLog
+    val asan = options.asan
+    val traceCodegen = options.traceCodegen
+    val tracePhases = options.tracePhases
+    val emitMidCoverage = options.emitMidCoverage
+    val requireMid = options.requireMid
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
     // `c.arena.bytes`, parsed by the shared @Plew/Syntax parser, its items retained, and its
@@ -1131,11 +1106,11 @@ export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, f
     // lowering both traverse these typed IDs after the graph is complete.
     mut val pendingRoots: Array[SyntaxSlice] = []
     mut val nextModuleId: U64 = 1
-    if argCount() > entryArgIdx {
+    match input {
+    FrontendInput.File(path: val rootPath) => {
         // Module loader: a recursive, deduplicated worklist over local includes.
         // Each file's `part`/`import` paths resolve relative to that file's own
         // directory; every distinct file is appended once (single-arena / single-C).
-        val rootPath: String = argAt(entryArgIdx)
         val entryBytes: Array[U8] = rootPath.bytes()
         // Loud-fail on a missing entry file: without this readFileBytes returns an
         // empty string and the compiler silently emits an empty program (exit 0),
@@ -1156,11 +1131,7 @@ export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, f
         // not the entry's — the right foundation for transitive resolution.
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
-        val stdRoot: Array[U8] = if sources.stdRoot.count() != 0U64 {
-            give sources.stdRoot
-        } else {
-            give computeStdRoot(arg0: argAt(0).bytes())
-        }
+        val stdRoot: Array[U8] = sources.stdRoot
         // the global package cache root (for git `@dep` source lookup via the lock),
         // resolved once for the whole build.
         val cacheRootBytes: Array[U8] = cacheRoot()
@@ -1564,12 +1535,13 @@ export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, f
                 }
             }
         }
-    } else {
-        val s: String = readStdin()
+    }
+    FrontendInput.Text(text: val s, path: val sourcePath) => {
         val fileStart: U64 = c.arena.bytes.count()
         c.appendSrc(from: s.bytes())
-        c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: 0U64, path: "<stdin>")
+        c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: 0U64, path: sourcePath)
         pendingRoots.append(c.parseFileSyntax(fileBytes: s.bytes(), fileStart: fileStart))
+    }
     }
     tracePhase(c: inout c, label: "load:done")
     tracePhase(c: inout c, label: "predeclare:start")
