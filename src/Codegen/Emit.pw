@@ -196,11 +196,11 @@ pub impl Comp {
         return line
     }
 
-    // Report a compile error at a byte offset and stop: maps the offset to its
+    // Construct an owned diagnostic at a byte offset: maps the offset to its
     // source file via the module ranges and reports `path:line` (line counted from
     // the file's start, not the concatenated buffer). An offset outside every range
     // (interner-appended synthetic names) falls back to the buffer-wide line count.
-    inout fn errorAt(offset: U64, msg: String) {
+    inout fn diagnosticAt(offset: U64, msg: String) -> CompileDiagnostic {
         match self.modules.sourceFileContaining(offset: offset) {
             Optional.Some(v: val index) => {
                 mut val line: I64 = 1
@@ -209,11 +209,18 @@ pub impl Comp {
                     if self.arena.bytes[cursor] == 10U8 { line += 1 }
                     cursor += 1U64
                 }
-                compileErrorAtFile(path: self.modules.sourceFilePath(index: index), line: line, msg: msg)
+                return <CompileDiagnostic location=<DiagnosticLocation.File path=self.modules.sourceFilePath(index: index) line=line /> message=msg />
             }
             Optional.None => {}
         }
-        compileErrorAt(line: self.lineOf(offset: offset), msg: msg)
+        return <CompileDiagnostic location=<DiagnosticLocation.Line line=self.lineOf(offset: offset) /> message=msg />
+    }
+
+    // Terminal adapter retained until each caller propagates its failure.
+    inout fn errorAt(offset: U64, msg: String) {
+        val diagnostic = self.diagnosticAt(offset: offset, msg: msg)
+        emitDiagnostic(diagnostic: diagnostic)
+        exit(code: 1)
     }
 
     // Diagnostic anchor for a function declaration: defOffset is the declaration's

@@ -1,0 +1,13 @@
+// Displaying a diagnostic must return; only the CLI decides whether to exit.
+import ../../../src/Diag with { CompileDiagnostic, DiagnosticLocation, emitDiagnostic }
+import @Std/Io with { print }
+
+fn main() {
+    val diagnostic = <CompileDiagnostic
+        location=<DiagnosticLocation.File path="request.pw" line=12I64 />
+        message="sample failure" />
+    emitDiagnostic(diagnostic: diagnostic)
+    emitDiagnostic(diagnostic: <CompileDiagnostic
+        location=<DiagnosticLocation.Line line=0I64 /> message="another failure" />)
+    print("returned")
+}

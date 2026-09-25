@@ -63,3 +63,7 @@ Comp instances, source names, and options. The same test-program-preparation.py
 command compiles and links it without LLVM, passes a nonexistent source argument
 and invalid stdin, and compares with FrontendInputs.out: analysis must use only
 the supplied requests.
+
+`DiagnosticValues.pw` is also run by that script. It renders two structured
+diagnostics, checks their exact stderr format, and continues to normal exit.
+This verifies rendering, not propagation from all existing frontend failures.

@@ -55,28 +55,46 @@ export fn eprintU64(n: U64) {
     eprint(text: digitStrU(d: n % 10U64))
 }
 
-// Report a compile error at a source line and stop (exit 1). Kept for positionless
-// backend-limitation reports (`line: 0`); offset-carrying sites use Comp.errorAt,
-// which maps the offset to file:line and calls compileErrorAtFile.
-export fn compileErrorAt(line: I64, msg: String) {
-    eprint(text: "plewc: error: line ")
-    eprintInt(n: line)
+// Diagnostics own their source identity and message, independent of an arena.
+// Constructing or displaying one does not terminate the embedding process.
+export enum DiagnosticLocation {
+    Line(line: I64)
+    File(path: String, line: I64)
+}
+
+export struct CompileDiagnostic {
+    pub val location: DiagnosticLocation
+    pub val message: String
+}
+pub impl CompileDiagnostic { factory }
+
+export fn emitDiagnostic(diagnostic: CompileDiagnostic) {
+    eprint(text: "plewc: error: ")
+    match diagnostic.location {
+        DiagnosticLocation.Line(line: val line) => {
+            eprint(text: "line ")
+            eprintInt(n: line)
+        }
+        DiagnosticLocation.File(path: val path, line: val line) => {
+            eprint(text: path)
+            eprint(text: ":")
+            eprintInt(n: line)
+        }
+    }
     eprint(text: ": ")
-    eprint(text: msg)
+    eprint(text: diagnostic.message)
     eprint(text: "\n")
+}
+
+// Compatibility adapters for call sites that still require terminal failure.
+// They must not become returning operations until callers propagate failure.
+export fn compileErrorAt(line: I64, msg: String) {
+    emitDiagnostic(diagnostic: <CompileDiagnostic location=<DiagnosticLocation.Line line=line /> message=msg />)
     exit(code: 1)
 }
 
-// Positioned diagnostic with the standard `path:line:` prefix (the offset->file:line
-// mapping lives in Comp.errorAt — this leaf module only formats and exits).
 export fn compileErrorAtFile(path: String, line: I64, msg: String) {
-    eprint(text: "plewc: error: ")
-    eprint(text: path)
-    eprint(text: ":")
-    eprintInt(n: line)
-    eprint(text: ": ")
-    eprint(text: msg)
-    eprint(text: "\n")
+    emitDiagnostic(diagnostic: <CompileDiagnostic location=<DiagnosticLocation.File path=path line=line /> message=msg />)
     exit(code: 1)
 }
 

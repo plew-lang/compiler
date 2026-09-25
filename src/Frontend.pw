@@ -42,7 +42,7 @@ import ./Path with { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, find
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
-import ./Diag with { compileErrorAt, compileErrorAtFile, eprintInt, digitByte, digitStrU }
+import ./Diag with { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
