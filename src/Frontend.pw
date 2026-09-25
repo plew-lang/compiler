@@ -1655,9 +1655,9 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // part of its module's public surface (`export`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
     // among the exported (loaded) declarations.
-    c.checkImports()
-    c.detectImportCycles()
-    c.checkUseVisibility()
+    try c.checkImports()
+    try c.detectImportCycles()
+    try c.checkUseVisibility()
     c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
     c.checkAllParamModes()

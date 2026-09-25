@@ -68,12 +68,12 @@ pub impl Comp {
     // part of some loaded module's public surface (`export`). A use of a non-exported
     // name — or an import from the wrong module (whose own module then isn't loaded, so
     // the name is absent from the exported set) — is a compile error.
-    inout fn checkImports() {
+    inout fn checkImports() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.modules.imports.count() {
             val im: Bind = self.modules.imports[i]
             if !(self.isExportedName(nameStart: im.nameStart, nameLen: im.nameLen)) {
-                self.errorAt(offset: im.nameStart, msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
+                return <Result.Err error=self.diagnosticAt(offset: im.nameStart, msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)") />
             }
             i += 1
         }
@@ -91,7 +91,7 @@ pub impl Comp {
                         val aid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: a.targetModule, start: a.sourceStart, len: a.sourceLength)
                         val bid: Bind = self.importedDeclIdentityFromSurface(surfaceMod: b.targetModule, start: b.sourceStart, len: b.sourceLength)
                         if aid.nameStart != bid.nameStart || aid.nameLen != bid.nameLen {
-                            self.errorAt(offset: a.localStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)")
+                            return <Result.Err error=self.diagnosticAt(offset: a.localStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)") />
                         }
                     }
                 }
@@ -99,6 +99,7 @@ pub impl Comp {
             }
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
@@ -125,7 +126,7 @@ pub impl Comp {
     // intercepts by raw name (print / write / exit / …), which are not ambient and must be
     // imported too. Types are scoped separately (their resolution sites); member/method
     // visibility is a separate axis.
-    inout fn checkUseVisibility() {
+    inout fn checkUseVisibility() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
@@ -138,7 +139,7 @@ pub impl Comp {
                         if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
                             // a free fn of this name exists only in other (loaded) modules and
                             // was not imported here — the use needs an import.
-                            self.errorAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)")
+                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)") />
                         } else {
                             // no free fn of this name anywhere: a local/closure/builtin, or an
                             // `@Std` intrinsic the backend intercepts by raw name (print /
@@ -146,7 +147,7 @@ pub impl Comp {
                             // items are) and must be imported.
                             if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
                                 if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                    self.errorAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
+                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)") />
                                 }
                             }
                         }
@@ -157,7 +158,7 @@ pub impl Comp {
                         // (name, module) visibility failure cleanly instead of an opaque backend
                         // error (spec/15).
                         if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
-                            self.errorAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)")
+                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)") />
                         }
                     }
                     i += 1
@@ -165,6 +166,7 @@ pub impl Comp {
                 _ => { i += 1 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Is a user type declaration named (start,len) VISIBLE from module `useMod` (scoped
@@ -997,29 +999,30 @@ pub impl Comp {
 
     // DFS over the module import graph (colors: 0=white, 1=gray/on-stack, 2=black). A gray
     // target is a back edge → a circular import; report it at the offending import.
-    inout fn dfsImportCycle(node: U64, color: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) {
+    inout fn dfsImportCycle(node: U64, color: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) -> Result[(), CompileDiagnostic] {
         color[node] = 1U64
         mut val k: U64 = 0
         while k < ef.count() {
             if ef[k] == node {
                 val w: U64 = et[k]
                 if color[w] == 1U64 {
-                    self.errorAt(offset: eo[k], msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.")
+                    return <Result.Err error=self.diagnosticAt(offset: eo[k], msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.") />
                 }
                 if color[w] == 0U64 {
-                    self.dfsImportCycle(node: w, color: inout color, ef: ef, et: et, eo: eo)
+                    try self.dfsImportCycle(node: w, color: inout color, ef: ef, et: et, eo: eo)
                 }
             }
             k += 1
         }
         color[node] = 2U64
+        return <Result.Ok value=() />
     }
 
     // Enforce the DAG rule (spec/15): the module `import` graph must have no cycle. Each
     // `import … with { name }` becomes an edge importing-module → defining-module-of-name;
     // a cycle among them is a compile error (parts share a module id, so they never form an
     // inter-module edge).
-    inout fn detectImportCycles() {
+    inout fn detectImportCycles() -> Result[(), CompileDiagnostic] {
         mut val maxId: U64 = 0
         mut val ri: U64 = 0
         while ri < self.modules.sourceFileCount() {
@@ -1054,10 +1057,11 @@ pub impl Comp {
         mut val s: U64 = 0
         while s < n {
             if color[s] == 0U64 {
-                self.dfsImportCycle(node: s, color: inout color, ef: ef, et: et, eo: eo)
+                try self.dfsImportCycle(node: s, color: inout color, ef: ef, et: et, eo: eo)
             }
             s += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
