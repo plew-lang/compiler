@@ -1,0 +1,62 @@
+// LLVM-independent preparation of the frontend's selected executable program.
+// This does not yet promise whole-target checking of otherwise unused bodies.
+import ./Frontend with { Comp }
+import ./Mid/Program with { MidExecutableProgram, MidProgramError }
+import ./Mid/Ambient with { MidAmbientProgram }
+import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
+import ./Mid/Diagnostics with { reportMidBuildError, reportMidPreparationFailure }
+
+export enum ProgramPreparationError {
+    Mid(error: MidProgramError)
+    GlobalAccess(offset: U64)
+}
+
+export struct PreparedProgram {
+    pub val executable: MidExecutableProgram
+    pub val ambient: MidAmbientProgram
+}
+
+pub impl PreparedProgram {
+    assoc fn prepare(c: inout Comp) -> Result[Self, ProgramPreparationError] {
+        val preparation = MidExecutableProgram.prepare(c: inout c)
+        val ambient = match preparation {
+            Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
+            Result.Err(error: _) => { give <MidAmbientProgram.empty /> }
+        }
+        // Preserve the existing diagnostic precedence, including partial Mid
+        // failures. This analysis reads the same arena prepared above.
+        val conflictingBody = conflictingMidGlobalAccess(c: inout c)
+        if conflictingBody != 0U64 {
+            val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
+            mut val offset = 0U64
+            if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
+            return <Result.Err error=<ProgramPreparationError.GlobalAccess offset=offset /> />
+        }
+        match preparation {
+            Result.Ok(value: val program) => { return <Result.Ok value=<PreparedProgram executable=program ambient=ambient /> /> }
+            Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Mid error=error /> /> }
+        }
+    }
+}
+
+// The existing terminating driver uses this adapter. Preparation itself
+// returns a structured failure; reporting does not construct an LLVM context.
+export fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparationError) {
+    match error {
+        ProgramPreparationError.GlobalAccess(offset: val offset) => {
+            c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+        }
+        ProgramPreparationError.Mid(error: val failure) => {
+            match failure {
+                MidProgramError.Build(bodyId: val bodyId, error: val error) => {
+                    reportMidBuildError(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, error: error)
+                }
+                MidProgramError.Preparation(bodyId: val bodyId, error: val error) => {
+                    reportMidPreparationFailure(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, failure: error)
+                }
+                _ => {}
+            }
+            c.errorAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
+        }
+    }
+}

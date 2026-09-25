@@ -1,6 +1,6 @@
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
-import ./Mid/Program with { MidExecutableProgram, MidProgramError }
-import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
+import ./Mid/Program with { MidExecutableProgram }
+import ./PreparedProgram with { PreparedProgram, reportProgramPreparationError }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `runFrontend`) and emits
 // an owned LLVM module via libLLVM-C. Text is an explicit diagnostic/seed
@@ -724,18 +724,17 @@ export fn emitLlvm(c: inout Comp) {
 
 export fn lowerLlvm(c: inout Comp) -> LlvmModule {
     tracePhase(c: inout c, label: "backend:emit:start")
-    val programPreparation = MidExecutableProgram.prepare(c: inout c)
-    val ambientProgram = match programPreparation {
-        Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
-        Result.Err(error: _) => { give <MidAmbientProgram.empty /> }
+    val prepared = match PreparedProgram.prepare(c: inout c) {
+        Result.Ok(value: val program) => { give program }
+        Result.Err(error: val error) => {
+            reportProgramPreparationError(c: inout c, error: error)
+            panic "compiler bug: preparation diagnostic returned"
+        }
     }
-    val conflictingBody = conflictingMidGlobalAccess(c: inout c)
-    if conflictingBody != 0U64 {
-        val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
-        mut val offset = 0U64
-        if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
-        c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
-    }
+    return lowerPreparedLlvm(c: inout c, prepared: prepared)
+}
+
+export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmModule {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     // Layout-sensitive optimizers must use the same native ABI as the linker.
@@ -762,8 +761,8 @@ export fn lowerLlvm(c: inout Comp) -> LlvmModule {
     promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
-        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx) ambientProgram=ambientProgram
-        midProgram=match programPreparation { Result.Ok(value: val program) => { give program } Result.Err(error: _) => { give <MidExecutableProgram.empty /> } }
+        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx) ambientProgram=prepared.ambient
+        midProgram=prepared.executable
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
@@ -777,21 +776,6 @@ export fn lowerLlvm(c: inout Comp) -> LlvmModule {
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
-    match programPreparation {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val failure) => {
-            match failure {
-                MidProgramError.Build(bodyId: val bodyId, error: val error) => {
-                    st.recordMidBuildError(c: inout c, bodyId: bodyId, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, error: error)
-                }
-                MidProgramError.Preparation(bodyId: val bodyId, error: val error) => {
-                    st.recordMidPreparationFailure(c: inout c, bodyId: bodyId, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, failure: error)
-                }
-                _ => {}
-            }
-            c.errorAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
-        }
-    }
     tracePhase(c: inout c, label: "mid:program:ready")
 
     // a "self" byte span (appended past the source) to bind method receivers.

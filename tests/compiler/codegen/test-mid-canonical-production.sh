@@ -89,7 +89,7 @@ for symbol in recordMidMissingBodyInstance; do
     fi
 done
 
-if ! rg -q '\bst.recordMidBuildError\b' src/Backend.pw; then
+if ! rg -q '\breportMidBuildError\(' src/PreparedProgram.pw; then
     echo "program preparation does not report synthetic body build failures" >&2
     exit 1
 fi
@@ -143,8 +143,9 @@ for file, name, call in entries:
     body = Path(f'src/Backend/Llvm/{file}.pw').read_text().split(f'fn {name}(', 1)[1].split('\n    inout fn ', 1)[0]
     assert f'self.{call}(' in body, f'{name}: missing common preparation'
 backend = Path('src/Backend/Llvm/Mid.pw').read_text()
-for symbol in ['recordMidInstantiate', 'recordMidAccess', 'recordMidVerify', 'recordMidPreflight']:
-    assert symbol + '(' in backend, f'shared preparation lost failure coverage: {symbol}'
+diagnostics = Path('src/Mid/Diagnostics.pw').read_text()
+for symbol in ['reportMidBuildError', 'reportMidPreparationFailure', 'traceMidVerificationFailure']:
+    assert symbol + '(' in diagnostics, f'shared preparation lost failure diagnostics: {symbol}'
 program = Path('src/Mid/Program.pw').read_text()
 assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId)' in program
 assert 'self.midProgram.body(bodyId: bodyId)' in backend
@@ -153,7 +154,11 @@ assert 'buildParametricMidGlobalInit(' in program
 assert 'ensureParametricMidClosureBody(' in program
 assert 'buildMidBodyForInstance(' in program
 entry = Path('src/Backend.pw').read_text().split('export fn emitLlvm(', 1)[1]
-assert entry.index('MidExecutableProgram.prepare(') < entry.index('LLVMContextCreate()')
+assert entry.index('PreparedProgram.prepare(') < entry.index('LLVMContextCreate()')
+analysis = Path('src/PreparedProgram.pw').read_text()
+assert analysis.index('MidExecutableProgram.prepare(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
+assert 'import ./Backend' not in analysis and 'LLVMContextCreate(' not in analysis
+assert 'midProgram=prepared.executable' in entry and 'ambientProgram=prepared.ambient' in entry
 for path in Path('src/Backend').rglob('*.pw'):
     body = re.sub(r'//[^\n]*', '', path.read_text())
     for symbol in ['buildParametricMidBody', 'buildMidBodyForInstance',

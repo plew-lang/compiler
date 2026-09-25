@@ -1,0 +1,255 @@
+// Semantic preparation diagnostics shared by compiler drivers; no LLVM state.
+import @Std/Io with { eprint }
+import ../Diag with { eprintU64 }
+import ../Frontend with { Comp }
+import ./Build with { MidBuildError, MidUnsupportedBuild, MidUnsupportedAssign }
+import ./Prepare with { MidPreparationError }
+import ./Instantiate with { MidInstantiateError }
+import ./Access with { MidAccessError }
+import ./Verify with { MidVerifyError, MidVerification }
+import ./Ir with { MidCanonicalBody }
+
+fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
+    match reason {
+        MidUnsupportedBuild.MakeWithoutAggregate => { return 1U64 }
+        MidUnsupportedBuild.FieldPlace => { return 2U64 }
+        MidUnsupportedBuild.UniqueAggregate => { return 3U64 }
+        MidUnsupportedBuild.IncompleteAggregate => { return 4U64 }
+        MidUnsupportedBuild.ShortCircuit => { return 5U64 }
+        MidUnsupportedBuild.FieldProjection => { return 6U64 }
+        MidUnsupportedBuild.FieldBase => { return 7U64 }
+        MidUnsupportedBuild.UnloweredView => { return 8U64 }
+        MidUnsupportedBuild.UnloweredValueControl => { return 9U64 }
+        MidUnsupportedBuild.UnloweredReference => { return 10U64 }
+        MidUnsupportedBuild.UnloweredClosure => { return 11U64 }
+        MidUnsupportedBuild.UnloweredAwait => { return 12U64 }
+        MidUnsupportedBuild.IndexPlace => { return 13U64 }
+        MidUnsupportedBuild.UnexpectedOperand => { return 14U64 }
+    }
+}
+
+fn midUnsupportedAssignCoverageDetail(reason: MidUnsupportedAssign) -> U64 {
+    match reason {
+        MidUnsupportedAssign.IdentifierNotLocal => { return 0U64 }
+        MidUnsupportedAssign.FieldBaseNotPlace => { return 1U64 }
+        MidUnsupportedAssign.IndexBaseNotPlace => { return 2U64 }
+        MidUnsupportedAssign.OtherNotPlace => { return 3U64 }
+        MidUnsupportedAssign.IndexProjection => { return 4U64 }
+        MidUnsupportedAssign.ImmutableGlobal => { return 5U64 }
+    }
+}
+
+fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
+    match reason {
+        MidVerifyError.None => { return 0U64 }
+        MidVerifyError.InvalidTarget => { return 1U64 }
+        MidVerifyError.TypeMismatch => { return 15U64 }
+        MidVerifyError.ConflictingReceiverAccess => { return 16U64 }
+        MidVerifyError.ConflictingBorrowAccess => { return 17U64 }
+        MidVerifyError.PartialMove => { return 2U64 }
+        MidVerifyError.MoveUnavailable => { return 3U64 }
+        MidVerifyError.DropUnavailable => { return 4U64 }
+        MidVerifyError.MissingOwnershipContract => { return 12U64 }
+        MidVerifyError.UniqueCopy => { return 18U64 }
+        MidVerifyError.OutstandingOwnership => { return 13U64 }
+        MidVerifyError.LiveInitialization => { return 14U64 }
+        MidVerifyError.InvalidDropFlag => { return 5U64 }
+        MidVerifyError.UninitializedDropFlag => { return 9U64 }
+        MidVerifyError.UnelaboratedBindingEnd => { return 6U64 }
+        MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
+        MidVerifyError.UnelaboratedAccess => { return 7U64 }
+        MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
+        MidVerifyError.UninstantiatedStorageBoundary => { return 11U64 }
+        MidVerifyError.UninstantiatedCastBoundary => { return 10U64 }
+    }
+}
+
+fn midInstantiateCoverageDetail(reason: MidInstantiateError) -> U64 {
+    match reason {
+        MidInstantiateError.None => { return 0U64 }
+        MidInstantiateError.InvalidBodyInstance => { return 1U64 }
+        MidInstantiateError.MissingCallResolution => { return 2U64 }
+        MidInstantiateError.CallResolutionIndex => { return 3U64 }
+        MidInstantiateError.CallResolutionArity => { return 4U64 }
+        MidInstantiateError.CallResolutionPassing => { return 5U64 }
+        MidInstantiateError.CallConversionSource => { return 6U64 }
+        MidInstantiateError.CallConversionTarget => { return 7U64 }
+        MidInstantiateError.MissingReturnResolution => { return 8U64 }
+        MidInstantiateError.InvalidReturnResolution => { return 9U64 }
+        MidInstantiateError.InvalidCastResolution => { return 13U64 }
+        MidInstantiateError.MissingFinalResolution => { return 10U64 }
+        MidInstantiateError.InvalidFinalResolution => { return 11U64 }
+        MidInstantiateError.InvalidLocalResultType => { return 12U64 }
+        MidInstantiateError.MissingTryResolution => { return 14U64 }
+        MidInstantiateError.InvalidTryResolution => { return 15U64 }
+        MidInstantiateError.MissingSemanticClosure => { return 16U64 }
+        MidInstantiateError.InvalidSemanticClosure => { return 17U64 }
+        MidInstantiateError.MissingTypeResolution => { return 18U64 }
+    }
+}
+
+export fn emitMidCoverageVerify(detail: U64) {
+    eprint(text: "verify:")
+    match detail {
+        0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-target") }
+        2U64 => { eprint(text: "partial-move") } 3U64 => { eprint(text: "move-unavailable") }
+        4U64 => { eprint(text: "drop-unavailable") } 5U64 => { eprint(text: "invalid-drop-flag") }
+        6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
+        8U64 => { eprint(text: "return-boundary") }
+        15U64 => { eprint(text: "type-mismatch") }
+        18U64 => { eprint(text: "unique-copy") } _ => { eprint(text: "unknown") }
+    }
+}
+
+fn traceMidBuildFailure(c: inout Comp, fnIdx: U64, detail: U64) {
+    if c.traceCodegen {
+        eprint(text: "[trace-codegen] Mid build-fallback detail=")
+        eprintU64(n: detail)
+        eprint(text: " fn=")
+        eprintU64(n: fnIdx)
+        eprint(text: "\n")
+    }
+}
+
+export fn reportMidBuildError(c: inout Comp, fnIdx: U64, error: MidBuildError) {
+    match error {
+        MidBuildError.None => {}
+        MidBuildError.InvalidStatement => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 1U64) }
+        MidBuildError.InvalidBlock => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 2U64) }
+        MidBuildError.InvalidFunction => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 3U64) }
+        MidBuildError.MissingSemanticType => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 4U64) }
+        MidBuildError.UnboundLocalIdentifier => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 5U64) }
+        MidBuildError.Unsupported(reason: val unsupported) => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 100U64 + midUnsupportedBuildCoverageDetail(reason: unsupported)) }
+        MidBuildError.UnsupportedAssign(reason: val reason) => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 20U64 + midUnsupportedAssignCoverageDetail(reason: reason)) }
+        MidBuildError.UnsupportedWhile => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 7U64) }
+        MidBuildError.UnsupportedFor => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 8U64) }
+        MidBuildError.UnsupportedMatch => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 9U64) }
+        MidBuildError.UnsupportedPanic => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 10U64) }
+        MidBuildError.UnsupportedGive => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 11U64) }
+        MidBuildError.UnsupportedBreak => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 12U64) }
+        MidBuildError.UnsupportedContinue => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 13U64) }
+        MidBuildError.MissingTerminator => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 14U64) }
+        MidBuildError.MissingCallTemplate => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 15U64) }
+        MidBuildError.UnsupportedCallTemplate => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 16U64) }
+    }
+}
+
+fn traceMidInstantiationFailure(c: inout Comp, fnIdx: U64, reason: MidInstantiateError) {
+    // Coverage is normally emitted only after code generation completes.
+    // A frontend diagnostic can abort that run first, so make the same
+    // stable reason observable at the failure boundary under tracing.
+    if c.traceCodegen {
+        eprint(text: "[trace-codegen] Mid instantiate-fallback detail=")
+        eprintU64(n: midInstantiateCoverageDetail(reason: reason))
+        eprint(text: " fn=")
+        eprintU64(n: fnIdx)
+        eprint(text: "\n")
+    }
+}
+
+export fn reportMidPreparationFailure(c: inout Comp, fnIdx: U64, failure: MidPreparationError) {
+    match failure {
+        MidPreparationError.InstantiationFailed(error: val error) => {
+            traceMidInstantiationFailure(c: inout c, fnIdx: fnIdx, reason: error)
+        }
+        MidPreparationError.AccessFailed(error: val error) => {
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid access error=")
+                match error {
+                    MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
+                    MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
+                    MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
+                    MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
+                    MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
+                    MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
+                    MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
+                    MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
+                    MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
+                    MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
+                    MidAccessError.None => { eprint(text: "none") }
+                }
+                eprint(text: "\n")
+            }
+        }
+        MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
+            match verification.error {
+                MidVerifyError.ConflictingBorrowAccess => {
+                    mut val offset = 0U64
+                    if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                    c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
+                }
+                MidVerifyError.ConflictingReceiverAccess => {
+                    mut val offset = 0U64
+                    if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
+                    c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
+                }
+                _ => {}
+            }
+            if c.traceCodegen { traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
+        }
+    }
+}
+
+fn traceMidVerificationFailure(c: inout Comp, canonical: MidCanonicalBody, fnIdx: U64, verification: MidVerification) {
+    eprint(text: "[trace-codegen] Mid verification reason=")
+    emitMidCoverageVerify(detail: midVerifyCoverageDetail(reason: verification.error))
+    eprint(text: " location fn=")
+    eprintU64(n: fnIdx)
+    eprint(text: " block=")
+    eprintU64(n: verification.block)
+    eprint(text: " local=")
+    eprintU64(n: verification.local)
+    eprint(text: "\n")
+    if !c.mid.isWellFormed(body: canonical) { return }
+    val failedBody = c.mid.bodies[canonical.body - 1U64]
+    if verification.local < failedBody.locals.len {
+        val local = c.mid.locals[failedBody.locals.start + verification.local]
+        eprint(text: "[trace-codegen] Mid failed-local binding=")
+        eprintU64(n: local.sourceNameStart)
+        eprint(text: " scope=")
+        eprintU64(n: local.sourceScope)
+        eprint(text: " type=")
+        c.traceMonoTypeHead(ref: local.typeTerm)
+        eprint(text: "\n")
+    }
+    if verification.block < failedBody.blocks.len {
+        val failedBlock = c.mid.blocks[failedBody.blocks.start + verification.block]
+        mut val statementIndex: U64 = 0U64
+        while statementIndex < failedBlock.statements.len {
+            val statement = c.mid.statements[failedBlock.statements.start + statementIndex]
+            eprint(text: "[trace-codegen] Mid failed-block statement=")
+            eprintU64(n: statementIndex)
+            eprint(text: " tag=")
+            eprintU64(n: statement.tag)
+            if statement.destination != 0U64 {
+                eprint(text: " destination=")
+                eprintU64(n: c.mid.places[statement.destination - 1U64].local)
+                eprint(text: " destination-type=")
+                eprintU64(n: c.mid.places[statement.destination - 1U64].typeTerm)
+            }
+            if statement.source != 0U64 {
+                val source = c.mid.places[statement.source - 1U64]
+                eprint(text: " overwrite-source=")
+                eprintU64(n: source.local)
+                eprint(text: " source-local-type=")
+                if source.local < failedBody.locals.len { eprintU64(n: c.mid.locals[failedBody.locals.start + source.local].typeTerm) }
+            }
+            if statement.value != 0U64 {
+                val value = c.mid.rvalues[statement.value - 1U64]
+                eprint(text: " rvalue=")
+                eprintU64(n: value.tag)
+                if value.operand != 0U64 {
+                    val operand = c.mid.operands[value.operand - 1U64]
+                    eprint(text: " operand=")
+                    eprintU64(n: operand.tag)
+                    if operand.place != 0U64 {
+                        eprint(text: " source=")
+                        eprintU64(n: c.mid.places[operand.place - 1U64].local)
+                    }
+                }
+            }
+            eprint(text: "\n")
+            statementIndex += 1U64
+        }
+    }
+}

@@ -1,3 +1,4 @@
+import ../../Mid/Diagnostics with { emitMidCoverageVerify }
 import ../../Diag with { eprintU64 }
 // Part of the LLVM backend (root: _.pw): lowering of already-elaborated Mid
 // CFG. This path owns no syntax/type/call resolution. It consumes only typed
@@ -56,60 +57,6 @@ pub impl LlvmCtx {
     // whereas coverage records survive the lowering attempt and are copied by
     // the worklist.  Keeping the former in the latter is both needless and
     // couples diagnostics to ARC layout of every evolving error enum.
-    fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
-        match reason {
-            MidUnsupportedBuild.MakeWithoutAggregate => { return 1U64 }
-            MidUnsupportedBuild.FieldPlace => { return 2U64 }
-            MidUnsupportedBuild.UniqueAggregate => { return 3U64 }
-            MidUnsupportedBuild.IncompleteAggregate => { return 4U64 }
-            MidUnsupportedBuild.ShortCircuit => { return 5U64 }
-            MidUnsupportedBuild.FieldProjection => { return 6U64 }
-            MidUnsupportedBuild.FieldBase => { return 7U64 }
-            MidUnsupportedBuild.UnloweredView => { return 8U64 }
-            MidUnsupportedBuild.UnloweredValueControl => { return 9U64 }
-            MidUnsupportedBuild.UnloweredReference => { return 10U64 }
-            MidUnsupportedBuild.UnloweredClosure => { return 11U64 }
-            MidUnsupportedBuild.UnloweredAwait => { return 12U64 }
-            MidUnsupportedBuild.IndexPlace => { return 13U64 }
-            MidUnsupportedBuild.UnexpectedOperand => { return 14U64 }
-        }
-    }
-
-    fn midUnsupportedAssignCoverageDetail(reason: MidUnsupportedAssign) -> U64 {
-        match reason {
-            MidUnsupportedAssign.IdentifierNotLocal => { return 0U64 }
-            MidUnsupportedAssign.FieldBaseNotPlace => { return 1U64 }
-            MidUnsupportedAssign.IndexBaseNotPlace => { return 2U64 }
-            MidUnsupportedAssign.OtherNotPlace => { return 3U64 }
-            MidUnsupportedAssign.IndexProjection => { return 4U64 }
-            MidUnsupportedAssign.ImmutableGlobal => { return 5U64 }
-        }
-    }
-
-    fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
-        match reason {
-            MidVerifyError.None => { return 0U64 }
-            MidVerifyError.InvalidTarget => { return 1U64 }
-            MidVerifyError.TypeMismatch => { return 15U64 }
-            MidVerifyError.ConflictingReceiverAccess => { return 16U64 }
-            MidVerifyError.ConflictingBorrowAccess => { return 17U64 }
-            MidVerifyError.PartialMove => { return 2U64 }
-            MidVerifyError.MoveUnavailable => { return 3U64 }
-            MidVerifyError.DropUnavailable => { return 4U64 }
-            MidVerifyError.MissingOwnershipContract => { return 12U64 }
-            MidVerifyError.UniqueCopy => { return 18U64 }
-            MidVerifyError.OutstandingOwnership => { return 13U64 }
-            MidVerifyError.LiveInitialization => { return 14U64 }
-            MidVerifyError.InvalidDropFlag => { return 5U64 }
-            MidVerifyError.UninitializedDropFlag => { return 9U64 }
-            MidVerifyError.UnelaboratedBindingEnd => { return 6U64 }
-            MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
-            MidVerifyError.UnelaboratedAccess => { return 7U64 }
-            MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
-            MidVerifyError.UninstantiatedStorageBoundary => { return 11U64 }
-            MidVerifyError.UninstantiatedCastBoundary => { return 10U64 }
-        }
-    }
 
     fn midPreflightCoverageDetail(reason: MidLlvmPreflight) -> U64 {
         match reason {
@@ -170,71 +117,8 @@ pub impl LlvmCtx {
         self.midCoverageKeys.append(key)
     }
 
-    // `MidBuildError` is consumed at its match site.  Coverage retains only its
-    // closed scalar detail, so this boundary must not re-project the enclosing
-    // MidBodyBuild value or pass an error enum through a second ABI boundary.
-    inout fn recordMidBuild(c: inout Comp, bodyId: U64, fnIdx: U64, detail: U64) {
-        if c.traceCodegen {
-            eprint(text: "[trace-codegen] Mid build-fallback detail=")
-            self.traceCodegenU64(n: detail)
-            eprint(text: " fn=")
-            self.traceCodegenU64(n: fnIdx)
-            eprint(text: "\n")
-        }
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 0U64, detail: detail)
-    }
-
-    // Every production-shaped body, including the synthetic global initializer,
-    // reports the same closed Build error vocabulary.  Keeping this conversion
-    // next to the coverage encoding prevents a new caller from silently
-    // treating a fallback as require-Mid success.
-    inout fn recordMidBuildError(c: inout Comp, bodyId: U64, fnIdx: U64, error: MidBuildError) {
-        match error {
-            MidBuildError.None => {}
-            MidBuildError.InvalidStatement => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 1U64) }
-            MidBuildError.InvalidBlock => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 2U64) }
-            MidBuildError.InvalidFunction => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 3U64) }
-            MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 4U64) }
-            MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 5U64) }
-            MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
-            MidBuildError.UnsupportedAssign(reason: val reason) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 20U64 + self.midUnsupportedAssignCoverageDetail(reason: reason)) }
-            MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 7U64) }
-            MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 8U64) }
-            MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 9U64) }
-            MidBuildError.UnsupportedPanic => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 10U64) }
-            MidBuildError.UnsupportedGive => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 11U64) }
-            MidBuildError.UnsupportedBreak => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 12U64) }
-            MidBuildError.UnsupportedContinue => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 13U64) }
-            MidBuildError.MissingTerminator => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 14U64) }
-            MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 15U64) }
-            MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fnIdx, detail: 16U64) }
-        }
-    }
-
     inout fn recordMidMissingBodyInstance(c: inout Comp, bodyId: U64, fnIdx: U64) {
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 1U64, detail: 0U64)
-    }
-
-    inout fn recordMidInstantiate(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidInstantiateError) {
-        // Coverage is normally emitted only after code generation completes.
-        // A frontend diagnostic can abort that run first, so make the same
-        // stable reason observable at the failure boundary under tracing.
-        if c.traceCodegen {
-            eprint(text: "[trace-codegen] Mid instantiate-fallback detail=")
-            self.traceCodegenU64(n: self.midInstantiateCoverageDetail(reason: reason))
-            eprint(text: " fn=")
-            self.traceCodegenU64(n: fnIdx)
-            eprint(text: "\n")
-        }
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 2U64, detail: self.midInstantiateCoverageDetail(reason: reason))
-    }
-
-    inout fn recordMidAccess(c: inout Comp, bodyId: U64, fnIdx: U64) {
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 3U64, detail: 0U64)
-    }
-
-    inout fn recordMidVerify(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidVerifyError) {
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 4U64, detail: self.midVerifyCoverageDetail(reason: reason))
     }
 
     inout fn recordMidEligibility(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidEligibilityReason) {
@@ -276,36 +160,12 @@ pub impl LlvmCtx {
             1U64 => { eprint(text: "missing-body-instance") }
             2U64 => { self.emitMidCoverageInstantiate(detail: detail) }
             3U64 => { eprint(text: "access") }
-            4U64 => { self.emitMidCoverageVerify(detail: detail) }
+            4U64 => { emitMidCoverageVerify(detail: detail) }
             5U64 => { self.emitMidCoveragePreflight(detail: detail) }
             6U64 => { self.emitMidCoverageEligibility(detail: detail) }
             _ => { eprint(text: "unknown") }
         }
         eprint(text: "\n")
-    }
-
-    fn midInstantiateCoverageDetail(reason: MidInstantiateError) -> U64 {
-        match reason {
-            MidInstantiateError.None => { return 0U64 }
-            MidInstantiateError.InvalidBodyInstance => { return 1U64 }
-            MidInstantiateError.MissingCallResolution => { return 2U64 }
-            MidInstantiateError.CallResolutionIndex => { return 3U64 }
-            MidInstantiateError.CallResolutionArity => { return 4U64 }
-            MidInstantiateError.CallResolutionPassing => { return 5U64 }
-            MidInstantiateError.CallConversionSource => { return 6U64 }
-            MidInstantiateError.CallConversionTarget => { return 7U64 }
-            MidInstantiateError.MissingReturnResolution => { return 8U64 }
-            MidInstantiateError.InvalidReturnResolution => { return 9U64 }
-            MidInstantiateError.InvalidCastResolution => { return 13U64 }
-            MidInstantiateError.MissingFinalResolution => { return 10U64 }
-            MidInstantiateError.InvalidFinalResolution => { return 11U64 }
-            MidInstantiateError.InvalidLocalResultType => { return 12U64 }
-            MidInstantiateError.MissingTryResolution => { return 14U64 }
-            MidInstantiateError.InvalidTryResolution => { return 15U64 }
-            MidInstantiateError.MissingSemanticClosure => { return 16U64 }
-            MidInstantiateError.InvalidSemanticClosure => { return 17U64 }
-            MidInstantiateError.MissingTypeResolution => { return 18U64 }
-        }
     }
 
     fn emitMidCoverageInstantiate(detail: U64) {
@@ -381,19 +241,6 @@ pub impl LlvmCtx {
             12U64 => { eprint(text: "unlowered-await") } 13U64 => { eprint(text: "index-place") }
             14U64 => { eprint(text: "unexpected-operand") }
             _ => { eprint(text: "unknown") }
-        }
-    }
-
-    fn emitMidCoverageVerify(detail: U64) {
-        eprint(text: "verify:")
-        match detail {
-            0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-target") }
-            2U64 => { eprint(text: "partial-move") } 3U64 => { eprint(text: "move-unavailable") }
-            4U64 => { eprint(text: "drop-unavailable") } 5U64 => { eprint(text: "invalid-drop-flag") }
-            6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
-            8U64 => { eprint(text: "return-boundary") }
-            15U64 => { eprint(text: "type-mismatch") }
-            18U64 => { eprint(text: "unique-copy") } _ => { eprint(text: "unknown") }
         }
     }
 
@@ -2824,8 +2671,7 @@ pub impl LlvmCtx {
 }
 
 pub impl LlvmCtx {
-    // Semantic preparation is shared by every entry. Only this adapter maps
-    // Mid failures into backend coverage and diagnostic context.
+    // Consume the shared, already-verified program without repeating passes.
     inout fn prepareMidExecutable(c: inout Comp, bodyId: U64, fnIdx: U64) -> Optional[MidExecutableBody] {
         val executable = self.midProgram.body(bodyId: bodyId)
         match executable {
@@ -2833,51 +2679,6 @@ pub impl LlvmCtx {
             Optional.None => { self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fnIdx) }
         }
         return executable
-    }
-
-    inout fn recordMidPreparationFailure(c: inout Comp, bodyId: U64, fnIdx: U64, failure: MidPreparationError) {
-        match failure {
-            MidPreparationError.InstantiationFailed(error: val error) => {
-                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: error)
-            }
-            MidPreparationError.AccessFailed(error: val error) => {
-                self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fnIdx)
-                if c.traceCodegen {
-                    eprint(text: "[trace-codegen] Mid access error=")
-                    match error {
-                        MidAccessError.MissingOuterSemanticAccess => { eprint(text: "missing-outer-semantic-access") }
-                        MidAccessError.AccessRoleMismatch => { eprint(text: "role-mismatch") }
-                        MidAccessError.UnresolvedAccessCall => { eprint(text: "unresolved-access-call") }
-                        MidAccessError.ParentAccessArgumentMissing => { eprint(text: "parent-argument-missing") }
-                        MidAccessError.ParentAccessArgumentMismatch => { eprint(text: "parent-argument-mismatch") }
-                        MidAccessError.InvalidAccessChain => { eprint(text: "invalid-chain") }
-                        MidAccessError.UnsupportedAccessBase => { eprint(text: "unsupported-base") }
-                        MidAccessError.UnsupportedAccessKey => { eprint(text: "unsupported-key") }
-                        MidAccessError.UnsupportedAccessProjection => { eprint(text: "unsupported-projection") }
-                        MidAccessError.UnsupportedSetterReceiver => { eprint(text: "unsupported-setter-receiver") }
-                        MidAccessError.None => { eprint(text: "none") }
-                    }
-                    eprint(text: "\n")
-                }
-            }
-            MidPreparationError.VerificationFailed(body: val body, verification: val verification) => {
-                match verification.error {
-                    MidVerifyError.ConflictingBorrowAccess => {
-                        mut val offset = 0U64
-                        if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                        c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
-                    }
-                    MidVerifyError.ConflictingReceiverAccess => {
-                        mut val offset = 0U64
-                        if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                        c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
-                    }
-                    _ => {}
-                }
-                self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: verification.error)
-                if c.traceCodegen { self.traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
-            }
-        }
     }
 
     // ABI admission is LLVM-specific and follows semantic verification. Async
@@ -2896,67 +2697,4 @@ pub impl LlvmCtx {
         return <MidLlvmPrepared.None />
     }
 
-    inout fn traceMidVerificationFailure(c: inout Comp, canonical: MidCanonicalBody, fnIdx: U64, verification: MidVerification) {
-        eprint(text: "[trace-codegen] Mid verification reason=")
-        self.emitMidCoverageVerify(detail: self.midVerifyCoverageDetail(reason: verification.error))
-        eprint(text: " location fn=")
-        self.traceCodegenU64(n: fnIdx)
-        eprint(text: " block=")
-        self.traceCodegenU64(n: verification.block)
-        eprint(text: " local=")
-        self.traceCodegenU64(n: verification.local)
-        eprint(text: "\n")
-        if !c.mid.isWellFormed(body: canonical) { return }
-        val failedBody = c.mid.bodies[canonical.body - 1U64]
-        if verification.local < failedBody.locals.len {
-            val local = c.mid.locals[failedBody.locals.start + verification.local]
-            eprint(text: "[trace-codegen] Mid failed-local binding=")
-            self.traceCodegenU64(n: local.sourceNameStart)
-            eprint(text: " scope=")
-            self.traceCodegenU64(n: local.sourceScope)
-            eprint(text: " type=")
-            c.traceMonoTypeHead(ref: local.typeTerm)
-            eprint(text: "\n")
-        }
-        if verification.block < failedBody.blocks.len {
-            val failedBlock = c.mid.blocks[failedBody.blocks.start + verification.block]
-            mut val statementIndex: U64 = 0U64
-            while statementIndex < failedBlock.statements.len {
-                val statement = c.mid.statements[failedBlock.statements.start + statementIndex]
-                eprint(text: "[trace-codegen] Mid failed-block statement=")
-                self.traceCodegenU64(n: statementIndex)
-                eprint(text: " tag=")
-                self.traceCodegenU64(n: statement.tag)
-                if statement.destination != 0U64 {
-                    eprint(text: " destination=")
-                    self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].local)
-                    eprint(text: " destination-type=")
-                    self.traceCodegenU64(n: c.mid.places[statement.destination - 1U64].typeTerm)
-                }
-                if statement.source != 0U64 {
-                    val source = c.mid.places[statement.source - 1U64]
-                    eprint(text: " overwrite-source=")
-                    self.traceCodegenU64(n: source.local)
-                    eprint(text: " source-local-type=")
-                    if source.local < failedBody.locals.len { self.traceCodegenU64(n: c.mid.locals[failedBody.locals.start + source.local].typeTerm) }
-                }
-                if statement.value != 0U64 {
-                    val value = c.mid.rvalues[statement.value - 1U64]
-                    eprint(text: " rvalue=")
-                    self.traceCodegenU64(n: value.tag)
-                    if value.operand != 0U64 {
-                        val operand = c.mid.operands[value.operand - 1U64]
-                        eprint(text: " operand=")
-                        self.traceCodegenU64(n: operand.tag)
-                        if operand.place != 0U64 {
-                            eprint(text: " source=")
-                            self.traceCodegenU64(n: c.mid.places[operand.place - 1U64].local)
-                        }
-                    }
-                }
-                eprint(text: "\n")
-                statementIndex += 1U64
-            }
-        }
-    }
 }
