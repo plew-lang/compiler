@@ -1,6 +1,7 @@
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram }
-import ./PreparedProgram with { PreparedProgram, reportProgramPreparationError }
+import ./PreparedProgram with { PreparedProgram }
+import ./CompilerDiagnostics with { reportProgramPreparationError }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `analyzeFrontend`) and emits
 // an owned LLVM module via libLLVM-C. Text is an explicit diagnostic/seed

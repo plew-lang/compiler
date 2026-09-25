@@ -1,7 +1,8 @@
 // Exercise the embedding entry without reading this process's argv or stdin.
 import ../../../src/Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
 import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/PreparedProgram with { PreparedProgram, reportProgramPreparationError }
+import ../../../src/PreparedProgram with { PreparedProgram }
+import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
 import @Std/Io with { print }
 
 fn checkSource(path: String, asan: Bool) {

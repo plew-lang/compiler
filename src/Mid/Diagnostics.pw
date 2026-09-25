@@ -1,6 +1,6 @@
 // Semantic preparation diagnostics shared by compiler drivers; no LLVM state.
 import @Std/Io with { eprint }
-import ../Diag with { eprintU64 }
+import ../Diag with { eprintU64, CompileDiagnostic }
 import ../Frontend with { Comp }
 import ./Build with { MidBuildError, MidUnsupportedBuild, MidUnsupportedAssign }
 import ./Prepare with { MidPreparationError }
@@ -147,7 +147,7 @@ fn traceMidInstantiationFailure(c: inout Comp, fnIdx: U64, reason: MidInstantiat
     }
 }
 
-export fn reportMidPreparationFailure(c: inout Comp, fnIdx: U64, failure: MidPreparationError) {
+export fn midPreparationDiagnostic(c: inout Comp, fnIdx: U64, failure: MidPreparationError) -> Optional[CompileDiagnostic] {
     match failure {
         MidPreparationError.InstantiationFailed(error: val error) => {
             traceMidInstantiationFailure(c: inout c, fnIdx: fnIdx, reason: error)
@@ -176,18 +176,19 @@ export fn reportMidPreparationFailure(c: inout Comp, fnIdx: U64, failure: MidPre
                 MidVerifyError.ConflictingBorrowAccess => {
                     mut val offset = 0U64
                     if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                    c.errorAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call")
+                    return <Optional.Some v=c.diagnosticAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call") />
                 }
                 MidVerifyError.ConflictingReceiverAccess => {
                     mut val offset = 0U64
                     if fnIdx < c.arena.functionCount() { offset = c.arena.functionAt(index: fnIdx).defOffset }
-                    c.errorAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call")
+                    return <Optional.Some v=c.diagnosticAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call") />
                 }
                 _ => {}
             }
             if c.traceCodegen { traceMidVerificationFailure(c: inout c, canonical: body, fnIdx: fnIdx, verification: verification) }
         }
     }
+    return <Optional.None />
 }
 
 fn traceMidVerificationFailure(c: inout Comp, canonical: MidCanonicalBody, fnIdx: U64, verification: MidVerification) {

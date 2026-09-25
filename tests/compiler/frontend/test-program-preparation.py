@@ -24,6 +24,11 @@ for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_ret
   reference=subprocess.run([*watch,str(carrier),str(source)],cwd=c,capture_output=True)
   assert result.stderr==reference.stderr,(name,result.stderr,reference.stderr)
  else:assert result.stdout==b'prepared\n',result.stdout
+ if expected:
+  returning=subprocess.run([*watch,str(out/'check'),'--return-failure',str(source)],cwd=c,capture_output=True)
+  assert returning.returncode==0,(name,returning.returncode,returning.stderr)
+  assert returning.stdout==b'returned\n',returning.stdout
+  assert returning.stderr==reference.stderr,(name,returning.stderr,reference.stderr)
  results.append({'case':name,'exit':result.returncode});print('PASS',name,flush=True)
 deps=subprocess.check_output(['/usr/bin/otool','-L',str(out/'check')],text=True)
 assert 'LLVM' not in deps,deps

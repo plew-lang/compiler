@@ -144,7 +144,10 @@ for file, name, call in entries:
     assert f'self.{call}(' in body, f'{name}: missing common preparation'
 backend = Path('src/Backend/Llvm/Mid.pw').read_text()
 diagnostics = Path('src/Mid/Diagnostics.pw').read_text()
-for symbol in ['reportMidBuildError', 'reportMidPreparationFailure', 'traceMidVerificationFailure']:
+assert 'c.errorAt(' not in diagnostics
+assert 'c.errorAt(' not in Path('src/PreparedProgram.pw').read_text()
+assert 'exit(' not in Path('src/PreparedProgram.pw').read_text()
+for symbol in ['reportMidBuildError', 'midPreparationDiagnostic', 'traceMidVerificationFailure']:
     assert symbol + '(' in diagnostics, f'shared preparation lost failure diagnostics: {symbol}'
 program = Path('src/Mid/Program.pw').read_text()
 assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId)' in program

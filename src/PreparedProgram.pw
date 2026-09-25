@@ -1,10 +1,11 @@
 // LLVM-independent preparation of the frontend's selected executable program.
 // This does not yet promise whole-target checking of otherwise unused bodies.
 import ./Frontend with { Comp }
+import ./Diag with { CompileDiagnostic }
 import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/Ambient with { MidAmbientProgram }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
-import ./Mid/Diagnostics with { reportMidBuildError, reportMidPreparationFailure }
+import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
 
 export enum ProgramPreparationError {
     Mid(error: MidProgramError)
@@ -39,12 +40,12 @@ pub impl PreparedProgram {
     }
 }
 
-// The existing terminating driver uses this adapter. Preparation itself
-// returns a structured failure; reporting does not construct an LLVM context.
-export fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparationError) {
+// Convert a preparation failure without terminating the caller. Trace options
+// retain the existing detailed internal-error output.
+export fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationError) -> CompileDiagnostic {
     match error {
         ProgramPreparationError.GlobalAccess(offset: val offset) => {
-            c.errorAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
         }
         ProgramPreparationError.Mid(error: val failure) => {
             match failure {
@@ -52,11 +53,14 @@ export fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparation
                     reportMidBuildError(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, error: error)
                 }
                 MidProgramError.Preparation(bodyId: val bodyId, error: val error) => {
-                    reportMidPreparationFailure(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, failure: error)
+                    match midPreparationDiagnostic(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, failure: error) {
+                        Optional.Some(v: val diagnostic) => { return diagnostic }
+                        Optional.None => {}
+                    }
                 }
                 _ => {}
             }
-            c.errorAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
+            return c.diagnosticAt(offset: 0U64, msg: "internal error: program Mid preparation failed")
         }
     }
 }

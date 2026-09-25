@@ -1,12 +1,23 @@
 import ../../../src/Frontend with { Comp }
 import ../../../src/FrontendDriver with { runFrontend }
-import ../../../src/PreparedProgram with { PreparedProgram, reportProgramPreparationError }
+import ../../../src/PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
+import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
 import @Std/Io with { print }
+import @Std/Process with { argCount, argAt }
+import ../../../src/Diag with { emitDiagnostic }
 fn main() {
     mut val compiler: Comp = <Comp />
-    runFrontend(c: inout compiler)
+    val returningFailure = argCount() > 1I64 && argAt(1I64) == "--return-failure"
+    runFrontend(c: inout compiler, firstArgument: if returningFailure { give 2I64 } else { give 1I64 })
     match PreparedProgram.prepare(c: inout compiler) {
         Result.Ok(value: _) => { print("prepared") }
-        Result.Err(error: val error) => { reportProgramPreparationError(c: inout compiler, error: error) }
+        Result.Err(error: val error) => {
+            if returningFailure {
+                emitDiagnostic(diagnostic: programPreparationDiagnostic(c: inout compiler, error: error))
+                print("returned")
+            } else {
+                reportProgramPreparationError(c: inout compiler, error: error)
+            }
+        }
     }
 }
