@@ -64,7 +64,7 @@ pub impl Comp {
     // transitively) must itself be declared `unique` — the decision is forced rather
     // than inferred, so adding a unique field can't silently make a copyable type
     // unsound (copies would multi-run deinit).
-    inout fn checkFieldContagion() {
+    inout fn checkFieldContagion() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.structCount() {
             val s: StructDef = self.arena.structAt(index: i)
@@ -77,7 +77,7 @@ pub impl Comp {
                             // anchor at the struct DECLARATION (defOffset — the place that
                             // must gain `unique`); the field's nameStart is re-interned and
                             // maps to no source file.
-                            self.errorAt(offset: s.defOffset, msg: "a struct with a unique field must be declared `unique`")
+                            return <Result.Err error=self.diagnosticAt(offset: s.defOffset, msg: "a struct with a unique field must be declared `unique`") />
                         }
                     }
                     j += 1
@@ -101,7 +101,7 @@ pub impl Comp {
                         if !(vf.tyIsArray) {
                             if self.typeIsTransitivelyUnique(start: vf.tyStart, len: vf.tyLen) {
                                 // anchor at the enum DECLARATION (see the struct arm above).
-                                self.errorAt(offset: e.defOffset, msg: "an enum with a unique payload must be declared `unique enum`")
+                                return <Result.Err error=self.diagnosticAt(offset: e.defOffset, msg: "an enum with a unique payload must be declared `unique enum`") />
                             }
                         }
                         fj += 1
@@ -111,6 +111,7 @@ pub impl Comp {
             }
             ei += 1
         }
+        return <Result.Ok value=() />
     }
 }
 
@@ -515,17 +516,18 @@ pub impl Comp {
     // is silently never deinit'd (CoW shares the buffer; the elements leak). Checks
     // every distinct array element type collected during parsing. `Array[Ref[File]]`
     // passes (the element head is `Ref`, not the unique type).
-    inout fn checkArrayElemsNotUnique() {
+    inout fn checkArrayElemsNotUnique() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.
-                self.errorAt(offset: self.uniqueDeclAnchor(start: ae.nameStart, len: ae.nameLen), msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]")
+                return <Result.Err error=self.diagnosticAt(offset: self.uniqueDeclAnchor(start: ae.nameStart, len: ae.nameLen), msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Reject a unique type as a generic type argument (spec/03): v1 generics are
@@ -534,7 +536,7 @@ pub impl Comp {
     // cells (which reference the unique cell, never copying it), so they are exempt. Scans the
     // whole TypeRef arena (not just genInsts) so lang-item enums like Optional/Result
     // are covered too; generic templates carry type-param args (not unique) and pass.
-    inout fn checkGenericUniqueArgs() {
+    inout fn checkGenericUniqueArgs() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: i)
@@ -558,7 +560,7 @@ pub impl Comp {
                                 // the arena TypeRef has no use-site offset — anchor at the
                                 // unique type's own DECLARATION (a real file:line) instead of
                                 // the interned arg span, which maps to no source file.
-                                self.errorAt(offset: self.uniqueDeclAnchor(start: ai.nameStart, len: ai.nameLen), msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]")
+                                return <Result.Err error=self.diagnosticAt(offset: self.uniqueDeclAnchor(start: ai.nameStart, len: ai.nameLen), msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
                             }
                         }
                         j += 1
@@ -567,6 +569,7 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Run param-mode validity over every function/method declaration.

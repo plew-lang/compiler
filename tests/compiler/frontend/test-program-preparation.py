@@ -16,7 +16,7 @@ with (out/'runtime.c').open('wb') as f:subprocess.run([*watch,str(carrier),'--ru
 subprocess.run([*watch,'/usr/bin/clang','-O2',str(out/'check.o'),str(out/'runtime.c'),'-o',str(out/'check')],check=True)
 (out/'std').symlink_to(c/'std',target_is_directory=True)
 results=[]
-for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_return_boundaries'),('reject','borrow_inout_argument'),('reject','receiver_read_inout_overlap'),('reject','receiver_read_inout_global'),('reject','missing_return'),('reject','move_fn_copyable'),('reject','deinit_on_non_unique'),('reject','unique_enum_deinit')]:
+for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_return_boundaries'),('reject','borrow_inout_argument'),('reject','receiver_read_inout_overlap'),('reject','receiver_read_inout_global'),('reject','missing_return'),('reject','move_fn_copyable'),('reject','deinit_on_non_unique'),('reject','unique_enum_deinit'),('reject','coalesce_removed'),('partreject','partfreefn/Main'),('reject','unique_field_not_unique'),('reject','enum_unique_payload_nomark'),('reject','array_unique'),('reject','generic_unique_arg'),('reject','any_unbound_assoc'),('reject','any_parameterized_trait'),('partreject','traitprovidedexternalimpl/Main'),('partreject','traitsubjectowner_aowner/Main')]:
  source=c/f'tests/fixtures/{kind}/{name}.pw'; expected=0 if kind=='run' else 1
  result=subprocess.run([*watch,str(out/'check'),str(source)],cwd=c,capture_output=True)
  assert result.returncode==expected,(name,result.stderr)

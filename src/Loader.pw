@@ -18,43 +18,45 @@
 pub impl Comp {
     // Append to Comp's one syntax store and retain only the root range for this
     // file.  Import scan and lowering consume those immutable IDs directly.
-    inout fn parseFileSyntax(fileBytes: Array[U8], fileStart: U64) -> SyntaxSlice {
+    inout fn parseFileSyntax(fileBytes: Array[U8], fileStart: U64) -> Result[SyntaxSlice, CompileDiagnostic] {
         mut val lx: Lexer = <Lexer bytes=fileBytes pos=0U64 toks=[] depth=0I64 />
         lex(lx: inout lx)
         mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0U64 base=fileStart />
         val roots: SyntaxSlice = parseProgramSyntaxInto(p: inout p, file: inout self.syntax)
         if p.hasErr {
-            self.errorAt(offset: p.errOff, msg: p.errMsg)
+            return <Result.Err error=self.diagnosticAt(offset: p.errOff, msg: p.errMsg) />
         }
-        return roots
+        return <Result.Ok value=roots />
     }
 
     // This deliberately needs no declaration/statement materialization: the
     // top-level tag, source span, and Export's nested TopItemId completely
     // determine this rule.
-    inout fn checkPartSyntaxOnly(roots: SyntaxSlice) {
+    inout fn checkPartSyntaxOnly(roots: SyntaxSlice) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < roots.count {
-            self.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: self.syntax, index: roots.start + i))
+            try self.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: self.syntax, index: roots.start + i))
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn rejectNonImplSyntaxItem(item: TopItemId) {
+    inout fn rejectNonImplSyntaxItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Impl => {}
             SyntaxTopItemKind.Import => {}
             SyntaxTopItemKind.Directive => {}
             SyntaxTopItemKind.Export => {
-                self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                try self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
             }
             _ => {
-                self.partItemError(offset: syntaxTopItemSpan(file: self.syntax, item: item).start)
+                return <Result.Err error=self.partItemDiagnostic(offset: syntaxTopItemSpan(file: self.syntax, item: item).start) />
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn partItemError(offset: U64) {
-        self.errorAt(offset: offset, msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
+    inout fn partItemDiagnostic(offset: U64) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: offset, msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
     }
 }

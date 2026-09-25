@@ -1358,13 +1358,13 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
             // Parse now to discover edges; lower all retained items only after the complete
             // graph (and therefore all import aliases and declarations) exists.
             tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
-            val roots: SyntaxSlice = c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
+            val roots: SyntaxSlice = try c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
             tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
             pendingRoots.append(roots)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
             // contain only `impl` blocks — reject any free fn / type / extern / val.
             if u64ArrayHas(a: rootSeen, v: moduleId) {
-                c.checkPartSyntaxOnly(roots: roots)
+                try c.checkPartSyntaxOnly(roots: roots)
             } else {
                 rootSeen.append(moduleId)
             }
@@ -1538,7 +1538,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
         val fileStart: U64 = c.arena.bytes.count()
         c.appendSrc(from: s.bytes())
         c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: 0U64, path: sourcePath)
-        pendingRoots.append(c.parseFileSyntax(fileBytes: s.bytes(), fileStart: fileStart))
+        pendingRoots.append(try c.parseFileSyntax(fileBytes: s.bytes(), fileStart: fileStart))
     }
     }
     tracePhase(c: inout c, label: "load:done")
@@ -1602,8 +1602,8 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // conformance provenance (spec/08,09): owner-module-only bare trait provided
     // methods and bare `impl B as A` must be validated before they can confer
     // methods/conformances onto other types.
-    c.checkTraitProvidedMethodOwners()
-    c.checkTraitSubjectConformOwners()
+    try c.checkTraitProvidedMethodOwners()
+    try c.checkTraitSubjectConformOwners()
     // A trait-to-trait cycle is invalid as a declaration graph. Check it before
     // the concrete-conformance fixpoint, whose idempotent fact deduplication is
     // intentionally not a substitute for this diagnostic.
@@ -1624,14 +1624,14 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.markBoxedFields()
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
-    c.checkFieldContagion()
+    try c.checkFieldContagion()
     // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
     // enum's own explicit deinit body is v1-rejected; active payloads still drop.
     // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
     // before impl++method lists merge.)
     c.checkFieldDefaults()
     c.checkParamDefaults()
-    c.checkArrayElemsNotUnique()
+    try c.checkArrayElemsNotUnique()
     // match pattern soundness (spec/11): a variant/struct pattern must name real
     // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
     c.checkMatchBinds()
@@ -1644,7 +1644,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.checkConformances()
     // existential formation (spec/08): `any P` is supported only over a trait with
     // no type args / associated types in this increment (else loud-reject).
-    c.checkAnyFormation()
+    try c.checkAnyFormation()
     // Candidate-table registration has already enforced declaration collisions
     // while lowering. The remaining checks concern non-table semantic rules.
     try c.checkDuplicateTraitReqs()
@@ -1713,7 +1713,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     tracePhase(c: inout c, label: "generic-body-check:done")
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
-    c.checkGenericUniqueArgs()
+    try c.checkGenericUniqueArgs()
     tracePhase(c: inout c, label: "generic-checks:done")
     // backend-independent acceptance pass (spec/15): run the per-expr/stmt checks
     // that were historically done inline during emission (rebuilding the local

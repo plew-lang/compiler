@@ -932,7 +932,7 @@ pub impl Comp {
         return self.decls.traitCount()
     }
 
-    inout fn checkAnyFormation() {
+    inout fn checkAnyFormation() -> Result[(), CompileDiagnostic] {
         mut val ti: U64 = 0
         while ti < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: ti)
@@ -963,22 +963,23 @@ pub impl Comp {
                         tpi += 1
                     }
                     if positional < posNeed {
-                        self.errorAt(offset: t.nameStart, msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
+                        return <Result.Err error=self.diagnosticAt(offset: t.nameStart, msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)") />
                     }
                     // each associated type must be bound by name.
                     mut val asi: U64 = 0
                     while asi < tr.assocTypes.count() {
                         if !(self.anyHasNamedBinding(t: t, nameId: self.traitBindAt(binds: tr.assocTypes, index: asi).nameId)) {
-                            self.errorAt(offset: t.nameStart, msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
+                            return <Result.Err error=self.diagnosticAt(offset: t.nameStart, msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)") />
                         }
                         asi += 1
                     }
                 } else {
-                    self.errorAt(offset: t.nameStart, msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
+                    return <Result.Err error=self.diagnosticAt(offset: t.nameStart, msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)") />
                 }
             }
             ti += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn anyHasNamedBinding(t: TypeRef, nameId: U64) -> Bool {

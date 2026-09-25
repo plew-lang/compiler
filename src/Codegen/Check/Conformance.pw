@@ -58,7 +58,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkTraitProvidedMethodOwners() {
+    inout fn checkTraitProvidedMethodOwners() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
@@ -67,16 +67,17 @@ pub impl Comp {
                     val ownerMod: U64 = self.traitModuleByOwner(owner: f.provTraitOwner)
                     if ownerMod != 4000000000U64 {
                         if self.moduleOf(offset: self.fnAnchor(f: f)) != ownerMod {
-                            self.errorAt(offset: self.fnAnchor(f: f), msg: "provided methods for a trait must be declared in the trait owner's module; use a named extension for third-party additions (spec/08,15)")
+                            return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "provided methods for a trait must be declared in the trait owner's module; use a named extension for third-party additions (spec/08,15)") />
                         }
                     }
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkTraitSubjectConformOwners() {
+    inout fn checkTraitSubjectConformOwners() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
@@ -84,12 +85,13 @@ pub impl Comp {
                 val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.subjectArgs.count())
                 if ownerMod != 4000000000U64 {
                     if cf.sourceModule != ownerMod {
-                        self.errorAt(offset: cf.defOffset, msg: "bare inter-trait conformance `impl B as A` must be declared in the subject trait's owner module; use a named extension for third-party additions (spec/08,09)")
+                        return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "bare inter-trait conformance `impl B as A` must be declared in the subject trait's owner module; use a named extension for third-party additions (spec/08,09)") />
                     }
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Trait-subject conformances are directed instance edges.  The concrete
