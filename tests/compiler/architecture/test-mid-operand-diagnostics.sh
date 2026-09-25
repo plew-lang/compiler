@@ -7,14 +7,15 @@ cd "$(dirname "$0")/../../.."
 
 build=src/Mid/Build.pw
 llvm=src/Backend/Llvm/Mid.pw
+diagnostics=src/Mid/Diagnostics.pw
 
 for reason in MakeWithoutAggregate UnloweredView UnloweredValueControl UnloweredReference UnloweredClosure UnloweredAwait IndexPlace UnexpectedOperand; do
     if ! rg -q "MidUnsupportedBuild\.$reason|    $reason" "$build"; then
         echo "operand diagnostic is missing $reason" >&2
         exit 1
     fi
-    if ! rg -q "MidUnsupportedBuild\.$reason" "$llvm"; then
-        echo "LLVM coverage detail is missing $reason" >&2
+    if ! rg -q "MidUnsupportedBuild\.$reason" "$diagnostics"; then
+        echo "semantic diagnostic detail is missing $reason" >&2
         exit 1
     fi
 done

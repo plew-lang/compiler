@@ -9,14 +9,15 @@ cd "$(dirname "$0")/../../.."
 
 build=src/Mid/Build.pw
 llvm=src/Backend/Llvm/Mid.pw
+diagnostics=src/Mid/Diagnostics.pw
 
 for reason in IdentifierNotLocal FieldBaseNotPlace IndexBaseNotPlace OtherNotPlace IndexProjection ImmutableGlobal; do
     if ! rg -q "MidUnsupportedAssign\.$reason|    $reason" "$build"; then
         echo "assign diagnostic is missing $reason" >&2
         exit 1
     fi
-    if ! rg -q "MidUnsupportedAssign\.$reason" "$llvm"; then
-        echo "LLVM coverage detail is missing $reason" >&2
+    if ! rg -q "MidUnsupportedAssign\.$reason" "$diagnostics"; then
+        echo "semantic diagnostic detail is missing $reason" >&2
         exit 1
     fi
 done

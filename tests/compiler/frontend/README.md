@@ -45,3 +45,15 @@ registered in the normal suite.
 Pass the fixture path under `tests/compiler/frontend/` to the carrier. Neither
 procedure updates the canonical compiler or seed, nor replaces the standard
 normal or sanitizer gates.
+
+## LLVM-independent program preparation
+
+`PreparedProgram.pw` invokes the production frontend and shared preparation,
+without importing Backend. Run `python3 -B tests/compiler/frontend/test-program-preparation.py
+--compiler /absolute/path/to/plewc --out tmp/preparation-check` (on one line).
+The output directory must be new. The test links the probe with only its C
+runtime, asserts that no LLVM dylib is needed, and compares successful
+CoW/async/closure preparation and borrow/receiver/global conflict diagnostics
+with the selected compiler. It does not execute the checked application's main
+or claim whole-target checking of unused bodies. This is a manual test outside
+the standard fixture suite.

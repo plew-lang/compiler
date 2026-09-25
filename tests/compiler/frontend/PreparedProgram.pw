@@ -1,0 +1,11 @@
+import ../../../src/Frontend with { Comp, runFrontend }
+import ../../../src/PreparedProgram with { PreparedProgram, reportProgramPreparationError }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    runFrontend(c: inout compiler)
+    match PreparedProgram.prepare(c: inout compiler) {
+        Result.Ok(value: _) => { print("prepared") }
+        Result.Err(error: val error) => { reportProgramPreparationError(c: inout compiler, error: error) }
+    }
+}

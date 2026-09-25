@@ -181,3 +181,13 @@ a use-after-free and a deliberate leak (expected exit 1). The normal 101-generat
 lifecycle and 21 loads plus readiness-failure/recovery must exit cleanly
 with the expected outputs. LLVM itself is a prebuilt unsanitized dependency.
 These are targeted diagnostics, not the compiler repository's whole ASan suite.
+
+## Lazy-call and failure-boundary probe
+
+`python3 -B scripts/diagnostics/orc-restart/lazy-check.py --out tmp/orc-lazy`
+checks LLVM 20 lazy lookup versus first-call materialization, mutual recursion,
+code/context callbacks, unused functions, and one-time compilation. A failed
+lazy link terminates only the executor subprocess with status 70; an infinite
+loop is killed and reaped, then a new execution succeeds. This is a mechanism
+probe using prebuilt LLVM IR, not source-lazy Plew or a production host ABI.
+It does not measure the 500 ms restart target or settle UI/process architecture.
