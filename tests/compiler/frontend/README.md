@@ -71,6 +71,8 @@ This verifies rendering, not propagation from all existing frontend failures.
 The returning-failure mode calls analyzeFrontend directly and then prepares Mid.
 It verifies the same diagnostic as the terminal CLI for borrow conflicts, missing
 returns, move receivers, deinit constraints, syntax/part rules, unique containment,
-trait ownership, existential formation, and import visibility/cycles. FrontendInputs also verifies that
+trait ownership, existential formation, import visibility/cycles, public API
+closure, derive visibility, and parameter ownership modes. The gen failure mode
+sets the production gen option while preserving the same returning boundary. FrontendInputs also verifies that
 a missing source returns an error before independent valid requests succeed.
 This covers migrated boundaries; other frontend checks still terminate.

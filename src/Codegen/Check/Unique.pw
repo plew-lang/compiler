@@ -456,14 +456,14 @@ pub impl Comp {
     // with by-value). `inout` is valid for both. Array params are containers
     // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
     // declaration offset (Param.nameStart is interned = maps to no source file).
-    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64, isAsync: Bool) {
+    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64, isAsync: Bool) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < params.count() {
             val p: Param = self.funcParamAt(params: params, index: i)
             // Async entry owns values independently of the caller's synchronous
             // borrow scope. Explicit storage loans cannot escape into its frame.
             if isAsync && (p.isBorrow || p.isInout) {
-                self.errorAt(offset: anchor, msg: "an async function cannot have borrow or inout parameters; pass an owned value instead")
+                return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "an async function cannot have borrow or inout parameters; pass an owned value instead") />
             }
             if !(p.tyIsArray) {
                 // Ownership modes describe the lexical parameter type, not
@@ -475,7 +475,7 @@ pub impl Comp {
                 if self.typeTermIsUnique(ref: term) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
-                        self.errorAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
+                        return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)") />
                     }
                 } else {
                     // A bare type parameter is not known-copyable at declaration time in
@@ -484,16 +484,17 @@ pub impl Comp {
                     // decide whether it is meaningful.
                     if term == 0U64 || term >= self.arena.typeCount() || self.arena.typeTerms[term].paramId == 0U64 {
                         if p.isMove {
-                            self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
+                            return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`") />
                         }
                         if p.isBorrow {
-                            self.errorAt(offset: anchor, msg: "`borrow` is redundant on a copyable type; pass by value")
+                            return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "`borrow` is redundant on a copyable type; pass by value") />
                         }
                     }
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Declaration offset of a unique struct/enum named by (start, len) — the anchor
@@ -573,13 +574,14 @@ pub impl Comp {
     }
 
     // Run param-mode validity over every function/method declaration.
-    inout fn checkAllParamModes() {
+    inout fn checkAllParamModes() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val function = self.arena.functionAt(index: i)
-            self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function), isAsync: function.isAsync)
+            try self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function), isAsync: function.isAsync)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // A default argument `name: T = expr` (spec/04) is memberwise/default-arg sugar, so

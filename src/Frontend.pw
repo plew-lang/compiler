@@ -1660,7 +1660,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     try c.checkUseVisibility()
     try c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
-    c.checkAllParamModes()
+    try c.checkAllParamModes()
     try c.checkDeinitOnlyOnUnique()
     try c.checkPublicApiClosure()
     tracePhase(c: inout c, label: "declaration-checks:done")
