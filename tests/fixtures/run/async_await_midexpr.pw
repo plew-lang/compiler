@@ -1,0 +1,13 @@
+// Await inside arithmetic resumes with the promised value before addition.
+import @Std/Async with { sleep }
+import @Std/Io with { print }
+
+async fn f() -> Promise[I64] {
+    val x: I64 = await sleep(ms: 1) + 1
+    return x
+}
+
+async fn main() {
+    val value = await f()
+    print(value)
+}
