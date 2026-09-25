@@ -66,7 +66,7 @@ pub impl Comp {
         }
     }
 
-    inout fn synthGenMain() {
+    inout fn synthGenMain() -> Result[(), CompileDiagnostic] {
         val writeN: Bind = self.internBytes(s: "write")
         val sN: Bind = self.internBytes(s: "s")
         val deriveN: Bind = self.internBytes(s: "derive")
@@ -95,7 +95,7 @@ pub impl Comp {
             // construction rule the post-checks pass skipped for this synthetic Make).
             // The annotation names a source declaration before the trusted
             // harness is synthesized. Apply ordinary import visibility here.
-            self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
+            try self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
             self.checkDirectiveArgsPublic(d: d)
             // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
             // annotated item's own source slice, with its original offset so the macro
@@ -135,5 +135,6 @@ pub impl Comp {
         val noParams: Array[Param] = []
         self.genMainIdx = self.arena.functionCount()
         self.arena.registerFunction(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen) typeParams=self.pushFuncBinds(binds: noTP) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+        return <Result.Ok value=() />
     }
 }

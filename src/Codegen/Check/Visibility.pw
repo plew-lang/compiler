@@ -273,16 +273,17 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
-    inout fn checkTypeName(siteOffset: U64, start: U64, len: U64) {
-        if len == 0 { return }
-        if self.isAmbientInLang(start: start, len: len) { return }
+    inout fn checkTypeName(siteOffset: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
+        if len == 0 { return <Result.Ok value=() /> }
+        if self.isAmbientInLang(start: start, len: len) { return <Result.Ok value=() /> }
         val useMod: U64 = self.moduleOf(offset: siteOffset)
         // a `Real as Alias` use resolves to Real (imports/exports are keyed by the real name).
         val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
-        if self.typeDeclVisibleFrom(useMod: useMod, start: real.nameStart, len: real.nameLen) { return }
+        if self.typeDeclVisibleFrom(useMod: useMod, start: real.nameStart, len: real.nameLen) { return <Result.Ok value=() /> }
         if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
-            self.errorAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `import … with { … }`)")
+            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `import … with { … }`)") />
         }
+        return <Result.Ok value=() />
     }
 
     // Type-side diagnostic arm of scoped resolution (spec/15), as a single choke-point pass:
@@ -294,17 +295,18 @@ pub impl Comp {
     // left to enumerate by hand. Generic arguments need no special recursion: each is itself a
     // TypeRef in the arena, visited by the same loop. siteOffset 0 marks a synthetic TypeRef
     // (compiler-built) or a type-parameter head — both skipped.
-    inout fn checkTypeVisibility() {
+    inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: i)
             if t.siteOffset != 0U64 {
                 if self.offsetIsLoaded(offset: t.siteOffset) {
-                    self.checkTypeName(siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
+                    try self.checkTypeName(siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn typeDeclModuleMissing() -> U64 {
@@ -538,17 +540,18 @@ pub impl Comp {
         return self.nameOnPublicSurfaceOfModule(surfaceMod: declRoot, nameStart: start, nameLen: len)
     }
 
-    inout fn checkSurfaceName(surfaceMod: U64, start: U64, len: U64, offset: U64) {
-        if self.isAmbientInLang(start: start, len: len) { return }
+    inout fn checkSurfaceName(surfaceMod: U64, start: U64, len: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if self.isAmbientInLang(start: start, len: len) { return <Result.Ok value=() /> }
         val identity: Bind = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: offset), start: start, len: len)
-        if identity.nameLen == 0U64 { return }
+        if identity.nameLen == 0U64 { return <Result.Ok value=() /> }
         val surfaceRoot: U64 = self.packageRootModuleOf(mod: surfaceMod)
         val declRoot: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: identity.nameStart))
         mut val requiredSurface: U64 = declRoot
         if declRoot == surfaceRoot { requiredSurface = surfaceRoot }
         if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: identity)) {
-            self.errorAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)") />
         }
+        return <Result.Ok value=() />
     }
 
     // A lowered trait constraint already carries its declaration owner.  Do
@@ -556,16 +559,17 @@ pub impl Comp {
     // surface: `PrivateMarker as Marker` would otherwise look unresolved and
     // escape public-API closure.  The canonical identity is the thing whose
     // reachability must be checked.
-    inout fn checkSurfaceTraitOwner(surfaceMod: U64, owner: U64, offset: U64) {
-        if owner == 0U64 { return }
+    inout fn checkSurfaceTraitOwner(surfaceMod: U64, owner: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if owner == 0U64 { return <Result.Ok value=() /> }
         val identity: Bind = <Bind nameStart=owner nameLen=1 fieldStart=0 fieldLen=0 />
         val surfaceRoot: U64 = self.packageRootModuleOf(mod: surfaceMod)
         val traitRoot: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: owner))
         mut val requiredSurface: U64 = traitRoot
         if traitRoot == surfaceRoot { requiredSurface = surfaceRoot }
         if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: identity)) {
-            self.errorAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)") />
         }
+        return <Result.Ok value=() />
     }
 
     inout fn isRecordSurfaceName(start: U64, len: U64) -> Bool {
@@ -574,8 +578,8 @@ pub impl Comp {
         return self.arena.bytes[start] == 40U8
     }
 
-    inout fn checkRecordSurfaceFields(surfaceMod: U64, start: U64, len: U64, offset: U64) {
-        if !(self.isRecordSurfaceName(start: start, len: len)) { return }
+    inout fn checkRecordSurfaceFields(surfaceMod: U64, start: U64, len: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if !(self.isRecordSurfaceName(start: start, len: len)) { return <Result.Ok value=() /> }
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val si: U64 = self.arena.firstStructNamed(nameId: qId)
         while si < self.arena.structCount() {
@@ -583,29 +587,30 @@ pub impl Comp {
             if sd.nameId == qId {
                 mut val fi: U64 = 0
                 while fi < sd.fields.count() {
-                    self.checkSurfaceType(surfaceMod: surfaceMod, ref: sd.fields[fi].ty, offset: offset)
+                    try self.checkSurfaceType(surfaceMod: surfaceMod, ref: sd.fields[fi].ty, offset: offset)
                     fi += 1
                 }
-                return
+                return <Result.Ok value=() />
             }
             si = self.arena.nextStructNamed(index: si)
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkSurfaceType(surfaceMod: U64, ref: U64, offset: U64) {
-        if ref == 0U64 { return }
-        if ref >= self.arena.typeCount() { return }
+    inout fn checkSurfaceType(surfaceMod: U64, ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 { return <Result.Ok value=() /> }
+        if ref >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.siteOffset == 0U64 {
             if self.isRecordSurfaceName(start: t.nameStart, len: t.nameLen) {
-                self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: offset)
+                try self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: offset)
             }
             mut val ai0: U64 = 0
             while ai0 < t.args.count() {
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[ai0], offset: offset)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[ai0], offset: offset)
                 ai0 += 1
             }
-            return
+            return <Result.Ok value=() />
         }
         mut val errOffset: U64 = offset
         if t.siteOffset != 0U64 {
@@ -620,10 +625,10 @@ pub impl Comp {
             mut val requiredSurface: U64 = declRoot
             if declRoot == surfaceRoot { requiredSurface = surfaceRoot }
             if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: identity)) {
-                self.errorAt(offset: errOffset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
+                return <Result.Err error=self.diagnosticAt(offset: errOffset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)") />
             }
         }
-        self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: errOffset)
+        try self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: errOffset)
         if t.hasAssocTraitDecl {
             val assoc: Bind = <Bind nameStart=t.assocTraitDeclOffset nameLen=1 fieldStart=0 fieldLen=0 />
             val surfaceRoot: U64 = self.packageRootModuleOf(mod: surfaceMod)
@@ -631,126 +636,138 @@ pub impl Comp {
             mut val requiredSurface: U64 = traitRoot
             if traitRoot == surfaceRoot { requiredSurface = surfaceRoot }
             if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: assoc)) {
-                self.errorAt(offset: errOffset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
+                return <Result.Err error=self.diagnosticAt(offset: errOffset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)") />
             }
         }
         mut val i: U64 = 0
         while i < t.args.count() {
-            self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[i], offset: errOffset)
+            try self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[i], offset: errOffset)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkSurfaceParam(surfaceMod: U64, p: Param, offset: U64) {
-        self.checkSurfaceType(surfaceMod: surfaceMod, ref: p.ty, offset: offset)
+    inout fn checkSurfaceParam(surfaceMod: U64, p: Param, offset: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkSurfaceType(surfaceMod: surfaceMod, ref: p.ty, offset: offset)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkSurfaceFuncSignature(surfaceMod: U64, fnIdx: U64, offset: U64) {
-        if fnIdx >= self.arena.functionCount() { return }
+    inout fn checkSurfaceFuncSignature(surfaceMod: U64, fnIdx: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if fnIdx >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: fnIdx)
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: f.params, index: pi), offset: offset)
+            try self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: f.params, index: pi), offset: offset)
             pi += 1
         }
         if f.hasRet {
-            self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.retTy, offset: offset)
+            try self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.retTy, offset: offset)
         }
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
             val b: FuncBound = self.decls.funcBounds[bi]
             if b.fnIdx == fnIdx {
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
-                self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: b.constraint.key.owner, offset: offset)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
+                try self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: b.constraint.key.owner, offset: offset)
             }
             bi += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicStructSurface(sd: StructDef) {
+    inout fn checkPublicStructSurface(sd: StructDef) -> Result[(), CompileDiagnostic] {
         val declMod: U64 = self.typeDeclModule(start: sd.nameStart, len: sd.nameLen)
-        if declMod == self.typeDeclModuleMissing() { return }
+        if declMod == self.typeDeclModuleMissing() { return <Result.Ok value=() /> }
         val surfaceMod: U64 = self.packageRootModuleOf(mod: declMod)
-        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: sd.nameStart, nameLen: sd.nameLen)) { return }
-        self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: sd.nameStart, nameLen: sd.nameLen)) { return <Result.Ok value=() /> }
+        try self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkStructSurfaceInModule(surfaceMod: U64, sd: StructDef) {
+    inout fn checkStructSurfaceInModule(surfaceMod: U64, sd: StructDef) -> Result[(), CompileDiagnostic] {
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
             val f: FieldDef = sd.fields[fi]
             if f.vis != 0U64 {
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
             }
             fi += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicEnumSurface(ed: EnumDef) {
+    inout fn checkPublicEnumSurface(ed: EnumDef) -> Result[(), CompileDiagnostic] {
         val declMod: U64 = self.typeDeclModule(start: ed.nameStart, len: ed.nameLen)
-        if declMod == self.typeDeclModuleMissing() { return }
+        if declMod == self.typeDeclModuleMissing() { return <Result.Ok value=() /> }
         val surfaceMod: U64 = self.packageRootModuleOf(mod: declMod)
-        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: ed.nameStart, nameLen: ed.nameLen)) { return }
-        self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: ed.nameStart, nameLen: ed.nameLen)) { return <Result.Ok value=() /> }
+        try self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkEnumSurfaceInModule(surfaceMod: U64, ed: EnumDef) {
+    inout fn checkEnumSurfaceInModule(surfaceMod: U64, ed: EnumDef) -> Result[(), CompileDiagnostic] {
         mut val vi: U64 = 0
         while vi < ed.variants.count() {
             val v: Variant = ed.variants[vi]
             mut val fi: U64 = 0
             while fi < v.fields.count() {
                 val f: FieldDef = v.fields[fi]
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
                 fi += 1
             }
             vi += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicNewtypeSurface(nt: NewtypeDef) {
+    inout fn checkPublicNewtypeSurface(nt: NewtypeDef) -> Result[(), CompileDiagnostic] {
         val declMod: U64 = self.typeDeclModule(start: nt.nameStart, len: nt.nameLen)
-        if declMod == self.typeDeclModuleMissing() { return }
+        if declMod == self.typeDeclModuleMissing() { return <Result.Ok value=() /> }
         val surfaceMod: U64 = self.packageRootModuleOf(mod: declMod)
-        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: nt.nameStart, nameLen: nt.nameLen)) { return }
-        self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: nt.nameStart, nameLen: nt.nameLen)) { return <Result.Ok value=() /> }
+        try self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkNewtypeSurfaceInModule(surfaceMod: U64, nt: NewtypeDef) {
-        self.checkSurfaceType(surfaceMod: surfaceMod, ref: nt.underRef, offset: nt.defOffset)
+    inout fn checkNewtypeSurfaceInModule(surfaceMod: U64, nt: NewtypeDef) -> Result[(), CompileDiagnostic] {
+        try self.checkSurfaceType(surfaceMod: surfaceMod, ref: nt.underRef, offset: nt.defOffset)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicGlobalSurface(g: Global) {
+    inout fn checkPublicGlobalSurface(g: Global) -> Result[(), CompileDiagnostic] {
         val surfaceMod: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: g.nameStart))
-        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: g.nameStart, nameLen: g.nameLen)) { return }
-        self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: g.nameStart, nameLen: g.nameLen)) { return <Result.Ok value=() /> }
+        try self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkGlobalSurfaceInModule(surfaceMod: U64, g: Global) {
-        if g.letStmt >= self.arena.stmts.count() { return }
+    inout fn checkGlobalSurfaceInModule(surfaceMod: U64, g: Global) -> Result[(), CompileDiagnostic] {
+        if g.letStmt >= self.arena.stmts.count() { return <Result.Ok value=() /> }
         match self.arena.stmts[g.letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 val eff: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: eff.ty, offset: g.nameStart)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: eff.ty, offset: g.nameStart)
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicTraitSurface(td: TraitDef) {
+    inout fn checkPublicTraitSurface(td: TraitDef) -> Result[(), CompileDiagnostic] {
         val surfaceMod: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: td.nameStart))
-        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: td.nameStart, nameLen: td.nameLen)) { return }
-        self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: td.nameStart, nameLen: td.nameLen)) { return <Result.Ok value=() /> }
+        try self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkTraitSurfaceInModule(surfaceMod: U64, td: TraitDef) {
+    inout fn checkTraitSurfaceInModule(surfaceMod: U64, td: TraitDef) -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < td.supertraits.count() {
             // Supertrait names are interned; resolve them from the owning trait's
             // real declaration site rather than treating the interned span as a
             // source location.
             val supertrait: Bind = self.traitBindAt(binds: td.supertraits, index: si)
-            self.checkSurfaceName(surfaceMod: surfaceMod, start: supertrait.nameStart, len: supertrait.nameLen, offset: td.nameStart)
+            try self.checkSurfaceName(surfaceMod: surfaceMod, start: supertrait.nameStart, len: supertrait.nameLen, offset: td.nameStart)
             si += 1
         }
         mut val ri: U64 = 0
@@ -758,14 +775,15 @@ pub impl Comp {
             val req: Func = self.traitReqAt(reqs: td.reqs, index: ri)
             mut val pi: U64 = 0
             while pi < req.params.count() {
-                self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: req.params, index: pi), offset: req.nameStart)
+                try self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: req.params, index: pi), offset: req.nameStart)
                 pi += 1
             }
             if req.hasRet {
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: req.retTy, offset: req.nameStart)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: req.retTy, offset: req.nameStart)
             }
             ri += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn traitDeclExported(td: TraitDef) -> Bool {
@@ -797,37 +815,39 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkPublicConformanceSurface(cf: Conform) {
-        if !(cf.isPub) { return }
-        if cf.extId != 0U64 { return }
+    inout fn checkPublicConformanceSurface(cf: Conform) -> Result[(), CompileDiagnostic] {
+        if !(cf.isPub) { return <Result.Ok value=() /> }
+        if cf.extId != 0U64 { return <Result.Ok value=() /> }
         val useMod: U64 = cf.sourceModule
         val receiver: Bind = self.typeDeclIdentityAt(useMod: useMod, start: cf.typeStart, len: cf.typeLen)
-        if receiver.nameLen == 0U64 { return }
+        if receiver.nameLen == 0U64 { return <Result.Ok value=() /> }
         val typeMod: U64 = self.moduleOf(offset: receiver.nameStart)
         val surfaceMod: U64 = self.packageRootModuleOf(mod: typeMod)
         val trait: Bind = self.typeDeclIdentityAt(useMod: useMod, start: cf.traitStart, len: cf.traitLen)
-        if trait.nameLen == 0U64 { return }
-        if !(self.publicSurfaceProvidesDecl(surfaceMod: surfaceMod, identity: receiver)) { return }
+        if trait.nameLen == 0U64 { return <Result.Ok value=() /> }
+        if !(self.publicSurfaceProvidesDecl(surfaceMod: surfaceMod, identity: receiver)) { return <Result.Ok value=() /> }
         val traitRoot: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: trait.nameStart))
-        if !(self.publicSurfaceProvidesDecl(surfaceMod: traitRoot, identity: trait)) { return }
-        self.checkSurfaceName(surfaceMod: surfaceMod, start: cf.traitStart, len: cf.traitLen, offset: cf.defOffset)
+        if !(self.publicSurfaceProvidesDecl(surfaceMod: traitRoot, identity: trait)) { return <Result.Ok value=() /> }
+        try self.checkSurfaceName(surfaceMod: surfaceMod, start: cf.traitStart, len: cf.traitLen, offset: cf.defOffset)
         mut val ai: U64 = 0
         while ai < cf.traitArgs.count() {
-            self.checkSurfaceType(surfaceMod: surfaceMod, ref: self.conformTypeAt(types: cf.traitArgs, index: ai), offset: cf.defOffset)
+            try self.checkSurfaceType(surfaceMod: surfaceMod, ref: self.conformTypeAt(types: cf.traitArgs, index: ai), offset: cf.defOffset)
             ai += 1
         }
-        self.checkPublicConformanceAssocBindings(surfaceMod: surfaceMod, cf: cf)
+        try self.checkPublicConformanceAssocBindings(surfaceMod: surfaceMod, cf: cf)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicConformanceAssocBindings(surfaceMod: U64, cf: Conform) {
+    inout fn checkPublicConformanceAssocBindings(surfaceMod: U64, cf: Conform) -> Result[(), CompileDiagnostic] {
         mut val ai: U64 = 0
         while ai < self.decls.assocBindings.count() {
             val ab: AssocBinding = self.decls.assocBindings[ai]
             if ab.implOffset == cf.defOffset {
-                self.checkSurfaceType(surfaceMod: surfaceMod, ref: ab.ty, offset: ab.nameStart)
+                try self.checkSurfaceType(surfaceMod: surfaceMod, ref: ab.ty, offset: ab.nameStart)
             }
             ai += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn surfaceCanExportDeclModule(surfaceMod: U64, declMod: U64) -> Bool {
@@ -850,14 +870,14 @@ pub impl Comp {
         return e.fieldStart
     }
 
-    inout fn checkExportEntrySurface(e: Bind) {
+    inout fn checkExportEntrySurface(e: Bind) -> Result[(), CompileDiagnostic] {
         val surfaceMod: U64 = self.exportEntrySurfaceModule(e: e)
         val identity: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: e.nameStart, len: e.nameLen)
         mut val si: U64 = 0
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if identity.nameLen != 0U64 && sd.defOffset == identity.nameStart {
-                self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
+                try self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
             }
             si += 1
         }
@@ -865,7 +885,7 @@ pub impl Comp {
         while ei < self.arena.enumCount() {
             val ed: EnumDef = self.arena.enumAt(index: ei)
             if identity.nameLen != 0U64 && ed.defOffset == identity.nameStart {
-                self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
+                try self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
             }
             ei += 1
         }
@@ -873,7 +893,7 @@ pub impl Comp {
         while nti < self.arena.newtypeCount() {
             val nt: NewtypeDef = self.arena.newtypeAt(index: nti)
             if identity.nameLen != 0U64 && nt.defOffset == identity.nameStart {
-                self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
+                try self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
             }
             nti += 1
         }
@@ -881,7 +901,7 @@ pub impl Comp {
         while ti < self.decls.traitCount() {
             val td: TraitDef = self.decls.traitAt(index: ti)
             if identity.nameLen != 0U64 && td.nameStart == identity.nameStart {
-                self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
+                try self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
             }
             ti += 1
         }
@@ -889,7 +909,7 @@ pub impl Comp {
         while gi < self.arena.globals.count() {
             val g: Global = self.arena.globals[gi]
             if g.nameStart == e.nameStart && self.moduleOf(offset: g.nameStart) == surfaceMod {
-                self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
+                try self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
             }
             gi += 1
         }
@@ -899,20 +919,21 @@ pub impl Comp {
             if !(f.hasRecv) {
                 if !(f.isAssoc) {
                     if f.nameStart == e.nameStart && self.moduleOf(offset: f.nameStart) == surfaceMod {
-                        self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
+                        try self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
                     }
                 }
             }
             fi += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkPublicApiClosure() {
+    inout fn checkPublicApiClosure() -> Result[(), CompileDiagnostic] {
         mut val exi: U64 = 0
         while exi < self.modules.exports.count() {
             val exSurface: U64 = self.exportEntrySurfaceModule(e: self.modules.exports[exi])
             if self.isPackageRootModule(mod: exSurface) {
-                self.checkExportEntrySurface(e: self.modules.exports[exi])
+                try self.checkExportEntrySurface(e: self.modules.exports[exi])
             }
             exi += 1
         }
@@ -931,7 +952,7 @@ pub impl Comp {
                         if receiver.nameLen != 0U64 {
                             if self.packageRootModuleOf(mod: self.moduleOf(offset: receiver.nameStart)) == surfaceMod {
                                 if self.publicSurfaceProvidesDecl(surfaceMod: surfaceMod, identity: receiver) {
-                                    self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.defOffset)
+                                    try self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.defOffset)
                                 }
                             }
                         }
@@ -942,9 +963,10 @@ pub impl Comp {
         }
         mut val ci: U64 = 0
         while ci < self.decls.conforms.count() {
-            self.checkPublicConformanceSurface(cf: self.decls.conforms[ci])
+            try self.checkPublicConformanceSurface(cf: self.decls.conforms[ci])
             ci += 1
         }
+        return <Result.Ok value=() />
     }
 }
 

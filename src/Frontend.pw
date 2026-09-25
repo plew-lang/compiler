@@ -1658,18 +1658,18 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     try c.checkImports()
     try c.detectImportCycles()
     try c.checkUseVisibility()
-    c.checkTypeVisibility()
+    try c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
     c.checkAllParamModes()
     try c.checkDeinitOnlyOnUnique()
-    c.checkPublicApiClosure()
+    try c.checkPublicApiClosure()
     tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
     // `deriveFromSource`/`write` is exempt from import hygiene) and before
     // instantiation discovery (so its `print`/method instances are emitted).
     if c.genMode {
-        c.synthGenMain()
+        try c.synthGenMain()
     }
     // discover concrete generic instantiations to monomorphize. The collection passes are
     // the one phase allowed to REGISTER a grounded-record StructDef (grounding is pure

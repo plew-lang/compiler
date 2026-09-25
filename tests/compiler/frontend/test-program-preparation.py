@@ -16,16 +16,17 @@ with (out/'runtime.c').open('wb') as f:subprocess.run([*watch,str(carrier),'--ru
 subprocess.run([*watch,'/usr/bin/clang','-O2',str(out/'check.o'),str(out/'runtime.c'),'-o',str(out/'check')],check=True)
 (out/'std').symlink_to(c/'std',target_is_directory=True)
 results=[]
-for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_return_boundaries'),('reject','borrow_inout_argument'),('reject','receiver_read_inout_overlap'),('reject','receiver_read_inout_global'),('reject','missing_return'),('reject','move_fn_copyable'),('reject','deinit_on_non_unique'),('reject','unique_enum_deinit'),('reject','coalesce_removed'),('partreject','partfreefn/Main'),('reject','unique_field_not_unique'),('reject','enum_unique_payload_nomark'),('reject','array_unique'),('reject','generic_unique_arg'),('reject','any_unbound_assoc'),('reject','any_parameterized_trait'),('partreject','traitprovidedexternalimpl/Main'),('partreject','traitsubjectowner_aowner/Main'),('partreject','import_same_local_name/Main'),('partreject','importcycle/Main'),('partreject','crossmoduleprivate/Main'),('reject','eprint_not_imported'),('partreject','partmissing/Main'),('partreject','partdiamond/Main'),('partreject','phantomdep/Main')]:
+for kind,name in [('run','cow_struct'),('run','async_match'),('run','closure_return_boundaries'),('reject','borrow_inout_argument'),('reject','receiver_read_inout_overlap'),('reject','receiver_read_inout_global'),('reject','missing_return'),('reject','move_fn_copyable'),('reject','deinit_on_non_unique'),('reject','unique_enum_deinit'),('reject','coalesce_removed'),('partreject','partfreefn/Main'),('reject','unique_field_not_unique'),('reject','enum_unique_payload_nomark'),('reject','array_unique'),('reject','generic_unique_arg'),('reject','any_unbound_assoc'),('reject','any_parameterized_trait'),('partreject','traitprovidedexternalimpl/Main'),('partreject','traitsubjectowner_aowner/Main'),('partreject','import_same_local_name/Main'),('partreject','importcycle/Main'),('partreject','crossmoduleprivate/Main'),('reject','eprint_not_imported'),('partreject','partmissing/Main'),('partreject','partdiamond/Main'),('partreject','phantomdep/Main'),('partreject', 'publicapiclosure/Main'),('partreject', 'publicapiclosure_assocbinding/Main'),('partreject', 'publicapiclosure_global/Main'),('partreject', 'publicapiclosure_newtype/Main'),('partreject', 'publicapiclosure_pkg_alias/Main'),('partreject', 'publicapiclosure_pkg_internal/Main'),('partreject', 'publicapiclosure_same_name/Main'),('partreject', 'publicapiclosure_trait_alias/Main'),('genreject','derive_hash_missing_import/App'),('genreject','derive_eq_missing_import/App')]:
  source=c/f'tests/fixtures/{kind}/{name}.pw'; expected=0 if kind=='run' else 1
- result=subprocess.run([*watch,str(out/'check'),str(source)],cwd=c,capture_output=True)
+ flags=['--gen'] if kind=='genreject' else []
+ result=subprocess.run([*watch,str(out/'check'),*flags,str(source)],cwd=c,capture_output=True)
  assert result.returncode==expected,(name,result.stderr)
  if expected:
-  reference=subprocess.run([*watch,str(carrier),str(source)],cwd=c,capture_output=True)
+  reference=subprocess.run([*watch,str(carrier),*flags,str(source)],cwd=c,capture_output=True)
   assert result.stderr==reference.stderr,(name,result.stderr,reference.stderr)
  else:assert result.stdout==b'prepared\n',result.stdout
  if expected:
-  returning=subprocess.run([*watch,str(out/'check'),'--return-failure',str(source)],cwd=c,capture_output=True)
+  returning=subprocess.run([*watch,str(out/'check'),'--return-gen-failure' if kind=='genreject' else '--return-failure',str(source)],cwd=c,capture_output=True)
   assert returning.returncode==0,(name,returning.returncode,returning.stderr)
   assert returning.stdout==b'returned\n',returning.stdout
   assert returning.stderr==reference.stderr,(name,returning.stderr,reference.stderr)
