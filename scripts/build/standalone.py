@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
 import llvm_link
+import llvm_lto
 import embedded_resources
 
 
@@ -83,6 +84,11 @@ def build(args):
     version = query(config, '--version')
     if version != recipe['llvm_version']:
         raise ValueError(f'expected LLVM {recipe["llvm_version"]}, got {version}')
+    tools_config = shutil.which(args.llvm_tools_config or args.llvm_config)
+    if not tools_config or query(tools_config, '--version') != version:
+        raise ValueError('build tools must match the selected LLVM library version')
+    lto = llvm_lto.settings(tools_config, args.lto_jobs) if args.lto == 'thin' else None
+    lto_flags = lto['flags'] if lto else []
     licenses = []
     if args.distribution:
         if len(args.static_dependency) != len(args.static_license):
@@ -106,14 +112,16 @@ def build(args):
         'scope': 'single-file tool candidate' if args.distribution else 'static compiler candidate',
         'recipe': recipe, 'recipe_sha256': digest(recipe_path),
         'llvm_config': config, 'llvm_config_sha256': digest(config), 'llvm_version': version,
+        'llvm_tools_config': tools_config, 'llvm_tools_config_sha256': digest(tools_config),
+        'lto': lto, 'lto_library_sha256': digest(lto['library']) if lto else None,
         'host_target': query(config, '--host-target'),
         'carrier': str(carrier), 'carrier_sha256': digest(carrier),
         'source_inputs': source_inputs,
         'archives': {path: digest(path) for path in archives},
         'licenses': {str(path): digest(path) for path in licenses},
         'environment': clang_environment.apply(),
-        'optimizer': llvm_link.optimizer(config),
-        'clang': llvm_link.selected_clang(config),
+        'optimizer': llvm_link.optimizer(tools_config),
+        'clang': llvm_link.selected_clang(tools_config),
         'pipeline': llvm_link.PIPELINE,
         'commands': [],
     }
@@ -149,14 +157,15 @@ def build(args):
     # This build worker is not a second distributed executable. Its library API
     # is the same entry the single-file driver will call directly.
     worker = output / 'llvm-object'
-    clangxx = str(Path(query(config, '--bindir')) / 'clang++')
+    clangxx = str(Path(query(tools_config, '--bindir')) / 'clang++')
     manifest['clangxx_sha256'] = digest(clangxx)
     print('[standalone] build native object backend', file=sys.stderr, flush=True)
     run([clangxx, '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
          '-isystem', query(config, '--includedir'), deployment,
          str(ROOT / 'native/llvm_backend.cpp'), str(ROOT / 'native/llvm_object_main.cpp'),
          *archives, *[flag for flag in recipe['system_libraries'] if flag != '-lc++'],
-         *recipe['link_flags'], '-o', str(worker)])
+         *recipe['link_flags'], *lto_flags, '-o', str(worker)],
+        trace='worker-link.log' if lto else None)
     manifest['worker_dynamic_dependencies'] = audit_dependencies(
         subprocess.check_output(['/usr/bin/otool', '-L', str(worker)], text=True))
     # The user-side linker sees only native objects. Compilation of runtime C
@@ -178,8 +187,9 @@ def build(args):
              '-isystem', query(config, '--includedir'), '-I' + str(ROOT / 'native'),
              deployment, '-c', str(source), '-o', str(compiled)])
         libraries.insert(0, str(compiled))
-    run(['/usr/bin/clang', deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
-         *libraries, '-o', str(binary)])
+    linker_driver = manifest['clang'] if lto else '/usr/bin/clang'
+    run([linker_driver, deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
+         *libraries, *lto_flags, '-o', str(binary)], trace='link.log' if lto else None)
     print('[standalone] audit dynamic dependencies', file=sys.stderr, flush=True)
     inspection = subprocess.check_output(['/usr/bin/otool', '-L', str(binary)], text=True)
     (output / 'dependencies.txt').write_text(inspection)
@@ -189,9 +199,11 @@ def build(args):
     for path, expected in {**manifest['archives'], **manifest['licenses']}.items():
         if digest(path) != expected:
             raise ValueError(f'build dependency changed: {path}')
-    for name in ('llvm_config', 'optimizer', 'clang'):
+    for name in ('llvm_config', 'llvm_tools_config', 'optimizer', 'clang'):
         if digest(manifest[name]) != manifest[name + '_sha256']:
             raise ValueError(f'build tool changed: {name}')
+    if lto and digest(lto['library']) != manifest['lto_library_sha256']:
+        raise ValueError('ThinLTO library changed during build')
     manifest.update(binary_sha256=digest(binary), binary_bytes=binary.stat().st_size,
                     compiler_object_sha256=digest(object_file), runtime_sha256=digest(runtime), status='success')
     record.write_text(json.dumps(manifest, indent=2) + '\n')
@@ -201,6 +213,9 @@ def build(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--llvm-config', required=True)
+    parser.add_argument('--llvm-tools-config', help='matching build-machine clang/opt toolchain; defaults to --llvm-config')
+    parser.add_argument('--lto', choices=('off', 'thin'), default='off')
+    parser.add_argument('--lto-jobs', type=int, default=max(1, (os.cpu_count() or 1) // 2))
     parser.add_argument('--carrier', default=str(ROOT / 'plewc'))
     parser.add_argument('--output', required=True, help='new staging directory')
     parser.add_argument('--distribution', action='store_true', help='bundle native CLI, resolver and resources')

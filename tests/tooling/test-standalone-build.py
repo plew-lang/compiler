@@ -5,6 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/build'))
@@ -14,6 +16,15 @@ spec.loader.exec_module(standalone)
 
 
 class DistributionBoundaries(unittest.TestCase):
+    def test_reject_mismatched_library_and_build_tool_versions(self):
+        args = SimpleNamespace(llvm_config='library-config', llvm_tools_config='tools-config')
+        with patch.object(standalone.sys, 'platform', 'darwin'), \
+                patch.object(standalone.platform, 'machine', return_value='arm64'), \
+                patch.object(standalone.shutil, 'which', side_effect=lambda path: path), \
+                patch.object(standalone, 'query', side_effect=['20.1.1', '22.1.8']), \
+                self.assertRaisesRegex(ValueError, 'build tools must match'):
+            standalone.build(args)
+
     def test_accept_os_libraries(self):
         output = 'plewc:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n'
         self.assertEqual(standalone.audit_dependencies(output), ['/usr/lib/libSystem.B.dylib'])
