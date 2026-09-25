@@ -41,7 +41,7 @@ pub impl Comp {
         return true
     }
 
-    inout fn checkDuplicateTraitReqs() {
+    inout fn checkDuplicateTraitReqs() -> Result[(), CompileDiagnostic] {
         mut val ti: U64 = 0
         while ti < self.decls.traitCount() {
             val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traitAt(index: ti).reqs)
@@ -52,7 +52,7 @@ pub impl Comp {
                     if reqs[a].nameId == reqs[b].nameId {
                         if self.sameLabels(a: reqs[a].params, b: reqs[b].params) {
                             if self.paramTypesEqual(a: reqs[a].params, b: reqs[b].params) {
-                                self.errorAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)")
+                                return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)") />
                             }
                         }
                     }
@@ -62,6 +62,7 @@ pub impl Comp {
             }
             ti += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn methodWitnessesAConformance(recvStart: U64, recvLen: U64, mStart: U64, mLen: U64) -> Bool {

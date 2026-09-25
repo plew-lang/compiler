@@ -391,7 +391,7 @@ pub impl Comp {
     // enum deinit bodies even for `unique enum`. Enum payloads are still destroyed by
     // the synthesized enum payload walker.
     // Validate the resolved receiver declaration, independently of generic arity.
-    inout fn checkDeinitOnlyOnUnique() {
+    inout fn checkDeinitOnlyOnUnique() -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < self.decls.deinits.count() {
             val function = self.arena.functionAt(index: self.decls.deinits[index])
@@ -403,16 +403,17 @@ pub impl Comp {
                 enumeration = self.arena.enumIndexByOffset(offset: receiver.declOffset)
             }
             if enumeration < self.arena.enumCount() {
-                self.errorAt(offset: self.arena.enumAt(index: enumeration).defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.enumAt(index: enumeration).defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally") />
             } else {
                 mut val isUnique = false
                 if structure < self.arena.structCount() { isUnique = self.arena.structAt(index: structure).isUnique }
                 if !isUnique {
-                    self.errorAt(offset: function.defOffset, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)") />
                 }
             }
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn checkFieldDefaults() {

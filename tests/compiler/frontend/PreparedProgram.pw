@@ -1,14 +1,29 @@
-import ../../../src/Frontend with { Comp }
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
 import ../../../src/FrontendDriver with { runFrontend }
 import ../../../src/PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
 import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
 import @Std/Io with { print }
 import @Std/Process with { argCount, argAt }
 import ../../../src/Diag with { emitDiagnostic }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Path with { computeStdRoot }
 fn main() {
     mut val compiler: Comp = <Comp />
     val returningFailure = argCount() > 1I64 && argAt(1I64) == "--return-failure"
-    runFrontend(c: inout compiler, firstArgument: if returningFailure { give 2I64 } else { give 1I64 })
+    if returningFailure {
+        match analyzeFrontend(c: inout compiler,
+            input: <FrontendInput.File path=argAt(2I64) />,
+            sources: <SourceAccess stdRoot=computeStdRoot(arg0: argAt(0I64).bytes()) />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => {
+                emitDiagnostic(diagnostic: diagnostic)
+                print("returned")
+                return
+            }
+        }
+    } else {
+        runFrontend(c: inout compiler)
+    }
     match PreparedProgram.prepare(c: inout compiler) {
         Result.Ok(value: _) => { print("prepared") }
         Result.Err(error: val error) => {

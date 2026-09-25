@@ -1638,7 +1638,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // missing-return (spec/11): a non-`()` function must return/panic/diverge on
     // every path — Plew does not implicitly return the tail expression, so falling
     // off the end would silently yield uninitialized memory.
-    c.checkReturns()
+    try c.checkReturns()
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
     c.checkConformances()
@@ -1647,10 +1647,10 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.checkAnyFormation()
     // Candidate-table registration has already enforced declaration collisions
     // while lowering. The remaining checks concern non-table semantic rules.
-    c.checkDuplicateTraitReqs()
-    c.checkImplOnBuiltin()
-    c.checkImplOnNewtype()
-    c.checkMoveFnReceivers()
+    try c.checkDuplicateTraitReqs()
+    try c.checkImplOnBuiltin()
+    try c.checkImplOnNewtype()
+    try c.checkMoveFnReceivers()
     // module visibility (spec/15): a name brought in by `import … with { }` must be
     // part of its module's public surface (`export`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
@@ -1661,7 +1661,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
     c.checkAllParamModes()
-    c.checkDeinitOnlyOnUnique()
+    try c.checkDeinitOnlyOnUnique()
     c.checkPublicApiClosure()
     tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner

@@ -2,7 +2,7 @@
 // move-receiver validation.
 
 pub impl Comp {
-    inout fn checkImplOnBuiltin() {
+    inout fn checkImplOnBuiltin() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
@@ -37,23 +37,25 @@ pub impl Comp {
                 onBuiltin = false
             }
             if onBuiltin {
-                self.errorAt(offset: self.fnAnchor(f: f), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
+                return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)") />
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkImplOnNewtype() {
+    inout fn checkImplOnNewtype() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv || f.isAssoc {
                 if self.newtypeUnderRef(start: f.recvStart, len: f.recvLen) != 0U64 {
-                    self.errorAt(offset: self.fnAnchor(f: f), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)") />
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn checkTraitProvidedMethodOwners() {
@@ -531,18 +533,19 @@ pub impl Comp {
         return self.modules.isSyntaxRoot(moduleId: mod)
     }
 
-    inout fn checkMoveFnReceivers() {
+    inout fn checkMoveFnReceivers() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
                 if f.selfMove {
                     if !(self.typeIsUnique(start: f.recvStart, len: f.recvLen)) {
-                        self.errorAt(offset: self.fnAnchor(f: f), msg: "`move fn` (consuming self) is only allowed on a unique type")
+                        return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "`move fn` (consuming self) is only allowed on a unique type") />
                     }
                 }
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }

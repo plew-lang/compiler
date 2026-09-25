@@ -67,3 +67,9 @@ the supplied requests.
 `DiagnosticValues.pw` is also run by that script. It renders two structured
 diagnostics, checks their exact stderr format, and continues to normal exit.
 This verifies rendering, not propagation from all existing frontend failures.
+
+The returning-failure mode calls analyzeFrontend directly and then prepares Mid.
+It verifies the same diagnostic as the terminal CLI for borrow conflicts, missing
+returns, move receivers, and deinit constraints. FrontendInputs also verifies that
+a missing source returns an error before independent valid requests succeed.
+This covers migrated boundaries; other frontend checks still terminate.

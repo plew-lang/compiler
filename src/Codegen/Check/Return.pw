@@ -104,7 +104,7 @@ pub impl Comp {
         }
     }
 
-    inout fn checkReturns() {
+    inout fn checkReturns() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
@@ -116,7 +116,7 @@ pub impl Comp {
                         if f.body != 0 {
                             if !(self.nameIsMain(f: f)) {
                                 if !(self.blockDiverges(blkId: f.body)) {
-                                    self.errorAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
+                                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)") />
                                 }
                             }
                         }
@@ -125,5 +125,6 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }
