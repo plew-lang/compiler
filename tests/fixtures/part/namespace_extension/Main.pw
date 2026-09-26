@@ -1,0 +1,4 @@
+import ./Models
+import @Std/Io with { print }
+extension Extra { pub impl Models.Item { fn doubled() -> I64 { return self.value * 2I64 } } }
+fn main() { val item = <Models.Item value=21I64 /> print(item#Extra.doubled()) }

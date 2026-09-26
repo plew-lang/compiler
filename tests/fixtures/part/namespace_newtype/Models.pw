@@ -1,0 +1,5 @@
+pub struct Item { pub val value: I64 }
+pub impl Item { factory }
+pub impl Item { assoc fn answer() -> I64 { return 41I64 } }
+pub enum Choice { Some(value: I64) }
+pub trait Read { fn read() -> I64 }

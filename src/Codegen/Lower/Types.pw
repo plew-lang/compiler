@@ -19,7 +19,8 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: names[0U64].start, msg: "a namespace is not a type") />
     }
 
-    inout fn lowerSyntaxTypePath(t: SyntaxType) -> Result[PType, CompileDiagnostic] {
+    inout fn resolveSyntaxTypePath(t: SyntaxType) -> Result[SyntaxType, CompileDiagnostic] {
+        if t.namePath.count == 0U64 { return <Result.Ok value=t /> }
         mut val names: Array[Span] = []
         mut val index = 0U64
         while index < t.namePath.count {
@@ -43,7 +44,7 @@ pub impl Comp {
             }
             associated = tail.name
         }
-        return self.lowerSyntaxTypeNode(t: <SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isRecord=t.isRecord />)
+        return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
     }
 
     // Authored names keep their source identity. Synthesized value ASTs
@@ -613,7 +614,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxTypeNode(t: SyntaxType) -> Result[PType, CompileDiagnostic] {
-        if t.namePath.count != 0U64 { return self.lowerSyntaxTypePath(t: t) }
+        if t.namePath.count != 0U64 { return self.lowerSyntaxTypeNode(t: (try self.resolveSyntaxTypePath(t: t))) }
         if t.isRecord {
             mut val fieldNames: Array[Span] = []
             mut val fieldTys: Array[PType] = []

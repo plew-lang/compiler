@@ -1,0 +1,4 @@
+import ./Models
+import @Std/Io with { print }
+newtype Item = Models.Item
+fn main() { val value = <Models.Item value=41I64 /> val wrapped = value as Item print((wrapped as Models.Item).value) }

@@ -1,0 +1,4 @@
+import ./Models
+import @Std/Io with { print }
+fn read(value: Models.Choice) -> I64 { match value { Models.Choice.Some(val item) => { return item } } return 0I64 }
+fn main() { print(read(value: <Models.Choice.Some value=41I64 />)) }

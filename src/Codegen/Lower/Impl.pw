@@ -603,7 +603,7 @@ pub impl Comp {
             originTraitOwner = origin.nameStart
             originTraitArity = syntaxImplTraitArgCount(file: self.syntax, impl: im)
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=syntaxTypeArgCount(file: self.syntax, ty: syntaxType(file: self.syntax, id: im.recvType)) provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />))
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.name.start />))
         try self.appendSyntaxMemberBounds(fnIdx: fnIdx, member: m)
         try self.appendSyntaxImplBounds(fnIdx: fnIdx, im: im)
         self.lowerAssociatedOwner = savedAssociatedOwner
@@ -757,7 +757,7 @@ pub impl Comp {
             originTraitOwner = originTrait.nameStart
             originTraitArity = im.traitArgs.count()
         }
-        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />))
+        (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.lowerMethodReceiverType(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=fnIdx + 1U64 defOffset=m.nameSpan.start />))
         try self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         try self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.lowerAssociatedOwner = savedAssociatedOwner
@@ -769,13 +769,17 @@ pub impl Comp {
     }
 
     inout fn lowerImpl(im: ImplAst) -> Result[(), CompileDiagnostic] {
-        val rawRecvN: Bind = self.internBytes(s: im.recvType.name)
-        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: im.recvType.span.start, len: rawRecvN.nameLen, arity: im.recvType.args.count())
+        val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable))
+        val receiverParams = self.cur.typeParams
+        self.cur.typeParams = implParamBinds
+        val receiverType = (try self.normalizeProjectionTypeActive(t: im.recvType))
+        val rawRecvN: Bind = self.lowerTypeName(name: receiverType.name, span: receiverType.nameSpan)
+        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: receiverType.span.start, len: rawRecvN.nameLen, arity: receiverType.args.count())
         mut val recvN: Bind = rawRecvN
         if recvTraitOwner != 0U64 {
             recvN = <Bind nameStart=recvTraitOwner nameLen=rawRecvN.nameLen nameId=intern(c: inout self, start: recvTraitOwner, len: rawRecvN.nameLen) fieldStart=recvTraitOwner fieldLen=rawRecvN.nameLen />
         }
-        val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable))
+        self.cur.typeParams = receiverParams
         // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
         // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
         // methods name `Item`) and `impl T as Tr` (the witnessed signatures name `Tr`'s assoc
@@ -809,12 +813,12 @@ pub impl Comp {
         // for callable-surface matching instead of collapsing to recvId.
         mut val recvTy: U64 = 0U64
         if !(self.isTraitName(start: recvN.nameStart, len: recvN.nameLen)) {
-            recvTy = (try self.lowerType(t: im.recvType)).ref
+            recvTy = (try self.lowerType(t: receiverType)).ref
         }
         mut val subjectArgs: Array[U64] = []
         mut val subjectArgIdx: U64 = 0
-        while subjectArgIdx < im.recvType.args.count() {
-            subjectArgs.append((try self.lowerType(t: im.recvType.args[subjectArgIdx])).ref)
+        while subjectArgIdx < receiverType.args.count() {
+            subjectArgs.append((try self.lowerType(t: receiverType.args[subjectArgIdx])).ref)
             subjectArgIdx += 1U64
         }
         mut val conformanceTraitArgs: Array[U64] = []
@@ -878,7 +882,7 @@ pub impl Comp {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            try self.registerDeclaredConformance(cf: <Conform sourceModule=self.moduleOf(offset: im.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=cfExtId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
+            try self.registerDeclaredConformance(cf: <Conform sourceModule=self.moduleOf(offset: im.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=im.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=cfExtId defOffset=im.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.
@@ -890,12 +894,6 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxImpl(im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
-        val recvSyntax: SyntaxType = syntaxType(file: self.syntax, id: im.recvType)
-        val rawRecvN: Bind = <Bind nameStart=recvSyntax.name.start nameLen=recvSyntax.name.end - recvSyntax.name.start fieldStart=recvSyntax.name.start fieldLen=recvSyntax.name.end - recvSyntax.name.start />
-        val recvArity: U64 = syntaxTypeArgCount(file: self.syntax, ty: recvSyntax)
-        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: recvSyntax.name.start, len: rawRecvN.nameLen, arity: recvArity)
-        mut val recvN: Bind = rawRecvN
-        if recvTraitOwner != 0U64 { recvN = <Bind nameStart=recvTraitOwner nameLen=rawRecvN.nameLen nameId=intern(c: inout self, start: recvTraitOwner, len: rawRecvN.nameLen) fieldStart=recvTraitOwner fieldLen=rawRecvN.nameLen /> }
         mut val implSpans: Array[Span] = []
         mut val implFlags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -905,6 +903,15 @@ pub impl Comp {
             i += 1U64
         }
         val implParamBinds: Array[Bind] = (try self.lowerTypeParamSpans(spans: implSpans, anchor: im.span.start, sendableFlags: implFlags))
+        val receiverParams = self.cur.typeParams
+        self.cur.typeParams = implParamBinds
+        val recvSyntax: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: im.recvType)))
+        val rawRecvN: Bind = <Bind nameStart=recvSyntax.name.start nameLen=recvSyntax.name.end - recvSyntax.name.start fieldStart=recvSyntax.name.start fieldLen=recvSyntax.name.end - recvSyntax.name.start />
+        val recvArity: U64 = syntaxTypeArgCount(file: self.syntax, ty: recvSyntax)
+        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: recvSyntax.name.start, len: rawRecvN.nameLen, arity: recvArity)
+        mut val recvN: Bind = rawRecvN
+        if recvTraitOwner != 0U64 { recvN = <Bind nameStart=recvTraitOwner nameLen=rawRecvN.nameLen nameId=intern(c: inout self, start: recvTraitOwner, len: rawRecvN.nameLen) fieldStart=recvTraitOwner fieldLen=rawRecvN.nameLen /> }
+        self.cur.typeParams = receiverParams
         mut val implScope: Array[Bind] = []
         i = 0U64
         while i < implParamBinds.count() {
