@@ -16,15 +16,24 @@ pub impl Comp {
     inout fn knownNamedTypeId(start: U64, len: U64) -> U64 {
         val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)
         if declaration.nameLen == 0U64 { return 0U64 }
-        val si = self.arena.structIndexByOffset(offset: declaration.nameStart)
+        return self.knownNamedTypeIdAt(offset: declaration.nameStart)
+    }
+
+    inout fn knownNamedTypeIdForTerm(type: TypeRef) -> U64 {
+        if type.hasDecl { return self.knownNamedTypeIdAt(offset: type.declOffset) }
+        return self.knownNamedTypeId(start: type.nameStart, len: type.nameLen)
+    }
+
+    inout fn knownNamedTypeIdAt(offset: U64) -> U64 {
+        val si = self.arena.structIndexByOffset(offset: offset)
         if si < self.arena.structCount() {
             val type = self.arena.structAt(index: si)
             if type.isCExtern || type.typeParams.count() != 0U64 { return 0U64 }
             return type.nameId
         }
-        val ei = self.arena.enumIndexByOffset(offset: declaration.nameStart)
+        val ei = self.arena.enumIndexByOffset(offset: offset)
         if ei < self.arena.enumCount() { return self.arena.enumAt(index: ei).nameId }
-        match self.arena.newtypeNameByOffset(offset: declaration.nameStart) {
+        match self.arena.newtypeNameByOffset(offset: offset) {
             Optional.Some(v: val name) => { return intern(c: inout self, start: name.start, len: name.len) }
             Optional.None => {}
         }
