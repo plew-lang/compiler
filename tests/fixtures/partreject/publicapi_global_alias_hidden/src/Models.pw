@@ -1,0 +1,2 @@
+struct Hidden {}
+pub val value: Hidden = <Hidden />

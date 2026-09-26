@@ -1,0 +1,3 @@
+import / with { create }
+import @Std/Io with { print }
+fn main() { print(create().value) }

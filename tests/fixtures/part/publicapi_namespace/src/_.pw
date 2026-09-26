@@ -1,0 +1,2 @@
+pub import ./Models
+pub fn create() -> Models.Token { return <Models.Token value=41I64 /> }

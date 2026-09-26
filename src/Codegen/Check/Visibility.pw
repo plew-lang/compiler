@@ -521,11 +521,16 @@ pub impl Comp {
         while i < self.modules.exports.count() {
             val e: Bind = self.modules.exports[i]
             if self.exportEntrySurfaceModule(e: e) == surfaceMod {
-                if self.moduleOf(offset: identity.nameStart) == surfaceMod {
-                    if self.declIdentityHasName(identity: identity, start: e.nameStart, len: e.nameLen) { return true }
+                match self.moduleBindingFromSurface(moduleId: surfaceMod, nameStart: e.nameStart, nameLen: e.nameLen) {
+                    ModuleBinding.Namespace(val moduleId) => {
+                        if self.publicSurfaceProvidesDecl(surfaceMod: moduleId, identity: identity) { return true }
+                    }
+                    ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
+                        val exported = self.typeDeclIdentityInModule(mod: moduleId, start: nameStart, len: nameLen)
+                        if exported.nameLen != 0U64 && exported.nameStart == identity.nameStart { return true }
+                    }
+                    ModuleBinding.Missing => {}
                 }
-                val exported: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: e.nameStart, len: e.nameLen)
-                if exported.nameLen != 0U64 && exported.nameStart == identity.nameStart { return true }
             }
             i += 1
         }
@@ -919,9 +924,32 @@ pub impl Comp {
         return e.fieldStart
     }
 
-    inout fn checkExportEntrySurface(e: Bind) -> Result[(), CompileDiagnostic] {
-        val surfaceMod: U64 = self.exportEntrySurfaceModule(e: e)
-        val identity: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: e.nameStart, len: e.nameLen)
+    inout fn checkExportEntrySurface(e: Bind, apiRoot: U64 = 4000000000U64) -> Result[(), CompileDiagnostic] {
+        val entryModule = self.exportEntrySurfaceModule(e: e)
+        val surfaceMod = if apiRoot == 4000000000U64 { give entryModule } else { give apiRoot }
+        mut val declarationModule = entryModule
+        mut val declarationName = e.nameStart
+        mut val declarationLength = e.nameLen
+        match self.moduleBindingFromSurface(moduleId: entryModule, nameStart: e.nameStart, nameLen: e.nameLen) {
+            ModuleBinding.Namespace(val moduleId) => {
+                // Imports form a DAG. Retain the original public root while
+                // walking the namespace's public declarations.
+                mut val index = 0U64
+                while index < self.modules.exports.count() {
+                    val child = self.modules.exports[index]
+                    if self.exportEntrySurfaceModule(e: child) == moduleId { try self.checkExportEntrySurface(e: child, apiRoot: surfaceMod) }
+                    index += 1U64
+                }
+                return <Result.Ok value=() />
+            }
+            ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
+                declarationModule = moduleId
+                declarationName = nameStart
+                declarationLength = nameLen
+            }
+            ModuleBinding.Missing => { return <Result.Ok value=() /> }
+        }
+        val identity = self.typeDeclIdentityInModule(mod: declarationModule, start: declarationName, len: declarationLength)
         mut val si: U64 = 0
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
@@ -957,7 +985,7 @@ pub impl Comp {
         mut val gi: U64 = 0
         while gi < self.arena.globals.count() {
             val g: Global = self.arena.globals[gi]
-            if g.nameStart == e.nameStart && self.moduleOf(offset: g.nameStart) == surfaceMod {
+            if self.moduleOf(offset: g.nameStart) == declarationModule && spansEqual(c: inout self, aStart: g.nameStart, aLen: g.nameLen, bStart: declarationName, bLen: declarationLength) {
                 try self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
             }
             gi += 1
@@ -967,7 +995,7 @@ pub impl Comp {
             val f: Func = self.arena.functionAt(index: fi)
             if !(f.hasRecv) {
                 if !(f.isAssoc) {
-                    if f.nameStart == e.nameStart && self.moduleOf(offset: f.nameStart) == surfaceMod {
+                    if self.funcDeclModule(f: f) == declarationModule && spansEqual(c: inout self, aStart: f.nameStart, aLen: f.nameLen, bStart: declarationName, bLen: declarationLength) {
                         try self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
                     }
                 }

@@ -1,0 +1,2 @@
+import / with { Models }
+fn main() { val value = Models.create() }

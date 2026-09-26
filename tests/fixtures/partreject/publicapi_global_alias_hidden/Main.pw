@@ -1,0 +1,2 @@
+import / with { exported }
+fn main() { val value = exported }

@@ -1,0 +1,2 @@
+import / with { factory }
+fn main() { val value = factory() }
