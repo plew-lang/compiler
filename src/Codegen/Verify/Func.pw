@@ -21,7 +21,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn verifyFunc(f: Func) -> Result[(), CompileDiagnostic] {
+    inout fn verifyFunc(f: Func, abstract: Bool = false) -> Result[(), CompileDiagnostic] {
         if f.hasRet {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart
@@ -77,7 +77,10 @@ pub impl Comp {
         self.cur.extId = f.extId
         self.cur.selfInout = f.selfInout
         self.cur.selfMove = f.selfMove
-        if f.hasRecv || f.isAssoc {
+        if abstract {
+            self.cur.selfRef = self.parametricSelfRef(f: f)
+            self.cur.itemRef = self.abstractProvidedItemRef(f: f)
+        } else if f.hasRecv || f.isAssoc {
             try self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
         } else {
             self.clearSelfItemEnv()

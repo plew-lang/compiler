@@ -3,6 +3,17 @@
 
 
 pub impl Comp {
+    // Validate literal contents at declaration checking time, including unused
+    // and abstract bodies. Mid and LLVM consume the same cached bytes.
+    inout fn prepareStringLiteral(start: U64, len: U64) -> Result[(), CompileDiagnostic] {
+        if self.decodedStringLiterals.contains(key: start) { return <Result.Ok value=() /> }
+        match decodeStringLiteral(source: self.arena.bytes, start: start, len: len) {
+            Result.Ok(value: val bytes) => { self.decodedStringLiterals.insert(key: start, value: bytes) }
+            Result.Err(error: val message) => { return <Result.Err error=self.diagnosticAt(offset: start, msg: message) /> }
+        }
+        return <Result.Ok value=() />
+    }
+
 
     // Fold a constant integer expression (literals, unary `-`, and `+ - *`). Lets us
     // catch constant overflow whose individual leaves each fit but whose result does

@@ -353,6 +353,7 @@ pub impl Comp {
 
     inout fn checkBoundsExpr(exprId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {
+            Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
             Expr.Unary(val op, val operand) => {
                 try self.checkBoundsExpr(exprId: operand)
                 // a unary operator on a type-parameter value needs the matching bound
@@ -1130,6 +1131,7 @@ pub impl Comp {
                 pi += 1
             }
             try self.checkBoundsBlock(blkId: f.body)
+            try self.verifyFunc(f: f, abstract: true)
         }
         return <Result.Ok value=() />
     }

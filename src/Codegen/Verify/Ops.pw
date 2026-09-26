@@ -480,6 +480,14 @@ pub impl Comp {
     }
 
     inout fn verifyBinaryOp(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
+        // Abstract declarations consume the same bound proof used by call
+        // recording. A missing proof must still pass the ordinary witness test.
+        val receiverTerm = self.parametricExprTerm(exprId: lhs)
+        match (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: false)) {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { return <Result.Ok value=() /> }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { return <Result.Ok value=() /> }
+            StaticMemberResolution.Missing => {}
+        }
         // float arithmetic / comparison is accepted directly (the backend emits the IEEE
         // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
         if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {

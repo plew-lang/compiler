@@ -1,0 +1,3 @@
+// String validity is checked even when this declaration is never called.
+fn unused() { val text = "\u{110000}" }
+fn main() {}

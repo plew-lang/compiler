@@ -25,6 +25,7 @@ pub impl Comp {
 
     inout fn verifyExpr(id: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[id] {
+            Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 // verify the closure BODY with the closure's own return type as context —
                 // else `return e` inside a closure escapes the return-type check entirely
@@ -520,7 +521,7 @@ pub impl Comp {
                 // verifyRecv) — so it is an undefined-identifier misuse (`val x = SomeType`).
                 // recordIdent stores the binding (value/fn/type-qual/undef) the backend reads;
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
-                val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.functionCount())
+                val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.cur.checkFn)
                 if !(self.bindIsValue(code: bindCode)) {
                     if bindCode == identFnCode() {
                         return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)") />
@@ -596,7 +597,7 @@ pub impl Comp {
         }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
-                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount())) {
+                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn)) {
                     try self.verifyExpr(id: recv)
                 }
             }
