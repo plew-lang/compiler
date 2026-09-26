@@ -41,7 +41,7 @@ for needle in 'parameterCount: abiParameterCount' 'prepared: preparedMid'; do
         exit 1
     fi
 done
-for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return false }' 'MidLlvmPrepared.Ready(canonical:'; do
+for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return <Result.Ok value=false /> }' 'MidLlvmPrepared.Ready(canonical:'; do
     if ! grep -F "$needle" src/Backend/Llvm/Mid.pw >/dev/null; then
         echo "canonical Mid prepared-body contract is missing $needle" >&2
         exit 1
@@ -55,7 +55,7 @@ from pathlib import Path
 import re
 source = Path('src/Backend/Llvm/Mid.pw').read_text()
 body = source.split('inout fn genLlvmPreparedMidBody(', 1)[1]
-signature, body = body.split(') -> Bool {', 1)
+signature, body = body.split(') -> Result[Bool, CompileDiagnostic] {', 1)
 assert 'abiParameterCount:' not in signature, 'emission must not accept a second count'
 ready = re.search(r'MidLlvmPrepared\.Ready\(canonical:\s*val\s+(\w+),\s*abiParameterCount:\s*val\s+(\w+)\)', body)
 assert ready, 'Ready must carry the admitted body and parameter count'
@@ -63,7 +63,7 @@ canonical, count = ready.groups()
 values = re.search(r'(\w+):\s*Array\[LLVMValueRef\]', signature)
 assert values, 'physical ABI bindings must be explicit'
 array = re.escape(values.group(1))
-guard = rf'if\s+{array}\.count\(\)\s*!=\s*0U64\s*&&\s*{array}\.count\(\)\s*!=\s*{re.escape(count)}\s*\{{\s*return false\s*\}}'
+guard = rf'if\s+{array}\.count\(\)\s*!=\s*0U64\s*&&\s*{array}\.count\(\)\s*!=\s*{re.escape(count)}\s*\{{\s*return <Result\.Ok value=false />\s*\}}'
 assert re.search(guard, body), 'mismatched physical bindings must be rejected'
 assert re.search(rf'give\s+{re.escape(canonical)}\b', body), 'emit the admitted canonical body'
 PYABI
@@ -224,7 +224,7 @@ python3 - <<'PYENUM'
 from pathlib import Path
 source = Path('src/Backend/Llvm/Enums.pw').read_text()
 layout = source.split('inout fn variantPayloadTy(', 1)[1].split('inout fn ', 1)[0]
-for required in ['requireFinalDestruction(', 'variantFieldStarts', 'fieldBoxed', 'fieldTypes']:
+for required in ['try c.checkedFinalDestruction(', 'variantFieldStarts', 'fieldBoxed', 'fieldTypes']:
     assert required in layout, f'payload layout lost its frozen contract: {required}'
 for forbidden in ['groundUnderInst(', 'groundTypeRef(', 'enumVariantAt(', 'fieldLlvmTy(']:
     assert forbidden not in layout, f'payload layout reopens semantic fields: {forbidden}'
@@ -251,12 +251,12 @@ PYLAYOUT
 python3 - <<'PYPHYSICAL'
 from pathlib import Path
 source = Path('src/Backend/Llvm/GenericAny.pw').read_text().split('inout fn llvmTypeOfRef(', 1)[1].split('inout fn extendToI64(', 1)[0]
-for required in ['requireFinalDestruction(', 'contract.underlying', 'contract.structLayout', 'contract.isOpaquePointer']:
+for required in ['try c.checkedFinalDestruction(', 'contract.underlying', 'contract.structLayout', 'contract.isOpaquePointer']:
     assert required in source
 for forbidden in ['genericStructIndex(', 'genericEnumIndex(', 'recordStructIndex(', 'c.cur.typeParams', 'c.genMode']:
     assert forbidden not in source
 query = Path('src/Backend/Llvm/GenericQuery.pw').read_text()
-assert 'requireFinalDestruction(' in query
+assert 'try c.checkedFinalDestruction(' in query
 assert 'localStructIdxFor(' not in query and 'runtimeTypeRef(' not in query
 PYPHYSICAL
 

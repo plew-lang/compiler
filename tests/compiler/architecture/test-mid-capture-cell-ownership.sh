@@ -29,9 +29,9 @@ initialize = emit.split('if statement.tag == 9U64 {', 1)[1].split('} else {', 1)
 assert 'self.rawbufAlloc(' in initialize
 assert 'llvmStore(self.b, cell, self.midCanonicalLocalPtr(' in initialize
 assert 'llvmStore(self.b, value, cell)' in initialize
-release = emit.split('if statement.tag == 10U64 {', 1)[1].split('return true', 1)[0]
+release = emit.split('if statement.tag == 10U64 {', 1)[1].split('return <Result.Ok value=true />', 1)[0]
 assert '!c.mid.locals[body.locals.start + place.local].isCaptureCell' in release
-assert 'return false' in release
+assert 'return <Result.Ok value=false />' in release
 assert 'self.emitCellRelease(' in release
 PYCELL
 

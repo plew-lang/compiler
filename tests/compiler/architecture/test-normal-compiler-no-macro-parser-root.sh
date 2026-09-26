@@ -82,7 +82,7 @@ preparation = Path('src/Backend/Llvm/Mid.pw').read_text().split('inout fn prepar
 assert 'self.midProgram.body(bodyId: bodyId)' in preparation
 assert 'Optional.None => { self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fnIdx)' in preparation
 assert 'prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi,' in body
-assert re.search(r'if !midReady\s*\{\s*c\.errorAt\([^\n]+\)\s*return\s*\}', body), 'unprepared body is not rejected'
+assert re.search(r'if !midReady\s*\{\s*return <Result\.Err error=c\.diagnosticAt\([^\n]+\) />\s*\}', body), 'unprepared body is not rejected'
 assert 'genLlvmBlock(' not in body, 'missing frozen body can fall back to source emission'
 PYBODY
 

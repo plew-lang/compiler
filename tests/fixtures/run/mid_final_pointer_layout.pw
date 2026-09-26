@@ -17,9 +17,9 @@ fn main() {
     compiler.enqueueFinalDestruction(typeRef: pointer).unwrap()
     compiler.enqueueFinalDestruction(typeRef: handle).unwrap()
     compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
-    val pointerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: pointer) - 1U64]
-    val handleContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: handle) - 1U64]
-    val integerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: integer) - 1U64]
+    val pointerContract = compiler.arena.finalDestructions[compiler.checkedFinalDestruction(typeRef: pointer).unwrap() - 1U64]
+    val handleContract = compiler.arena.finalDestructions[compiler.checkedFinalDestruction(typeRef: handle).unwrap() - 1U64]
+    val integerContract = compiler.arena.finalDestructions[compiler.checkedFinalDestruction(typeRef: integer).unwrap() - 1U64]
     assert(pointerContract.isOpaquePointer && handleContract.isOpaquePointer)
     assert(pointerContract.structLayout == 0U64 && handleContract.structLayout == 0U64)
     assert(!pointerContract.needsRelease && !handleContract.needsRelease)
