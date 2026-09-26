@@ -5605,8 +5605,8 @@ pub impl Comp {
         val type = self.arena.typeAt(index: typeRef)
         val nameStart = type.nameStart
         val nameLen = type.nameLen
-        val chainTrait: Bind = self.internBytes(s: "Chain")
-        if !(self.conformExists(typeRef: typeRef, traitId: chainTrait.nameId)) {
+        val chainOwner = self.coreTraitOwner(name: "Chain")
+        if !(self.conformExists(typeRef: typeRef, traitOwner: chainOwner)) {
             return <Result.Ok value=false />
         }
         val chN: Bind = self.internBytes(s: "chain")
