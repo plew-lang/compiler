@@ -1,0 +1,8 @@
+import ./Facade with { Counter, amount, localAmount }
+import @Std/Io with { print }
+fn main() {
+    val counter = <Counter value=3 />
+    print(counter.read())
+    print(amount())
+    print(localAmount())
+}

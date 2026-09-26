@@ -63,7 +63,7 @@ export struct MidAmbientBodyPlan {
     mut val entries: Array[MidAmbientPlaceEntry] = []
 }
 pub impl MidAmbientBodyPlan {
-    factory
+    factory empty() { return <MidAmbientBodyPlan heads=[:] entries=[] /> }
     fn hasStorage() -> Bool { return self.entries.count() != 0U64 }
     fn path(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
         mut val entry = self.heads.getOr(key: ambientPlaceKey(place: place), fallback: 0U64)
@@ -102,7 +102,7 @@ export struct MidAmbientProgram {
 }
 pub impl MidAmbientProgram {
     factory empty { return <MidAmbientProgram /> }
-    fn body(bodyId: U64) -> MidAmbientBodyPlan { return self.bodies.getOr(key: bodyId, fallback: <MidAmbientBodyPlan />) }
+    fn body(bodyId: U64) -> MidAmbientBodyPlan { return self.bodies.getOr(key: bodyId, fallback: <MidAmbientBodyPlan.empty />) }
 
     fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool { return self.effects.callMayAccess(c: c, term: term) }
 
@@ -134,7 +134,7 @@ pub impl MidAmbientProgram {
                 Optional.None => {}
                 Optional.Some(v: val executable) => {
                     val body = c.mid.bodies[executable.canonical.body - 1U64]
-                    mut val plan = <MidAmbientBodyPlan />
+                    mut val plan = <MidAmbientBodyPlan.empty />
                     mut val blockIndex = 0U64
                     while blockIndex < body.blocks.len {
                         val block = c.mid.blocks[body.blocks.start + blockIndex]

@@ -44,7 +44,10 @@ pub impl Comp {
     inout fn rejectNonImplSyntaxItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Impl => {}
-            SyntaxTopItemKind.Import => {}
+            SyntaxTopItemKind.Import => {
+                val imp = syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                if imp.isPublic { return <Result.Err error=self.partItemDiagnostic(offset: imp.span.start) /> }
+            }
             SyntaxTopItemKind.Directive => {}
             SyntaxTopItemKind.Export => {
                 try self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)

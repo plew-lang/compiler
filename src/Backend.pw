@@ -172,7 +172,7 @@ pub impl LlvmAmbientScope { factory }
 
 struct LlvmCtx {
     pub val ambientProgram: MidAmbientProgram = <MidAmbientProgram.empty />
-    pub mut val ambientBody: MidAmbientBodyPlan = <MidAmbientBodyPlan />
+    pub mut val ambientBody: MidAmbientBodyPlan = <MidAmbientBodyPlan.empty />
     pub mut val ambientPermit: Optional[LLVMValueRef] = <Optional.None />
     pub mut val ambientScopes: Dictionary[U64, LlvmAmbientScope] = [:]
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />

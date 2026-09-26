@@ -71,7 +71,7 @@ export struct Comp {
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
     // the import-name / chain-result caches.
     pub mut val decls: Decls = <Decls />
-    pub mut val keywordSpans: KeywordSpans = <KeywordSpans />
+    pub mut val keywordSpans: KeywordSpans = <KeywordSpans.empty />
     // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
     pub mut val parseScratch: ParseScratch = <ParseScratch />
     // the per-body codegen / lowering / verify cursor (see `Cursor`).
@@ -1449,6 +1449,10 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
                                 if tgt != 4000000000U64 {
                                     c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
                                     c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: tgt, reExport: false)
+                                    if imp.isPublic {
+                                        c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
+                                        c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: tgt, reExport: true)
+                                    }
                                 }
                             }
                         }

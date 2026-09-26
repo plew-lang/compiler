@@ -95,7 +95,9 @@ impl KeywordSpans {
 }
 
 pub impl KeywordSpans {
-    factory
+    factory empty() {
+        return <KeywordSpans keys=[] entries=[] slots=[] sourceScans=0U64 />
+    }
 
     inout fn register(spelling: Array[U8], start: U64) {
         val index: U64 = self.row(spelling: spelling)

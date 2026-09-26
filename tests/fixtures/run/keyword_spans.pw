@@ -2,7 +2,7 @@ import @Std/Io with { write }
 import /KeywordSpans with { KeywordSpans }
 
 fn main() {
-    mut val table: KeywordSpans = <KeywordSpans />
+    mut val table: KeywordSpans = <KeywordSpans.empty />
     mut val source: Array[U8] = "stable:la".bytes()
     val first = table.lookup(source: source, spelling: "stable".bytes(), requestLength: 6U64)
     mut val repeat: U64 = 0U64
@@ -45,11 +45,11 @@ fn main() {
         if entry.start != (index as U64) + 1000U64 || entry.length != 2U64 { return }
         index += 1U8
     }
-    mut val other: KeywordSpans = <KeywordSpans />
+    mut val other: KeywordSpans = <KeywordSpans.empty />
     val absent = other.lookup(source: "".bytes(), spelling: "stable".bytes(), requestLength: 6U64)
     if absent.length != 0U64 { return }
     // FNV hashes of a/i share the initial eight-slot bucket.
-    mut val collisions: KeywordSpans = <KeywordSpans />
+    mut val collisions: KeywordSpans = <KeywordSpans.empty />
     val collisionA = collisions.lookup(source: "ia".bytes(), spelling: "a".bytes(), requestLength: 1U64)
     val collisionI = collisions.lookup(source: "ia".bytes(), spelling: "i".bytes(), requestLength: 1U64)
     if collisionA.start != 1U64 || collisionI.start != 0U64 { return }
@@ -63,13 +63,13 @@ fn main() {
     val registeredEmpty = other.lookup(source: "".bytes(), spelling: "".bytes(), requestLength: 99U64)
     if registeredEmpty.start != 17U64 || registeredEmpty.length != 0U64 { return }
     // A rejected length must not poison a later correctly sized lookup.
-    mut val lengths: KeywordSpans = <KeywordSpans />
+    mut val lengths: KeywordSpans = <KeywordSpans.empty />
     val rejected = lengths.lookup(source: "xxabaaba".bytes(), spelling: "aba".bytes(), requestLength: 2U64)
     val accepted = lengths.lookup(source: "xxabaaba".bytes(), spelling: "aba".bytes(), requestLength: 3U64)
     if rejected.length != 0U64 || accepted.start != 2U64 || lengths.sourceScans != 1U64 { return }
     // A source/table copy can diverge by append, including after a cached miss.
     mut val originalSource: Array[U8] = "ab".bytes()
-    mut val originalTable: KeywordSpans = <KeywordSpans />
+    mut val originalTable: KeywordSpans = <KeywordSpans.empty />
     val absentOriginal = originalTable.lookup(source: originalSource, spelling: "abc".bytes(), requestLength: 3U64)
     mut val forkSource: Array[U8] = originalSource
     mut val forkTable: KeywordSpans = originalTable

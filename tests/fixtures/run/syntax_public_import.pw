@@ -1,0 +1,28 @@
+// Public imports retain publication metadata in both compiler and macro ASTs.
+import @Plew/Syntax with { Lexer, P, ImportId, TopItemAst, lex, parseProgramSyntaxFile, parseProgramAst, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImport }
+import @Std/Io with { print }
+fn main() {
+    val source = "pub import ./Models with { Item as Model }\nimport ./Other\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    mut val index = 0U64
+    while index < 2U64 {
+        val item = syntaxFileTopLevel(file: file, index: index)
+        val imp = syntaxImport(file: file, id: <ImportId raw=syntaxTopItemPayload(file: file, item: item) />)
+        print(imp.isImport)
+        print(imp.isPublic)
+        index += 1U64
+    }
+    mut val valueParser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = parseProgramAst(p: inout valueParser)
+    index = 0U64
+    while index < items.count() {
+        match items[index] {
+            TopItemAst.Import(val imp) => { print(imp.isPublic) }
+            _ => { print("wrong node") }
+        }
+        index += 1U64
+    }
+}

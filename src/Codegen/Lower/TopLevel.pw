@@ -160,6 +160,7 @@ pub impl Comp {
     }
 
     inout fn lowerImport(imp: ImportAst) {
+        if imp.isPublic { self.lowerReExport(imp: imp) }
         // a `with`-less import (`import @Std/Io`) binds the last path segment as a
         // namespace; `Io.print(args)` then resolves to `print` from that module. A path
         // alias `import @Std/Io as IO` binds `IO` instead (spec/15).
@@ -187,6 +188,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxImport(imp: SyntaxImport) {
+        if imp.isPublic { self.lowerSyntaxReExport(imp: imp) }
         if imp.isImport && syntaxImportNameCount(file: self.syntax, imp: imp) == 0U64 {
             mut val nsStart: U64 = imp.segment.start
             mut val nsEnd: U64 = imp.segment.end
