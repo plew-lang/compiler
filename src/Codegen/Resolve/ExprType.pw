@@ -1339,7 +1339,8 @@ pub impl Comp {
                 }
                 return <Result.Ok value=scalarInfo() />
             }
-            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+            Expr.Cast(operand: _, val tyStart, val tyLen, val ty) => {
+                if ty != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: ty) /> }
                 return <Result.Ok value=self.typeInfoOfName(start: tyStart, len: tyLen, isArray: false) />
             }
             Expr.MatchExpr(val scrut, val arms) => {
