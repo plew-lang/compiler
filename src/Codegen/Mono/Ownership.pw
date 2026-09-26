@@ -51,7 +51,6 @@ pub impl Comp {
             if call.bodyId != 0U64 {
                 if !self.finalDestructorCallIsValid(call: call) {
                     return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: contract.typeRef).nameStart, msg: "internal error: destructor requires a finalized borrowed receiver and a nullary Unit body") />
-                    return <Result.Ok value=() />
                 }
                 val finalized = <FinalDestructorCall bodyId=call.bodyId receiverType=call.receiverType receiverPassing=call.receiverPassing ready=true />
                 self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
@@ -186,7 +185,7 @@ pub impl Comp {
             mut val releases: Array[Bool] = []
             mut val field = 0U64
             while field < contract.fieldTypes.count() {
-                releases.append(contract.fieldBoxed[field] || self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs))
+                releases.append(contract.fieldBoxed[field] || (try self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs)))
                 field += 1U64
             }
             self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
@@ -200,7 +199,6 @@ pub impl Comp {
         val identity = self.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: ownership dependency has no collected shape") />
-            return <Result.Ok value=() />
         }
         val child = identity - 1U64
         if child < start {
@@ -214,15 +212,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn collectedFinalReleaseEffect(typeRef: U64, start: U64, needs: Array[Bool]) -> Bool {
-        if typeRef == 0U64 { return false }
+    inout fn collectedFinalReleaseEffect(typeRef: U64, start: U64, needs: Array[Bool]) -> Result[Bool, CompileDiagnostic] {
+        if typeRef == 0U64 { return <Result.Ok value=false />}
         val identity = self.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
-            self.errorAt(offset: 0U64, msg: "internal error: ownership field has no collected shape")
-            return false
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: ownership field has no collected shape") />
         }
-        if identity - 1U64 < start { return self.finalNeedsRelease(typeRef: typeRef) }
-        return needs[identity - 1U64 - start]
+        if identity - 1U64 < start { return <Result.Ok value=self.finalNeedsRelease(typeRef: typeRef) />}
+        return <Result.Ok value=needs[identity - 1U64 - start] />
     }
 
     inout fn collectFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
@@ -258,7 +255,6 @@ pub impl Comp {
             val layout = self.recordStructIndex(ref: typeRef)
             if layout >= self.arena.structCount() {
                 return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: finalized record has no physical layout") />
-                return <Result.Ok value=() />
             }
             structLayout = layout + 1U64
             fields = type.recordFieldTerms

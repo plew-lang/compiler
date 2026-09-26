@@ -955,26 +955,26 @@ pub impl Comp {
         }
         val environment = <InstanceEnvironment params=params args=values receiverRef=canonicalRecv proof=proof />
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=environment />}
-        return <Result.Ok value=self.withLexicalSelfBinding(f: self.arena.functionAt(index: fnIdx), environment: environment) />
+        return <Result.Ok value=(try self.withLexicalSelfBinding(f: self.arena.functionAt(index: fnIdx), environment: environment)) />
     }
 
     // The lexical trait Self is a ParamId, including below nominal type
     // constructors. Both signature queries and executable bodies bind it from
     // the selected receiver; Cursor's legacy Self spelling is not a binder.
-    inout fn withLexicalSelfBinding(f: Func, environment: InstanceEnvironment) -> InstanceEnvironment {
+    inout fn withLexicalSelfBinding(f: Func, environment: InstanceEnvironment) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val declaration: Func = self.lexicalFunction(f: f)
-        if !(declaration.isProvided || self.methodRecvIsTrait(f: declaration)) || declaration.provTraitOwner == 0U64 { return environment }
+        if !(declaration.isProvided || self.methodRecvIsTrait(f: declaration)) || declaration.provTraitOwner == 0U64 { return <Result.Ok value=environment />}
         val index = self.decls.traitIndexByOffset(offset: declaration.provTraitOwner)
-        if index >= self.decls.traitCount() { return environment }
+        if index >= self.decls.traitCount() { return <Result.Ok value=environment />}
         val traitDef = self.decls.traitAt(index: index)
-        if traitDef.selfParamId == 0U64 { return environment }
+        if traitDef.selfParamId == 0U64 { return <Result.Ok value=environment />}
         mut val i: U64 = 0U64
         while i < environment.params.count() {
             if environment.params[i].paramId == traitDef.selfParamId {
                 if i >= environment.args.count() || !self.typeRefEq(a: environment.args[i], b: environment.receiverRef) {
-                    self.errorAt(offset: declaration.defOffset, msg: "internal error: lexical Self binding conflicts with selected receiver")
+                    return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "internal error: lexical Self binding conflicts with selected receiver") />
                 }
-                return environment
+                return <Result.Ok value=environment />
             }
             i += 1U64
         }
@@ -987,7 +987,7 @@ pub impl Comp {
             values.append(environment.args[i])
             i += 1U64
         }
-        return <InstanceEnvironment params=params args=values receiverRef=environment.receiverRef proof=environment.proof />
+        return <Result.Ok value=<InstanceEnvironment params=params args=values receiverRef=environment.receiverRef proof=environment.proof /> />
     }
 
     inout fn sameInstanceEnvironment(a: InstanceEnvironment, b: InstanceEnvironment) -> Bool {
@@ -5375,7 +5375,7 @@ pub impl Comp {
         self.recordSemanticExprTerm(exprId: exprId, term: ref)
     }
 
-    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64, stageRef: U64) {
+    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64, stageRef: U64) -> Result[(), CompileDiagnostic] {
         val chainN: Bind = self.internBytes(s: "chain")
         val fromValueN: Bind = self.internBytes(s: "fromValue")
         val emptyN: Bind = self.internBytes(s: "empty")
@@ -5419,7 +5419,7 @@ pub impl Comp {
         // for a compiler-created occurrence.
         val fromOriginSerial: U64 = self.nextExprOriginSerial
         self.nextExprOriginSerial += 1U64
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=fromCall originSerial=fromOriginSerial receiverTerm=stageRef />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=fromCall originSerial=fromOriginSerial receiverTerm=stageRef />)
         mut val someStmts: Array[U64] = []
         someStmts.append(self.pushStmt(s: <Stmt.Give value=fromCall />))
         val someBlk: U64 = self.pushBlock(stmts: someStmts)
@@ -5435,7 +5435,7 @@ pub impl Comp {
         self.arena.exprSpanStart[emptyCall] = memberStart
         val emptyOriginSerial: U64 = self.nextExprOriginSerial
         self.nextExprOriginSerial += 1U64
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=emptyCall originSerial=emptyOriginSerial receiverTerm=stageRef />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=emptyCall originSerial=emptyOriginSerial receiverTerm=stageRef />)
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
         val noneBlk: U64 = self.pushBlock(stmts: noneStmts)
@@ -5447,6 +5447,7 @@ pub impl Comp {
         // Their SyntheticCallSite identities retain distinct provenance; their
         // ordinary CallTemplates retain receiver, arguments and result context.
         self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=self.pushMatchArms(arms: arms) />
+        return <Result.Ok value=() />
     }
 
     // Which type-argument position of a `Chain` conformer named (headStart,headLen) is

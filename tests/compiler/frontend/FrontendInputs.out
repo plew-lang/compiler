@@ -3,3 +3,7 @@ First.pw
 1
 Second.pw
 1
+internal error: ownership field has no collected shape
+internal error: synthetic call origin registered twice
+internal error: lexical Self binding conflicts with selected receiver
+invariant diagnostics returned

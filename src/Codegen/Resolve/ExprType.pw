@@ -232,7 +232,7 @@ pub impl Comp {
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
-        return <Result.Ok value=self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />) />
+        return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />)) />
     }
 
     inout fn signatureTypeArguments(f: Func, environment: InstanceEnvironment) -> Array[U64] {

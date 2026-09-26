@@ -12,23 +12,23 @@ pub impl Comp {
     // Value-position subscript syntax is an Index requirement call.  The
     // generated node has no source spelling of its own, so give it an explicit
     // synthetic origin before any semantic pass records templates.
-    inout fn lowerIndexRead(recv: U64, key: U64) -> U64 {
+    inout fn lowerIndexRead(recv: U64, key: U64) -> Result[U64, CompileDiagnostic] {
         // Preserve storage provenance beside the synthetic value read. A later
         // Record/freeze access elaborator decides whether this is a pure read
         // or get-modify-set; Lower never guesses from a method name.
         val place: U64 = self.pushExpr(e: <Expr.Index base=recv index=key />)
         val call: U64 = self.synthMethodCall(recv: recv, name: "index", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
         val originSerial: U64 = self.arena.exprOriginSerial[call]
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=<SyntheticCallKind.IndexRead /> originSerial=originSerial receiverTerm=0U64 />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=<SyntheticCallKind.IndexRead /> originSerial=originSerial receiverTerm=0U64 />)
         // The write facet intentionally uses the read result only as a
         // declaration-time Value type anchor. It is detached from executable
         // source and cannot be scanned/emitted as a second call; access
         // elaboration replaces it with the materialized temporary after the
         // selected parent ABI says writeback is necessary.
         val write: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: call, arg1HasLabel: false)
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=write kind=<SyntheticCallKind.IndexWrite /> originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=write kind=<SyntheticCallKind.IndexWrite /> originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
         self.decls.registerAccessCandidate(<AccessCandidate readExpr=call writeExpr=write placeExpr=place originSerial=originSerial />, expressionCount: self.arena.exprs.count())
-        return call
+        return <Result.Ok value=call />
     }
 
     inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
@@ -212,7 +212,7 @@ pub impl Comp {
             ExprAst.Index(val base, val index, val span) => {
                 val b: U64 = (try self.lowerExpr(e: base))
                 val idx: U64 = (try self.lowerExpr(e: index))
-                result = self.lowerIndexRead(recv: b, key: idx)
+                result = (try self.lowerIndexRead(recv: b, key: idx))
             }
             ExprAst.Make(val typeName, val typeNameSpan, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
                 val tn: Bind = self.internBytes(s: typeName)
@@ -499,7 +499,7 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Arrow base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
             }
             SyntaxExprKind.Index => {
-                result = self.lowerIndexRead(recv: (try self.lowerSyntaxExpr(id: e.child0)), key: (try self.lowerSyntaxExpr(id: e.child1)))
+                result = (try self.lowerIndexRead(recv: (try self.lowerSyntaxExpr(id: e.child0)), key: (try self.lowerSyntaxExpr(id: e.child1))))
             }
             SyntaxExprKind.Make => {
                 mut val typeArgs: Array[U64] = []

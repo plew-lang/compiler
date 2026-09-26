@@ -36,13 +36,11 @@ pub impl Comp {
         val globalIndex: U64 = self.globalIndexForDeclarationTarget(target: local.nameStart)
         if globalIndex >= self.arena.globals.count() {
             return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "internal error: pending global type has no declaration") />
-            return <Result.Ok value=local />
         }
         mut val resolving: U64 = 0U64
         while resolving < self.resolvingGlobalTypes.count() {
             if self.resolvingGlobalTypes[resolving] == local.nameStart {
                 return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "cyclic global type inference") />
-                return <Result.Ok value=local />
             }
             resolving += 1U64
         }
@@ -247,7 +245,6 @@ pub impl Comp {
         }
         if state[i] == 1U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.globals[i].nameStart, msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)") />
-            return <Result.Ok value=() />
         }
         state[i] = 1U64
         mut val d: Array[U64] = []
@@ -295,7 +292,7 @@ pub impl Comp {
     // factory (an assoc fn on Type), rewrite it to the assoc-fn call `Type.name(labels:
     // values)` so it rides the existing assoc-fn machinery. Enum-variant constructions
     // (`<Optional.Some v=…/>`) are untouched (Some has no assoc fn).
-    inout fn rewriteFactoryConstruction() {
+    inout fn rewriteFactoryConstruction() -> Result[(), CompileDiagnostic] {
         val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
@@ -315,7 +312,7 @@ pub impl Comp {
                             val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                             val originSerial: U64 = self.nextExprOriginSerial
                             self.nextExprOriginSerial += 1U64
-                            self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
+                            try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                         }
                     } else {
                         // Anonymous factory form (spec/05): `factory(label: T)` lowers as an
@@ -333,7 +330,7 @@ pub impl Comp {
                                 val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
                                 val originSerial: U64 = self.nextExprOriginSerial
                                 self.nextExprOriginSerial += 1U64
-                                self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
+                                try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                             }
                         }
                     }
@@ -353,6 +350,7 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Post-load rewrite (spec/15): a `with { real as alias }` import lets the using

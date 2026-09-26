@@ -654,27 +654,27 @@ pub impl Comp {
     inout fn lowerCompoundAssignInto(op: I64, target: ExprAst, value: ExprAst, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         val pid: U64 = (try self.rebuildPlaceTemping(e: target, stmts: inout stmts))
         val vid: U64 = (try self.lowerExpr(e: value))
-        val read: U64 = self.loweredPlaceRead(id: pid)
+        val read: U64 = (try self.loweredPlaceRead(id: pid))
         val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=read rhs=vid />)
-        self.lowerPlaceAssignInto(target: pid, value: binE, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: pid, value: binE, stmts: inout stmts)
         return <Result.Ok value=() />
     }
 
     // Read a lowered place as a value.  Index is source sugar, so this is the
     // only route which turns it into the selected `Index.index` requirement;
     // field/arrow navigation merely preserve their value form around that read.
-    inout fn loweredPlaceRead(id: U64) -> U64 {
+    inout fn loweredPlaceRead(id: U64) -> Result[U64, CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Field(val base, val nameStart, val nameLen) => {
-                return self.pushExpr(e: <Expr.Field base=self.loweredPlaceRead(id: base) nameStart=nameStart nameLen=nameLen />)
+                return <Result.Ok value=self.pushExpr(e: <Expr.Field base=(try self.loweredPlaceRead(id: base)) nameStart=nameStart nameLen=nameLen />) />
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                return self.pushExpr(e: <Expr.Arrow base=self.loweredPlaceRead(id: base) nameStart=nameStart nameLen=nameLen />)
+                return <Result.Ok value=self.pushExpr(e: <Expr.Arrow base=(try self.loweredPlaceRead(id: base)) nameStart=nameStart nameLen=nameLen />) />
             }
             Expr.Index(val base, val index) => {
-                return self.lowerIndexRead(recv: self.loweredPlaceRead(id: base), key: index)
+                return <Result.Ok value=(try self.lowerIndexRead(recv: (try self.loweredPlaceRead(id: base)), key: index)) />
             }
-            _ => { return id }
+            _ => { return <Result.Ok value=id />}
         }
     }
 
@@ -697,18 +697,18 @@ pub impl Comp {
     // addressability special case to Mono/LLVM.  The base is evaluated once as
     // a value, held in a mutable local while its child is changed, and then
     // written back through the original IndexSet route.
-    inout fn lowerPlaceAssignInto(target: U64, value: U64, stmts: inout Array[U64]) {
+    inout fn lowerPlaceAssignInto(target: U64, value: U64, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
                 if self.loweredPlaceHasIndex(id: base) {
-                    self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
+                    try self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
                 } else {
-                    stmts.append(self.lowerIndexSetAssign(recv: base, key: index, value: value))
+                    stmts.append((try self.lowerIndexSetAssign(recv: base, key: index, value: value)))
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 if self.loweredPlaceHasIndex(id: base) {
-                    self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
+                    try self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
                 } else {
                     stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=value />))
                 }
@@ -718,12 +718,13 @@ pub impl Comp {
             }
             _ => { stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=value />)) }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerNestedPlaceAssignInto(target: U64, base: U64, value: U64, stmts: inout Array[U64]) {
+    inout fn lowerNestedPlaceAssignInto(target: U64, base: U64, value: U64, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__gm", n: self.cur.lowerTmpSeq)
-        val read: U64 = self.loweredPlaceRead(id: base)
+        val read: U64 = (try self.loweredPlaceRead(id: base))
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=read />))
         val tmpId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
         mut val modified: U64 = target
@@ -732,15 +733,16 @@ pub impl Comp {
             Expr.Field(base: _, val nameStart, val nameLen) => { modified = self.pushExpr(e: <Expr.Field base=tmpId nameStart=nameStart nameLen=nameLen />) }
             _ => {}
         }
-        self.lowerPlaceAssignInto(target: modified, value: value, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: modified, value: value, stmts: inout stmts)
         val tmpForWriteback: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-        self.lowerPlaceAssignInto(target: base, value: tmpForWriteback, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: base, value: tmpForWriteback, stmts: inout stmts)
+        return <Result.Ok value=() />
     }
 
     inout fn lowerPlainAssignInto(target: ExprAst, value: ExprAst, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         val pid: U64 = (try self.rebuildPlaceTemping(e: target, stmts: inout stmts))
         val vid: U64 = (try self.lowerExpr(e: value))
-        self.lowerPlaceAssignInto(target: pid, value: vid, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: pid, value: vid, stmts: inout stmts)
         return <Result.Ok value=() />
     }
 
@@ -782,16 +784,16 @@ pub impl Comp {
     inout fn lowerSyntaxPlainAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         val target: U64 = (try self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts))
         val value: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
-        self.lowerPlaceAssignInto(target: target, value: value, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: target, value: value, stmts: inout stmts)
         return <Result.Ok value=() />
     }
 
     inout fn lowerSyntaxCompoundAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         val target: U64 = (try self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts))
         val value: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
-        val read: U64 = self.loweredPlaceRead(id: target)
+        val read: U64 = (try self.loweredPlaceRead(id: target))
         val combined: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: stmt.op) lhs=read rhs=value />)
-        self.lowerPlaceAssignInto(target: target, value: combined, stmts: inout stmts)
+        try self.lowerPlaceAssignInto(target: target, value: combined, stmts: inout stmts)
         return <Result.Ok value=() />
     }
 
@@ -852,11 +854,11 @@ pub impl Comp {
     // lowering: its specified meaning is the `IndexSet.indexSet` method call.
     // Register a synthetic origin now, while the call is still part of the
     // frontend tree, so Record and Mono share one semantic key.
-    inout fn lowerIndexSetAssign(recv: U64, key: U64, value: U64) -> U64 {
+    inout fn lowerIndexSetAssign(recv: U64, key: U64, value: U64) -> Result[U64, CompileDiagnostic] {
         val call: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: value, arg1HasLabel: false)
         val originSerial: U64 = self.arena.exprOriginSerial[call]
-        self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=<SyntheticCallKind.IndexWrite /> originSerial=originSerial receiverTerm=0U64 />)
-        return self.pushStmt(s: <Stmt.ExprStmt expr=call />)
+        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call kind=<SyntheticCallKind.IndexWrite /> originSerial=originSerial receiverTerm=0U64 />)
+        return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=call />) />
     }
 
     // SyntaxFile counterpart of the direct statement lowerer. The block path
@@ -960,7 +962,7 @@ pub impl Comp {
                     val v: U64 = (try self.lowerExpr(e: value))
                     match target {
                         ExprAst.Index(val base, val index, span: _) => {
-                            result = self.lowerIndexSetAssign(recv: (try self.lowerExpr(e: base)), key: (try self.lowerExpr(e: index)), value: v)
+                            result = (try self.lowerIndexSetAssign(recv: (try self.lowerExpr(e: base)), key: (try self.lowerExpr(e: index)), value: v))
                         }
                         _ => {
                             val t: U64 = (try self.lowerExpr(e: target))

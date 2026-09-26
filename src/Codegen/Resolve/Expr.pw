@@ -439,16 +439,16 @@ pub impl Comp {
     // has exactly one producer. Keep the semantic row and its ExprId
     // navigation index together here so readers never rediscover provenance by
     // scanning every lowered call in the compilation.
-    inout fn recordSyntheticCallSite(site: SyntheticCallSite) {
+    inout fn recordSyntheticCallSite(site: SyntheticCallSite) -> Result[(), CompileDiagnostic] {
         while self.decls.syntheticCallSiteByExpr.count() <= site.exprId {
             self.decls.syntheticCallSiteByExpr.append(0U64)
         }
         if self.decls.syntheticCallSiteByExpr[site.exprId] != 0U64 {
-            self.errorAt(offset: self.exprOffset(id: site.exprId), msg: "internal error: synthetic call origin registered twice")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: site.exprId), msg: "internal error: synthetic call origin registered twice") />
         }
         self.decls.syntheticCallSites.append(site)
         self.decls.syntheticCallSiteByExpr.set(i: site.exprId, value: self.decls.syntheticCallSites.count())
+        return <Result.Ok value=() />
     }
 
     // Return the semantic-table count when ExprId has no synthetic origin.

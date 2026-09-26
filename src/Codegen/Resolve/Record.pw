@@ -1808,7 +1808,7 @@ pub impl Comp {
                                 self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=baseTerm.args[valueIndex] />)
                             }
                         }
-                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: baseInfo.nameStart, headLen: baseInfo.nameLen, stageRef: stageRef)
+                        try self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: baseInfo.nameStart, headLen: baseInfo.nameLen, stageRef: stageRef)
                     }
                 }
             }

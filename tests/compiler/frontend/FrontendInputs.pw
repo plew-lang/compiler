@@ -3,6 +3,7 @@ import ../../../src/Frontend with { Comp, FrontendInput, FrontendOptions, analyz
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/PreparedProgram with { PreparedProgram }
 import ../../../src/CompilerDiagnostics with { reportProgramPreparationError }
+import ./InvariantDiagnostics with { checkInvariantDiagnostics }
 import @Std/Io with { print }
 
 fn checkSource(path: String, asan: Bool) {
@@ -32,4 +33,5 @@ fn main() {
     }
     checkSource(path: "First.pw", asan: false)
     checkSource(path: "Second.pw", asan: true)
+    checkInvariantDiagnostics()
 }

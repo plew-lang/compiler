@@ -1,0 +1,61 @@
+// Invalid semantic state is rejected without exiting the embedding process.
+// Each failed Comp is discarded; this does not test recovery inside a request.
+import ../../../src/Frontend with { Comp }
+import ../../../src/Diag with { CompileDiagnostic }
+import ../../../src/Ir with { Bind, Expr, Func, InstanceEnvironment, SyntheticCallSite, TraitDef }
+import @Std/Io with { print }
+
+fn expectDiagnostic[T](result: Result[T, CompileDiagnostic]) {
+    match result {
+        Result.Ok(value: _) => { panic("invalid semantic state was accepted") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+    }
+}
+
+fn missingShape() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "I64")
+    val term = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    expectDiagnostic(result: c.collectedFinalReleaseEffect(typeRef: term, start: 0U64, needs: []))
+}
+
+fn duplicateOrigin() {
+    mut val c: Comp = <Comp />
+    val expression = c.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val site = <SyntheticCallSite exprId=expression receiverTerm=0U64 />
+    c.recordSyntheticCallSite(site: site).unwrap()
+    match c.recordSyntheticCallSite(site: site) {
+        Result.Ok(value: _) => { panic("duplicate origin was accepted") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+    }
+}
+
+fn conflictingSelf() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "Self")
+    val trait = c.internBytes(s: "Producer")
+    c.decls.registerTrait(<TraitDef nameStart=trait.nameStart nameLen=trait.nameLen nameId=trait.nameId selfParamId=81U64 />)
+    val integer = c.internBytes(s: "I64")
+    val string = c.internBytes(s: "String")
+    val receiver = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val other = c.simpleTypeRef(nameStart: string.nameStart, nameLen: string.nameLen)
+    val function = <Func nameStart=name.nameStart nameLen=name.nameLen
+        typeParams=c.pushFuncBinds(binds: []) params=c.pushFuncParams(params: [])
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=true recvStart=trait.nameStart recvLen=trait.nameLen
+        selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
+        isProvided=true provTraitOwner=trait.nameStart />
+    val environment = <InstanceEnvironment
+        params=[<Bind nameStart=name.nameStart nameLen=name.nameLen paramId=81U64 fieldStart=0U64 fieldLen=0U64 />]
+        args=[other] receiverRef=receiver />
+    expectDiagnostic(result: c.withLexicalSelfBinding(f: function, environment: environment))
+}
+
+export fn checkInvariantDiagnostics() {
+    missingShape()
+    duplicateOrigin()
+    conflictingSelf()
+    print("invariant diagnostics returned")
+}
