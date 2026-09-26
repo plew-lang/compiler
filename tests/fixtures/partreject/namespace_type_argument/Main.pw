@@ -1,0 +1,2 @@
+import ./Models
+fn main() { val item = <Models[I64].Box value=41I64 /> }

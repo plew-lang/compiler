@@ -8,7 +8,7 @@ fn main() {
     mut val compiler: Comp = <Comp />
     compiler.arena.reserveTypeSentinel()
     val absent: Span = <Span start=0U64 end=0U64 />
-    val generated = <ExprAst.Make typeName="Box" typeNameSpan=absent typeArgs=[] variant="" variantSpan=absent isEnum=false fields=[] span=absent />
+    val generated = <ExprAst.Make typePath=[] typeName="Box" typeNameSpan=absent typeArgs=[] variant="" variantSpan=absent isEnum=false fields=[] span=absent />
     val root = compiler.lowerExpr(e: generated).unwrap()
     match compiler.arena.exprs[root] {
         Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {

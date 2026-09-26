@@ -135,6 +135,29 @@ pub impl Comp {
     }
 
     inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[TypeAst, CompileDiagnostic] {
+        if t.namePath.count() != 0U64 {
+            mut val names: Array[Span] = []
+            mut val index = 0U64
+            while index < t.namePath.count() { names.append(t.namePath[index].nameSpan) index += 1U64 }
+            val headIndex = (try self.typePathHead(names: names))
+            index = 0U64
+            while index < headIndex {
+                if t.namePath[index].args.count() != 0U64 { return <Result.Err error=self.diagnosticAt(offset: names[index].start, msg: "namespace segments do not accept type arguments") /> }
+                index += 1U64
+            }
+            val head = t.namePath[headIndex]
+            mut val associated = t.projectionAssoc
+            mut val associatedSpan = t.projectionAssocSpan
+            if headIndex + 1U64 < names.count() {
+                val tail = t.namePath[headIndex + 1U64]
+                if headIndex + 2U64 != names.count() || tail.args.count() != 0U64 || associated.bytes().count() != 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: tail.nameSpan.start, msg: "invalid associated-type projection path") />
+                }
+                associated = tail.name
+                associatedSpan = tail.nameSpan
+            }
+            return self.normalizeProjectionType(t: <TypeAst name=head.name nameSpan=head.nameSpan args=head.args span=t.span extView=t.extView extViewSpan=t.extViewSpan viewNames=t.viewNames viewNameSpans=t.viewNameSpans projectionTrait=t.projectionTrait projectionTraitSpan=t.projectionTraitSpan projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionTraitArgLabelSpans=t.projectionTraitArgLabelSpans projectionAssoc=associated projectionAssocSpan=associatedSpan isAny=t.isAny argLabels=head.argLabels argLabelSpans=head.argLabelSpans isSendable=t.isSendable isRecord=t.isRecord />, whereTypes: whereTypes, whereTraits: whereTraits)
+        }
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
         while i < t.args.count() {

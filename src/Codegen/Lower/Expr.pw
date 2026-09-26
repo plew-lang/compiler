@@ -58,19 +58,6 @@ pub impl Comp {
                 }
                 if ct.args.count() > 0 {
                     match e {
-                        ExprAst.Make(val typeName, typeNameSpan: _, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
-                            if !(isEnum) {
-                                if typeArgs.count() == 0 {
-                                    val tn: Bind = self.internBytes(s: typeName)
-                                    if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
-                                        val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false))
-                                        val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
-                                        self.arena.exprSpanStart[rid] = span.start
-                                        return <Result.Ok value=rid />
-                                    }
-                                }
-                            }
-                        }
                         ExprAst.DictLit(val keys, val vals, val span) => {
                             return <Result.Ok value=(try self.lowerDictLit(keys: keys, vals: vals, ctxRef: ctxRef, span: span)) />
                         }
@@ -79,10 +66,10 @@ pub impl Comp {
                 }
             }
         }
-        return <Result.Ok value=(try self.lowerExpr(e: e)) />
+        return <Result.Ok value=(try self.lowerExpr(e: e, ctxRef: ctxRef)) />
     }
 
-    inout fn lowerExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerExpr(e: ExprAst, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         mut val result: U64 = 0
         match e {
             ExprAst.IntLit(val value, val isBool, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
@@ -192,32 +179,47 @@ pub impl Comp {
                 val idx: U64 = (try self.lowerExpr(e: index))
                 result = (try self.lowerIndexRead(recv: b, key: idx))
             }
-            ExprAst.Make(val typeName, val typeNameSpan, val typeArgs, val variant, val variantSpan, val isEnum, val fields, val span) => {
+            ExprAst.Make(val typeName, val typeNameSpan, val typePath, val typeArgs, val variant, val variantSpan, val isEnum, val fields, val span) => {
                 mut val tn: Bind = self.lowerTypeName(name: typeName, span: typeNameSpan)
                 mut val constructionEnum = isEnum
-                if isEnum {
-                    val moduleId = self.typeNamespaceModule(name: typeNameSpan)
-                    if moduleId != 4000000000U64 {
-                        self.recordNamespaceUse(name: variantSpan, moduleId: moduleId)
-                        tn = <Bind nameStart=variantSpan.start nameLen=variantSpan.end - variantSpan.start fieldStart=0U64 fieldLen=0U64 />
-                        constructionEnum = false
+                mut val constructorVariant = variant
+                mut val constructorVariantSpan = variantSpan
+                mut val constructorArgs = typeArgs
+                if typePath.count() != 0U64 {
+                    mut val names: Array[Span] = []
+                    mut val index = 0U64
+                    while index < typePath.count() { names.append(typePath[index].nameSpan) index += 1U64 }
+                    val headIndex = (try self.typePathHead(names: names))
+                    index = 0U64
+                    while index < typePath.count() {
+                        if index != headIndex && typePath[index].args.count() != 0U64 { return <Result.Err error=self.diagnosticAt(offset: names[index].start, msg: "only the constructed type accepts type arguments") /> }
+                        index += 1U64
+                    }
+                    val head = typePath[headIndex]
+                    tn = self.lowerTypeName(name: head.name, span: head.nameSpan)
+                    constructorArgs = head.args
+                    constructionEnum = headIndex + 1U64 < typePath.count()
+                    if constructionEnum {
+                        if headIndex + 2U64 != typePath.count() { return <Result.Err error=self.diagnosticAt(offset: typeNameSpan.start, msg: "invalid construction path") /> }
+                        constructorVariant = typePath[headIndex + 1U64].name
+                        constructorVariantSpan = typePath[headIndex + 1U64].nameSpan
                     }
                 }
                 mut val targs: Array[U64] = []
                 mut val ti: U64 = 0U64
-                while ti < typeArgs.count() {
-                    targs.append((try self.lowerType(t: typeArgs[ti])).ref)
+                while ti < constructorArgs.count() {
+                    targs.append((try self.lowerType(t: constructorArgs[ti])).ref)
                     ti += 1U64
                 }
-                val tyRef = self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
+                val tyRef = self.contextualConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start, ctxRef: ctxRef, isVariant: constructionEnum)
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
                 if constructionEnum {
-                    val vb: Bind = self.internBytes(s: variant)
+                    val vb: Bind = self.lowerTypeName(name: constructorVariant, span: constructorVariantSpan)
                     vStart = vb.nameStart
                     vLen = vb.nameLen
                 }
-                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: variant, isEnum: constructionEnum))
+                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: constructorVariant, isEnum: constructionEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.ArrayLit(val elems, val span) => {
@@ -386,19 +388,6 @@ pub impl Comp {
                         SyntaxExprKind.Range => {
                             return <Result.Ok value=(try self.lowerSyntaxRange(expr: e, ctxRef: ctxRef)) />
                         }
-                        SyntaxExprKind.Make => {
-                            if !(e.flag0) {
-                                if syntaxExprTypeArgCount(file: self.syntax, expr: e) == 0U64 {
-                                    if intern(c: inout self, start: e.name.start, len: e.name.end - e.name.start) == ct.nameId {
-                                        val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false))
-                                        val result: U64 = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
-                                        self.arena.exprSpanStart[result] = e.span.start
-                                        self.arena.exprSpanEnd[result] = e.span.end
-                                        return <Result.Ok value=result />
-                                    }
-                                }
-                            }
-                        }
                         SyntaxExprKind.DictLit => {
                             return <Result.Ok value=(try self.lowerSyntaxDictLit(expr: e, ctxRef: ctxRef)) />
                         }
@@ -407,14 +396,14 @@ pub impl Comp {
                 }
             }
         }
-        return <Result.Ok value=(try self.lowerSyntaxExpr(id: id)) />
+        return <Result.Ok value=(try self.lowerSyntaxExpr(id: id, ctxRef: ctxRef)) />
     }
 
     // SyntaxFile counterpart of expression lowering.  This path deliberately
     // reads scalar node views and child IDs only: it never materializes an
     // ExprAst/String tree from the immutable syntax arena.  More expression
     // categories are added before the normal loader is switched to SyntaxFile.
-    inout fn lowerSyntaxExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerSyntaxExpr(id: ExprId, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
         mut val result: U64 = 0U64
         match e.kind {
@@ -484,29 +473,48 @@ pub impl Comp {
             }
             SyntaxExprKind.Make => {
                 mut val typeName = e.name
+                mut val variantName = e.nameSpan
                 mut val constructionEnum = e.flag0
-                if e.flag0 {
-                    val moduleId = self.typeNamespaceModule(name: e.name)
-                    if moduleId != 4000000000U64 {
-                        self.recordNamespaceUse(name: e.nameSpan, moduleId: moduleId)
-                        typeName = e.nameSpan
-                        constructionEnum = false
+                mut val headIndex = 0U64
+                if e.typePath.count != 0U64 {
+                    mut val names: Array[Span] = []
+                    mut val index = 0U64
+                    while index < e.typePath.count { names.append(syntaxExprTypeSegment(file: self.syntax, expr: e, index: index).name) index += 1U64 }
+                    headIndex = (try self.typePathHead(names: names))
+                    index = 0U64
+                    while index < names.count() {
+                        if index != headIndex && syntaxExprTypeSegment(file: self.syntax, expr: e, index: index).args.count != 0U64 { return <Result.Err error=self.diagnosticAt(offset: names[index].start, msg: "only the constructed type accepts type arguments") /> }
+                        index += 1U64
+                    }
+                    typeName = names[headIndex]
+                    constructionEnum = headIndex + 1U64 < names.count()
+                    if constructionEnum {
+                        if headIndex + 2U64 != names.count() { return <Result.Err error=self.diagnosticAt(offset: e.span.start, msg: "invalid construction path") /> }
+                        variantName = names[headIndex + 1U64]
                     }
                 }
                 mut val typeArgs: Array[U64] = []
                 mut val i: U64 = 0U64
-                while i < syntaxExprTypeArgCount(file: self.syntax, expr: e) {
-                    typeArgs.append((try self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i))).ref)
-                    i += 1U64
+                if e.typePath.count != 0U64 {
+                    val head = syntaxExprTypeSegment(file: self.syntax, expr: e, index: headIndex)
+                    while i < head.args.count {
+                        typeArgs.append((try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: i))).ref)
+                        i += 1U64
+                    }
+                } else {
+                    while i < syntaxExprTypeArgCount(file: self.syntax, expr: e) {
+                        typeArgs.append((try self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i))).ref)
+                        i += 1U64
+                    }
                 }
-                val tyRef = self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
+                val tyRef = self.contextualConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start, ctxRef: ctxRef, isVariant: constructionEnum)
                 val typeId: U64 = intern(c: inout self, start: typeName.start, len: typeName.end - typeName.start)
                 mut val variantId: U64 = 0U64
                 if constructionEnum {
-                    variantId = intern(c: inout self, start: e.nameSpan.start, len: e.nameSpan.end - e.nameSpan.start)
+                    variantId = intern(c: inout self, start: variantName.start, len: variantName.end - variantName.start)
                 }
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: constructionEnum))
-                result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=e.nameSpan.start variantLen=e.nameSpan.end - e.nameSpan.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+                result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Range => {
                 result = (try self.lowerSyntaxRange(expr: e))

@@ -1,0 +1,23 @@
+// Each qualifier keeps its source span and its own type argument list.
+import @Plew/Syntax with { ExprAst, TopItemAst, parseExprFrom, parseItem }
+import @Std/Io with { print }
+fn main() {
+    match parseExprFrom(source: "<Models.Choice[I64].Some value=41I64 />", start: 17U64) {
+        ExprAst.Make(typeName: _, typeNameSpan: _, typePath: val path, typeArgs: _, variant: _, variantSpan: _, isEnum: _, fields: _, span: _) => {
+            print(path.count())
+            print(path[0U64].nameSpan.start)
+            print(path[1U64].name)
+            print(path[1U64].args[0U64].name)
+            print(path[2U64].name)
+        }
+        _ => { print(99U64) }
+    }
+    match parseItem(source: "newtype Alias = Facade.Models.Box[I64]", start: 0U64, end: 36U64) {
+        TopItemAst.NewType(name: _, nameSpan: _, val ty, isPub: _, span: _) => {
+            print(ty.namePath.count())
+            print(ty.namePath[2U64].name)
+            print(ty.namePath[2U64].args[0U64].name)
+        }
+        _ => { print(99U64) }
+    }
+}

@@ -2,6 +2,50 @@
 // synthesis, and argument / field / dict-literal lowering.
 
 pub impl Comp {
+    inout fn typePathHead(names: Array[Span]) -> Result[U64, CompileDiagnostic] {
+        val initial = self.typeNamespaceModule(name: names[0U64])
+        if initial == 4000000000U64 { return <Result.Ok value=0U64 /> }
+        mut val moduleId = initial
+        mut val index = 1U64
+        while index < names.count() {
+            val name = names[index]
+            self.recordNamespaceUse(name: name, moduleId: moduleId)
+            match self.moduleBindingAt(nameStart: name.start, nameLen: name.end - name.start, requirePublic: false) {
+                ModuleBinding.Namespace(moduleId: val target) => { moduleId = target }
+                _ => { return <Result.Ok value=index /> }
+            }
+            index += 1U64
+        }
+        return <Result.Err error=self.diagnosticAt(offset: names[0U64].start, msg: "a namespace is not a type") />
+    }
+
+    inout fn lowerSyntaxTypePath(t: SyntaxType) -> Result[PType, CompileDiagnostic] {
+        mut val names: Array[Span] = []
+        mut val index = 0U64
+        while index < t.namePath.count {
+            names.append(syntaxTypeNameSegment(file: self.syntax, ty: t, index: index).name)
+            index += 1U64
+        }
+        val headIndex = (try self.typePathHead(names: names))
+        index = 0U64
+        while index < headIndex {
+            if syntaxTypeNameSegment(file: self.syntax, ty: t, index: index).args.count != 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: names[index].start, msg: "namespace segments do not accept type arguments") />
+            }
+            index += 1U64
+        }
+        val head = syntaxTypeNameSegment(file: self.syntax, ty: t, index: headIndex)
+        mut val associated = t.projectionAssoc
+        if headIndex + 1U64 < names.count() {
+            val tail = syntaxTypeNameSegment(file: self.syntax, ty: t, index: headIndex + 1U64)
+            if headIndex + 2U64 != names.count() || tail.args.count != 0U64 || associated.end > associated.start {
+                return <Result.Err error=self.diagnosticAt(offset: tail.name.start, msg: "invalid associated-type projection path") />
+            }
+            associated = tail.name
+        }
+        return self.lowerSyntaxTypeNode(t: <SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isRecord=t.isRecord />)
+    }
+
     // Authored names keep their source identity. Synthesized value ASTs
     // have no token span, but still carry an explicit name to intern.
     inout fn lowerTypeName(name: String, span: Span) -> Bind {
@@ -43,6 +87,19 @@ pub impl Comp {
         return 0U64
     }
 
+
+    inout fn contextualConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64, ctxRef: U64, isVariant: Bool) -> U64 {
+        if !isVariant && args.count() == 0U64 && ctxRef != 0U64 && ctxRef < self.arena.typeCount() {
+            val context = self.arena.typeAt(index: ctxRef)
+            if context.args.count() != 0U64 && spansEqual(c: inout self, aStart: nameStart, aLen: nameLen, bStart: context.nameStart, bLen: context.nameLen) {
+                val written = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: siteOffset), start: nameStart, len: nameLen)
+                val expected = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: context.siteOffset), start: context.nameStart, len: context.nameLen)
+                if written.nameLen != 0U64 && expected.nameLen != 0U64 && written.nameStart == expected.nameStart { return ctxRef }
+                if written.nameLen == 0U64 && expected.nameLen == 0U64 && self.sameModuleBinding(left: self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen), right: self.moduleBindingAt(nameStart: context.nameStart, nameLen: context.nameLen)) { return ctxRef }
+            }
+        }
+        return self.lowerConstructionType(nameStart: nameStart, nameLen: nameLen, args: args, siteOffset: siteOffset)
+    }
 
     // Construction heads retain the same lexical identity as written type
     // annotations, including when their explicit argument list is empty.
@@ -552,7 +609,11 @@ pub impl Comp {
     // associated projections resolve to a local trait span rather than cloning
     // a normalized TypeAst.
     inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
-        val t: SyntaxType = syntaxType(file: self.syntax, id: id)
+        return self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id))
+    }
+
+    inout fn lowerSyntaxTypeNode(t: SyntaxType) -> Result[PType, CompileDiagnostic] {
+        if t.namePath.count != 0U64 { return self.lowerSyntaxTypePath(t: t) }
         if t.isRecord {
             mut val fieldNames: Array[Span] = []
             mut val fieldTys: Array[PType] = []
