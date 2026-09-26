@@ -1573,7 +1573,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
             // items. A pathological first item must be observable too.
             val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex)
             traceLowerTopItem(c: inout c, index: lowerIndex, span: syntaxTopItemSpan(file: c.syntax, item: item))
-            c.lowerSyntaxTopItem(item: item)
+            try c.lowerSyntaxTopItem(item: item)
             lowerIndex += 1U64
             itemIndex += 1U64
         }
@@ -1603,7 +1603,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     c.normalizeMemberwiseDefaults()
     // module-level variable init order (spec/15): topologically sort globals so a
     // forward reference in an initializer reads the already-initialized value.
-    c.orderGlobalsByDependency()
+    try c.orderGlobalsByDependency()
     // conformance provenance (spec/08,09): owner-module-only bare trait provided
     // methods and bare `impl B as A` must be validated before they can confer
     // methods/conformances onto other types.
@@ -1619,10 +1619,10 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // conforming concrete type (before provided methods, so A's own provided
     // methods also reach the newly-conforming types). The headless form
     // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
-    c.instantiateTraitSubjectConforms()
+    try c.instantiateTraitSubjectConforms()
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
-    c.instantiateProvidedMethods()
+    try c.instantiateProvidedMethods()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).

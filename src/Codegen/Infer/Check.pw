@@ -219,7 +219,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn tcUnaryReject(operand: U64, msg: String) {
+    inout fn tcUnaryReject(operand: U64, msg: String) -> Result[(), CompileDiagnostic] {
         if self.tcLog {
             eprint(text: "TC unary ")
             eprint(text: msg)
@@ -229,14 +229,15 @@ pub impl Comp {
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: operand)))
             eprint(text: "\n")
         } else {
-            self.errorAt(offset: self.exprOffset(id: operand), msg: msg)
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: msg) />
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn tcCheckUnary(op: I64, operand: U64) {
+    inout fn tcCheckUnary(op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
         val t: U64 = self.inferType(id: operand)
         if t == 0U64 || t >= self.arena.typeCount() {
-            return
+            return <Result.Ok value=() />
         }
         val tn: TypeRef = self.arena.typeAt(index: t)
         val isInt: Bool = self.isIntType(start: tn.nameStart, len: tn.nameLen)
@@ -247,27 +248,28 @@ pub impl Comp {
         // float / String); skip user types (which may implement Neg/Not/BitNot).
         val isString: Bool = rangeEquals(bytes: self.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "String")
         if !(isInt || isBool || isFloat || isString) {
-            return
+            return <Result.Ok value=() />
         }
         if op == opSub() {
             if !(isFloat) {
                 if !(isInt && !self.tcIsUnsignedInt(ref: t)) {
-                    self.tcUnaryReject(operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
+                    try self.tcUnaryReject(operand: operand, msg: "unary `-` (Neg) is for signed integers / floats only (spec/12)")
                 }
             }
         } else {
             if op == opNot() {
                 if !(isBool) {
-                    self.tcUnaryReject(operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
+                    try self.tcUnaryReject(operand: operand, msg: "unary `!` (Not) requires a Bool operand (spec/12)")
                 }
             } else {
                 if op == opBitNot() {
                     if !(isInt) {
-                        self.tcUnaryReject(operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
+                        try self.tcUnaryReject(operand: operand, msg: "unary `~` (BitNot) requires an integer operand (spec/12)")
                     }
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn tcIsPrimInt(ref: U64) -> Bool {

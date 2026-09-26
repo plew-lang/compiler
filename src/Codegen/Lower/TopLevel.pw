@@ -7,9 +7,9 @@
 // all that matters (the arrays are independent). Reports a non-intrinsic ABI.
 
 pub impl Comp {
-    inout fn lowerExtern(e: ExternAst) {
+    inout fn lowerExtern(e: ExternAst) -> Result[(), CompileDiagnostic] {
         if !(e.abiOk) {
-            self.errorAt(offset: e.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
+            return <Result.Err error=self.diagnosticAt(offset: e.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported") />
         }
         mut val fi: U64 = 0
         while fi < e.fns.count() {
@@ -23,12 +23,12 @@ pub impl Comp {
                 mut val pj: U64 = 0
                 while pj < sig.params.count() {
                     if !(sig.params[pj].noLabel) {
-                        self.errorAt(offset: sig.params[pj].span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                        return <Result.Err error=self.diagnosticAt(offset: sig.params[pj].span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)") />
                     }
                     pj += 1
                 }
             }
-            self.registerDeclaredFunc(f: self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
+            (try self.registerDeclaredFunc(f: self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC)))
             fi += 1
         }
         mut val si: U64 = 0
@@ -82,11 +82,12 @@ pub impl Comp {
             }
             si += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxExtern(ext: SyntaxExtern) {
+    inout fn lowerSyntaxExtern(ext: SyntaxExtern) -> Result[(), CompileDiagnostic] {
         if !(ext.abiOk) {
-            self.errorAt(offset: ext.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
+            return <Result.Err error=self.diagnosticAt(offset: ext.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported") />
         }
         mut val i: U64 = 0U64
         while i < syntaxExternFnCount(file: self.syntax, ext: ext) {
@@ -96,12 +97,12 @@ pub impl Comp {
                 while pi < syntaxSigParamCount(file: self.syntax, sig: sig) {
                     val param: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxSigParam(file: self.syntax, sig: sig, index: pi))
                     if !(param.noLabel) {
-                        self.errorAt(offset: param.span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                        return <Result.Err error=self.diagnosticAt(offset: param.span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)") />
                     }
                     pi += 1U64
                 }
             }
-            self.registerDeclaredFunc(f: self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC))
+            (try self.registerDeclaredFunc(f: self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC)))
             i += 1U64
         }
         i = 0U64
@@ -137,22 +138,25 @@ pub impl Comp {
             }
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerDecl(d: DeclAst) {
+    inout fn lowerDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         match d.kind {
-            DeclKind.Struct => { self.lowerStructDecl(d: d) }
+            DeclKind.Struct => { try self.lowerStructDecl(d: d) }
             DeclKind.Enum => { self.lowerEnumDecl(d: d) }
-            DeclKind.Func => { self.lowerFuncDecl(d: d) }
+            DeclKind.Func => { try self.lowerFuncDecl(d: d) }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxDecl(d: SyntaxDecl) {
+    inout fn lowerSyntaxDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         match d.kind {
-            DeclKind.Struct => { self.lowerSyntaxStructDecl(d: d) }
+            DeclKind.Struct => { try self.lowerSyntaxStructDecl(d: d) }
             DeclKind.Enum => { self.lowerSyntaxEnumDecl(d: d) }
-            DeclKind.Func => { self.lowerSyntaxFuncDecl(d: d) }
+            DeclKind.Func => { try self.lowerSyntaxFuncDecl(d: d) }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn lowerImport(imp: ImportAst) {
@@ -291,12 +295,12 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerExportItem(inner: TopItemAst) {
+    inout fn lowerExportItem(inner: TopItemAst) -> Result[(), CompileDiagnostic] {
         match inner {
             TopItemAst.Extern(val e) => {
                 val xfB: U64 = self.arena.functionCount()
                 val xsB: U64 = self.arena.structCount()
-                self.lowerExtern(e: e)
+                try self.lowerExtern(e: e)
                 mut val xi: U64 = xfB
                 while xi < self.arena.functionCount() {
                     self.recordExport(nameStart: self.arena.functionAt(index: xi).nameStart, nameLen: self.arena.functionAt(index: xi).nameLen)
@@ -312,7 +316,7 @@ pub impl Comp {
                 val sB: U64 = self.arena.structCount()
                 val eB: U64 = self.arena.enumCount()
                 val fB: U64 = self.arena.functionCount()
-                self.lowerDecl(d: d)
+                try self.lowerDecl(d: d)
                 match d.kind {
                     DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: sB).nameStart, nameLen: self.arena.structAt(index: sB).nameLen, moduleOffset: self.arena.structAt(index: sB).defOffset) }
                     DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: eB).nameStart, nameLen: self.arena.enumAt(index: eB).nameLen, moduleOffset: self.arena.enumAt(index: eB).defOffset) }
@@ -340,36 +344,38 @@ pub impl Comp {
                     self.recordExportFrom(nameStart: self.arena.newtypeAt(index: ntB).nameStart, nameLen: self.arena.newtypeAt(index: ntB).nameLen, moduleOffset: self.arena.newtypeAt(index: ntB).defOffset)
                 }
             }
-            _ => { self.lowerTopItem(item: inner) }
+            _ => { try self.lowerTopItem(item: inner) }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerTopItem(item: TopItemAst) {
+    inout fn lowerTopItem(item: TopItemAst) -> Result[(), CompileDiagnostic] {
         // reset the lowering-time type-parameter scope at every top-level item boundary, so a
         // generic decl's `[T]` can never leak into a sibling (siteOffset stamping in lowerType
         // reads self.cur.typeParams to skip type-parameter heads). Each generic decl-lowering
         // function then sets/restores its own scope around its signature + body.
         self.cur.typeParams = []
         match item {
-            TopItemAst.Decl(val d) => { self.lowerDecl(d: d) }
-            TopItemAst.Impl(val im) => { self.lowerImpl(im: im) }
+            TopItemAst.Decl(val d) => { try self.lowerDecl(d: d) }
+            TopItemAst.Impl(val im) => { try self.lowerImpl(im: im) }
             TopItemAst.Trait(val t) => { self.lowerTrait(t: t) }
-            TopItemAst.Extern(val e) => { self.lowerExtern(e: e) }
+            TopItemAst.Extern(val e) => { try self.lowerExtern(e: e) }
             TopItemAst.Import(val imp) => { self.lowerImport(imp: imp) }
-            TopItemAst.Export(val inner) => { self.lowerExportItem(inner: inner) }
+            TopItemAst.Export(val inner) => { try self.lowerExportItem(inner: inner) }
             TopItemAst.ReExport(val imp) => { self.lowerReExport(imp: imp) }
             TopItemAst.Directive(val dir) => { self.lowerDirective(dir: dir) }
             TopItemAst.GlobalVal(val s) => { self.lowerGlobalVal(s: s) }
             TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxExportItem(item: TopItemId) {
+    inout fn lowerSyntaxExportItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extern => {
                 val funcBefore: U64 = self.arena.functionCount()
                 val structBefore: U64 = self.arena.structCount()
-                self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
                 mut val i: U64 = funcBefore
                 while i < self.arena.functionCount() {
                     self.recordExport(nameStart: self.arena.functionAt(index: i).nameStart, nameLen: self.arena.functionAt(index: i).nameLen)
@@ -386,7 +392,7 @@ pub impl Comp {
                 val structBefore: U64 = self.arena.structCount()
                 val enumBefore: U64 = self.arena.enumCount()
                 val funcBefore: U64 = self.arena.functionCount()
-                self.lowerSyntaxDecl(d: d)
+                try self.lowerSyntaxDecl(d: d)
                 match d.kind {
                     DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: structBefore).nameStart, nameLen: self.arena.structAt(index: structBefore).nameLen, moduleOffset: self.arena.structAt(index: structBefore).defOffset) }
                     DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: enumBefore).nameStart, nameLen: self.arena.enumAt(index: enumBefore).nameLen, moduleOffset: self.arena.enumAt(index: enumBefore).defOffset) }
@@ -408,24 +414,26 @@ pub impl Comp {
                 self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
                 if self.arena.newtypeCount() > before { self.recordExportFrom(nameStart: self.arena.newtypeAt(index: before).nameStart, nameLen: self.arena.newtypeAt(index: before).nameLen, moduleOffset: self.arena.newtypeAt(index: before).defOffset) }
             }
-            _ => { self.lowerSyntaxTopItem(item: item) }
+            _ => { try self.lowerSyntaxTopItem(item: item) }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxTopItem(item: TopItemId) {
+    inout fn lowerSyntaxTopItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         self.cur.typeParams = []
         match syntaxTopItemKind(file: self.syntax, item: item) {
-            SyntaxTopItemKind.Decl => { self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Impl => { self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Decl => { try self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Impl => { try self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Trait => { self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Extern => { self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Export => { self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.Export => { try self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.ReExport => { self.lowerSyntaxReExport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Directive => { self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.GlobalVal => { self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.NewType => { self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) {

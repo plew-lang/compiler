@@ -31,13 +31,13 @@ pub impl Comp {
         return true
     }
 
-    inout fn finalizeNewtypeAdapter(bodyId: U64) {
+    inout fn finalizeNewtypeAdapter(bodyId: U64) -> Result[(), CompileDiagnostic] {
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         val target = self.arena.bodyInstanceAt(index: instance.adapterTargetBodyId - 1U64)
         val signature = self.arena.bodySignature(bodyId: instance.adapterTargetBodyId)
         if !signature.ready {
-            self.errorAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: adapter target signature is not finalized")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: instance.fnIdx).defOffset, msg: "internal error: adapter target signature is not finalized") />
+            return <Result.Ok value=() />
         }
         mut val conversions: Array[ValueConversionProof] = []
         mut val index = 0U64
@@ -47,5 +47,6 @@ pub impl Comp {
         }
         self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: self.selectedReceiverPassing(callee: target.fnIdx), argumentPassings: self.selectedArgumentPassings(callee: target.fnIdx), calleeBodyId: instance.adapterTargetBodyId, generatedSite: <CallSiteKey ownerFnIdx=instance.fnIdx originKind=2U64 originSerial=bodyId />)
         self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: instance.adapterTargetBodyId, callResolutionId: self.finalCalleeCount())
+        return <Result.Ok value=() />
     }
 }

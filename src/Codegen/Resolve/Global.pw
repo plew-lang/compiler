@@ -240,30 +240,31 @@ pub impl Comp {
     // 1=on-stack (a back-edge to it is a cycle), 2=done. Appends i after its deps. Deps
     // are recomputed here (rather than stored in a nested array, which self-host's array
     // codegen does not handle for `Array[Array[U64]]`).
-    inout fn globalDfs(i: U64, state: inout Array[U64], order: inout Array[U64]) {
+    inout fn globalDfs(i: U64, state: inout Array[U64], order: inout Array[U64]) -> Result[(), CompileDiagnostic] {
         if state[i] == 2U64 {
-            return
+            return <Result.Ok value=() />
         }
         if state[i] == 1U64 {
-            self.errorAt(offset: self.arena.globals[i].nameStart, msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.globals[i].nameStart, msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)") />
+            return <Result.Ok value=() />
         }
         state[i] = 1U64
         mut val d: Array[U64] = []
         self.collectGlobalDeps(id: self.globalInitExpr(g: self.arena.globals[i]), into: inout d)
         mut val k: U64 = 0
         while k < d.count() {
-            self.globalDfs(i: d[k], state: inout state, order: inout order)
+            try self.globalDfs(i: d[k], state: inout state, order: inout order)
             k += 1
         }
         state[i] = 2U64
         order.append(i)
+        return <Result.Ok value=() />
     }
 
-    inout fn orderGlobalsByDependency() {
+    inout fn orderGlobalsByDependency() -> Result[(), CompileDiagnostic] {
         val n: U64 = self.arena.globals.count()
         if n <= 1U64 {
-            return
+            return <Result.Ok value=() />
         }
         mut val state: Array[U64] = []
         mut val j: U64 = 0
@@ -274,7 +275,7 @@ pub impl Comp {
         mut val order: Array[U64] = []
         mut val s: U64 = 0
         while s < n {
-            self.globalDfs(i: s, state: inout state, order: inout order)
+            try self.globalDfs(i: s, state: inout state, order: inout order)
             s += 1
         }
         // rebuild self.arena.globals in dependency order (deps before dependents).
@@ -285,6 +286,7 @@ pub impl Comp {
             o += 1
         }
         self.arena.globals = reordered
+        return <Result.Ok value=() />
     }
 
     // Post-load rewrite (spec/05): a named factory call `<Type.name attrs/>` parses as a

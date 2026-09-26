@@ -54,16 +54,17 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
-    inout fn checkDirectiveArgsPublic(d: DeriveReq) {
+    inout fn checkDirectiveArgsPublic(d: DeriveReq) -> Result[(), CompileDiagnostic] {
         mut val ai: U64 = 0
         while ai < d.args.count() {
             val mf: MakeField = d.args[ai]
             val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
-                self.errorAt(offset: mf.nameStart, msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
+                return <Result.Err error=self.diagnosticAt(offset: mf.nameStart, msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)") />
             }
             ai += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn synthGenMain() -> Result[(), CompileDiagnostic] {
@@ -96,7 +97,7 @@ pub impl Comp {
             // The annotation names a source declaration before the trusted
             // harness is synthesized. Apply ordinary import visibility here.
             try self.checkTypeName(siteOffset: d.nameStart, start: d.nameStart, len: d.nameLen)
-            self.checkDirectiveArgsPublic(d: d)
+            try self.checkDirectiveArgsPublic(d: d)
             // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
             // annotated item's own source slice, with its original offset so the macro
             // sees spans in original coordinates. (Synthesized post-checks, so the

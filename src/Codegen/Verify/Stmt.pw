@@ -278,7 +278,7 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 try self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 try self.verifyExpr(id: scrut)
-                self.checkMatchArmsEnum(scrut: scrut, arms: arms)
+                try self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard") />
                 }

@@ -4623,7 +4623,7 @@ pub impl Comp {
         val bodyResult = if f.isAsync { give self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId) } else { give signatureResult }
         self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
         if instance.adapterTargetBodyId != 0U64 {
-            self.finalizeNewtypeAdapter(bodyId: bodyId)
+            try self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { try self.scanBlockInsts(blkId: f.body) }
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
         return <Result.Ok value=() />
@@ -5132,7 +5132,7 @@ pub impl Comp {
             self.retainSelectedGlobals()
             self.globalCallTemplatesClosed = true
         }
-        self.finalizeDestructorCalls()
+        try self.finalizeDestructorCalls()
         try self.verifyFinalCallResolutions()
         try self.freezeFinalAccesses()
         // Do not leak the last scanned generic body's substitution environment
@@ -5986,7 +5986,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
+                    try self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Expression exprId=exprId />, armIndex: ai)
                     try self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -6074,7 +6074,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn scanAddFinalMatchArmBinds(a: MatchArm, matchSource: MatchSource, armIndex: U64) {
+    inout fn scanAddFinalMatchArmBinds(a: MatchArm, matchSource: MatchSource, armIndex: U64) -> Result[(), CompileDiagnostic] {
         mut val bi: U64 = 0
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
@@ -6087,13 +6087,14 @@ pub impl Comp {
             // Do not silently fall back to source spelling and invent a
             // potentially wrong payload type.
             if payloadRef == 0U64 {
-                self.errorAt(offset: bd.nameStart, msg: "internal error: finalized match binding was not recorded")
+                return <Result.Err error=self.diagnosticAt(offset: bd.nameStart, msg: "internal error: finalized match binding was not recorded") />
             } else {
                 val bti: TypeInfo = self.typeInfoOfRef(ref: payloadRef)
                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: payloadRef, isInout: false, isMut: false, owned: false)
             }
             bi += 1
         }
+        return <Result.Ok value=() />
     }
 
     // An executable body's inferred local consumes its initializer's frozen
@@ -6388,7 +6389,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
+                    try self.scanAddFinalMatchArmBinds(a: a, matchSource: <MatchSource.Statement stmtId=stmtId />, armIndex: ai)
                     try self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
