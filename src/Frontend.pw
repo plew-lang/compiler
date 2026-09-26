@@ -1572,13 +1572,11 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     c.buildKwCache()
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
+    c.resolveLexicalModuleNames()
     c.rewriteAssocValReads()
     // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
     // when `name` is a named factory (not an enum variant).
     try c.rewriteFactoryConstruction()
-    // import name aliases (spec/15): rewrite `alias(args)` to the real imported name
-    // for each `with { real as alias }`, before visibility/resolution analysis.
-    c.rewriteImportAliases()
     // Defaults depend on the complete declaration set, not file load order.
     // Custom factories have already consumed their written label sets; only
     // structural memberwise Make nodes remain for default materialization.

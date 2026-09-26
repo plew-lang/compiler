@@ -4,6 +4,7 @@
 // scopes, and expression type recovery. Split across `Resolve/` for readability;
 // all parts share the module scope, so the split is purely organizational.
 
+part ./Resolve/Lexical
 part ./Resolve/Module
 part ./Resolve/Global
 part ./Resolve/TypeRecovery

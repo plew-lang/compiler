@@ -1,0 +1,248 @@
+// Resolve module-qualified value names after lowering, with lexical value
+// scopes available. This pass does not infer types or perform overload lookup.
+pub impl Comp {
+    inout fn lexicalNameBound(names: Array[U64], start: U64, len: U64) -> Bool {
+        val nameId = intern(c: inout self, start: start, len: len)
+        return idInSet(set: names, id: nameId)
+    }
+
+    inout fn namespaceExprModule(id: U64, names: Array[U64]) -> U64 {
+        match self.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                if self.lexicalNameBound(names: names, start: start, len: len) { return 4000000000U64 }
+                match self.moduleBindingAt(nameStart: start, nameLen: len) {
+                    ModuleBinding.Namespace(val moduleId) => { return moduleId }
+                    _ => {}
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val parent = self.namespaceExprModule(id: base, names: names)
+                if parent != 4000000000U64 {
+                    match self.moduleBindingFromSurface(moduleId: parent, nameStart: nameStart, nameLen: nameLen) {
+                        ModuleBinding.Namespace(val moduleId) => { return moduleId }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        return 4000000000U64
+    }
+
+    inout fn resolveLexicalModuleArgs(args: ArgRange, names: inout Array[U64]) {
+        mut val index = 0U64
+        while index < args.len {
+            self.resolveLexicalModuleExpr(id: self.argAt(args: args, index: index).expr, names: inout names)
+            index += 1U64
+        }
+    }
+
+    inout fn resolveLexicalModuleBinds(binds: BindRange, names: inout Array[U64]) {
+        mut val index = 0U64
+        while index < binds.len {
+            val binding = self.bindAt(binds: binds, index: index)
+            if binding.nameLen != 0U64 { names.append(intern(c: inout self, start: binding.nameStart, len: binding.nameLen)) }
+            index += 1U64
+        }
+    }
+
+    inout fn resolveLexicalModuleArms(arms: MatchArmRange, names: inout Array[U64]) {
+        mut val index = 0U64
+        while index < arms.len {
+            val arm = self.matchArmAt(arms: arms, index: index)
+            val mark = names.count()
+            self.resolveLexicalModuleBinds(binds: arm.binds, names: inout names)
+            self.resolveLexicalModuleBlock(blockId: arm.body, names: inout names)
+            names.truncate(count: mark)
+            index += 1U64
+        }
+    }
+
+    inout fn resolveLexicalModuleExpr(id: U64, names: inout Array[U64]) {
+        match self.arena.exprs[id] {
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                val moduleId = self.namespaceExprModule(id: recv, names: names)
+                if moduleId != 4000000000U64 {
+                    self.recordNamespaceUse(name: <Span start=nameStart end=nameStart + nameLen />, moduleId: moduleId)
+                    self.arena.exprs[id] = <Expr.Call nameStart=nameStart nameLen=nameLen args=args />
+                } else { self.resolveLexicalModuleExpr(id: recv, names: inout names) }
+                self.resolveLexicalModuleArgs(args: args, names: inout names)
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                if !self.lexicalNameBound(names: names, start: nameStart, len: nameLen) {
+                    val moduleId = self.moduleOf(offset: nameStart)
+                    val nameId = intern(c: inout self, start: nameStart, len: nameLen)
+                    val index = self.modules.firstImportOriginNamed(moduleId: moduleId, nameId: nameId)
+                    if index < self.modules.importOriginCount() {
+                        val origin = self.modules.importOriginAt(index: index)
+                        if !origin.isNamespace && !spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: origin.sourceStart, bLen: origin.sourceLength) {
+                            self.modules.registerQualifiedUse(<ImportOrigin localStart=origin.sourceStart localLength=origin.sourceLength localModule=moduleId sourceStart=origin.sourceStart sourceLength=origin.sourceLength targetModule=origin.targetModule />)
+                            self.arena.exprs[id] = <Expr.Call nameStart=origin.sourceStart nameLen=origin.sourceLength args=args />
+                        }
+                    }
+                }
+                self.resolveLexicalModuleArgs(args: args, names: inout names)
+            }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
+            Expr.Deref(val base) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
+            Expr.Unary(op: _, val operand) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
+            Expr.Binary(op: _, val lhs, val rhs) => {
+                self.resolveLexicalModuleExpr(id: lhs, names: inout names)
+                self.resolveLexicalModuleExpr(id: rhs, names: inout names)
+            }
+            Expr.Index(val base, val index) => {
+                self.resolveLexicalModuleExpr(id: base, names: inout names)
+                self.resolveLexicalModuleExpr(id: index, names: inout names)
+            }
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
+                self.resolveLexicalModuleExpr(id: recv, names: inout names)
+                self.resolveLexicalModuleArgs(args: args, names: inout names)
+            }
+            Expr.ExtView(val recv, source: _, strip: _) => { self.resolveLexicalModuleExpr(id: recv, names: inout names) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
+            Expr.Move(val operand, isBorrow: _) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
+            Expr.Await(val operand) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }
+            Expr.Try(val expr) => { self.resolveLexicalModuleExpr(id: expr, names: inout names) }
+            Expr.Array(val elems) => {
+                mut val index = 0U64
+                while index < elems.len { self.resolveLexicalModuleExpr(id: self.exprAt(exprs: elems, index: index), names: inout names) index += 1U64 }
+            }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val index = 0U64
+                while index < fields.len { self.resolveLexicalModuleExpr(id: self.makeFieldAt(fields: fields, index: index).value, names: inout names) index += 1U64 }
+            }
+            Expr.OptChain(val base, val cont) => {
+                self.resolveLexicalModuleExpr(id: base, names: inout names)
+                self.resolveLexicalModuleExpr(id: cont, names: inout names)
+            }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                self.resolveLexicalModuleExpr(id: cond, names: inout names)
+                self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)
+                self.resolveLexicalModuleBlock(blockId: elseBlk, names: inout names)
+            }
+            Expr.MatchExpr(val scrut, val arms) => {
+                self.resolveLexicalModuleExpr(id: scrut, names: inout names)
+                self.resolveLexicalModuleArms(arms: arms, names: inout names)
+            }
+            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
+                val mark = names.count()
+                mut val index = 0U64
+                while index < params.count() {
+                    names.append(intern(c: inout self, start: params[index].nameStart, len: params[index].nameLen))
+                    index += 1U64
+                }
+                self.resolveLexicalModuleBlock(blockId: body, names: inout names)
+                names.truncate(count: mark)
+            }
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {}
+            Expr.Ident(start: _, len: _) => {}
+            Expr.Str(start: _, len: _) => {}
+            Expr.ChainHole => {}
+        }
+    }
+
+    inout fn resolveLexicalModuleBlock(blockId: U64, names: inout Array[U64]) {
+        val mark = names.count()
+        mut val index = 0U64
+        while index < self.blockStmtCount(blkId: blockId) {
+            match self.arena.stmts[self.blockStmtAt(blkId: blockId, index: index)] {
+                Stmt.Let(mutable: _, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => {
+                    self.resolveLexicalModuleExpr(id: init, names: inout names)
+                    names.append(intern(c: inout self, start: nameStart, len: nameLen))
+                }
+                Stmt.Assign(val target, val value) => {
+                    self.resolveLexicalModuleExpr(id: target, names: inout names)
+                    self.resolveLexicalModuleExpr(id: value, names: inout names)
+                }
+                Stmt.ExprStmt(val expr) => { self.resolveLexicalModuleExpr(id: expr, names: inout names) }
+                Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { self.resolveLexicalModuleExpr(id: value, names: inout names) } }
+                Stmt.Give(val value) => { self.resolveLexicalModuleExpr(id: value, names: inout names) }
+                Stmt.Panic(val msg, offset: _) => { self.resolveLexicalModuleExpr(id: msg, names: inout names) }
+                Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                    self.resolveLexicalModuleExpr(id: cond, names: inout names)
+                    self.resolveLexicalModuleBlock(blockId: thenBlk, names: inout names)
+                    if hasElse { self.resolveLexicalModuleBlock(blockId: elseBlk, names: inout names) }
+                }
+                Stmt.While(val cond, val body) => {
+                    self.resolveLexicalModuleExpr(id: cond, names: inout names)
+                    self.resolveLexicalModuleBlock(blockId: body, names: inout names)
+                }
+                Stmt.For(val varStart, val varLen, varTyStart: _, varTyLen: _, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
+                    self.resolveLexicalModuleExpr(id: iter, names: inout names)
+                    if isRange { self.resolveLexicalModuleExpr(id: rangeHi, names: inout names) }
+                    val loopMark = names.count()
+                    if isStruct { self.resolveLexicalModuleBinds(binds: binds, names: inout names) }
+                    else { names.append(intern(c: inout self, start: varStart, len: varLen)) }
+                    self.resolveLexicalModuleBlock(blockId: body, names: inout names)
+                    names.truncate(count: loopMark)
+                }
+                Stmt.Match(val scrut, val arms) => {
+                    self.resolveLexicalModuleExpr(id: scrut, names: inout names)
+                    self.resolveLexicalModuleArms(arms: arms, names: inout names)
+                }
+                Stmt.Break(offset: _) => {}
+                Stmt.Continue(offset: _) => {}
+            }
+            index += 1U64
+        }
+        names.truncate(count: mark)
+    }
+
+    inout fn resolveLexicalModuleNames() {
+        mut val active: Set[U64] = Set.new()
+        mut val index = 0U64
+        while index < self.modules.importOriginCount() {
+            val origin = self.modules.importOriginAt(index: index)
+            mut val needed = !spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: origin.sourceStart, bLen: origin.sourceLength)
+            match self.moduleBindingFromOrigin(origin: origin) { ModuleBinding.Namespace(moduleId: _) => { needed = true } _ => {} }
+            if needed { active.insert(origin.localModule) }
+            index += 1U64
+        }
+        mut val names: Array[U64] = []
+        index = 0U64
+        while index < self.arena.functionCount() {
+            val function = self.arena.functionAt(index: index)
+            if !function.isExtern && active.contains(self.funcDeclModule(f: function)) {
+                names.truncate(count: 0U64)
+                mut val parameterIndex = 0U64
+                // Defaults are signatures evaluated in the defining module,
+                // outside the scope of all parameters and the receiver.
+                while parameterIndex < function.params.count() {
+                    val parameter = self.funcParamAt(params: function.params, index: parameterIndex)
+                    if parameter.hasDefault { self.resolveLexicalModuleExpr(id: parameter.defaultExpr, names: inout names) }
+                    parameterIndex += 1U64
+                }
+                parameterIndex = 0U64
+                while parameterIndex < function.params.count() {
+                    val parameter = self.funcParamAt(params: function.params, index: parameterIndex)
+                    names.append(intern(c: inout self, start: parameter.nameStart, len: parameter.nameLen))
+                    parameterIndex += 1U64
+                }
+                self.resolveLexicalModuleBlock(blockId: function.body, names: inout names)
+            }
+            index += 1U64
+        }
+        names.truncate(count: 0U64)
+        index = 0U64
+        while index < self.arena.globals.count() {
+            val global = self.arena.globals[index]
+            if active.contains(self.moduleOf(offset: global.nameStart)) { self.resolveLexicalModuleExpr(id: self.globalInitExpr(g: global), names: inout names) }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.arena.structCount() {
+            val structure = self.arena.structAt(index: index)
+            if active.contains(self.moduleOf(offset: structure.defOffset)) {
+                mut val fieldIndex = 0U64
+                while fieldIndex < structure.fields.count() {
+                    val field = structure.fields[fieldIndex]
+                    if field.hasDefault { self.resolveLexicalModuleExpr(id: field.defaultVal, names: inout names) }
+                    fieldIndex += 1U64
+                }
+            }
+            index += 1U64
+        }
+    }
+}

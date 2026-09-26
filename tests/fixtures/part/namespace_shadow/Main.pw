@@ -2,4 +2,7 @@ import ./Models as models
 import @Std/Io with { print }
 struct Local {}
 impl Local { fn answer() -> I64 { return 99I64 } }
-fn main() { val models = <Local /> print(models.answer()) }
+fn read(models: Local, value: I64 = models.answer()) -> I64 {
+    return models.answer() + value
+}
+fn main() { val models = <Local /> print(models.answer()) print(read(models: models)) }

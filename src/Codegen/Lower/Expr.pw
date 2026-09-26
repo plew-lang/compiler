@@ -163,25 +163,9 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Field base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
-                // Namespace calls keep a written-use origin for the resolver;
-                // they never introduce the member as a flat local import.
-                mut val namespaceModule = 4000000000U64
-                match recv {
-                    ExprAst.Ident(name: _, val span) => { namespaceModule = self.namespaceModuleAt(name: span) }
-                    _ => {}
-                }
-                if namespaceModule != 4000000000U64 {
-                    val a: Array[Arg] = (try self.lowerArgs(args: args, fnName: name))
-                    self.recordNamespaceUse(name: nameSpan, moduleId: namespaceModule)
-                    result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
-                } else {
-                    val r: U64 = (try self.lowerExpr(e: recv))
-                    val a: Array[Arg] = (try self.lowerMethodArgs(args: args, methodName: name))
-                    // the name's SOURCE span, not an interned copy: resolution compares
-                    // byte content (equivalent either way), and diagnostics anchored at
-                    // nameStart (method visibility) need a real file:line.
-                    result = self.pushExpr(e: <Expr.Method recv=r nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
-                }
+                val recvId = (try self.lowerExpr(e: recv))
+                val loweredArgs = (try self.lowerMethodArgs(args: args, methodName: name))
+                result = self.pushExpr(e: <Expr.Method recv=recvId nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: loweredArgs) />)
             }
             ExprAst.ArrowMethod(val recv, val name, val nameSpan, val args, val span) => {
                 // `recv->name(args)`: a pointee method call. Lower the receiver, wrap it in a
@@ -468,21 +452,9 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Field base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
             }
             SyntaxExprKind.Method => {
-                val receiver = syntaxExpr(file: self.syntax, id: e.child0)
-                mut val namespaceModule = 4000000000U64
-                match receiver.kind {
-                    SyntaxExprKind.Ident => { namespaceModule = self.namespaceModuleAt(name: receiver.name) }
-                    _ => {}
-                }
-                if namespaceModule != 4000000000U64 {
-                    val args: Array[Arg] = (try self.lowerSyntaxArgs(expr: e, fnName: e.name))
-                    self.recordNamespaceUse(name: e.name, moduleId: namespaceModule)
-                    result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
-                } else {
-                    val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
-                    val args: Array[Arg] = (try self.lowerSyntaxMethodArgs(expr: e, methodName: e.name))
-                    result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
-                }
+                val recv = (try self.lowerSyntaxExpr(id: e.child0))
+                val args = (try self.lowerSyntaxMethodArgs(expr: e, methodName: e.name))
+                result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.ArrowMethod => {
                 val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))

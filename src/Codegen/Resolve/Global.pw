@@ -353,57 +353,10 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Post-load rewrite (spec/15): a `with { real as alias }` import lets the using
-    // module call `real` under the local name `alias`. Rewrite each free-function call
-    // `alias(args)` whose module imported that alias into a call to `real`, so it rides
-    // the normal name resolution and import-visibility checks. (Function-call uses only;
-    // type/value aliases are additive.)
-    inout fn rewriteImportAliases() {
-        if self.decls.importAliases.count() == 0U64 {
-            return
-        }
-        mut val i: U64 = 0
-        while i < self.arena.exprs.count() {
-            match self.arena.exprs[i] {
-                Expr.Call(val nameStart, val nameLen, val args) => {
-                    // A qualified member belongs to its namespace, not to an
-                    // unrelated local import alias with the same spelling.
-                    if self.modules.qualifiedUseIndex(offset: nameStart) < self.modules.qualifiedUseCount() {
-                        i += 1U64
-                        continue
-                    }
-                    mut val ai: U64 = 0
-                    while ai < self.decls.importAliases.count() {
-                        val al: Bind = self.decls.importAliases[ai]
-                        if spansEqual(c: inout self, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
-                            if self.moduleOf(offset: al.nameStart) == self.moduleOf(offset: nameStart) {
-                                val useModule = self.moduleOf(offset: nameStart)
-                                val nameId = intern(c: inout self, start: al.nameStart, len: al.nameLen)
-                                val originIndex = self.modules.firstImportOriginNamed(moduleId: useModule, nameId: nameId)
-                                if originIndex < self.modules.importOriginCount() {
-                                    val origin = self.modules.importOriginAt(index: originIndex)
-                                    self.modules.registerQualifiedUse(<ImportOrigin localStart=al.fieldStart localLength=al.fieldLen localModule=useModule sourceStart=origin.sourceStart sourceLength=origin.sourceLength targetModule=origin.targetModule />)
-                                }
-                                self.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
-                                ai = self.decls.importAliases.count()
-                            } else {
-                                ai += 1
-                            }
-                        } else {
-                            ai += 1
-                        }
-                    }
-                }
-                _ => {}
-            }
-            i += 1
-        }
-    }
-
     // Resolve a module-local import alias to the real imported name (spec/15:
     // `import M with { Real as Alias }`). A use of `Alias` in a TYPE position (annotation,
     // construction head, assoc-fn receiver) resolves to `Real` for downstream struct/type
-    // lookup — the call-expression alias rewrite (`rewriteImportAliases`) handles value
+    // lookup — the call-expression alias rewrite (the lexical module-name pass) handles value
     // uses, this handles type uses. No-op when there are no aliases or the span does not
     // name a local alias (returns the input span unchanged). The alias is module-scoped:
     // only a use in the same module as the `with` clause resolves.
