@@ -1125,17 +1125,14 @@ pub impl Comp {
     // receiver belongs in SyntheticCallSite provenance rather than in the AST
     // node or a later backend recovery.
     inout fn synthBufferNew(elemRef: U64) -> Result[U64, CompileDiagnostic] {
-        val spelling = self.internBytes(s: "Buffer")
-        val identity = self.typeDeclIdentityInModule(mod: self.modules.coreModule, start: spelling.nameStart, len: spelling.nameLen)
-        val index = self.arena.structIndexByOffset(offset: identity.nameStart)
-        if identity.nameLen == 0U64 || index >= self.arena.structCount() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "missing Core Buffer declaration for dictionary construction") />
-        }
-        val declaration = self.arena.structAt(index: index)
-        val bufN = <Bind nameStart=declaration.nameStart nameLen=declaration.nameLen fieldStart=0U64 fieldLen=0U64 />
+        val bufN = self.internBytes(s: "Buffer")
+        // The Core declaration may lower after this body. Preserve the selected
+        // module now; resolve its declaration through the ordinary binding table
+        // after declaration registration, just like an authored qualified use.
+        self.recordNamespaceUse(name: <Span start=bufN.nameStart end=bufN.nameStart + bufN.nameLen />, moduleId: self.modules.coreModule)
         val newN: Bind = self.internBytes(s: "new")
         val typeArgs: Array[U64] = [elemRef]
-        val receiverTerm: U64 = self.pushType(t: <TypeRef nameStart=bufN.nameStart nameLen=bufN.nameLen hasDecl=true declOffset=identity.nameStart args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        val receiverTerm: U64 = self.pushType(t: <TypeRef nameStart=bufN.nameStart nameLen=bufN.nameLen args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         val recv: U64 = self.pushExpr(e: <Expr.Ident start=bufN.nameStart len=bufN.nameLen />)
         val noArgs: Array[Arg] = []
         val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=self.pushArgs(args: noArgs) />)
