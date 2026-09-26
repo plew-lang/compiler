@@ -872,7 +872,7 @@ pub impl Comp {
                 mut val tyIsArray: Bool = false
                 mut val tyRef: U64 = 0U64
                 if s.flag1 {
-                    val ty: PType = self.lowerSyntaxType(id: s.type0)
+                    val ty: PType = (try self.lowerSyntaxType(id: s.type0))
                     tyStart = ty.start
                     tyLen = ty.len
                     tyIsArray = ty.isArray
@@ -941,7 +941,7 @@ pub impl Comp {
                 mut val tyIsArray: Bool = false
                 mut val tyRef: U64 = 0
                 if hasTy {
-                    val pt: PType = self.lowerType(t: ty)
+                    val pt: PType = (try self.lowerType(t: ty))
                     tyStart = pt.start
                     tyLen = pt.len
                     tyIsArray = pt.isArray
@@ -1017,7 +1017,7 @@ pub impl Comp {
                 mut val vtLen: U64 = 0
                 mut val elementRef: U64 = 0U64
                 if hasVarTy {
-                    val vpt: PType = self.lowerType(t: varTy)
+                    val vpt: PType = (try self.lowerType(t: varTy))
                     vtStart = vpt.start
                     vtLen = vpt.len
                     elementRef = vpt.ref
@@ -1221,7 +1221,7 @@ pub impl Comp {
         mut val varTyLen: U64 = 0U64
         mut val elementRef: U64 = 0U64
         if stmt.flag0 {
-            val ty: PType = self.lowerSyntaxType(id: stmt.type0)
+            val ty: PType = (try self.lowerSyntaxType(id: stmt.type0))
             varTyStart = ty.start
             varTyLen = ty.len
             elementRef = ty.ref

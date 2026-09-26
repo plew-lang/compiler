@@ -219,7 +219,7 @@ pub impl Comp {
                 mut val targs: Array[U64] = []
                 mut val ti: U64 = 0U64
                 while ti < typeArgs.count() {
-                    targs.append(self.lowerType(t: typeArgs[ti]).ref)
+                    targs.append((try self.lowerType(t: typeArgs[ti])).ref)
                     ti += 1U64
                 }
                 val tyRef = self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
@@ -258,7 +258,7 @@ pub impl Comp {
             }
             ExprAst.Cast(val operand, val ty, val span) => {
                 val o: U64 = (try self.lowerExpr(e: operand))
-                val pt: PType = self.lowerType(t: ty)
+                val pt: PType = (try self.lowerType(t: ty))
                 result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
             }
             ExprAst.MatchExpr(val scrut, val arms, val span) => {
@@ -309,7 +309,7 @@ pub impl Comp {
                 mut val rIsArray: Bool = false
                 mut val rTy: U64 = 0
                 if hasRet {
-                    val pt: PType = self.lowerType(t: ret)
+                    val pt: PType = (try self.lowerType(t: ret))
                     rStart = pt.start
                     rLen = pt.len
                     rIsArray = pt.isArray
@@ -505,7 +505,7 @@ pub impl Comp {
                 mut val typeArgs: Array[U64] = []
                 mut val i: U64 = 0U64
                 while i < syntaxExprTypeArgCount(file: self.syntax, expr: e) {
-                    typeArgs.append(self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i)).ref)
+                    typeArgs.append((try self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i))).ref)
                     i += 1U64
                 }
                 val tyRef = self.lowerConstructionType(nameStart: e.name.start, nameLen: e.name.end - e.name.start, args: typeArgs, siteOffset: e.name.start)
@@ -537,7 +537,7 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=0U64 fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Cast => {
-                val ty: PType = self.lowerSyntaxType(id: e.type0)
+                val ty: PType = (try self.lowerSyntaxType(id: e.type0))
                 result = self.pushExpr(e: <Expr.Cast operand=(try self.lowerSyntaxExpr(id: e.child0)) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
             SyntaxExprKind.IfExpr => {
@@ -573,7 +573,7 @@ pub impl Comp {
                 mut val retIsArray: Bool = false
                 mut val retTy: U64 = 0U64
                 if e.flag0 {
-                    val ret: PType = self.lowerSyntaxType(id: e.type0)
+                    val ret: PType = (try self.lowerSyntaxType(id: e.type0))
                     retStart = ret.start
                     retLen = ret.len
                     retIsArray = ret.isArray

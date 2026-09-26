@@ -55,7 +55,7 @@ pub impl Comp {
         return true
     }
 
-    inout fn uniqueProjectionTrait(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> String {
+    inout fn uniqueProjectionTrait(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[String, CompileDiagnostic] {
         val assocN: Bind = self.internBytes(s: t.projectionAssoc)
         mut val found: String = ""
         mut val foundId: U64 = 0
@@ -77,14 +77,13 @@ pub impl Comp {
             i += 1
         }
         if count == 1U64 {
-            return found
+            return <Result.Ok value=found />
         }
         if count == 0U64 {
-            self.errorAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)")
+            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") />
         } else {
-            self.errorAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)")
+            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") />
         }
-        return ""
     }
 
     inout fn boundLhsMatchesSyntaxType(lhs: TypeId, t: SyntaxType) -> Bool {
@@ -105,7 +104,7 @@ pub impl Comp {
     // Resolve a short associated projection without allocating a replacement
     // SyntaxType node.  The immutable raw tree remains source truth; lowering
     // chooses the unique trait source as a local span for this semantic use.
-    inout fn uniqueSyntaxProjectionTrait(t: SyntaxType) -> Span {
+    inout fn uniqueSyntaxProjectionTrait(t: SyntaxType) -> Result[Span, CompileDiagnostic] {
         val assocId: U64 = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
         mut val found: Span = <Span start=0U64 end=0U64 />
         mut val foundId: U64 = 0U64
@@ -127,26 +126,25 @@ pub impl Comp {
             }
             i += 1U64
         }
-        if count == 1U64 { return found }
+        if count == 1U64 { return <Result.Ok value=found />}
         if count == 0U64 {
-            self.errorAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)")
+            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") />
         } else {
-            self.errorAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)")
+            return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") />
         }
-        return <Span start=0U64 end=0U64 />
     }
 
-    inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> TypeAst {
+    inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[TypeAst, CompileDiagnostic] {
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
         while i < t.args.count() {
-            args.append(self.normalizeProjectionType(t: t.args[i], whereTypes: whereTypes, whereTraits: whereTraits))
+            args.append((try self.normalizeProjectionType(t: t.args[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1
         }
         mut val projectionTrait: String = t.projectionTrait
         if t.projectionAssoc.bytes().count() > 0 {
             if projectionTrait.bytes().count() == 0 {
-                projectionTrait = self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits)
+                projectionTrait = (try self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits))
             } else {
                 val traitN: Bind = self.internBytes(s: projectionTrait)
                 // The spelling may be an import alias.  Resolve it at this
@@ -154,12 +152,12 @@ pub impl Comp {
                 // name-id scan would pick an unrelated same-spelled trait.
                 val owner: U64 = self.traitOwnerAtUse(start: traitN.nameStart, len: traitN.nameLen, arity: t.projectionTraitArgs.count())
                 if owner == 0U64 {
-                    self.errorAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments")
+                    return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments") />
                 }
                 mut val pi: U64 = 0U64
                 while pi < t.projectionTraitArgLabels.count() {
                     if t.projectionTraitArgLabels[pi].bytes().count() > 0U64 {
-                        self.errorAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only")
+                        return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only") />
                     }
                     pi += 1U64
                 }
@@ -168,41 +166,41 @@ pub impl Comp {
         mut val projectionTraitArgs: Array[TypeAst] = []
         i = 0U64
         while i < t.projectionTraitArgs.count() {
-            projectionTraitArgs.append(self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits))
+            projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1U64
         }
-        return <TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
+        return <Result.Ok value=<TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
     }
 
-    inout fn normalizeProjectionTypeActive(t: TypeAst) -> TypeAst {
-        return self.normalizeProjectionType(t: t, whereTypes: self.lowerWhereTypes, whereTraits: self.lowerWhereTraits)
+    inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {
+        return <Result.Ok value=(try self.normalizeProjectionType(t: t, whereTypes: self.lowerWhereTypes, whereTraits: self.lowerWhereTraits)) />
     }
 
-    inout fn normalizeParams(params: Array[ParamAst], whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Array[ParamAst] {
+    inout fn normalizeParams(params: Array[ParamAst], whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Result[Array[ParamAst], CompileDiagnostic] {
         mut val out: Array[ParamAst] = []
         mut val i: U64 = 0
         while i < params.count() {
             val p: ParamAst = params[i]
-            out.append(<ParamAst name=p.name ty=self.normalizeProjectionType(t: p.ty, whereTypes: whereTypes, whereTraits: whereTraits) isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=p.hasDefault defaultVal=p.defaultVal span=p.span />)
+            out.append(<ParamAst name=p.name ty=(try self.normalizeProjectionType(t: p.ty, whereTypes: whereTypes, whereTraits: whereTraits)) isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=p.hasDefault defaultVal=p.defaultVal span=p.span />)
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
-    inout fn lowerTypeParamNames(names: Array[String], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
+    inout fn lowerTypeParamNames(names: Array[String], anchor: U64, sendableFlags: Array[Bool] = []) -> Result[Array[Bind], CompileDiagnostic] {
         mut val spans: Array[Bind] = []
         mut val i: U64 = 0
         while i < names.count() {
             spans.append(self.internBytes(s: names[i]))
             i += 1
         }
-        return self.lowerTypeParamBinds(names: spans, anchor: anchor, sendableFlags: sendableFlags)
+        return <Result.Ok value=(try self.lowerTypeParamBinds(names: spans, anchor: anchor, sendableFlags: sendableFlags)) />
     }
 
     // SyntaxFile already owns identifier spellings in the compiler source arena.
     // Preserve those spans instead of rebuilding String names solely to allocate
     // the same semantic generic binders.
-    inout fn lowerTypeParamSpans(spans: Array[Span], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
+    inout fn lowerTypeParamSpans(spans: Array[Span], anchor: U64, sendableFlags: Array[Bool] = []) -> Result[Array[Bind], CompileDiagnostic] {
         mut val names: Array[Bind] = []
         mut val i: U64 = 0U64
         while i < spans.count() {
@@ -210,12 +208,12 @@ pub impl Comp {
             names.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
             i += 1U64
         }
-        return self.lowerTypeParamBinds(names: names, anchor: anchor, sendableFlags: sendableFlags)
+        return <Result.Ok value=(try self.lowerTypeParamBinds(names: names, anchor: anchor, sendableFlags: sendableFlags)) />
     }
 
     // The sole semantic binder sink for both value-AST and SyntaxFile decoders.
     // It assigns lexical ParamIds and enforces distinctness within one bracket list.
-    inout fn lowerTypeParamBinds(names: Array[Bind], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
+    inout fn lowerTypeParamBinds(names: Array[Bind], anchor: U64, sendableFlags: Array[Bool] = []) -> Result[Array[Bind], CompileDiagnostic] {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0U64
         while i < names.count() {
@@ -226,7 +224,7 @@ pub impl Comp {
             mut val k: U64 = 0
             while k < out.count() {
                 if intern(c: inout self, start: out[k].nameStart, len: out[k].nameLen) == bId {
-                    self.errorAt(offset: anchor, msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
+                    return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)") />
                 }
                 k += 1
             }
@@ -239,7 +237,7 @@ pub impl Comp {
             out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=bId paramId=paramId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn lowerFieldDef(f: FieldAst) -> Result[FieldDef, CompileDiagnostic] {
@@ -249,7 +247,7 @@ pub impl Comp {
         mut val tyIsArray: Bool = false
         mut val tyRef: U64 = 0
         if f.ty.name.bytes().count() > 0 || f.ty.isRecord {
-            val pt: PType = self.lowerType(t: f.ty)
+            val pt: PType = (try self.lowerType(t: f.ty))
             tyStart = pt.start
             tyLen = pt.len
             tyIsArray = pt.isArray
@@ -264,7 +262,7 @@ pub impl Comp {
         return <Result.Ok value=<FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis /> />
     }
 
-    inout fn lowerSyntaxDeclTypeParams(d: SyntaxDecl) -> Array[Bind] {
+    inout fn lowerSyntaxDeclTypeParams(d: SyntaxDecl) -> Result[Array[Bind], CompileDiagnostic] {
         mut val names: Array[Span] = []
         mut val flags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -273,11 +271,11 @@ pub impl Comp {
             flags.append(syntaxDeclTypeParamIsSendable(file: self.syntax, decl: d, index: i))
             i += 1U64
         }
-        return self.lowerTypeParamSpans(spans: names, anchor: d.span.start, sendableFlags: flags)
+        return <Result.Ok value=(try self.lowerTypeParamSpans(spans: names, anchor: d.span.start, sendableFlags: flags)) />
     }
 
     inout fn lowerSyntaxFieldDef(f: SyntaxField) -> Result[FieldDef, CompileDiagnostic] {
-        val pt: PType = self.lowerSyntaxType(id: f.ty)
+        val pt: PType = (try self.lowerSyntaxType(id: f.ty))
         mut val defaultVal: U64 = 0U64
         if f.hasDefault { defaultVal = (try self.lowerSyntaxExprWithCtx(id: f.defaultVal, ctxRef: pt.ref)) }
         return <Result.Ok value=<FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis /> />
@@ -297,7 +295,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxStructDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
         mut val fields: Array[FieldDef] = []
@@ -320,7 +318,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
         mut val variants: Array[Variant] = []
@@ -347,7 +345,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < syntaxDeclParamCount(file: self.syntax, decl: d) {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxDeclParam(file: self.syntax, decl: d, index: i))
-            val ty: PType = self.lowerSyntaxType(id: p.ty)
+            val ty: PType = (try self.lowerSyntaxType(id: p.ty))
             mut val defaultExpr: U64 = 0U64
             if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
@@ -358,7 +356,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
         val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
@@ -379,7 +377,7 @@ pub impl Comp {
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0U64
         if d.hasRet {
-            val pt: PType = self.lowerSyntaxType(id: d.ret)
+            val pt: PType = (try self.lowerSyntaxType(id: d.ret))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -390,7 +388,7 @@ pub impl Comp {
         val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=d.name.start />))
-        self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
+        try self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
         self.lowerWhereSyntaxTraits = savedWTr
@@ -400,7 +398,7 @@ pub impl Comp {
 
     inout fn lowerStructDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: d.name)
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
+        val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable))
         // field types may reference `[T]` — make them the lowering-time scope so lowerType
         // marks type-parameter heads as skip (siteOffset 0). Restored at function end.
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -430,7 +428,7 @@ pub impl Comp {
 
     inout fn lowerEnumDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: d.name)
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
+        val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable))
         // variant payload types may reference `[T]` — see lowerStructDecl.
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
@@ -457,7 +455,7 @@ pub impl Comp {
     inout fn lowerFuncDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = d.nameSpan.start
         val nameLen: U64 = d.nameSpan.end - d.nameSpan.start
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: nameStart, sendableFlags: d.typeParamSendable)
+        val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: d.typeParams, anchor: nameStart, sendableFlags: d.typeParamSendable))
         // param / return / body-local types may reference `[T]` — make them the lowering-time
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -466,14 +464,14 @@ pub impl Comp {
         self.cur.typeParams = typeParams
         self.lowerWhereTypes = d.whereTypes
         self.lowerWhereTraits = d.whereTraits
-        val normParams: Array[ParamAst] = self.normalizeParams(params: d.params, whereTypes: d.whereTypes, whereTraits: d.whereTraits)
+        val normParams: Array[ParamAst] = (try self.normalizeParams(params: d.params, whereTypes: d.whereTypes, whereTraits: d.whereTraits))
         val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if d.hasRet {
-            val pt: PType = self.lowerType(t: self.normalizeProjectionType(t: d.ret, whereTypes: d.whereTypes, whereTraits: d.whereTraits))
+            val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: d.ret, whereTypes: d.whereTypes, whereTraits: d.whereTraits))))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -489,7 +487,7 @@ pub impl Comp {
         // lowered the parameters, return type, and body remains installed.
         // Restoring first loses T's ParamId and turns an unrelated global name
         // such as a user-written trait `T` into a false type-visibility error.
-        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
+        try self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraits = savedWTr
@@ -499,14 +497,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) {
+    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < params.count() {
             val pn: Bind = self.internBytes(s: params[i])
             val tn: Bind = self.internBytes(s: traits[i])
             mut val pty: U64 = 0
             if i < types.count() {
-                pty = self.lowerType(t: self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)).ref
+                pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref
             } else {
                 pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen)
             }
@@ -516,7 +514,7 @@ pub impl Comp {
             if i < traitTypes.count() {
                 mut val ai: U64 = 0U64
                 while ai < traitTypes[i].args.count() {
-                    val boundRef: U64 = self.lowerType(t: self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)).ref
+                    val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)))).ref
                     mut val label: U64 = 0U64
                     if ai < traitTypes[i].argLabels.count() && traitTypes[i].argLabels[ai].bytes().count() > 0U64 {
                         val labelBind: Bind = self.internBytes(s: traitTypes[i].argLabels[ai])
@@ -578,28 +576,30 @@ pub impl Comp {
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn appendSyntaxFuncBounds(fnIdx: U64, decl: SyntaxDecl) {
+    inout fn appendSyntaxFuncBounds(fnIdx: U64, decl: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < syntaxDeclWhereCount(file: self.syntax, decl: decl) {
-            self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxDeclWhereParamSpan(file: self.syntax, decl: decl, index: i), trait: syntaxDeclWhereTraitSpan(file: self.syntax, decl: decl, index: i), ty: syntaxDeclWhereType(file: self.syntax, decl: decl, index: i), traitTy: syntaxDeclWhereTraitType(file: self.syntax, decl: decl, index: i))
+            try self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxDeclWhereParamSpan(file: self.syntax, decl: decl, index: i), trait: syntaxDeclWhereTraitSpan(file: self.syntax, decl: decl, index: i), ty: syntaxDeclWhereType(file: self.syntax, decl: decl, index: i), traitTy: syntaxDeclWhereTraitType(file: self.syntax, decl: decl, index: i))
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // One semantic sink for every SyntaxFile where-clause owner.  Declaration,
     // impl and member readers differ only in how they enumerate their typed
     // pools; trait identity and associated-predicate construction live here.
-    inout fn appendSyntaxBound(fnIdx: U64, param: Span, trait: Span, ty: TypeId, traitTy: TypeId) {
-        val pty: U64 = self.lowerSyntaxType(id: ty).ref
+    inout fn appendSyntaxBound(fnIdx: U64, param: Span, trait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {
+        val pty: U64 = (try self.lowerSyntaxType(id: ty)).ref
         val traitType: SyntaxType = syntaxType(file: self.syntax, id: traitTy)
         mut val args: Array[U64] = []
         mut val assocNames: Array[U64] = []
         mut val assocValues: Array[U64] = []
         mut val ai: U64 = 0U64
         while ai < syntaxTypeArgCount(file: self.syntax, ty: traitType) {
-            val arg: U64 = self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai)).ref
+            val arg: U64 = (try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai))).ref
             val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: ai)
             if label.end > label.start {
                 assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
@@ -618,5 +618,6 @@ pub impl Comp {
             ai += 1U64
         }
         self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />)
+        return <Result.Ok value=() />
     }
 }

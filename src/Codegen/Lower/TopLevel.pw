@@ -51,7 +51,7 @@ pub impl Comp {
                 if si < e.structTypeParamSendable.count() {
                     sendableFlags = e.structTypeParamSendable[si]
                 }
-                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si], anchor: defOff, sendableFlags: sendableFlags)
+                externTP = (try self.lowerTypeParamNames(names: e.structTypeParams[si], anchor: defOff, sendableFlags: sendableFlags))
             }
             val noFields: Array[FieldDef] = []
             // `String` is the one intrinsic that is really a value-semantics struct over a
@@ -102,7 +102,7 @@ pub impl Comp {
                     pi += 1U64
                 }
             }
-            (try self.registerDeclaredFunc(f: self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC)))
+            (try self.registerDeclaredFunc(f: (try self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC))))
             i += 1U64
         }
         i = 0U64
@@ -117,7 +117,7 @@ pub impl Comp {
                 paramFlags.append(syntaxExternStructTypeParamIsSendable(file: self.syntax, ext: ext, structIndex: i, index: pi))
                 pi += 1U64
             }
-            val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: paramSpans, anchor: defSpan.start, sendableFlags: paramFlags)
+            val typeParams: Array[Bind] = (try self.lowerTypeParamSpans(spans: paramSpans, anchor: defSpan.start, sendableFlags: paramFlags))
             val noFields: Array[FieldDef] = []
             mut val fields: Array[FieldDef] = noFields
             mut val isExtern: Bool = true
@@ -341,7 +341,7 @@ pub impl Comp {
                 // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
                 // then record its name as exported so other modules can import it.
                 val ntB: U64 = self.arena.newtypeCount()
-                self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
+                try self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
                 if self.arena.newtypeCount() > ntB {
                     self.recordExportFrom(nameStart: self.arena.newtypeAt(index: ntB).nameStart, nameLen: self.arena.newtypeAt(index: ntB).nameLen, moduleOffset: self.arena.newtypeAt(index: ntB).defOffset)
                 }
@@ -367,7 +367,7 @@ pub impl Comp {
             TopItemAst.ReExport(val imp) => { self.lowerReExport(imp: imp) }
             TopItemAst.Directive(val dir) => { try self.lowerDirective(dir: dir) }
             TopItemAst.GlobalVal(val s) => { try self.lowerGlobalVal(s: s) }
-            TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
+            TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { try self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
         }
         return <Result.Ok value=() />
     }
@@ -403,7 +403,7 @@ pub impl Comp {
             }
             SyntaxTopItemKind.Trait => {
                 val before: U64 = self.decls.traitCount()
-                self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
                 self.recordExport(nameStart: self.decls.traitAt(index: before).nameStart, nameLen: self.decls.traitAt(index: before).nameLen)
             }
             SyntaxTopItemKind.GlobalVal => {
@@ -413,7 +413,7 @@ pub impl Comp {
             }
             SyntaxTopItemKind.NewType => {
                 val before: U64 = self.arena.newtypeCount()
-                self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
                 if self.arena.newtypeCount() > before { self.recordExportFrom(nameStart: self.arena.newtypeAt(index: before).nameStart, nameLen: self.arena.newtypeAt(index: before).nameLen, moduleOffset: self.arena.newtypeAt(index: before).defOffset) }
             }
             _ => { try self.lowerSyntaxTopItem(item: item) }
@@ -426,30 +426,32 @@ pub impl Comp {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Decl => { try self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Impl => { try self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Trait => { self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Export => { try self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.ReExport => { self.lowerSyntaxReExport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.GlobalVal => { try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
-            SyntaxTopItemKind.NewType => { self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.NewType => { try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
         }
         return <Result.Ok value=() />
     }
 
-    inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) {
+    inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) -> Result[(), CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: name)
-        val under: PType = self.lowerType(t: ty)
+        val under: PType = (try self.lowerType(t: ty))
         self.appendLoweredNewtype(name: nm, under: under, defOffset: defOffset)
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxNewtype(id: NewtypeId) {
+    inout fn lowerSyntaxNewtype(id: NewtypeId) -> Result[(), CompileDiagnostic] {
         val item: SyntaxNewtype = syntaxNewtype(file: self.syntax, id: id)
         val nameLen: U64 = item.name.end - item.name.start
         val name: Bind = <Bind nameStart=item.name.start nameLen=nameLen fieldStart=item.name.start fieldLen=nameLen />
-        val under: PType = self.lowerSyntaxType(id: item.ty)
+        val under: PType = (try self.lowerSyntaxType(id: item.ty))
         self.appendLoweredNewtype(name: name, under: under, defOffset: item.span.start)
+        return <Result.Ok value=() />
     }
 
     // Both source decoders converge here.  The semantic mutation is deliberately

@@ -355,18 +355,18 @@ pub impl Comp {
         return nm
     }
 
-    inout fn lowerType(t: TypeAst) -> PType {
-        return self.lowerTypeCore(t: self.normalizeProjectionTypeActive(t: t))
+    inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
+        return <Result.Ok value=(try self.lowerTypeCore(t: (try self.normalizeProjectionTypeActive(t: t)))) />
     }
 
-    inout fn lowerTypeCore(t: TypeAst) -> PType {
+    inout fn lowerTypeCore(t: TypeAst) -> Result[PType, CompileDiagnostic] {
         // a labelled anonymous record type `(x: I32, y: I32)` (spec/02): lower to its
         // synthetic structural struct and return a PType naming it.
         if t.isRecord {
             mut val fieldTys: Array[PType] = []
             mut val fi: U64 = 0
             while fi < t.args.count() {
-                fieldTys.append(self.lowerType(t: t.args[fi]))
+                fieldTys.append((try self.lowerType(t: t.args[fi])))
                 fi += 1
             }
             val rnm: Bind = self.ensureRecordStruct(fieldNames: t.argLabels, fieldTys: fieldTys)
@@ -377,14 +377,14 @@ pub impl Comp {
                 ti += 1U64
             }
             val rref: U64 = self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms)
-            return <PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref />
+            return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref /> />
         }
         val nm: Bind = self.internBytes(s: t.name)
         mut val args: Array[U64] = []
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0
         while i < t.args.count() {
-            val ap: PType = self.lowerType(t: t.args[i])
+            val ap: PType = (try self.lowerType(t: t.args[i]))
             argPtys.append(ap)
             args.append(ap.ref)
             i += 1
@@ -447,7 +447,7 @@ pub impl Comp {
         mut val assocTraitArgLabels: Array[U64] = []
         mut val ati: U64 = 0U64
         while ati < t.projectionTraitArgs.count() {
-            assocTraitArgs.append(self.lowerType(t: t.projectionTraitArgs[ati]).ref)
+            assocTraitArgs.append((try self.lowerType(t: t.projectionTraitArgs[ati])).ref)
             if ati < t.projectionTraitArgLabels.count() && t.projectionTraitArgLabels[ati].bytes().count() > 0U64 {
                 val label: Bind = self.internBytes(s: t.projectionTraitArgLabels[ati])
                 assocTraitArgLabels.append(intern(c: inout self, start: label.nameStart, len: label.nameLen))
@@ -502,7 +502,7 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed />
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed /> />
             }
         }
         mut val projectionReceiver: U64 = 0
@@ -522,7 +522,7 @@ pub impl Comp {
                 self.recordArrayElem(ty: result)
             }
         }
-        return result
+        return <Result.Ok value=result />
     }
 
     // SyntaxFile path for type lowering. It has the same semantic output as
@@ -530,7 +530,7 @@ pub impl Comp {
     // spellings directly from the compiler source arena. In particular, short
     // associated projections resolve to a local trait span rather than cloning
     // a normalized TypeAst.
-    inout fn lowerSyntaxType(id: TypeId) -> PType {
+    inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
         val t: SyntaxType = syntaxType(file: self.syntax, id: id)
         if t.isRecord {
             mut val fieldNames: Array[Span] = []
@@ -538,7 +538,7 @@ pub impl Comp {
             mut val fi: U64 = 0U64
             while fi < syntaxTypeArgCount(file: self.syntax, ty: t) {
                 fieldNames.append(syntaxTypeArgLabel(file: self.syntax, ty: t, index: fi))
-                fieldTys.append(self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: fi)))
+                fieldTys.append((try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: fi))))
                 fi += 1U64
             }
             val recordName: Bind = self.ensureRecordStructSpans(fieldNames: fieldNames, fieldTys: fieldTys)
@@ -549,7 +549,7 @@ pub impl Comp {
                 ti += 1U64
             }
             val recordRef: U64 = self.recordTypeTermSpans(name: recordName, fieldNames: fieldNames, fieldTerms: fieldTerms)
-            return <PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef />
+            return <Result.Ok value=<PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef /> />
         }
 
         val nameLen: U64 = t.name.end - t.name.start
@@ -558,7 +558,7 @@ pub impl Comp {
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0U64
         while i < syntaxTypeArgCount(file: self.syntax, ty: t) {
-            val arg: PType = self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: i))
+            val arg: PType = (try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: i)))
             argPtys.append(arg)
             args.append(arg.ref)
             i += 1U64
@@ -595,17 +595,17 @@ pub impl Comp {
         mut val projectionTrait: Span = t.projectionTrait
         if t.projectionAssoc.end > t.projectionAssoc.start {
             if projectionTrait.end == projectionTrait.start {
-                projectionTrait = self.uniqueSyntaxProjectionTrait(t: t)
+                projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
             } else {
                 val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
                 if owner == 0U64 {
-                    self.errorAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments")
+                    return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments") />
                 }
                 mut val pi: U64 = 0U64
                 while pi < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
                     val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: pi)
                     if label.end > label.start {
-                        self.errorAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only")
+                        return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only") />
                     }
                     pi += 1U64
                 }
@@ -630,7 +630,7 @@ pub impl Comp {
         mut val assocTraitArgLabels: Array[U64] = []
         mut val ati: U64 = 0U64
         while ati < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
-            assocTraitArgs.append(self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: ati)).ref)
+            assocTraitArgs.append((try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: ati))).ref)
             val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: ati)
             if label.end > label.start {
                 assocTraitArgLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start))
@@ -669,7 +669,7 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed />
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed /> />
             }
         }
         mut val projectionReceiver: U64 = 0
@@ -689,7 +689,7 @@ pub impl Comp {
                 self.recordArrayElem(ty: result)
             }
         }
-        return result
+        return <Result.Ok value=result />
     }
 
     // Lower a call/construction argument list.

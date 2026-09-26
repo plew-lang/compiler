@@ -13,7 +13,7 @@ pub impl Comp {
             // a record type has an empty `name` (its fields ride in args/argLabels), so gate
             // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
             if p.ty.name.bytes().count() > 0 || p.ty.isRecord {
-                ty = self.lowerType(t: p.ty)
+                ty = (try self.lowerType(t: p.ty))
                 hasType = true
             }
             // a default argument `name: T = expr` (spec/04). Closures never carry one
@@ -42,7 +42,7 @@ pub impl Comp {
             mut val ty: PType = <PType start=0U64 len=0U64 isArray=false ref=0U64 />
             val syntaxTy: SyntaxType = syntaxType(file: self.syntax, id: p.ty)
             if syntaxTy.name.end > syntaxTy.name.start || syntaxTy.isRecord {
-                ty = self.lowerSyntaxType(id: p.ty)
+                ty = (try self.lowerSyntaxType(id: p.ty))
                 hasType = true
             }
             mut val hasDefault: Bool = false
