@@ -276,14 +276,10 @@ pub impl Comp {
         mut val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         // a newtype inherits the underlying struct's fields (spec/10): resolve to the
         // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
-        mut val ntI: U64 = 0
-        while ntI < self.arena.newtypeCount() {
-            if self.arena.newtypeAt(index: ntI).nameId == qStruct {
-                qStruct = intern(c: inout self, start: self.arena.newtypeAt(index: ntI).underStart, len: self.arena.newtypeAt(index: ntI).underLen)
-                ntI = self.arena.newtypeCount()
-            } else {
-                ntI += 1
-            }
+        val underlying = self.newtypeUnderRef(start: structStart, len: structLen)
+        if underlying != 0U64 {
+            val type = self.arena.typeAt(index: underlying)
+            qStruct = type.nameId
         }
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)

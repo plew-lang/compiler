@@ -555,12 +555,10 @@ pub impl Comp {
             i += 1U64
         }
         // a newtype inherits the underlying type's extensions (spec/10).
-        mut val ni: U64 = 0
-        while ni < self.arena.newtypeCount() {
-            if self.arena.newtypeAt(index: ni).nameId == qType {
-                return <Result.Ok value=(try self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen)) />
-            }
-            ni += 1
+        val underlying = self.newtypeUnderRef(start: typeStart, len: typeLen)
+        if underlying != 0U64 {
+            val type = self.arena.typeAt(index: underlying)
+            return <Result.Ok value=(try self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: type.nameStart, typeLen: type.nameLen)) />
         }
         return <Result.Ok value=false />
     }

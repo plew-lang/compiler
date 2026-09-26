@@ -351,35 +351,20 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.arena.newtypeCount() {
             val nt: NewtypeDef = self.arena.newtypeAt(index: i)
-            mut val curStart: U64 = nt.underStart
-            mut val curLen: U64 = nt.underLen
-            mut val hops: U64 = 0
-            mut val chasing: Bool = true
-            while chasing {
-                // step by "is the current name itself a newtype?" — NOT by span progress:
-                // a direct self-cycle (`newtype A = A`) resolves to the same span and a
-                // progress test would wrongly conclude "done".
-                val qid: U64 = intern(c: inout self, start: curStart, len: curLen)
-                mut val found: Bool = false
-                mut val j: U64 = 0
-                while j < self.arena.newtypeCount() {
-                    if self.arena.newtypeAt(index: j).nameId == qid {
-                        curStart = self.arena.newtypeAt(index: j).underStart
-                        curLen = self.arena.newtypeAt(index: j).underLen
-                        found = true
-                        j = self.arena.newtypeCount()
-                    } else {
-                        j += 1
-                    }
+            mut val current = nt.underRef
+            mut val hops: U64 = 0U64
+            while current != 0U64 {
+                val type = self.arena.typeAt(index: current)
+                // Declaration checks run after registration. Resolve the
+                // authored span here as forward references may have been
+                // lowered before their target declaration was registered.
+                val next = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
+                if next == 0U64 { break }
+                hops += 1U64
+                if hops > self.arena.newtypeCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: nt.defOffset, msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)") />
                 }
-                if found {
-                    hops += 1
-                    if hops > self.arena.newtypeCount() {
-                        return <Result.Err error=self.diagnosticAt(offset: nt.defOffset, msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)") />
-                    }
-                } else {
-                    chasing = false
-                }
+                current = next
             }
             i += 1
         }

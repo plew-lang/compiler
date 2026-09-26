@@ -1109,12 +1109,10 @@ pub impl Comp {
         // a `newtype` inherits the underlying type's trait conformances automatically
         // (spec/10), so `UserId = String` satisfies `where T: Format` because String
         // does — `print(u)` type-checks and dispatches to the underlying's witness.
-        mut val ni: U64 = 0
-        while ni < self.arena.newtypeCount() {
-            if self.arena.newtypeAt(index: ni).nameId == qType {
-                return self.typeConformsTo(typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen, traitStart: traitStart, traitLen: traitLen)
-            }
-            ni += 1
+        val underlying = self.newtypeUnderRef(start: typeStart, len: typeLen)
+        if underlying != 0U64 {
+            val type = self.arena.typeAt(index: underlying)
+            return self.typeConformsTo(typeStart: type.nameStart, typeLen: type.nameLen, traitStart: traitStart, traitLen: traitLen)
         }
         return false
     }
