@@ -349,12 +349,13 @@ pub impl Comp {
     // Resolve the lexical closure target while Record owns the source scope.
     // `bindingDeclStart` is the lowered declaration identity, so the final
     // descriptor cannot accidentally select a same-spelled shadow later.
-    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val localIndex: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-        if localIndex >= self.cur.locals.count() { return }
+        if localIndex >= self.cur.locals.count() { return <Result.Ok value=() /> }
         val local: Local = self.cur.locals[localIndex]
-        if !(self.isFnType(ref: local.ty)) { return }
-        self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
+        if !(self.isFnType(ref: local.ty)) { return <Result.Ok value=() /> }
+        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
+        return <Result.Ok value=() />
     }
 
     // An `any` type has an already-resolved declaration identity in TypeRef.
@@ -392,7 +393,7 @@ pub impl Comp {
     // existential has no static Func callee.  Record its selected target while
     // the parametric receiver and source selector are both available; the
     // function TypeTerm is grounded only when the shared body is instantiated.
-    inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if self.traceCodegen {
             eprint(text: "[trace-codegen] record dynamic-method body=")
             eprintU64(n: self.cur.checkFn)
@@ -411,19 +412,19 @@ pub impl Comp {
             }
             eprint(text: "\n")
         }
-        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return }
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val receiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: receiverExpr)
         val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
             val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
-                self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
+                try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
             }
-            return
+            return <Result.Ok value=() />
         }
         val structIndex: U64 = self.structDefByNameAny(start: recvTy.nameStart, len: recvTy.nameLen)
-        if structIndex >= self.arena.structCount() { return }
+        if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val fields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
         mut val fieldIndex: U64 = 0U64
@@ -431,15 +432,16 @@ pub impl Comp {
             if fields[fieldIndex].nameId == fieldName { break }
             fieldIndex += 1U64
         }
-        if fieldIndex >= fields.count() { return }
+        if fieldIndex >= fields.count() { return <Result.Ok value=() /> }
         val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
         // A generic field such as `p: P` can be called only after P grounds
         // to a function type in its BodyInstance.  Call syntax has already
         // been validated by the frontend; preserve the symbolic field term
         // here and let the dynamic finalizer enforce the concrete fn shape.
         if fieldTerm != 0U64 {
-            self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />)
+            try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />)
         }
+        return <Result.Ok value=() />
     }
 
     // A method whose concrete declaration is unavailable during the
@@ -448,23 +450,23 @@ pub impl Comp {
     // generic bound.  Both ordinary and source-qualified (`#…`) method syntax
     // reach this one finalization point so they cannot diverge by silently
     // treating a view-qualified static call as a closure-field call.
-    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
         match staticResolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
                 self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.staticRequirementResultType(resolution: staticResolution))
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
                 self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
             }
             _ => {
-                self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                try self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 // All declaration-time candidate families have been queried.
                 // Do not defer an invalid written call to Mono's invariant check.
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && self.syntheticRequiredTraitOwner(exprId: exprId) == 0U64 {
@@ -479,14 +481,15 @@ pub impl Comp {
                     }
                     if !selected {
                         if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeAt(index: receiverTerm).isAny {
-                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
                         } else {
-                            self.errorAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
                         }
                     }
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) {
@@ -654,9 +657,9 @@ pub impl Comp {
     // context. This applies to a nonempty literal too: `[1, 2]` passed where
     // Array[I32] is required must retain Array[I32], rather than freezing the
     // temporary default I64 shape inferred from its unsuffixed elements.
-    inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) {
+    inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) -> Result[(), CompileDiagnostic] {
         if ctxRef == 0U64 || exprId >= self.arena.semanticExprTypes.count() {
-            return
+            return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
             Expr.Array(elems: val elems) => {
@@ -666,7 +669,7 @@ pub impl Comp {
                     if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
                         mut val i: U64 = 0U64
                         while i < elems.len {
-                            self.recordSemanticExprExpectedResult(exprId: self.exprAt(exprs: elems, index: i), expectedTerm: array.args[0U64])
+                            try self.recordSemanticExprExpectedResult(exprId: self.exprAt(exprs: elems, index: i), expectedTerm: array.args[0U64])
                             i += 1U64
                         }
                     }
@@ -675,6 +678,7 @@ pub impl Comp {
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     // `Record` is the last phase allowed to turn a construction's authored
@@ -1091,7 +1095,7 @@ pub impl Comp {
     // Argument access provenance is independent of free/method call syntax.
     // The selected declaration owns the parameter mapping and write mode;
     // unresolved modes remain explicit until finalization.
-    inout fn recordArgumentAccessUses(parentExpr: U64, callee: U64, args: ArgRange) {
+    inout fn recordArgumentAccessUses(parentExpr: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         mut val accessArg: U64 = 0U64
         while accessArg < args.len {
             val arg: Arg = self.argAt(args: args, index: accessArg)
@@ -1119,11 +1123,12 @@ pub impl Comp {
                 // Mono may then close the frozen setter call without
                 // reopening the authored Index expression.
                 if accessWrite {
-                    self.recordAccessWriteFacet(readExpr: arg.expr)
+                    try self.recordAccessWriteFacet(readExpr: arg.expr)
                 }
             }
             accessArg += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // Record the detached IndexSet facet under exactly the same lexical
@@ -1132,15 +1137,16 @@ pub impl Comp {
     // will later replace that value with a materialized mutable temporary.
     // The guard prevents `write(value: read())` from recursively re-entering
     // this routine while it records its anchor child.
-    inout fn recordAccessWriteFacet(readExpr: U64) {
-        if self.cur.recordingAccessWriteFacet { return }
+    inout fn recordAccessWriteFacet(readExpr: U64) -> Result[(), CompileDiagnostic] {
+        if self.cur.recordingAccessWriteFacet { return <Result.Ok value=() /> }
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
-        if candidateIndex >= self.decls.accessCandidateCount() { return }
+        if candidateIndex >= self.decls.accessCandidateCount() { return <Result.Ok value=() /> }
         val writeExpr: U64 = self.decls.accessCandidateAt(index: candidateIndex).writeExpr
-        if writeExpr >= self.arena.exprs.count() { return }
+        if writeExpr >= self.arena.exprs.count() { return <Result.Ok value=() /> }
         self.cur.recordingAccessWriteFacet = true
-        self.recordExpr(exprId: writeExpr)
+        try self.recordExpr(exprId: writeExpr)
         self.cur.recordingAccessWriteFacet = false
+        return <Result.Ok value=() />
     }
 
     // Declaration layout selection is separate from the value's lexical type.
@@ -1190,7 +1196,7 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         // Recording owns its destination slot. Parent expressions can be
         // newer than every child; type publication must not depend on an
         // unrelated expression having already extended this table.
@@ -1255,12 +1261,12 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
+            Expr.Unary(op: _, val operand) => { try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
             Expr.Binary(val op, val lhs, val rhs) => {
-                self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
-                self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
                 if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                    val contextual = self.recordFloatingOperandContext(lhs: lhs, rhs: rhs)
+                    val contextual = (try self.recordFloatingOperandContext(lhs: lhs, rhs: rhs))
                     if contextual && isBinTraitOp(op: op) {
                         val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
                         val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
@@ -1271,7 +1277,7 @@ pub impl Comp {
             Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 // `pow(base:, exp:)` has free-call syntax but is a static
@@ -1289,18 +1295,18 @@ pub impl Comp {
                         match resolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                                 self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.staticRequirementResultType(resolution: resolution))
-                                return
+                                return <Result.Ok value=() />
                             }
                             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
                                 self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
-                                return
+                                return <Result.Ok value=() />
                             }
                             _ => {}
                         }
                         cfi = self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId))
                         if cfi < self.arena.functionCount() {
                             self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
-                            return
+                            return <Result.Ok value=() />
                         }
                     }
                 }
@@ -1336,8 +1342,8 @@ pub impl Comp {
                                 self.cur.typeArgs = savedA
                             }
                             if cctx != 0U64 && self.tyRefIsGround(ref: cctx) {
-                                self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
-                                self.recordArrayLitCtx(exprId: self.argAt(args: args, index: k).expr, ctxRef: cctx)
+                                try self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
+                                try self.recordArrayLitCtx(exprId: self.argAt(args: args, index: k).expr, ctxRef: cctx)
                             }
                         }
                         k += 1
@@ -1354,15 +1360,15 @@ pub impl Comp {
                     // in SemanticAggregate).
                     self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                 } else {
-                    self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
+                    try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
                 }
-                self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
+                try self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.methodReceiverTerm(exprId: recv))
@@ -1445,10 +1451,10 @@ pub impl Comp {
                             if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
                                 val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
                                 val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
-                                self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
-                                self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
-                                self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
-                                self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
+                                try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
+                                try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
+                                try self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
+                                try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
                             }
                         }
                         mk += 1U64
@@ -1456,7 +1462,7 @@ pub impl Comp {
                 }
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: self.directReceiverTemplateForExpr(exprId: recv), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
-                    self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
                     // Record publishes under the lexical checking declaration.
@@ -1472,7 +1478,7 @@ pub impl Comp {
                         }
                     }
                     if !selected {
-                        self.errorAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "subscript requires an Index implementation for reading or an IndexSet implementation for writing") />
                     }
                 }
                 // A synthetic index read used as this receiver is an access
@@ -1489,15 +1495,15 @@ pub impl Comp {
                 // to work for non-nested paths where another walk recorded
                 // the facet; nested indexes require this exact candidate
                 // identity to close every write dependency.
-                self.recordAccessWriteFacet(readExpr: recv)
-                self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
+                try self.recordAccessWriteFacet(readExpr: recv)
+                try self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
 
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
-                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 mut val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
@@ -1521,18 +1527,18 @@ pub impl Comp {
                 }
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
-                    self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
                 if methodCallee < self.arena.functionCount() {
                     self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)
                 } else {
                     self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: false, write: false)
                 }
-                self.recordAccessWriteFacet(readExpr: recv)
-                self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
+                try self.recordAccessWriteFacet(readExpr: recv)
+                try self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
             }
             Expr.ExtView(val recv, val source, val strip) => {
-                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 // A view is a type-level facet of an existing value, not a
                 // method-resolution query.  Preserve the receiver's exact
                 // TypeTerm and apply the resolved source set once, matching
@@ -1559,7 +1565,7 @@ pub impl Comp {
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 // Field selection is a structural type-term operation. Once the
                 // receiver has been recorded, derive the exact field term here
                 // rather than forcing every BodyInstance to re-walk Field in
@@ -1588,7 +1594,7 @@ pub impl Comp {
                         }
                     }
                     if !self.recordsFieldDefault(field: field) {
-                        self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
+                        try self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm)
                     }
                     i += 1U64
                 }
@@ -1634,7 +1640,7 @@ pub impl Comp {
                     // `Buffer[String]`.  Dropping it merely because it is not
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
-                    self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: ctxRef)
+                    try self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: ctxRef)
                     // Empty array literals are different: their AST-owned
                     // literal type must itself be concrete, so retain the old
                     // ground-only gate for this literal-specific adapter.
@@ -1642,7 +1648,7 @@ pub impl Comp {
                     if arrayCtx != 0U64 && !(self.tyRefIsGround(ref: arrayCtx)) {
                         arrayCtx = 0U64
                     }
-                    self.recordArrayLitCtx(exprId: value, ctxRef: arrayCtx)
+                    try self.recordArrayLitCtx(exprId: value, ctxRef: arrayCtx)
                     i += 1
                 }
                 if completedFields.count() != 0U64 {
@@ -1658,7 +1664,7 @@ pub impl Comp {
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
-                    self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef)
+                    try self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 // an array literal types as `Array[E]` from its first element (exprType
@@ -1676,7 +1682,7 @@ pub impl Comp {
                 self.recordSemanticAggregate(exprId: exprId)
             }
             Expr.Index(val base, val index) => {
-                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 mut val keyTerm: U64 = 0U64
                 // Array/Buffer indexing is equally structural: the selected
                 // element term is an existing child of the recorded receiver.
@@ -1705,7 +1711,7 @@ pub impl Comp {
                         }
                     }
                 }
-                self.recordExpr(exprId: index, chainHoleRef: chainHoleRef, expectedTerm: keyTerm)
+                try self.recordExpr(exprId: index, chainHoleRef: chainHoleRef, expectedTerm: keyTerm)
                 // A non-structural subscript is syntax for a selected method
                 // call.  Freeze that selection here, before CallTemplates are
                 // closed; Mono must not rewrite Expr.Index and then attempt
@@ -1714,7 +1720,7 @@ pub impl Comp {
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
                 val operandContext: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: ty)
-                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
+                try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 // `as Target` is an explicit source-level type boundary; Lower
                 // has resolved Target into `ty`, so this is not an inference
                 // query. Recording it directly preserves a generic/view term
@@ -1722,14 +1728,14 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: ty)
             }
             Expr.MatchExpr(val scrut, val arms) => {
-                self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
                 self.recordSemanticMatch(matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    self.recordBlock(blkId: a.body)
+                    try self.recordBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
@@ -1749,9 +1755,9 @@ pub impl Comp {
                 }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
-                self.recordBlock(blkId: thenBlk)
-                self.recordBlock(blkId: elseBlk)
+                try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
+                try self.recordBlock(blkId: thenBlk)
+                try self.recordBlock(blkId: elseBlk)
                 self.recordValueBlockResult(exprId: exprId, blockId: thenBlk)
             }
             Expr.OptChain(val base, val cont) => {
@@ -1761,7 +1767,7 @@ pub impl Comp {
                 if exprId < self.arena.semanticExprTypes.count() {
                     self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                 }
-                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 mut val baseInfo: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 mut val baseRef: U64 = self.parametricExprTerm(exprId: base)
                 if baseRef == 0U64 {
@@ -1776,7 +1782,7 @@ pub impl Comp {
                     baseInfo = self.typeInfoOfRef(ref: baseRef)
                     val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
                     if valueIndex < baseTerm.args.count() {
-                        self.recordExpr(exprId: cont, chainHoleRef: baseTerm.args[valueIndex])
+                        try self.recordExpr(exprId: cont, chainHoleRef: baseTerm.args[valueIndex])
                     }
                 }
                 // `?.` is a semantic desugar, not a late Mono recovery. Record
@@ -1805,7 +1811,7 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: chainHoleRef)
             }
             Expr.Try(val expr) => {
-                self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
                 val resultTerm: U64 = self.parametricExprTerm(exprId: expr)
                 if self.isGenericInst(ref: resultTerm) {
                     val result: TypeRef = self.arena.typeAt(index: resultTerm)
@@ -1815,7 +1821,7 @@ pub impl Comp {
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if self.isStrongRefInst(ref: refTerm) {
                     val reference: TypeRef = self.arena.typeAt(index: refTerm)
@@ -1825,7 +1831,7 @@ pub impl Comp {
                 }
             }
             Expr.Deref(val base) => {
-                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if self.isStrongRefInst(ref: refTerm) {
                     val reference: TypeRef = self.arena.typeAt(index: refTerm)
@@ -1835,11 +1841,11 @@ pub impl Comp {
                 }
             }
             Expr.Move(val operand, isBorrow: _) => {
-                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
                 self.recordSemanticExprTerm(exprId: exprId, term: self.parametricExprTerm(exprId: operand))
             }
             Expr.Await(val operand) => {
-                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
                 val promiseTerm: U64 = self.parametricExprTerm(exprId: operand)
                 if promiseTerm != 0U64 && promiseTerm < self.arena.typeCount() {
                     val promise: TypeRef = self.arena.typeAt(index: promiseTerm)
@@ -1873,7 +1879,7 @@ pub impl Comp {
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
                 }
-                self.recordBlock(blkId: body)
+                try self.recordBlock(blkId: body)
                 self.cur.checkFn = savedCheckFn
                 self.popLocals(mark: mark)
             }
@@ -1885,7 +1891,7 @@ pub impl Comp {
             }
         }
         if expectedTerm != 0U64 {
-            self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+            try self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
         }
         // Record only after child terms and fallback literal adapters are
         // available. The template is the unique semantic input for operator
@@ -1901,48 +1907,49 @@ pub impl Comp {
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     // Mirror checkBoundsStmt's SCOPE maintenance (Let/For/Match binds) without any of
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
-    inout fn recordStmt(stmtId: U64) {
+    inout fn recordStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                self.recordExpr(exprId: init, expectedTerm: ty)
-                self.recordArrayLitCtx(exprId: init, ctxRef: ty)
+                try self.recordExpr(exprId: init, expectedTerm: ty)
+                try self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
-                self.recordExpr(exprId: target)
+                try self.recordExpr(exprId: target)
                 val expected: U64 = self.parametricExprTerm(exprId: target)
-                self.recordExpr(exprId: value, expectedTerm: expected)
-                self.recordArrayLitCtx(exprId: value, ctxRef: expected)
+                try self.recordExpr(exprId: value, expectedTerm: expected)
+                try self.recordArrayLitCtx(exprId: value, ctxRef: expected)
             }
-            Stmt.ExprStmt(val expr) => { self.recordExpr(exprId: expr) }
+            Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
-                    self.recordExpr(exprId: value, expectedTerm: expected)
-                    self.recordArrayLitCtx(exprId: value, ctxRef: expected)
+                    try self.recordExpr(exprId: value, expectedTerm: expected)
+                    try self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                 }
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                self.recordExpr(exprId: cond)
-                self.recordBlock(blkId: thenBlk)
+                try self.recordExpr(exprId: cond)
+                try self.recordBlock(blkId: thenBlk)
                 if hasElse {
-                    self.recordBlock(blkId: elseBlk)
+                    try self.recordBlock(blkId: elseBlk)
                 }
             }
             Stmt.While(val cond, val body) => {
-                self.recordExpr(exprId: cond)
-                self.recordBlock(blkId: body)
+                try self.recordExpr(exprId: cond)
+                try self.recordBlock(blkId: body)
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, patStart: _, patLen: _, val binds) => {
                 val forMark: U64 = self.scopeMark()
-                self.recordExpr(exprId: iter)
+                try self.recordExpr(exprId: iter)
                 if isRange {
-                    self.recordExpr(exprId: rangeHi)
+                    try self.recordExpr(exprId: rangeHi)
                     // the annotated var type if any (`for i: U64 in a..b`); an unannotated
                     // range var stays untyped here, same as the check pass.
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: varTyStart, tyLen: varTyLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
@@ -1983,37 +1990,39 @@ pub impl Comp {
                         }
                     }
                 }
-                self.recordBlock(blkId: body)
+                try self.recordBlock(blkId: body)
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
-                self.recordExpr(exprId: scrut)
+                try self.recordExpr(exprId: scrut)
                 self.recordSemanticMatch(matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    self.recordBlock(blkId: a.body)
+                    try self.recordBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
             }
-            Stmt.Panic(val msg, offset: _) => { self.recordExpr(exprId: msg) }
-            Stmt.Give(val value) => { self.recordExpr(exprId: value) }
+            Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
+            Stmt.Give(val value) => { try self.recordExpr(exprId: value) }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn recordBlock(blkId: U64) {
+    inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
-            self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
+            try self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)
+        return <Result.Ok value=() />
     }
 
     inout fn recordBodyReceiverTerm(fnIdx: U64, term: U64) {
@@ -2034,7 +2043,7 @@ pub impl Comp {
     // Record one lexical declaration using the same contract as the eager walk.
     // Selection/order belongs to the caller; generated provided copies share
     // their source declaration's semantic rows and are never recorded twice.
-    inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) {
+    inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) -> Result[(), CompileDiagnostic] {
         self.cur.recordCallTemplates = recordCallTemplates
         val f: Func = self.arena.functionAt(index: fnIdx)
         // A trait-provided body is copied per conformance, but its lexical
@@ -2074,12 +2083,13 @@ pub impl Comp {
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
                 if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
-                    self.recordExpr(exprId: p.defaultExpr)
+                    try self.recordExpr(exprId: p.defaultExpr)
                 }
                 pi += 1
             }
-            self.recordBlock(blkId: f.body)
+            try self.recordBlock(blkId: f.body)
         }
+        return <Result.Ok value=() />
     }
 
     // Demand preparation preserves the same lexical phases as the eager
@@ -2093,10 +2103,10 @@ pub impl Comp {
         self.cur.bodyId = 0U64
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
-        self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
+        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: false)
         try self.checkGenericFunction(fnIdx: owner)
         try self.verifyFunctionDeclaration(fnIdx: owner)
-        self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
+        try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
         self.cur.recordCallTemplates = false
         if self.completeRecordedDefaultCalls() != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
@@ -2112,7 +2122,7 @@ pub impl Comp {
     // would overwrite the template's `Self` forms with one conformer's concrete
     // types and corrupt every other conformer. The template's recording (Self/T
     // parametric) serves all of them via groundTypeRef at read.
-    inout fn recordParametricTypes(recordCallTemplates: Bool = false, includeBodies: Bool = true) {
+    inout fn recordParametricTypes(recordCallTemplates: Bool = false, includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // global initializers first (`val nums: Array[I64] = [...]` at module level):
@@ -2132,7 +2142,7 @@ pub impl Comp {
         self.cur.checkFn = 18446744073709551615U64
         mut val gvi: U64 = 0
         while !self.genMode && gvi < self.arena.globals.count() {
-            self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
+            try self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
         // This phase records the parametric semantic contract of the declaration
@@ -2146,7 +2156,7 @@ pub impl Comp {
         val sourceFuncLimit: U64 = self.arena.functionCount()
         mut val fi: U64 = 0
         while includeBodies && fi < sourceFuncLimit {
-            self.recordParametricFunction(fnIdx: fi, recordCallTemplates: recordCallTemplates)
+            try self.recordParametricFunction(fnIdx: fi, recordCallTemplates: recordCallTemplates)
             fi += 1
         }
         self.cur.locals = []
@@ -2159,5 +2169,6 @@ pub impl Comp {
         self.cur.typeArgs = []
         self.cur.checkFn = 18446744073709551615U64
         self.cur.recordCallTemplates = false
+        return <Result.Ok value=() />
     }
 }

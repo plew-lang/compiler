@@ -515,7 +515,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn verifyCastLossless(operand: U64, tyStart: U64, tyLen: U64, targetTerm: U64) {
+    inout fn verifyCastLossless(operand: U64, tyStart: U64, tyLen: U64, targetTerm: U64) -> Result[(), CompileDiagnostic] {
         // Bool is not a numeric type, so `as` (the lossless numeric / newtype-retag
         // conversion, spec/12) can't bridge Bool and a numeric type in either direction
         // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
@@ -523,33 +523,33 @@ pub impl Comp {
         val targetNum: Bool = self.isIntType(start: tyStart, len: tyLen) || self.isFloatType(start: tyStart, len: tyLen)
         if self.castOperandIsBool(operand: operand) {
             if targetNum {
-                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)") />
+                return <Result.Ok value=() />
             }
         } else {
             if targetBool {
-                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)") />
+                return <Result.Ok value=() />
             }
         }
         if self.isIntType(start: tyStart, len: tyLen) {
             // a float -> int `as` truncates the fractional part = lossy, so it is not a
             // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
             if self.exprIsFloat(id: operand) {
-                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)") />
+                return <Result.Ok value=() />
             }
             match self.arena.exprs[operand] {
                 Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
                     if !(self.litFitsType(value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen)) {
-                        self.errorAt(offset: offset, msg: "integer literal is out of range for the target type of `as`")
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "integer literal is out of range for the target type of `as`") />
                     }
                 }
                 _ => {
                     val st: TypeInfo = self.typeOf(id: operand)
                     if self.isIntType(start: st.nameStart, len: st.nameLen) {
                         if !(self.losslessInt(srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen)) {
-                            self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion") />
                         }
                     }
                 }
@@ -560,7 +560,8 @@ pub impl Comp {
         // just as annotated values and selected call parameters already do.
         val contextTerm: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: targetTerm)
         if contextTerm != 0U64 {
-            self.checkLitTi(id: operand, ti: self.typeInfoOfRef(ref: contextTerm))
+            try self.checkLitTi(id: operand, ti: self.typeInfoOfRef(ref: contextTerm))
         }
+        return <Result.Ok value=() />
     }
 }

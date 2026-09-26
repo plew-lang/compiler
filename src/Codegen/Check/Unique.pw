@@ -438,12 +438,12 @@ pub impl Comp {
                 if f.hasDefault {
                     try self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
                     try self.checkDefaultDoesNotSuspend(exprId: f.defaultVal, offset: f.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
-                    self.checkLitSpan(id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
+                    try self.checkLitSpan(id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
                     // checkLitSpan accepts a `true`/`false` (and other category-mismatched
                     // values) regardless of the field type, so a default of the wrong type
                     // (`val a: I64 = true`) slips through — full type-check against T.
                     if !(f.tyIsArray) {
-                        self.tcCheckValue(expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
+                        try self.tcCheckValue(expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
                     }
                 }
                 j += 1
@@ -610,9 +610,9 @@ pub impl Comp {
                 if p.hasDefault {
                     try self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
                     try self.checkDefaultDoesNotSuspend(exprId: p.defaultExpr, offset: p.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
-                    self.checkLitSpan(id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                    try self.checkLitSpan(id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                     if !(p.tyIsArray) {
-                        self.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
+                        try self.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
                     }
                 }
                 j += 1

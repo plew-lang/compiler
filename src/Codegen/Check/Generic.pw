@@ -313,20 +313,21 @@ pub impl Comp {
     // not a value read — so it needs no value check (the parent Method arm bound-checks a
     // type-parameter receiver separately). Any other receiver is an ordinary value and is
     // walked normally (its Ident arm runs the value check).
-    inout fn checkBoundsRecv(recv: U64, tpFn: U64) {
+    inout fn checkBoundsRecv(recv: U64, tpFn: U64) -> Result[(), CompileDiagnostic] {
         // A type-qualified associated call may carry a `#` view. It remains a
         // qualifier, never a value use of the base type identifier.
         if self.assocRecvName(recv: recv).nameLen != 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
                 if !(self.identIsTypeQualifier(start: start, len: len, tpFn: tpFn)) {
-                    self.checkBoundsExpr(exprId: recv)
+                    try self.checkBoundsExpr(exprId: recv)
                 }
             }
-            _ => { self.checkBoundsExpr(exprId: recv) }
+            _ => { try self.checkBoundsExpr(exprId: recv) }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn binOpTraitName(op: I64) -> String {
@@ -350,10 +351,10 @@ pub impl Comp {
         return ""
     }
 
-    inout fn checkBoundsExpr(exprId: U64) {
+    inout fn checkBoundsExpr(exprId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
-                self.checkBoundsExpr(exprId: operand)
+                try self.checkBoundsExpr(exprId: operand)
                 // a unary operator on a type-parameter value needs the matching bound
                 // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
                 val ut: TypeInfo = self.typeOf(id: operand)
@@ -362,21 +363,21 @@ pub impl Comp {
                         val need: String = self.unOpTraitName(op: op)
                         if need.bytes().count() != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
-                                self.errorAt(offset: self.exprOffset(id: operand), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
+                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)") />
                             }
                         }
                     }
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                self.checkBoundsExpr(exprId: lhs)
-                self.checkBoundsExpr(exprId: rhs)
+                try self.checkBoundsExpr(exprId: lhs)
+                try self.checkBoundsExpr(exprId: rhs)
                 // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
                 // the same binop type-check verifyProgram runs on non-generic bodies, now
                 // applied to EVERY module's generic templates (std included — no
                 // trusted-import boundary).
                 if self.cur.checkFn < self.arena.functionCount() {
-                    self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
+                    try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                 }
                 val lt: TypeInfo = self.typeOf(id: lhs)
                 if lt.kind == 2 {
@@ -401,7 +402,7 @@ pub impl Comp {
                                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
                                 StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
                                 StaticMemberResolution.Missing => {
-                                    self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)") />
                                 }
                             }
                         }
@@ -411,7 +412,7 @@ pub impl Comp {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
+                    try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
                 // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
@@ -433,27 +434,27 @@ pub impl Comp {
                 }
             }
             Expr.ExtMethod(val recv, val source, nameStart: _, nameLen: _, val args) => {
-                self.checkBoundsExpr(exprId: recv)
+                try self.checkBoundsExpr(exprId: recv)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                 val srcStart: U64 = src.start
                 val srcLen: U64 = src.len
                 if self.isExtName(start: srcStart, len: srcLen) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                     if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extStart: srcStart, extLen: srcLen)) {
-                        self.errorAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance")
+                        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance") />
                     }
                 }
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
+                    try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
             }
             Expr.ExtView(val recv, val source, val strip) => {
                 if self.assocRecvName(recv: exprId).nameLen != 0U64 {
-                    return
+                    return <Result.Ok value=() />
                 }
-                self.checkBoundsExpr(exprId: recv)
+                try self.checkBoundsExpr(exprId: recv)
                 if !strip {
                     val rt: TypeInfo = self.typeOf(id: recv)
                     val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
@@ -461,16 +462,16 @@ pub impl Comp {
                     val srcLen: U64 = src.len
                     if self.isExtName(start: srcStart, len: srcLen) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extStart: srcStart, extLen: srcLen)) {
-                            self.errorAt(offset: source.writtenStart, msg: "extension view is not justified by this type parameter's bounds")
+                            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension view is not justified by this type parameter's bounds") />
                         }
                     }
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.checkBoundsRecv(recv: recv, tpFn: self.cur.checkFn)
+                try self.checkBoundsRecv(recv: recv, tpFn: self.cur.checkFn)
                 mut val i: U64 = 0
                 while i < args.len {
-                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
+                    try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
                 val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
@@ -479,7 +480,7 @@ pub impl Comp {
                     match selected {
                         StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                             if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
-                                self.errorAt(offset: nameStart, msg: "a type qualifier can only call an associated function")
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
                             }
                             mut val index: U64 = 0U64
                             while index < args.len {
@@ -489,20 +490,20 @@ pub impl Comp {
                         }
                         StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                             if !self.arena.functionAt(index: declaration).isAssoc {
-                                self.errorAt(offset: nameStart, msg: "a type qualifier can only call an associated function")
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type qualifier can only call an associated function") />
                             }
                         }
                         StaticMemberResolution.Missing => {
-                            self.errorAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)") />
                         }
                     }
-                    return
+                    return <Result.Ok value=() />
                 }
                 val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                            self.errorAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)") />
                         }
                     } else {
                         if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
@@ -512,7 +513,7 @@ pub impl Comp {
                             val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                             val selfTraitId: U64 = intern(c: inout self, start: self.arena.functionAt(index: self.cur.checkFn).recvStart, len: self.arena.functionAt(index: self.cur.checkFn).recvLen)
                             if !(self.traitProvidesMember(traitNameId: selfTraitId, traitArity: self.arena.functionAt(index: self.cur.checkFn).provTraitArity, qName: qm, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart))) {
-                                self.errorAt(offset: nameStart, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)") />
                             }
                         } else {
                         // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
@@ -569,36 +570,36 @@ pub impl Comp {
                     Expr.Ident(val start, val len) => {
                         if self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) {
                             if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
-                                self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)")
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)") />
                             } else {
-                                self.errorAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)")
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />
                             }
-                            return
+                            return <Result.Ok value=() />
                         }
                     }
                     _ => {}
                 }
-                self.checkBoundsExpr(exprId: base)
+                try self.checkBoundsExpr(exprId: base)
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
                 // (spec/06). `.count()`/`.bytes()` etself. on a `T` value have no meaning.
                 val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
-                        self.errorAt(offset: nameStart, msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)") />
                     }
                 }
             }
             Expr.Index(val base, val index) => {
-                self.checkBoundsExpr(exprId: base)
-                self.checkBoundsExpr(exprId: index)
+                try self.checkBoundsExpr(exprId: base)
+                try self.checkBoundsExpr(exprId: index)
                 // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
                 // subscript desugars to the Index trait).
                 val ibt: TypeInfo = self.typeOf(id: base)
                 if ibt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
                         if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
-                            self.errorAt(offset: self.exprOffset(id: base), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)") />
                         }
                     }
                 }
@@ -606,7 +607,7 @@ pub impl Comp {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
                 while i < fields.len {
-                    self.checkBoundsExpr(exprId: self.makeFieldAt(fields: fields, index: i).value)
+                    try self.checkBoundsExpr(exprId: self.makeFieldAt(fields: fields, index: i).value)
                     i += 1
                 }
                 // A declaration field type alone is not a semantic field
@@ -623,37 +624,37 @@ pub impl Comp {
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
                 while i < elems.len {
-                    self.checkBoundsExpr(exprId: self.exprAt(exprs: elems, index: i))
+                    try self.checkBoundsExpr(exprId: self.exprAt(exprs: elems, index: i))
                     i += 1
                 }
             }
-            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { self.checkBoundsExpr(exprId: operand) }
+            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { try self.checkBoundsExpr(exprId: operand) }
             Expr.OptChain(val base, val cont) => {
-                self.checkBoundsExpr(exprId: base)
-                self.checkBoundsExpr(exprId: cont)
+                try self.checkBoundsExpr(exprId: base)
+                try self.checkBoundsExpr(exprId: cont)
             }
             Expr.ChainHole => {}
-            Expr.Try(val expr) => { self.checkBoundsExpr(exprId: expr) }
-            Expr.Arrow(val base, val nameStart, val nameLen) => { self.checkBoundsExpr(exprId: base) }
-            Expr.Deref(val base) => { self.checkBoundsExpr(exprId: base) }
+            Expr.Try(val expr) => { try self.checkBoundsExpr(exprId: expr) }
+            Expr.Arrow(val base, val nameStart, val nameLen) => { try self.checkBoundsExpr(exprId: base) }
+            Expr.Deref(val base) => { try self.checkBoundsExpr(exprId: base) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                self.checkBoundsExpr(exprId: cond)
-                self.checkBoundsBlock(blkId: thenBlk)
-                self.checkBoundsBlock(blkId: elseBlk)
+                try self.checkBoundsExpr(exprId: cond)
+                try self.checkBoundsBlock(blkId: thenBlk)
+                try self.checkBoundsBlock(blkId: elseBlk)
             }
             Expr.MatchExpr(val scrut, val arms) => {
-                self.checkBoundsExpr(exprId: scrut)
+                try self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
-                    self.checkBoundsBlock(blkId: a.body)
+                    try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
             }
-            Expr.Move(val operand, val isBorrow) => { self.checkBoundsExpr(exprId: operand) }
+            Expr.Move(val operand, val isBorrow) => { try self.checkBoundsExpr(exprId: operand) }
             Expr.Ident(val start, val len) => {
                 // the same reachability-independent undefined-identifier check the
                 // non-generic path runs (verifyExpr), now for EVERY module's GENERIC bodies —
@@ -669,15 +670,16 @@ pub impl Comp {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                     if !(self.bindIsValue(code: bindCode)) {
                         if bindCode == identFnCode() {
-                            self.errorAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)")
+                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)") />
                         } else {
-                            self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
                         }
                     }
                 }
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     // `Make` is checked bidirectionally in the ordinary type checker: the
@@ -931,10 +933,10 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkBoundsStmt(stmtId: U64) {
+    inout fn checkBoundsStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                self.checkBoundsExpr(exprId: init)
+                try self.checkBoundsExpr(exprId: init)
                 if tyLen > 0U64 {
                     // checkGenericTypeMatch recurses into an array literal against Array[E].
                     self.checkGenericTypeMatch(expectedRef: ty, valueExpr: init)
@@ -942,42 +944,42 @@ pub impl Comp {
                     // generic body is NOT walked by the verify literal pass (Verify/Stmt), so
                     // without this `val x: U8 = 200 + 100` would skip the constant-range check
                     // and wrap at runtime instead of being rejected (spec/12: no wraparound).
-                    self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
                 }
                 self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
-                self.checkBoundsExpr(exprId: target)
-                self.checkBoundsExpr(exprId: value)
+                try self.checkBoundsExpr(exprId: target)
+                try self.checkBoundsExpr(exprId: value)
                 // the assigned value must match the place's type (`x = a` / `x += a` where
                 // x: I64 and a: T is a type error). The place type is inferType(target).
                 self.checkGenericTypeMatch(expectedRef: self.inferType(id: target), valueExpr: value)
             }
-            Stmt.ExprStmt(val expr) => { self.checkBoundsExpr(exprId: expr) }
+            Stmt.ExprStmt(val expr) => { try self.checkBoundsExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
-                    self.checkBoundsExpr(exprId: value)
+                    try self.checkBoundsExpr(exprId: value)
                     if self.cur.checkFn < self.arena.functionCount() {
                         self.checkGenericTypeMatch(expectedRef: self.arena.functionAt(index: self.cur.checkFn).retTy, valueExpr: value)
                     }
                 }
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                self.checkBoundsExpr(exprId: cond)
-                self.checkBoundsBlock(blkId: thenBlk)
+                try self.checkBoundsExpr(exprId: cond)
+                try self.checkBoundsBlock(blkId: thenBlk)
                 if hasElse {
-                    self.checkBoundsBlock(blkId: elseBlk)
+                    try self.checkBoundsBlock(blkId: elseBlk)
                 }
             }
             Stmt.While(val cond, val body) => {
-                self.checkBoundsExpr(exprId: cond)
-                self.checkBoundsBlock(blkId: body)
+                try self.checkBoundsExpr(exprId: cond)
+                try self.checkBoundsBlock(blkId: body)
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 val forMark: U64 = self.scopeMark()
-                self.checkBoundsExpr(exprId: iter)
+                try self.checkBoundsExpr(exprId: iter)
                 if isRange {
-                    self.checkBoundsExpr(exprId: rangeHi)
+                    try self.checkBoundsExpr(exprId: rangeHi)
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
                     val et: TypeInfo = self.typeOf(id: iter)
@@ -993,36 +995,38 @@ pub impl Comp {
                         }
                     }
                 }
-                self.checkBoundsBlock(blkId: body)
+                try self.checkBoundsBlock(blkId: body)
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
-                self.checkBoundsExpr(exprId: scrut)
+                try self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
-                    self.checkBoundsBlock(blkId: a.body)
+                    try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
             }
-            Stmt.Panic(val msg, val offset) => { self.checkBoundsExpr(exprId: msg) }
-            Stmt.Give(val value) => { self.checkBoundsExpr(exprId: value) }
+            Stmt.Panic(val msg, val offset) => { try self.checkBoundsExpr(exprId: msg) }
+            Stmt.Give(val value) => { try self.checkBoundsExpr(exprId: value) }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkBoundsBlock(blkId: U64) {
+    inout fn checkBoundsBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {
-            self.checkBoundsStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
+            try self.checkBoundsStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)
+        return <Result.Ok value=() />
     }
 
     // Check one lexical declaration under its authored abstract bounds.
@@ -1123,7 +1127,7 @@ pub impl Comp {
                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
                 pi += 1
             }
-            self.checkBoundsBlock(blkId: f.body)
+            try self.checkBoundsBlock(blkId: f.body)
         }
         return <Result.Ok value=() />
     }

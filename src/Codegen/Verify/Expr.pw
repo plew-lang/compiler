@@ -112,7 +112,7 @@ pub impl Comp {
                     _ => {}
                 }
                 if boundLen != 0U64 {
-                    if self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, tpStart: boundStart, tpLen: boundLen, nameStart: nameStart, nameLen: nameLen, args: args) {
+                    if (try self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, tpStart: boundStart, tpLen: boundLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
                         return <Result.Ok value=() />
                     }
                 }
@@ -120,7 +120,7 @@ pub impl Comp {
                 val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.nameLen != 0U64 { self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
-                self.checkResolvedMethodArgs(mf: mf, args: args)
+                try self.checkResolvedMethodArgs(mf: mf, args: args)
             }
             Expr.ExtMethod(val recv, source: val sourceSelector, val nameStart, val nameLen, val args) => {
                 val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
@@ -135,7 +135,7 @@ pub impl Comp {
                     }
                     val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                     self.recordResolvedMethodCallee(id: id, callee: mf)
-                    self.checkResolvedMethodArgs(mf: mf, args: args)
+                    try self.checkResolvedMethodArgs(mf: mf, args: args)
                     try self.verifyArgs(args: args)
                     return <Result.Ok value=() />
                 }
@@ -160,7 +160,7 @@ pub impl Comp {
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 if rt.nameLen != 0U64 {
                     self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
-                    self.checkResolvedMethodArgs(mf: mf, args: args)
+                    try self.checkResolvedMethodArgs(mf: mf, args: args)
                 }
                 try self.verifyExpr(id: recv)
                 try self.verifyArgs(args: args)
@@ -184,7 +184,7 @@ pub impl Comp {
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 try self.verifyArgs(args: args)
-                self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
+                try self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
@@ -229,7 +229,7 @@ pub impl Comp {
                                     while mfk < fields.len {
                                         val field: MakeField = self.makeFieldAt(fields: fields, index: mfk)
                                         if spansEqual(c: inout self, aStart: field.nameStart, aLen: field.nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
-                                            self.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: field.value, pos: self.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
+                                            try self.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: field.value, pos: self.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
                                             mfk = fields.len
                                         } else {
                                             mfk += 1U64
@@ -277,7 +277,7 @@ pub impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)") />
                     }
                 }
-                self.tcCheckMakeFields(expectedRef: selectedMakeType, makeId: id)
+                try self.tcCheckMakeFields(expectedRef: selectedMakeType, makeId: id)
                 // a NON-GENERIC struct's field value whose category disagrees with the
                 // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
                 // — reject (same reliable-value discipline as the let-annotation check).
@@ -304,7 +304,7 @@ pub impl Comp {
                         mut val fk: U64 = 0
                         while fk < cfs.count() {
                             if spansEqual(c: inout self, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: field.nameStart, bLen: field.nameLen) {
-                                self.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: field.value, pos: "field")
+                                try self.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: field.value, pos: "field")
                                 fk = cfs.count()
                             } else {
                                 fk += 1U64
@@ -325,14 +325,14 @@ pub impl Comp {
                 }
             }
             Expr.Cast(val operand, val tyStart, val tyLen, ty: val targetTerm) => {
-                self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen, targetTerm: targetTerm)
+                try self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen, targetTerm: targetTerm)
                 try self.verifyExpr(id: operand)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.verifyExpr(id: lhs)
                 try self.verifyExpr(id: rhs)
                 self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
-                self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
+                try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
             }
             Expr.Unary(val op, val operand) => {
                 try self.verifyExpr(id: operand)
@@ -341,8 +341,8 @@ pub impl Comp {
             Expr.Index(val base, val index) => {
                 try self.verifyExpr(id: base)
                 try self.verifyExpr(id: index)
-                self.tcCheckArrayIndex(base: base, index: index)
-                self.checkIndexKeyType(base: base, index: index)
+                try self.tcCheckArrayIndex(base: base, index: index)
+                try self.checkIndexKeyType(base: base, index: index)
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0

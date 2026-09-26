@@ -18,7 +18,7 @@ pub impl Comp {
     // the latter belongs to Mono after T is instantiated.  Keeping the two
     // phases distinct prevents unrelated concrete conformance paths from
     // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
-    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
+    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         val methodId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val found: Bool = false
@@ -39,7 +39,7 @@ pub impl Comp {
                             val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                             if req.nameId == methodId && self.paramsLabelsOk(params: req.params, args: args) {
                                 if found {
-                                    self.errorAt(offset: nameStart, msg: "ambiguous method in generic bounds; select one trait source with `x#Trait.method()`")
+                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous method in generic bounds; select one trait source with `x#Trait.method()`") />
                                 }
                                 found = true
                                 chosenTrait = ti
@@ -53,7 +53,7 @@ pub impl Comp {
             }
             bi += 1U64
         }
-        if !found { return false }
+        if !found { return <Result.Ok value=false /> }
         val chosen: Func = self.traitReqAt(reqs: self.decls.traitAt(index: chosenTrait).reqs, index: chosenReq)
         mut val ai: U64 = 0U64
         while ai < args.len {
@@ -61,11 +61,11 @@ pub impl Comp {
             if pi < chosen.params.count() {
                 val param: Param = self.funcParamAt(params: chosen.params, index: pi)
                 self.checkArgInoutMode(p: param, arg: self.argAt(args: args, index: ai))
-                self.tcCheckValue(expectedRef: param.ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
+                try self.tcCheckValue(expectedRef: param.ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
         }
-        return true
+        return <Result.Ok value=true />
     }
 
     inout fn knownNamedTypeId(start: U64, len: U64) -> U64 {
@@ -103,29 +103,30 @@ pub impl Comp {
     // Final argument-type validation operates on the already source-selected
     // callable.  Bare and `#` method calls must not rediscover candidates by
     // different rules after resolution.
-    inout fn checkResolvedMethodArgCategories(mf: U64, args: ArgRange) {
-        if mf >= self.arena.functionCount() { return }
+    inout fn checkResolvedMethodArgCategories(mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val cf: Func = self.arena.functionAt(index: mf)
         // Generic and provided methods need their resolved substitution before
         // this conservative non-generic category checker can compare values.
         // Preserve the ordinary-method boundary; this helper only removes the
         // source-selection split, it does not invent a second generic checker.
-        if cf.typeParams.count() > 0U64 { return }
-        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
+        if cf.typeParams.count() > 0U64 { return <Result.Ok value=() /> }
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.tcCheckValue(expectedRef: self.funcParamAt(params: cf.params, index: pIdx).ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
+                try self.tcCheckValue(expectedRef: self.funcParamAt(params: cf.params, index: pIdx).ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkResolvedMethodArgs(mf: U64, args: ArgRange) {
-        if mf >= self.arena.functionCount() { return }
+    inout fn checkResolvedMethodArgs(mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        if mf >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val cf: Func = self.arena.functionAt(index: mf)
-        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return <Result.Ok value=() /> }
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
@@ -134,17 +135,18 @@ pub impl Comp {
             }
             ai += 1U64
         }
-        self.checkResolvedMethodArgCategories(mf: mf, args: args)
+        try self.checkResolvedMethodArgCategories(mf: mf, args: args)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind != 2 {
-            return
+            return <Result.Ok value=() />
         }
         val rId: U64 = self.knownNamedTypeId(start: rt.nameStart, len: rt.nameLen)
         if rId == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         val nq: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val theFi: U64 = self.arena.functionCount()
@@ -164,12 +166,13 @@ pub impl Comp {
             fi += 1
         }
         if anyOther || count != 1U64 {
-            return
+            return <Result.Ok value=() />
         }
-        self.checkResolvedMethodArgCategories(mf: theFi, args: args)
+        try self.checkResolvedMethodArgCategories(mf: theFi, args: args)
+        return <Result.Ok value=() />
     }
 
-    inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val theFi: U64 = self.arena.functionCount()
         mut val count: U64 = 0
@@ -188,20 +191,21 @@ pub impl Comp {
             fi += 1
         }
         if anyGen || count != 1U64 {
-            return
+            return <Result.Ok value=() />
         }
         val cf: Func = self.arena.functionAt(index: theFi)
         if !(self.paramsLabelsOk(params: cf.params, args: args)) {
-            return
+            return <Result.Ok value=() />
         }
         mut val ai: U64 = 0
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.tcCheckValue(expectedRef: self.funcParamAt(params: cf.params, index: pIdx).ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
+                try self.tcCheckValue(expectedRef: self.funcParamAt(params: cf.params, index: pIdx).ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn variantExists(enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> Bool {

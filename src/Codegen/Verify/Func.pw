@@ -160,13 +160,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkCondBool(cond: U64) {
+    inout fn checkCondBool(cond: U64) -> Result[(), CompileDiagnostic] {
         val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
         if bs.nameLen == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
-        self.tcCheckValue(expectedRef: boolRef, valueExpr: cond, pos: "condition")
+        try self.tcCheckValue(expectedRef: boolRef, valueExpr: cond, pos: "condition")
+        return <Result.Ok value=() />
     }
 
     inout fn exprIsUnit(id: U64) -> Bool {
@@ -180,18 +181,19 @@ pub impl Comp {
         }
     }
 
-    inout fn checkIndexKeyType(base: U64, index: U64) {
+    inout fn checkIndexKeyType(base: U64, index: U64) -> Result[(), CompileDiagnostic] {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.ref != 0U64 {
             if bt.ref < self.arena.typeCount() {
                 val t: TypeRef = self.arena.typeAt(index: bt.ref)
                 if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
                     if t.args.count() >= 1U64 {
-                        self.tcCheckValue(expectedRef: t.args[0], valueExpr: index, pos: "dict key")
+                        try self.tcCheckValue(expectedRef: t.args[0], valueExpr: index, pos: "dict key")
                     }
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn valueIsReliablyNonArray(value: U64) -> Bool {

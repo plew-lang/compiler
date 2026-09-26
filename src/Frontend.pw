@@ -1039,7 +1039,7 @@ fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
 // consumer. Keeping this as an explicit phase makes the hand-off into
 // CallTemplate finalization a real `Comp` boundary, rather than an incidental
 // region inside the frontend driver.
-fn recordSemanticExpressionTypes(c: inout Comp) {
+fn recordSemanticExpressionTypes(c: inout Comp) -> Result[(), CompileDiagnostic] {
     mut val i: U64 = 0U64
     while i < c.arena.exprs.count() {
         c.arena.semanticExprTypes.append(<SemanticExprType />)
@@ -1047,9 +1047,10 @@ fn recordSemanticExpressionTypes(c: inout Comp) {
     }
     tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.traceExprInstScans = 0U64
-    c.recordParametricTypes(includeBodies: !c.genMode)
+    try c.recordParametricTypes(includeBodies: !c.genMode)
     tracePhaseCount(c: inout c, label: "semantic-expression-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "semantic-expression-record:done")
+    return <Result.Ok value=() />
 }
 
 // Fill the caller-owned compiler state through parsing, lowering, verification,
@@ -1698,7 +1699,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // checked only when finalization enqueues their grounded BodyInstance; that
     // is the one semantic edge Mono and LLVM will actually consume.
     tracePhase(c: inout c, label: "generic-checks:start")
-    recordSemanticExpressionTypes(c: inout c)
+    try recordSemanticExpressionTypes(c: inout c)
     // Allocate the persistent expression cache before abstract generic checking.
     // `checkGenericBodies` resolves each lexical identifier under its symbolic
     // parameter scope and `recordIdent` is the one authoritative producer of
@@ -1737,7 +1738,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     // lexical walk only; the early walk never publishes a provisional callee.
     tracePhase(c: inout c, label: "call-template-record:start")
     c.traceExprInstScans = 0U64
-    c.recordParametricTypes(recordCallTemplates: true, includeBodies: !c.genMode)
+    try c.recordParametricTypes(recordCallTemplates: true, includeBodies: !c.genMode)
     tracePhaseCount(c: inout c, label: "call-template-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "call-template-record:done")
     tracePhase(c: inout c, label: "default-call-completion:start")

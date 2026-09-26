@@ -201,7 +201,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         self.checkUniqueArgModes(args: args)
         val fi: U64 = self.resolvedCallee(id: id)
         if fi == self.arena.functionCount() {
@@ -215,19 +215,19 @@ pub impl Comp {
                     mut val k: U64 = 0
                     while k < args.len {
                         if k + 1U64 < ft.args.count() {
-                            self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: self.argAt(args: args, index: k).expr, pos: "fn-value arg")
+                            try self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: self.argAt(args: args, index: k).expr, pos: "fn-value arg")
                         }
                         k += 1
                     }
-                    return
+                    return <Result.Ok value=() />
                 }
             }
             mut val i: U64 = 0
             while i < args.len {
-                self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
+                try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
                 i += 1
             }
-            return
+            return <Result.Ok value=() />
         }
         val f: Func = self.arena.functionAt(index: fi)
         self.tcCheckGenericArgConsistency(f: f, args: args)
@@ -238,19 +238,20 @@ pub impl Comp {
             if pi < ps.count() {
                 val p: Param = ps[pi]
                 self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
-                self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                 self.checkClosureArgArity(argExpr: self.argAt(args: args, index: i).expr, p: p)
                 // full type-compatibility (not just literal context): a non-literal VALUE
                 // argument whose type disagrees with the parameter (a closure with the wrong
                 // return type for a `fn(...)->R` param, etself.) — checkLitSpan only sees
                 // literals. tcCheckValue rejects only DEFINITE mismatches (unknown/generic
                 // types pass through).
-                self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
+                try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
             } else {
-                self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
+                try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn checkClosureArgArity(argExpr: U64, p: Param) {
@@ -319,9 +320,9 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         self.checkUniqueArgModes(args: args)
-        self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
+        try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
         // int form, so this matches exprType exactly.)
         val rt: TypeInfo = self.typeOf(id: recv)
@@ -344,10 +345,10 @@ pub impl Comp {
                                 val arg: Arg = self.argAt(args: args, index: dai)
                                 if arg.hasLabel {
                                     if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "key") {
-                                        self.tcCheckValue(expectedRef: drt.args[0], valueExpr: arg.expr, pos: "dict key")
+                                        try self.tcCheckValue(expectedRef: drt.args[0], valueExpr: arg.expr, pos: "dict key")
                                     }
                                     if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "value") || rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "fallback") {
-                                        self.tcCheckValue(expectedRef: drt.args[1], valueExpr: arg.expr, pos: "dict value")
+                                        try self.tcCheckValue(expectedRef: drt.args[1], valueExpr: arg.expr, pos: "dict value")
                                     }
                                 }
                                 dai += 1
@@ -363,7 +364,7 @@ pub impl Comp {
             // Mono after T is instantiated; querying the global conformance
             // table here makes unrelated paths falsely ambiguous.
             if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                return
+                return <Result.Ok value=() />
             }
             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             if mi != self.arena.functionCount() {
@@ -383,13 +384,13 @@ pub impl Comp {
                             // method's own type params mis-grounds a method-own generic like
                             // `fold[B]`'s `B`, so only primitives are checked this way.)
                             if self.isPrimType(start: p.tyStart, len: p.tyLen) {
-                                self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                                self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
+                                try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                                try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
                                 val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: self.copyFuncBinds(binds: mf.typeParams), tyRef: p.ty)
-                                self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
+                                try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
                                 // full type-compatibility against the GROUNDED param type — a
                                 // typed value whose type disagrees with the (instantiated)
                                 // parameter (`w.combine(x: 5I64)` on `W[String]` stores an I64
@@ -422,20 +423,20 @@ pub impl Comp {
                                         }
                                     }
                                     if pref != 0U64 {
-                                        self.tcCheckValue(expectedRef: pref, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
+                                        try self.tcCheckValue(expectedRef: pref, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                                     }
                                 }
                             }
                         } else {
-                            self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                            self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
+                            try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                            try self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                         }
                     } else {
-                        self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
+                        try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
                     }
                     i += 1
                 }
-                return
+                return <Result.Ok value=() />
             }
         }
         if rt.kind == 3 {
@@ -464,21 +465,21 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < args.len {
                     if innerArr {
-                        self.checkLitArray(id: self.argAt(args: args, index: i).expr, elemStart: innerStart, elemLen: innerLen)
+                        try self.checkLitArray(id: self.argAt(args: args, index: i).expr, elemStart: innerStart, elemLen: innerLen)
                     } else {
-                        self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                        try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
                         // a primitive-element array: the appended value's type must match the
                         // element type (`Array[I64].append(true)` — checkLitSpan range-checks a
                         // literal but a `true`/typed value of the wrong type slips through). Only
                         // primitives are checked (their simpleTypeRef is reliable; a struct/
                         // generic element name may be mangled and is left to other checks).
                         if self.isIntType(start: rt.nameStart, len: rt.nameLen) || self.isFloatType(start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
-                            self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: self.argAt(args: args, index: i).expr, pos: "append")
+                            try self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: self.argAt(args: args, index: i).expr, pos: "append")
                         }
                     }
                     i += 1
                 }
-                return
+                return <Result.Ok value=() />
             }
         }
         // an assoc fn call `Type.make(...)`: the recv is a TYPE NAME (not a value), so the
@@ -506,8 +507,8 @@ pub impl Comp {
                             if qualifier != 0U64 && ap.ty != 0U64 {
                                 val parameter = self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty)
                                 if parameter != 0U64 && self.tyRefIsGround(ref: parameter) {
-                                    self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
-                                    self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
+                                    try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
+                                    try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                                     checkedGround = true
                                 }
                             }
@@ -521,36 +522,37 @@ pub impl Comp {
                                     self.cur.typeParams = savedP
                                     self.cur.typeArgs = savedA
                                     if gty != 0U64 && self.tyRefIsGround(ref: gty) {
-                                        self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: gty))
-                                        self.tcCheckValue(expectedRef: gty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
+                                        try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: gty))
+                                        try self.tcCheckValue(expectedRef: gty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                                         checkedGround = true
                                     }
                                 }
                             }
                             if !(checkedGround) {
-                                self.checkLitSpan(id: self.argAt(args: args, index: k).expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
-                                self.tcCheckValue(expectedRef: ap.ty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
+                                try self.checkLitSpan(id: self.argAt(args: args, index: k).expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
+                                try self.tcCheckValue(expectedRef: ap.ty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                             }
                         }
                         k += 1
                     }
-                    return
+                    return <Result.Ok value=() />
                 }
                 if self.typeHasAssocFn(typeStart: rStart, typeLen: rLen, nameStart: nameStart, nameLen: nameLen) {
                     if args.len == 0U64 {
-                        self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; call it with the required arguments or wrap the call in an explicit closure (spec/07)")
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; call it with the required arguments or wrap the call in an explicit closure (spec/07)") />
                     } else {
-                        self.errorAt(offset: nameStart, msg: "no matching associated function for this argument list (spec/07)")
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "no matching associated function for this argument list (spec/07)") />
                     }
-                    return
+                    return <Result.Ok value=() />
                 }
             }
             _ => {}
         }
         mut val i: U64 = 0
         while i < args.len {
-            self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
+            try self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }

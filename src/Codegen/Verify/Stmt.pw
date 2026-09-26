@@ -7,9 +7,9 @@ pub impl Comp {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 // literal range against the annotation (or context-free if none).
                 if tyLen > 0U64 {
-                    self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
                 } else {
-                    self.checkLitCtx(id: init, eKind: 0, eBits: 0, eSgn: false)
+                    try self.checkLitCtx(id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
                 // a bare unique place on the rhs is a forbidden copy (`val g = f`).
                 self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
@@ -36,7 +36,7 @@ pub impl Comp {
                     }
                 }
                 if tyLen > 0U64 {
-                    self.tcCheckValue(expectedRef: ty, valueExpr: init, pos: "let")
+                    try self.tcCheckValue(expectedRef: ty, valueExpr: init, pos: "let")
                     // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
                     // category-check each element against the declared element type (tyStart
                     // names the element for an array annotation).
@@ -53,7 +53,7 @@ pub impl Comp {
                                 }
                                 mut val ek: U64 = 0
                                 while ek < elems.len {
-                                    self.tcCheckValue(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
+                                    try self.tcCheckValue(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
                                     ek += 1
                                 }
                             }
@@ -101,7 +101,7 @@ pub impl Comp {
                                 // element 0 DEFINED E; check the rest against it.
                                 mut val ek: U64 = 1
                                 while ek < elems.len {
-                                    self.tcCheckValue(expectedRef: infElemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
+                                    try self.tcCheckValue(expectedRef: infElemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
                                     ek += 1
                                 }
                             }
@@ -116,7 +116,7 @@ pub impl Comp {
                 try self.verifyAssign(target: target, value: value)
             }
             Stmt.ExprStmt(val expr) => {
-                self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
+                try self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
                 try self.verifyExpr(id: expr)
             }
             Stmt.Return(val value, val hasValue, val offset) => {
@@ -129,7 +129,7 @@ pub impl Comp {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a function with no return type cannot return a value (spec/04)") />
                         }
                     }
-                    self.checkLitSpanCtx(id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
+                    try self.checkLitSpanCtx(id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
                     // returning a non-array where the declared return type IS an array
                     // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                     if self.cur.retIsArray {
@@ -141,7 +141,7 @@ pub impl Comp {
                     // type (`return "s"` / `return <A…/>` from `-> I64`). Same shared,
                     // reliable-value discipline as bindings; curRetLen 0 = `()` return.
                     if self.cur.retLen > 0U64 {
-                        self.tcCheckValue(expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
+                        try self.tcCheckValue(expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
                     }
                     try self.verifyExpr(id: value)
                 } else {
@@ -158,8 +158,8 @@ pub impl Comp {
                 }
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
-                self.checkCondBool(cond: cond)
+                try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
+                try self.checkCondBool(cond: cond)
                 try self.verifyExpr(id: cond)
                 // locals already in scope are "outside" this branch (a `move` of one
                 // inside would be conditional) — mark the boundary for the move guard.
@@ -172,8 +172,8 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.While(val cond, val body) => {
-                self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
-                self.checkCondBool(cond: cond)
+                try self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
+                try self.checkCondBool(cond: cond)
                 try self.verifyExpr(id: cond)
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = self.scopeMark()
@@ -205,18 +205,18 @@ pub impl Comp {
                     // types both bounds; otherwise each must determine its own type, so a
                     // bare literal range (`0..<5`) is ambiguous and rejected.
                     if varTyLen != 0U64 {
-                        self.checkLitSpan(id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                        self.checkLitSpan(id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        try self.checkLitSpan(id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        try self.checkLitSpan(id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
                         // checkLitSpan only range-checks a SUFFIXED literal against its own
                         // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
                         // slips through — check each bound's type against the loop var type.
                         val vref: U64 = self.simpleTypeRef(nameStart: varTyStart, nameLen: varTyLen)
-                        self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
-                        self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
+                        try self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
+                        try self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                     } else {
-                        self.checkArithNoCtx(lhs: iter, rhs: rangeHi)
+                        try self.checkArithNoCtx(lhs: iter, rhs: rangeHi)
                         // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                        self.tcCheckValue(expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
+                        try self.tcCheckValue(expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
                     }
                 }
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
@@ -332,7 +332,7 @@ pub impl Comp {
                 }
                 try self.verifyExpr(id: base)
                 try self.verifyExpr(id: index)
-                self.checkIndexKeyType(base: base, index: index)
+                try self.checkIndexKeyType(base: base, index: index)
             }
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
@@ -399,7 +399,7 @@ pub impl Comp {
         // determine the RHS literal type from the target place (the same context a `val`
         // initializer gets): a determinable literal types at the target width and is
         // range-checked; an undetermined one is a compile error, not a silent i64 default.
-        self.checkAssignRhsLit(target: target, value: value)
+        try self.checkAssignRhsLit(target: target, value: value)
         try self.verifyExpr(id: value)
         // a reassignment `u = e` reinitializes `u`, so it is live again — clear any
         // use-after-move mark (the value was verified above, so a moved read in `e` is
@@ -415,7 +415,7 @@ pub impl Comp {
         // precision and Bool/width/sign distinctions). Compound assign was desugared to
         // `place = place OP value` in Lower, so the OP's operand check rides the binary's
         // own witness resolution — there is no separate compound check.
-        self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
+        try self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
         return <Result.Ok value=() />
     }
 }
