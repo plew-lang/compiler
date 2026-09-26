@@ -89,21 +89,21 @@ pub impl Comp {
     // result is the fn type's return — args[0] of the {fn, [ret, p0, …]} ref. Grounded
     // through a generic receiver's env (`fn() -> T` on `Handler[I64]`). scalarInfo when
     // the name is not a closure field (the caller then keeps its unknown result).
-    inout fn closureFieldRetInfo(rt: TypeInfo, nameStart: U64, nameLen: U64) -> TypeInfo {
+    inout fn closureFieldRetInfo(rt: TypeInfo, nameStart: U64, nameLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
         mut val fr: U64 = self.structFieldRawTyRef(structStart: rt.nameStart, structLen: rt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
         if fr == 0U64 {
-            return scalarInfo()
+            return <Result.Ok value=scalarInfo() />
         }
         if self.isGenericInst(ref: rt.ref) {
-            fr = self.groundUnderInst(instRef: rt.ref, tyRef: fr)
+            fr = (try self.groundUnderInst(instRef: rt.ref, tyRef: fr))
         }
         if self.isFnType(ref: fr) {
             val ft: TypeRef = self.arena.typeAt(index: fr)
             if ft.args.count() > 0U64 {
-                return self.typeInfoOfRef(ref: ft.args[0])
+                return <Result.Ok value=self.typeInfoOfRef(ref: ft.args[0]) />
             }
         }
-        return scalarInfo()
+        return <Result.Ok value=scalarInfo() />
     }
 
     // A declared return's TypeInfo: an `Array[E]` return prefers the STRUCTURED
@@ -111,10 +111,10 @@ pub impl Comp {
     // element instance (ref 0), so a direct-call for-in source (`for c in mkArr()`)
     // lost `Ref[Cell]` elements and the body could not resolve `c->v`. A parametric
     // retTy (un-grounded generic) falls back to the bare name span, as before.
-    inout fn declaredRetInfo(f: Func) -> TypeInfo {
+    inout fn declaredRetInfo(f: Func) -> Result[TypeInfo, CompileDiagnostic] {
         if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
-            if self.tyRefIsGround(ref: f.retTy) {
-                return self.typeInfoOfRef(ref: f.retTy)
+            if (try self.tyRefIsGround(ref: f.retTy)) {
+                return <Result.Ok value=self.typeInfoOfRef(ref: f.retTy) />
             }
         }
         // an existential `any P` return: the isAny ref IS the type identity, so a
@@ -123,7 +123,7 @@ pub impl Comp {
         // path instead of dynamic dispatch (spec/08).
         if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
             if self.arena.typeAt(index: f.retTy).isAny {
-                return self.typeInfoOfRef(ref: f.retTy)
+                return <Result.Ok value=self.typeInfoOfRef(ref: f.retTy) />
             }
             // A non-generic anonymous-record return is nevertheless a fully
             // structured semantic term.  Returning only its synthetic layout
@@ -131,10 +131,10 @@ pub impl Comp {
             // compare, ground, or select a field.
             if self.arena.typeAt(index: f.retTy).isRecord {
                 val rt: TypeRef = self.arena.typeAt(index: f.retTy)
-                return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=f.retTy viewExtId=rt.viewExtId />
+                return <Result.Ok value=<TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=f.retTy viewExtId=rt.viewExtId /> />
             }
         }
-        return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+        return <Result.Ok value=self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray) />
     }
 
     // Build the selected method's complete lexical substitution once.  Return
@@ -153,7 +153,7 @@ pub impl Comp {
         // They are lexical identities, not positional aliases. Finalization
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
-        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: receiverRef)
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiverRef))
         if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 { return <Result.Ok value=<InstanceEnvironment /> />}
         mut val fullArgs: Array[U64] = []
         mut val fi: U64 = 0U64
@@ -202,7 +202,6 @@ pub impl Comp {
                 if nominalParams[bi].paramId != 0U64 && nominalParams[bi].paramId == parameter.paramId {
                     if fullArgs[pi] != 0U64 && !self.typeRefEq(a: fullArgs[pi], b: receiver.args[bi]) {
                         return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: receiver substitutions disagree for one parameter") />
-                        return <Result.Ok value=<InstanceEnvironment /> />
                     }
                     fullArgs.set(i: pi, value: receiver.args[bi])
                 }
@@ -261,7 +260,7 @@ pub impl Comp {
     // proof as Self.  Keep this beside finalMethodEnvironment so every
     // signature position (return and parameter alike) has identical proof
     // grounding.
-    inout fn finalMethodItemRef(f: Func, receiverRef: U64) -> U64 {
+    inout fn finalMethodItemRef(f: Func, receiverRef: U64) -> Result[U64, CompileDiagnostic] {
         // A provided trait method's `Item` is part of its selected receiver
         // proof, just like `Self`; it is not a free declaration spelling.
         // Record-time return construction must carry both or a chain such as
@@ -274,7 +273,7 @@ pub impl Comp {
             // Associated outputs belong to the declared trait owner. Do not
             // construct a conformance proof for an output it does not declare.
             val traitIndex = self.decls.traitIndexByOffset(offset: f.originTraitOwner)
-            if traitIndex >= self.decls.traitCount() { return 0U64 }
+            if traitIndex >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
             val trait = self.decls.traitAt(index: traitIndex)
             mut val declaresItem = false
             mut val index: U64 = 0U64
@@ -285,11 +284,11 @@ pub impl Comp {
                 }
                 index += 1U64
             }
-            if !declaresItem { return 0U64 }
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />)
-            itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
+            if !declaresItem { return <Result.Ok value=0U64 />}
+            val proof: StaticConformanceProof = (try self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />))
+            itemRef = (try self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId))
         }
-        return itemRef
+        return <Result.Ok value=itemRef />
     }
 
     // Ground any selected declaration signature term under one final method
@@ -298,14 +297,14 @@ pub impl Comp {
     inout fn groundFinalMethodSignatureTerm(f: Func, receiverRef: U64, args: ArgRange, signatureTerm: U64) -> Result[U64, CompileDiagnostic] {
         if signatureTerm == 0U64 { return <Result.Ok value=0U64 />}
         val environment: InstanceEnvironment = (try self.finalMethodEnvironment(f: f, receiverRef: receiverRef, args: args))
-        return <Result.Ok value=self.groundFinalMethodSignatureInEnvironment(f: f, environment: environment, signatureTerm: signatureTerm) />
+        return <Result.Ok value=(try self.groundFinalMethodSignatureInEnvironment(f: f, environment: environment, signatureTerm: signatureTerm)) />
     }
 
     // Consumers that retain the selected environment must use that same
     // substitution for signature grounding instead of inferring it again.
-    inout fn groundFinalMethodSignatureInEnvironment(f: Func, environment: InstanceEnvironment, signatureTerm: U64) -> U64 {
-        if signatureTerm == 0U64 || environment.receiverRef == 0U64 { return 0U64 }
-        return self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: environment.receiverRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: environment.receiverRef))
+    inout fn groundFinalMethodSignatureInEnvironment(f: Func, environment: InstanceEnvironment, signatureTerm: U64) -> Result[U64, CompileDiagnostic] {
+        if signatureTerm == 0U64 || environment.receiverRef == 0U64 { return <Result.Ok value=0U64 />}
+        return <Result.Ok value=(try self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: environment.receiverRef, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: environment.receiverRef)))) />
     }
 
     // Ground a final method callable through its receiver instance.  `a.m()` and
@@ -391,7 +390,7 @@ pub impl Comp {
         val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args))
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                val result: U64 = self.staticRequirementResultType(resolution: resolution)
+                val result: U64 = (try self.staticRequirementResultType(resolution: resolution))
                 if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
@@ -399,7 +398,7 @@ pub impl Comp {
                 val inferred = (try self.finalMethodEnvironment(f: declaration, receiverRef: semanticReceiver, args: args))
                 if inferred.receiverRef != 0U64 {
                     val environment = <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=inferred.receiverRef proof=proof />
-                    val result = self.groundTermForBody(ref: declaration.retTy, environment: environment, selfRef: semanticReceiver, itemRef: 0U64)
+                    val result = (try self.groundTermForBody(ref: declaration.retTy, environment: environment, selfRef: semanticReceiver, itemRef: 0U64))
                     if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                 }
             }
@@ -426,7 +425,7 @@ pub impl Comp {
                                     val savedArgs: Array[U64] = self.cur.typeArgs
                                     self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                                     self.cur.typeArgs = fb.constraint.key.positionalArgs
-                                    val grounded: U64 = self.groundTypeRef(ref: req.retTy)
+                                    val grounded: U64 = (try self.groundTypeRef(ref: req.retTy))
                                     self.cur.typeParams = savedParams
                                     self.cur.typeArgs = savedArgs
                                     val result: U64 = self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: fb.paramTy, traitOwner: fb.constraint.key.owner, traitArgs: fb.constraint.key.positionalArgs, predicates: fb.constraint.assocPredicates)
@@ -479,14 +478,14 @@ pub impl Comp {
         return self.groundTermInEnvironment(ref: ref, params: boundParams, values: boundArgs, selfRef: receiverRef)
     }
 
-    inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> TypeInfo {
+    inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> Result[TypeInfo, CompileDiagnostic] {
         if !(req.hasRet) || req.retTy == 0U64 {
-            return scalarInfo()
+            return <Result.Ok value=scalarInfo() />
         }
         val t: TypeRef = self.arena.typeAt(index: anyRef)
         val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
         if tri >= self.decls.traitCount() {
-            return scalarInfo()
+            return <Result.Ok value=scalarInfo() />
         }
         val tr: TraitDef = self.decls.traitAt(index: tri)
         mut val tp: Array[Bind] = []
@@ -531,7 +530,7 @@ pub impl Comp {
         self.cur.typeArgs = ta
         self.cur.selfRef = anyRef
         val substituted: U64 = self.groundTraitRequirementType(ref: req.retTy, traitIdx: tri, receiverRef: anyRef, params: tp, args: ta)
-        val g: U64 = self.groundTypeRef(ref: substituted)
+        val g: U64 = (try self.groundTypeRef(ref: substituted))
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
         self.cur.selfRef = savedS
@@ -541,14 +540,14 @@ pub impl Comp {
             eprint(text: " grounded=")
             self.traceMonoTypeHead(ref: g)
             eprint(text: " ground=")
-            if g != 0U64 && self.tyRefIsGround(ref: g) { eprint(text: "true") }
+            if g != 0U64 && (try self.tyRefIsGround(ref: g)) { eprint(text: "true") }
             else { eprint(text: "false") }
             eprint(text: "\n")
         }
-        if g != 0U64 && self.tyRefIsGround(ref: g) {
-            return self.typeInfoOfRef(ref: g)
+        if g != 0U64 && (try self.tyRefIsGround(ref: g)) {
+            return <Result.Ok value=self.typeInfoOfRef(ref: g) />
         }
-        return scalarInfo()
+        return <Result.Ok value=scalarInfo() />
     }
 
     // The context-free expression query. An optional-chain continuation uses
@@ -616,7 +615,7 @@ pub impl Comp {
                         // element name) so the array/raw intrinsics dispatch on it.
                         if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                             if rt.args.count() == 1 {
-                                val en: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
+                                val en: Bind = (try self.arrayElemNameForRef(elemRef: rt.args[0]))
                                 return <Result.Ok value=<TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=sref /> />
                             }
                         }
@@ -827,7 +826,7 @@ pub impl Comp {
                                     val savedA: Array[U64] = self.cur.typeArgs
                                     self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                                     self.cur.typeArgs = inferred
-                                    val gr: U64 = self.groundTypeRef(ref: f.retTy)
+                                    val gr: U64 = (try self.groundTypeRef(ref: f.retTy))
                                     self.cur.typeParams = savedP
                                     self.cur.typeArgs = savedA
                                     if gr != f.retTy {
@@ -844,15 +843,15 @@ pub impl Comp {
                                 // unfound params (see the record pass's identical gate).
                                 if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
                                     val ainf: Array[U64] = (try self.inferFnArgs(f: f, args: args))
-                                    if self.fnArgsAllGround(args: ainf) {
+                                    if (try self.fnArgsAllGround(args: ainf)) {
                                         val savedAP: Array[Bind] = self.cur.typeParams
                                         val savedAA: Array[U64] = self.cur.typeArgs
                                         self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                                         self.cur.typeArgs = ainf
-                                        val agr: U64 = self.groundTypeRef(ref: f.retTy)
+                                        val agr: U64 = (try self.groundTypeRef(ref: f.retTy))
                                         self.cur.typeParams = savedAP
                                         self.cur.typeArgs = savedAA
-                                        if agr != f.retTy && self.tyRefIsGround(ref: agr) {
+                                        if agr != f.retTy && (try self.tyRefIsGround(ref: agr)) {
                                             return <Result.Ok value=self.typeInfoOfRef(ref: agr) />
                                         }
                                     }
@@ -867,7 +866,7 @@ pub impl Comp {
                                 return <Result.Ok value=<TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy /> />
                             }
                         }
-                        return <Result.Ok value=self.declaredRetInfo(f: f) />
+                        return <Result.Ok value=(try self.declaredRetInfo(f: f)) />
                     }
                     return <Result.Ok value=scalarInfo() />
                 }
@@ -897,7 +896,7 @@ pub impl Comp {
                 // §3-付録4), resolved through normal method typing below — no property branch.
                 // A generic struct instantiation's field type is substituted.
                 if self.isGenericInst(ref: bt.ref) {
-                    return <Result.Ok value=self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen) />
+                    return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)) />
                 }
                 if bt.kind == 2 {
                     return <Result.Ok value=self.fieldType(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) />
@@ -926,7 +925,7 @@ pub impl Comp {
                 mut val g: U64 = ty
                 if ty != 0U64 {
                     if self.cur.typeParams.count() > 0U64 {
-                        g = self.groundTypeRef(ref: ty)
+                        g = (try self.groundTypeRef(ref: ty))
                     }
                 }
                 // Keep the written construction identity for nominal and
@@ -947,7 +946,7 @@ pub impl Comp {
                     // named by the mangled element name.
                     val er: U64 = self.arrayElemRef(start: bt.nameStart, len: bt.nameLen)
                     if er != 0 {
-                        val rr: U64 = self.resolveTy(tyRef: er)
+                        val rr: U64 = (try self.resolveTy(tyRef: er))
                         if rr < self.arena.typeCount() {
                             // an `Array[any P]` element (`xs[i]` where the element is the
                             // existential): carry the isAny ref so a bare `xs[i].m()`
@@ -959,7 +958,7 @@ pub impl Comp {
                             val rt: TypeRef = self.arena.typeAt(index: rr)
                             if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                                 if rt.args.count() > 0 {
-                                    val xn: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
+                                    val xn: Bind = (try self.arrayElemNameForRef(elemRef: rt.args[0]))
                                     return <Result.Ok value=<TypeInfo kind=3 nameStart=xn.nameStart nameLen=xn.nameLen ref=0 /> />
                                 }
                             }
@@ -968,7 +967,7 @@ pub impl Comp {
                             // can recover the pointee/instantiation (typeInfoOfRef would
                             // drop the ref for a non-Array compound). Only for compound
                             // elements — a simple scalar element (`U8`) must stay scalar.
-                            if self.isCompoundType(ref: rr) {
+                            if (try self.isCompoundType(ref: rr)) {
                                 return <Result.Ok value=<TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr /> />
                             }
                         }
@@ -1044,7 +1043,7 @@ pub impl Comp {
                         if grounded != 0U64 {
                             return <Result.Ok value=self.typeInfoOfRef(ref: grounded) />
                         }
-                        return <Result.Ok value=self.declaredRetInfo(f: mf) />
+                        return <Result.Ok value=(try self.declaredRetInfo(f: mf)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />
@@ -1077,7 +1076,7 @@ pub impl Comp {
                     }
                     val af: Func = self.arena.functionAt(index: afi)
                     if af.hasRet {
-                        val qualifier = self.concreteTypeQualifierTerm(exprId: recv)
+                        val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                         if qualifier != 0U64 {
                             val result = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: af.retTy))
                             if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
@@ -1087,7 +1086,7 @@ pub impl Comp {
                             val result = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: inferredReceiver, args: args, signatureTerm: af.retTy))
                             if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                         }
-                        return <Result.Ok value=self.declaredRetInfo(f: af) />
+                        return <Result.Ok value=(try self.declaredRetInfo(f: af)) />
                     }
                     return <Result.Ok value=scalarInfo() />
                 }
@@ -1120,7 +1119,7 @@ pub impl Comp {
                         val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
                         match staticResolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                                val result: U64 = self.staticRequirementResultType(resolution: staticResolution)
+                                val result: U64 = (try self.staticRequirementResultType(resolution: staticResolution))
                                 if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                                 return <Result.Ok value=scalarInfo() />
                             }
@@ -1159,7 +1158,7 @@ pub impl Comp {
                                         mut val ri: U64 = 0
                                         while ri < reqs.count() {
                                             if reqs[ri].nameId == qMethod {
-                                                return <Result.Ok value=self.anyMemberRetInfo(anyRef: rt.ref, req: reqs[ri]) />
+                                                return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, req: reqs[ri])) />
                                             }
                                             ri += 1
                                         }
@@ -1182,7 +1181,7 @@ pub impl Comp {
                     if mi == self.arena.functionCount() {
                         // not a method — but it may be a closure-typed FIELD called
                         // indirectly (`h.run()`); recover the fn type's return.
-                        return <Result.Ok value=self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen) />
+                        return <Result.Ok value=(try self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen)) />
                     }
                     val mf: Func = self.arena.functionAt(index: mi)
                     if mf.hasRet {
@@ -1199,7 +1198,7 @@ pub impl Comp {
                         if self.isGenericInst(ref: mf.retTy) {
                             val g2SavedSelf: U64 = self.cur.selfRef
                             val g2SavedItem: U64 = self.cur.itemRef
-                            self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
+                            try self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
                             // a generic method (`Counter.map[B]`): bind its method-own type
                             // params from the call (B from the closure arg) so the return
                             // `MapIter[Self,…,B]` grounds to `MapIter[Counter,…,I64]`.
@@ -1213,7 +1212,7 @@ pub impl Comp {
                                 self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                                 self.cur.typeArgs = g2inf
                             }
-                            val gr2: U64 = self.groundTypeRef(ref: mf.retTy)
+                            val gr2: U64 = (try self.groundTypeRef(ref: mf.retTy))
                             self.cur.typeParams = savedTP
                             self.cur.typeArgs = savedTA
                             self.cur.selfRef = g2SavedSelf
@@ -1237,15 +1236,15 @@ pub impl Comp {
                             val oSavedA: Array[U64] = self.cur.typeArgs
                             self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                             self.cur.typeArgs = oinf
-                            val og: U64 = self.groundTypeRef(ref: mf.retTy)
+                            val og: U64 = (try self.groundTypeRef(ref: mf.retTy))
                             self.cur.typeParams = oSavedP
                             self.cur.typeArgs = oSavedA
-                            if og != 0U64 && self.tyRefIsGround(ref: og) {
+                            if og != 0U64 && (try self.tyRefIsGround(ref: og)) {
                                 return <Result.Ok value=self.typeInfoOfRef(ref: og) />
                             }
                             return <Result.Ok value=scalarInfo() />
                         }
-                        return <Result.Ok value=self.declaredRetInfo(f: mf) />
+                        return <Result.Ok value=(try self.declaredRetInfo(f: mf)) />
                     }
                     return <Result.Ok value=scalarInfo() />
                 }
@@ -1312,7 +1311,7 @@ pub impl Comp {
                                     val aSavedA: Array[U64] = self.cur.typeArgs
                                     self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                                     self.cur.typeArgs = aargs
-                                    val agr: U64 = self.groundTypeRef(ref: mf.retTy)
+                                    val agr: U64 = (try self.groundTypeRef(ref: mf.retTy))
                                     self.cur.typeParams = aSavedP
                                     self.cur.typeArgs = aSavedA
                                     if agr != 0U64 {
@@ -1338,7 +1337,7 @@ pub impl Comp {
                                 }
                             }
                         }
-                        return <Result.Ok value=self.declaredRetInfo(f: mf) />
+                        return <Result.Ok value=(try self.declaredRetInfo(f: mf)) />
                     }
                     return <Result.Ok value=scalarInfo() />
                 }
@@ -1350,7 +1349,7 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 // a desugared non-Optional `?.` records its result type (its arm's give value
                 // references a bound `__chainVal` not in scope from here, so re-deriving fails).
-                val cr: U64 = self.chainResultRef(exprId: id)
+                val cr: U64 = (try self.chainResultRef(exprId: id))
                 if cr != 0 {
                     return <Result.Ok value=self.typeInfoOfRef(ref: cr) />
                 }
@@ -1379,7 +1378,7 @@ pub impl Comp {
                 // once the mono scan records the ChainSite, its stage result `Head[U]` is
                 // authoritative (the desugar's give value references a bound `__chainVal`
                 // not in scope from here, so re-deriving through the tree fails).
-                val cr: U64 = self.chainResultRef(exprId: id)
+                val cr: U64 = (try self.chainResultRef(exprId: id))
                 if cr != 0 {
                     return <Result.Ok value=self.typeInfoOfRef(ref: cr) />
                 }

@@ -52,13 +52,13 @@ pub impl Comp {
     // the element's structured ref so genCElem / the runtime recover its C type and
     // ARC behaviour (0 = a simple named element — use the name path). Driven by
     // lowerType when it lowers an `Array[E]`.
-    inout fn recordArrayElem(ty: PType) {
+    inout fn recordArrayElem(ty: PType) -> Result[(), CompileDiagnostic] {
         if ty.isArray {
             mut val i: U64 = 0
             while i < self.monoWork.arrayElems.count() {
                 val e: Bind = self.monoWork.arrayElems[i]
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
-                    return
+                    return <Result.Ok value=() />
                 }
                 i += 1
             }
@@ -71,9 +71,10 @@ pub impl Comp {
             }
             // a nested array element (`Array[Array[I32]]`) needs the inner
             // `PlewArray_<inner>` registered (and emitted) first.
-            self.ensureArrayElemDeps(elemRef: elemRef)
+            try self.ensureArrayElemDeps(elemRef: elemRef)
             self.monoWork.arrayElems.append(<Bind nameStart=ty.start nameLen=ty.len fieldStart=elemRef fieldLen=0 />)
         }
+        return <Result.Ok value=() />
     }
 
     // Lower a type expression, reproducing parseTypeTok's arena seeding (head name +
@@ -125,18 +126,19 @@ pub impl Comp {
     // generic inference and grounding recurse through the explicit field
     // terms below.  `ensureRecordStruct` sorts fields, so this is also the
     // canonical ordering for structural equality and keys.
-    inout fn publishRecordLayoutTerm(ref: U64) {
-        if !self.tyRefIsGround(ref: ref) { return }
+    inout fn publishRecordLayoutTerm(ref: U64) -> Result[(), CompileDiagnostic] {
+        if !(try self.tyRefIsGround(ref: ref)) { return <Result.Ok value=() /> }
         val layout = self.recordStructIndex(ref: ref)
         if layout < self.arena.structCount() { self.arena.recordTypeByLayout[layout] = ref }
+        return <Result.Ok value=() />
     }
 
-    inout fn recordTypeTermForLayout(name: Bind) -> U64 {
+    inout fn recordTypeTermForLayout(name: Bind) -> Result[U64, CompileDiagnostic] {
         val si: U64 = self.anyStructIndex(nameStart: name.nameStart, nameLen: name.nameLen)
         if si >= self.arena.structCount() {
             val noLabels: Array[U64] = []
             val noFields: Array[U64] = []
-            return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=noLabels recordFieldTerms=noFields />)
+            return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=noLabels recordFieldTerms=noFields />) />
         }
         val fields: Array[FieldDef] = self.arena.structAt(index: si).fields
         mut val labels: Array[U64] = []
@@ -148,16 +150,16 @@ pub impl Comp {
             i += 1U64
         }
         val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
-        self.publishRecordLayoutTerm(ref: ref)
-        return ref
+        try self.publishRecordLayoutTerm(ref: ref)
+        return <Result.Ok value=ref />
     }
 
     // Construct a Record TypeTerm from the lexical terms at its source site.
     // The synthetic StructDef is an ABI layout cache only: it may have been
     // first registered in a different generic scope whose same-spelled `T`
     // has a different ParamId.  Never recover semantic children from it here.
-    inout fn recordTypeTerm(name: Bind, fieldNames: Array[String], fieldTerms: Array[U64]) -> U64 {
-        if fieldNames.count() != fieldTerms.count() { return 0U64 }
+    inout fn recordTypeTerm(name: Bind, fieldNames: Array[String], fieldTerms: Array[U64]) -> Result[U64, CompileDiagnostic] {
+        if fieldNames.count() != fieldTerms.count() { return <Result.Ok value=0U64 />}
         mut val order: Array[U64] = []
         mut val i: U64 = 0U64
         while i < fieldNames.count() {
@@ -187,8 +189,8 @@ pub impl Comp {
             oi += 1U64
         }
         val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
-        self.publishRecordLayoutTerm(ref: ref)
-        return ref
+        try self.publishRecordLayoutTerm(ref: ref)
+        return <Result.Ok value=ref />
     }
 
     // Register (or find) the synthetic struct for an anonymous record type with the given
@@ -272,8 +274,8 @@ pub impl Comp {
         }
     }
 
-    inout fn recordTypeTermSpans(name: Bind, fieldNames: Array[Span], fieldTerms: Array[U64]) -> U64 {
-        if fieldNames.count() != fieldTerms.count() { return 0U64 }
+    inout fn recordTypeTermSpans(name: Bind, fieldNames: Array[Span], fieldTerms: Array[U64]) -> Result[U64, CompileDiagnostic] {
+        if fieldNames.count() != fieldTerms.count() { return <Result.Ok value=0U64 />}
         mut val order: Array[U64] = []
         mut val i: U64 = 0U64
         while i < fieldNames.count() {
@@ -303,8 +305,8 @@ pub impl Comp {
             oi += 1U64
         }
         val ref = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
-        self.publishRecordLayoutTerm(ref: ref)
-        return ref
+        try self.publishRecordLayoutTerm(ref: ref)
+        return <Result.Ok value=ref />
     }
 
     inout fn ensureRecordStructSpans(fieldNames: Array[Span], fieldTys: Array[PType]) -> Bind {
@@ -376,7 +378,7 @@ pub impl Comp {
                 fieldTerms.append(fieldTys[ti].ref)
                 ti += 1U64
             }
-            val rref: U64 = self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms)
+            val rref: U64 = (try self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms))
             return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref /> />
         }
         val nm: Bind = self.internBytes(s: t.name)
@@ -513,13 +515,13 @@ pub impl Comp {
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
-                if self.isCompoundType(ref: args[0]) {
-                    val mn: Bind = self.appendMangleSpan(ref: args[0])
+                if (try self.isCompoundType(ref: args[0])) {
+                    val mn: Bind = (try self.appendMangleSpan(ref: args[0]))
                     result = <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
                 } else {
                     result = <PType start=argPtys[0].start len=argPtys[0].len isArray=true ref=ref />
                 }
-                self.recordArrayElem(ty: result)
+                try self.recordArrayElem(ty: result)
             }
         }
         return <Result.Ok value=result />
@@ -548,7 +550,7 @@ pub impl Comp {
                 fieldTerms.append(fieldTys[ti].ref)
                 ti += 1U64
             }
-            val recordRef: U64 = self.recordTypeTermSpans(name: recordName, fieldNames: fieldNames, fieldTerms: fieldTerms)
+            val recordRef: U64 = (try self.recordTypeTermSpans(name: recordName, fieldNames: fieldNames, fieldTerms: fieldTerms))
             return <Result.Ok value=<PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef /> />
         }
 
@@ -680,13 +682,13 @@ pub impl Comp {
         mut val result: PType = <PType start=name.nameStart len=name.nameLen isArray=false ref=ref />
         if syntaxTypeArgCount(file: self.syntax, ty: t) > 0U64 {
             if rangeEquals(bytes: self.arena.bytes, start: name.nameStart, len: name.nameLen, kw: "Array") {
-                if self.isCompoundType(ref: args[0U64]) {
-                    val mangled: Bind = self.appendMangleSpan(ref: args[0U64])
+                if (try self.isCompoundType(ref: args[0U64])) {
+                    val mangled: Bind = (try self.appendMangleSpan(ref: args[0U64]))
                     result = <PType start=mangled.nameStart len=mangled.nameLen isArray=true ref=ref />
                 } else {
                     result = <PType start=argPtys[0U64].start len=argPtys[0U64].len isArray=true ref=ref />
                 }
-                self.recordArrayElem(ty: result)
+                try self.recordArrayElem(ty: result)
             }
         }
         return <Result.Ok value=result />
@@ -1125,7 +1127,6 @@ pub impl Comp {
     inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> Result[U64, CompileDiagnostic] {
         if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
             return <Result.Err error=self.diagnosticAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
-            return <Result.Ok value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />
         }
         mut val loweredKeys: Array[U64] = []
         mut val loweredVals: Array[U64] = []
@@ -1144,7 +1145,6 @@ pub impl Comp {
     inout fn lowerSyntaxDictLit(expr: SyntaxExpr, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
         if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
             return <Result.Err error=self.diagnosticAt(offset: expr.span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
-            return <Result.Ok value=self.pushExpr(e: <Expr.Int value=0 offset=expr.span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />
         }
         mut val keys: Array[U64] = []
         mut val vals: Array[U64] = []

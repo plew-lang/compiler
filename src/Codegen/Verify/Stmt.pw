@@ -246,7 +246,7 @@ pub impl Comp {
                             mut val bi: U64 = 0
                             while bi < binds.len {
                                 val bd: Bind = self.bindAt(binds: binds, index: bi)
-                                val ft: TypeInfo = self.forBindFieldType(et: et, bd: bd)
+                                val ft: TypeInfo = (try self.forBindFieldType(et: et, bd: bd))
                                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
                                 bi += 1
                             }
@@ -263,7 +263,7 @@ pub impl Comp {
                         // scalar binding, still in scope.)
                         val item: TypeInfo = (try self.iterableItemInfo(et: et))
                         if isStruct {
-                            self.addForStructBinds(et: item, binds: binds)
+                            try self.addForStructBinds(et: item, binds: binds)
                         } else {
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: item.ref, isInout: false, isMut: false, owned: false)
                         }

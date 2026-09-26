@@ -401,8 +401,8 @@ pub impl Comp {
     // Directional concrete-witness selection. This is the one entry that
     // matches receiver and trait arguments under a shared substitution, and it
     // returns that substitution instead of erasing it to a Bool.
-    inout fn conformancePatternWitnessMatch(conformIdx: U64, subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> WitnessMatch {
-        if !traitArgsOpen && self.patternTypeCount(input: declaredTraitArgs) != self.patternTypeCount(input: traitArgs) { return <WitnessMatch /> }
+    inout fn conformancePatternWitnessMatch(conformIdx: U64, subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
+        if !traitArgsOpen && self.patternTypeCount(input: declaredTraitArgs) != self.patternTypeCount(input: traitArgs) { return <Result.Ok value=<WitnessMatch /> />}
         // Match the inherited implementation against its physical subject,
         // but preserve the authored receiver as Self in the returned proof.
         mut val matchRef: U64 = typeRef
@@ -416,14 +416,14 @@ pub impl Comp {
         }
         mut val binds: Array[UnifyBind] = []
         if subjectTy != 0U64 {
-            if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: matchRef, bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)) { return <WitnessMatch /> }
+            if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: matchRef, bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)) { return <Result.Ok value=<WitnessMatch /> />}
         } else {
             // A trait subject (`impl Sub as Marker`) has no nominal TypeRef
             // body in the receiver table.  That is not a wildcard subject:
             // preserve the same head-and-arguments match used by a structured
             // receiver, or the blanket declaration would incorrectly apply to
             // every concrete type before trait-subject conferral materializes it.
-            if matchRef >= self.arena.typeCount() { return <WitnessMatch /> }
+            if matchRef >= self.arena.typeCount() { return <Result.Ok value=<WitnessMatch /> />}
             val actual: TypeRef = self.arena.typeAt(index: matchRef)
             // `nameId` is an interning cache, not a semantic name. Synthetic
             // TypeRefs (including the receiver used while finalizing a
@@ -436,10 +436,10 @@ pub impl Comp {
             if actualId == 0U64 {
                 actualId = intern(c: inout self, start: actual.nameStart, len: actual.nameLen)
             }
-            if subjectId != actualId || self.patternTypeCount(input: subjectArgs) != actual.args.count() { return <WitnessMatch /> }
+            if subjectId != actualId || self.patternTypeCount(input: subjectArgs) != actual.args.count() { return <Result.Ok value=<WitnessMatch /> />}
             mut val si: U64 = 0U64
             while si < self.patternTypeCount(input: subjectArgs) {
-                if !(self.unifyPatterns(a: self.patternTypeAt(input: subjectArgs, index: si), aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
+                if !(self.unifyPatterns(a: self.patternTypeAt(input: subjectArgs, index: si), aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
                 si += 1U64
             }
         }
@@ -448,30 +448,30 @@ pub impl Comp {
             while i < self.patternTypeCount(input: declaredTraitArgs) {
                 val partial: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
                 val selected: WitnessMatch = <WitnessMatch conformIdx=partial.conformIdx binds=partial.binds selfRef=typeRef />
-                val declared: U64 = self.groundWitnessTypeTerm(ref: self.patternTypeAt(input: declaredTraitArgs, index: i), params: typeParams, matchResult: selected)
-                if !(self.unifyPatterns(a: declared, aSide: 0U64, b: self.patternTypeAt(input: traitArgs, index: i), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
+                val declared: U64 = (try self.groundWitnessTypeTerm(ref: self.patternTypeAt(input: declaredTraitArgs, index: i), params: typeParams, matchResult: selected))
+                if !(self.unifyPatterns(a: declared, aSide: 0U64, b: self.patternTypeAt(input: traitArgs, index: i), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
                 i += 1U64
             }
         }
         val selected: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
-        return <WitnessMatch conformIdx=selected.conformIdx binds=selected.binds selfRef=typeRef />
+        return <Result.Ok value=<WitnessMatch conformIdx=selected.conformIdx binds=selected.binds selfRef=typeRef /> />
     }
 
     // Compatibility projection for consumers still migrating to the witness
     // query. New trait-resolution code must consume `WitnessMatch` directly.
-    inout fn conformancePatternMatchesTraitInstance(subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> Bool {
-        val result: WitnessMatch = self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: subjectId, subjectTy: subjectTy, subjectArgs: subjectArgs, typeParams: typeParams, declaredTraitArgs: declaredTraitArgs, typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
-        return result.conformIdx != 0U64
+    inout fn conformancePatternMatchesTraitInstance(subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> Result[Bool, CompileDiagnostic] {
+        val result: WitnessMatch = (try self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: subjectId, subjectTy: subjectTy, subjectArgs: subjectArgs, typeParams: typeParams, declaredTraitArgs: declaredTraitArgs, typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen))
+        return <Result.Ok value=result.conformIdx != 0U64 />
     }
 
-    inout fn conformanceMatchesTraitInstance(cf: Conform, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Bool {
-        return self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)
+    inout fn conformanceMatchesTraitInstance(cf: Conform, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Result[Bool, CompileDiagnostic] {
+        return <Result.Ok value=(try self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
 
-    inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> WitnessMatch {
-        if conformIdx >= self.decls.conforms.count() { return <WitnessMatch /> }
+    inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
+        if conformIdx >= self.decls.conforms.count() { return <Result.Ok value=<WitnessMatch /> />}
         val cf: Conform = self.decls.conforms[conformIdx]
-        return self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)
+        return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
 
     // Registration-side counterpart of `conformanceSubjectMatches`: two
@@ -733,7 +733,7 @@ pub impl Comp {
     // Letting that witness match every S: B duplicates the copy (and turns one
     // proof into an ambiguity). Calls without a recovered TypeRef retain the
     // legacy head-name fallback.
-    inout fn callableReceiverMatches(f: Func, recvId: U64, recvRef: U64) -> Bool {
+    inout fn callableReceiverMatches(f: Func, recvId: U64, recvRef: U64) -> Result[Bool, CompileDiagnostic] {
         // A trait-subject origin needs its full path proof: the copied
         // receiver surface B is not the target trait A of `impl B as A`.
         // Direct origins intentionally retain the established direct-witness
@@ -764,24 +764,24 @@ pub impl Comp {
                     traitArgs = <PatternTypeInput.Conformance range=origin.traitArgs />
                 }
             }
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs)
+            val proof: StaticConformanceProof = (try self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs))
             match proof {
-                StaticConformanceProof.Missing => { return false }
-                _ => { return true }
+                StaticConformanceProof.Missing => { return <Result.Ok value=false />}
+                _ => { return <Result.Ok value=true />}
             }
         }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
-                return self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))
+                return <Result.Ok value=(try self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))) />
             }
-            return false
+            return <Result.Ok value=false />
         }
-        if recvRef == 0U64 || f.recvTy == 0U64 { return true }
-        if recvRef >= self.arena.typeCount() || f.recvTy >= self.arena.typeCount() { return true }
+        if recvRef == 0U64 || f.recvTy == 0U64 { return <Result.Ok value=true />}
+        if recvRef >= self.arena.typeCount() || f.recvTy >= self.arena.typeCount() { return <Result.Ok value=true />}
         mut val binds: Array[UnifyBind] = []
         mut val patternParams: Array[Bind] = self.copyFuncBinds(binds: f.typeParams)
         if f.recvPatternParams.count() > 0U64 { patternParams = self.copyFuncBinds(binds: f.recvPatternParams) }
-        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: <PatternBindInput.Values values=patternParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)
+        return <Result.Ok value=self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: <PatternBindInput.Values values=patternParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) />
     }
 
     inout fn sameTypeRefListAlphaEq(a: Array[U64], b: Array[U64], aParams: Array[Bind], bParams: Array[Bind]) -> Bool {

@@ -12,7 +12,7 @@ pub impl Comp {
     // anchors; every type comes from the template's semantic source, grounded
     // in this BodyInstance.  This is the finalizer counterpart of
     // inferParametricFnArgs, not a second AST type-recovery pass.
-    inout fn inferFnArgsFromTemplate(f: Func, args: ArgRange, sources: Array[CallTemplateArgument]) -> Array[U64] {
+    inout fn inferFnArgsFromTemplate(f: Func, args: ArgRange, sources: Array[CallTemplateArgument]) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         mut val ti: U64 = 0U64
         while ti < f.typeParams.count() {
@@ -25,7 +25,7 @@ pub impl Comp {
                 mut val candidate: U64 = 0U64
                 if ai < sources.count() {
                     val argument: CallTemplateArgument = sources[ai]
-                    val argRef: U64 = self.groundCallArgumentSource(source: argument.source)
+                    val argRef: U64 = (try self.groundCallArgumentSource(source: argument.source))
                     if p.tyIsArray {
                         if p.tyNameId == tp.nameId && argRef != 0U64 && argRef < self.arena.typeCount() {
                             val array: TypeRef = self.arena.typeAt(index: argRef)
@@ -40,12 +40,12 @@ pub impl Comp {
                 if candidate != 0U64 {
                     if found == 0U64 {
                         found = candidate
-                    } else if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: candidate) && !(self.sameMangle(refA: found, refB: candidate)) {
+                    } else if (try self.tyRefIsGround(ref: found)) && (try self.tyRefIsGround(ref: candidate)) && !((try self.sameMangle(refA: found, refB: candidate))) {
                         mut val offset: U64 = f.nameStart
                         if ai < sources.count() {
                             offset = self.exprOffset(id: self.callArgumentExprId(source: sources[ai].source))
                         }
-                        self.errorAt(offset: offset, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)") />
                     }
                 }
                 pi += 1U64
@@ -53,7 +53,7 @@ pub impl Comp {
             out.append(found)
             ti += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // Infer a generic free-call substitution from declaration-time semantic
@@ -360,8 +360,8 @@ pub impl Comp {
                         // keeping the first sent emission after a witness that does not
                         // exist. Only two GROUND disagreeing refs are conclusive (a
                         // parametric candidate in a template body is not evidence).
-                        if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: cand) {
-                            if !(self.sameMangle(refA: found, refB: cand)) {
+                        if (try self.tyRefIsGround(ref: found)) && (try self.tyRefIsGround(ref: cand)) {
+                            if !((try self.sameMangle(refA: found, refB: cand))) {
                                 val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                                 mut val off: U64 = f.nameStart
                                 if ai < args.len {
@@ -380,21 +380,21 @@ pub impl Comp {
         return <Result.Ok value=out />
     }
 
-    inout fn fnArgsAllGround(args: Array[U64]) -> Bool {
+    inout fn fnArgsAllGround(args: Array[U64]) -> Result[Bool, CompileDiagnostic] {
         if args.count() == 0 {
-            return false
+            return <Result.Ok value=false />
         }
         mut val i: U64 = 0
         while i < args.count() {
             if args[i] == 0 {
-                return false
+                return <Result.Ok value=false />
             }
-            if !(self.tyRefIsGround(ref: args[i])) {
-                return false
+            if !((try self.tyRefIsGround(ref: args[i]))) {
+                return <Result.Ok value=false />
             }
             i += 1
         }
-        return true
+        return <Result.Ok value=true />
     }
 
     // Code-generation instances are identified by the selected callable, its
@@ -444,7 +444,7 @@ pub impl Comp {
                 // no concrete receiver for its nested calls.  Instance demand
                 // is therefore a pure consumer of the final descriptor.
                 val finalArgs: Array[U64] = self.bodyCalleeTypeArgs(exprId: id)
-                if finalArgs.count() == self.arena.functionAt(index: fi).typeParams.count() && self.fnArgsAllGround(args: finalArgs) {
+                if finalArgs.count() == self.arena.functionAt(index: fi).typeParams.count() && (try self.fnArgsAllGround(args: finalArgs)) {
                     if !(self.fnInstExists(fnIdx: fi, args: finalArgs)) {
                         // polymorphic-recursion ceiling: an ever-deepening type argument
                         // (`deep(v: (v, v))` through an anonymous record) grows fn instances
@@ -556,7 +556,7 @@ pub impl Comp {
                 return <Result.Ok value=() />
             }
         }
-        self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
+        try self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
         // As for free calls, a method-own instance is keyed by the resolved
         // callable descriptor.  Its receiver substitutions and own generic
         // substitutions are one vector selected by Mono, never a second
@@ -565,7 +565,7 @@ pub impl Comp {
         if callId != 4000000000U64 {
             fullArgs = self.bodyCalleeTypeArgs(exprId: callId)
         }
-        if self.fnArgsAllGround(args: fullArgs) {
+        if (try self.fnArgsAllGround(args: fullArgs)) {
             if !(self.fnInstExists(fnIdx: mi, args: fullArgs, recvInstRef: recvInst)) {
                 self.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
             }

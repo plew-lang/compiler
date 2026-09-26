@@ -22,7 +22,7 @@ pub impl Comp {
         // An annotation can contain abstract associated types below a nominal
         // constructor. Store Array[Self#Iterator.Item], not the unresolved
         // Array[Item] spelling that could alias an unrelated nominal Item.
-        mut val term: U64 = self.groundTypeRef(ref: inferred.ty)
+        mut val term: U64 = (try self.groundTypeRef(ref: inferred.ty))
         if ty == 0U64 {
             val initializerTerm: U64 = self.parametricExprTerm(exprId: init)
             if initializerTerm != 0U64 { term = initializerTerm }

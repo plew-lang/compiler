@@ -78,7 +78,7 @@ pub impl Comp {
         self.cur.selfInout = f.selfInout
         self.cur.selfMove = f.selfMove
         if f.hasRecv || f.isAssoc {
-            self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
+            try self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0)
         } else {
             self.clearSelfItemEnv()
         }

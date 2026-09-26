@@ -121,7 +121,7 @@ pub impl Comp {
                             if firstRef == 0U64 {
                                 firstRef = ar
                             } else {
-                                if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
+                                if !((try self.typesCompatible(expected: firstRef, inferred: ar))) {
                                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types") />
                                 }
                             }
@@ -163,7 +163,7 @@ pub impl Comp {
         // return type: ft.args[0].
         if ft.args.count() >= 1U64 {
             if retTy != 0U64 {
-                if !(self.typesCompatible(expected: ft.args[0], inferred: retTy)) {
+                if !((try self.typesCompatible(expected: ft.args[0], inferred: retTy))) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "function value's return type does not match the expected function type (spec/04)") />
                 }
             }
@@ -172,7 +172,7 @@ pub impl Comp {
         while k < params.count() {
             if k + 1U64 < ft.args.count() {
                 if params[k].ty != 0U64 {
-                    if !(self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
+                    if !((try self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty))) {
                         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "function value's parameter type does not match the expected function type (spec/04)") />
                     }
                 }
@@ -303,7 +303,7 @@ pub impl Comp {
                         if retTy != 0U64 {
                             val expRet: U64 = self.arena.typeAt(index: p.ty).args[0]
                             if expRet != 0U64 {
-                                if !(self.typesCompatible(expected: expRet, inferred: retTy)) {
+                                if !((try self.typesCompatible(expected: expRet, inferred: retTy))) {
                                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: argExpr), msg: "closure return type does not match the expected function type") />
                                 }
                             }
@@ -397,7 +397,7 @@ pub impl Comp {
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
-                                val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: self.copyFuncBinds(binds: mf.typeParams), tyRef: p.ty)
+                                val pti: TypeInfo = (try self.substTypeInfo(instRef: rt.ref, params: self.copyFuncBinds(binds: mf.typeParams), tyRef: p.ty))
                                 try self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
                                 // full type-compatibility against the GROUNDED param type — a
                                 // typed value whose type disagrees with the (instantiated)
@@ -457,12 +457,12 @@ pub impl Comp {
                 mut val innerLen: U64 = 0
                 val er: U64 = self.arrayElemRef(start: rt.nameStart, len: rt.nameLen)
                 if er != 0 {
-                    val rr: U64 = self.resolveTy(tyRef: er)
+                    val rr: U64 = (try self.resolveTy(tyRef: er))
                     if rr < self.arena.typeCount() {
                         val rtp: TypeRef = self.arena.typeAt(index: rr)
                         if rangeEquals(bytes: self.arena.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
                             if rtp.args.count() > 0 {
-                                val xn: Bind = self.arrayElemNameForRef(elemRef: rtp.args[0])
+                                val xn: Bind = (try self.arrayElemNameForRef(elemRef: rtp.args[0]))
                                 innerArr = true
                                 innerStart = xn.nameStart
                                 innerLen = xn.nameLen
@@ -499,7 +499,7 @@ pub impl Comp {
                 if ai < self.arena.functionCount() {
                     val af: Func = self.arena.functionAt(index: ai)
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
-                    mut val qualifier = self.concreteTypeQualifierTerm(exprId: recv)
+                    mut val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                     if qualifier == 0U64 { qualifier = (try self.associatedReceiverFromArguments(f: af, args: args)) }
                     mut val ginf: Array[U64] = []
                     if af.typeParams.count() > 0U64 {
@@ -514,7 +514,7 @@ pub impl Comp {
                             mut val checkedGround: Bool = false
                             if qualifier != 0U64 && ap.ty != 0U64 {
                                 val parameter = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty))
-                                if parameter != 0U64 && self.tyRefIsGround(ref: parameter) {
+                                if parameter != 0U64 && (try self.tyRefIsGround(ref: parameter)) {
                                     try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
                                     try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                                     checkedGround = true
@@ -526,10 +526,10 @@ pub impl Comp {
                                     val savedA: Array[U64] = self.cur.typeArgs
                                     self.cur.typeParams = self.copyFuncBinds(binds: af.typeParams)
                                     self.cur.typeArgs = ginf
-                                    val gty: U64 = self.groundTypeRef(ref: ap.ty)
+                                    val gty: U64 = (try self.groundTypeRef(ref: ap.ty))
                                     self.cur.typeParams = savedP
                                     self.cur.typeArgs = savedA
-                                    if gty != 0U64 && self.tyRefIsGround(ref: gty) {
+                                    if gty != 0U64 && (try self.tyRefIsGround(ref: gty)) {
                                         try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: gty))
                                         try self.tcCheckValue(expectedRef: gty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                                         checkedGround = true

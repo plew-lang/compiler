@@ -110,17 +110,17 @@ pub impl Comp {
             _ => {}
         }
         val inferred: U64 = (try self.inferType(id: valueExpr))
-        if self.typesCompatible(expected: expectedRef, inferred: inferred) {
+        if (try self.typesCompatible(expected: expectedRef, inferred: inferred)) {
             return <Result.Ok value=() />
         }
         if expectedRef < self.arena.typeCount() {
-            val expectedGround: U64 = self.groundTypeRef(ref: expectedRef)
+            val expectedGround: U64 = (try self.groundTypeRef(ref: expectedRef))
             if expectedGround < self.arena.typeCount() {
                 val expectedTy: TypeRef = self.arena.typeAt(index: expectedGround)
                 if expectedTy.isSendable {
                     if inferred != 0U64 {
                         if inferred < self.arena.typeCount() {
-                            if !(self.typeRefIsSendable(ref: inferred)) {
+                            if !((try self.typeRefIsSendable(ref: inferred))) {
                                 if !(self.tcLog) {
                                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)") />
                                 }
@@ -135,7 +135,7 @@ pub impl Comp {
             eprint(text: "TC ")
             eprint(text: pos)
             eprint(text: " expected=")
-            eprint(text: self.tcRefName(ref: self.groundTypeRef(ref: expectedRef)))
+            eprint(text: self.tcRefName(ref: (try self.groundTypeRef(ref: expectedRef))))
             eprint(text: " got=")
             eprint(text: self.tcRefName(ref: inferred))
             eprint(text: " from=")
@@ -410,7 +410,7 @@ pub impl Comp {
                         val savedA: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = params
                         self.cur.typeArgs = targs
-                        val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
+                        val grounded: U64 = (try self.groundTypeRef(ref: defFields[di].ty))
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         try self.tcCheckValue(expectedRef: grounded, valueExpr: makeField.value, pos: "ginst-field")

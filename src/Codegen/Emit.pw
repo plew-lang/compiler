@@ -112,7 +112,7 @@ pub impl Comp {
     // The registered array-element name span for a given element ref (head name for
     // a simple element, the mangled name for a compound one). Falls back to the
     // type's head name. Used to recover a nested array's element name in exprType.
-    inout fn arrayElemNameForRef(elemRef: U64) -> Bind {
+    inout fn arrayElemNameForRef(elemRef: U64) -> Result[Bind, CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
@@ -124,9 +124,9 @@ pub impl Comp {
             // concrete lookup ref and return the template name (`Array_T_get`). Only a
             // ground stored element is a real match; the fallback below covers the rest.
             if ae.fieldStart != 0 {
-                if self.tyRefIsGround(ref: ae.fieldStart) {
-                    if self.sameMangle(refA: ae.fieldStart, refB: elemRef) {
-                        return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+                if (try self.tyRefIsGround(ref: ae.fieldStart)) {
+                    if (try self.sameMangle(refA: ae.fieldStart, refB: elemRef)) {
+                        return <Result.Ok value=<Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 /> />
                     }
                 }
             }
@@ -134,9 +134,9 @@ pub impl Comp {
         }
         if elemRef < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: elemRef)
-            return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
+            return <Result.Ok value=<Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 /> />
         }
-        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        return <Result.Ok value=<Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 /> />
     }
 
     // --- numeric intrinsic runtime (O6) ---------------------------------------

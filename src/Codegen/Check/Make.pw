@@ -75,12 +75,12 @@ pub impl Comp {
             try self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
             if ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeAt(index: ty).isRecord {
-                ft = self.typeInfoOfRef(ref: self.fieldTypeRefOfReceiver(receiverRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
+                ft = self.typeInfoOfRef(ref: (try self.fieldTypeRefOfReceiver(receiverRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)))
             } else if self.isGenericEnumInst(ref: ty) {
-                ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                ft = (try self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
             } else {
                 if self.isGenericInst(ref: ty) {
-                    ft = self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    ft = (try self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
                 } else {
                     ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 }

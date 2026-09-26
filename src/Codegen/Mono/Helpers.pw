@@ -204,22 +204,22 @@ pub impl Comp {
     // `tStart/tLen`? `visited` holds declaration `nameStart`s of user types already
     // entered (cycle guard). Indirect containers cut; transparent containers descend
     // into args; concrete user struct/enum descend into fields (and args).
-    inout fn nameReachesOwner(nStart: U64, nLen: U64, args: Array[U64], tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+    inout fn nameReachesOwner(nStart: U64, nLen: U64, args: Array[U64], tStart: U64, tLen: U64, visited: inout Array[U64]) -> Result[Bool, CompileDiagnostic] {
         if self.isIndirectContainer(nStart: nStart, nLen: nLen) {
-            return false
+            return <Result.Ok value=false />
         }
         if intern(c: inout self, start: nStart, len: nLen) == intern(c: inout self, start: tStart, len: tLen) {
-            return true
+            return <Result.Ok value=true />
         }
         if self.isTransparentContainer(nStart: nStart, nLen: nLen) {
             mut val ai: U64 = 0
             while ai < args.count() {
-                if self.typeRefReachesOwner(ref: args[ai], tStart: tStart, tLen: tLen, visited: inout visited) {
-                    return true
+                if (try self.typeRefReachesOwner(ref: args[ai], tStart: tStart, tLen: tLen, visited: inout visited)) {
+                    return <Result.Ok value=true />
                 }
                 ai += 1
             }
-            return false
+            return <Result.Ok value=false />
         }
         // a struct head, generic OR not: scan its fields for a path back to the owner.
         // genericStructIndex is tried too (structIndexByName skips generics) — else a
@@ -232,7 +232,7 @@ pub impl Comp {
         if si < self.arena.structCount() {
             val key: U64 = self.arena.structAt(index: si).nameStart
             if containsU64(xs: visited, v: key) {
-                return false
+                return <Result.Ok value=false />
             }
             visited.append(key)
             val def: StructDef = self.arena.structAt(index: si)
@@ -255,7 +255,7 @@ pub impl Comp {
             mut val reached: Bool = false
             while fi < fields.count() {
                 if !reached {
-                    if self.fieldReachesOwner(f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited) {
+                    if (try self.fieldReachesOwner(f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited)) {
                         reached = true
                     }
                 }
@@ -263,7 +263,7 @@ pub impl Comp {
             }
             self.cur.typeParams = savedP
             self.cur.typeArgs = savedA
-            return reached
+            return <Result.Ok value=reached />
         }
         // an enum head, generic OR not (genericEnumIndex too — concreteEnumIndex skips
         // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
@@ -275,7 +275,7 @@ pub impl Comp {
         if ei < self.arena.enumCount() {
             val key: U64 = self.arena.enumAt(index: ei).nameStart
             if containsU64(xs: visited, v: key) {
-                return false
+                return <Result.Ok value=false />
             }
             visited.append(key)
             val edef: EnumDef = self.arena.enumAt(index: ei)
@@ -300,7 +300,7 @@ pub impl Comp {
                 mut val fj: U64 = 0
                 while fj < vf.count() {
                     if !reached {
-                        if self.fieldReachesOwner(f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited) {
+                        if (try self.fieldReachesOwner(f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited)) {
                             reached = true
                         }
                     }
@@ -310,28 +310,28 @@ pub impl Comp {
             }
             self.cur.typeParams = savedP
             self.cur.typeArgs = savedA
-            return reached
+            return <Result.Ok value=reached />
         }
         // unknown/generic head: conservatively descend into its type arguments.
         mut val gi: U64 = 0
         while gi < args.count() {
-            if self.typeRefReachesOwner(ref: args[gi], tStart: tStart, tLen: tLen, visited: inout visited) {
-                return true
+            if (try self.typeRefReachesOwner(ref: args[gi], tStart: tStart, tLen: tLen, visited: inout visited)) {
+                return <Result.Ok value=true />
             }
             gi += 1
         }
-        return false
+        return <Result.Ok value=false />
     }
 
-    inout fn typeRefReachesOwner(ref: U64, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+    inout fn typeRefReachesOwner(ref: U64, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Result[Bool, CompileDiagnostic] {
         if ref == 0 {
-            return false
+            return <Result.Ok value=false />
         }
         if ref >= self.arena.typeCount() {
-            return false
+            return <Result.Ok value=false />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
-        return self.nameReachesOwner(nStart: t.nameStart, nLen: t.nameLen, args: t.args, tStart: tStart, tLen: tLen, visited: inout visited)
+        return <Result.Ok value=(try self.nameReachesOwner(nStart: t.nameStart, nLen: t.nameLen, args: t.args, tStart: tStart, tLen: tLen, visited: inout visited)) />
     }
 
     // Does field `f`'s declared type by-value reach the owner type `tStart/tLen`? An
@@ -342,15 +342,15 @@ pub impl Comp {
     // never boxed, and monomorphizing the infinite layout overflows the compiler stack
     // (review/12). At the top level the env is empty and `arcFieldTy` returns the
     // declared type verbatim (carrying its own generic args), so nothing changes there.
-    inout fn fieldReachesOwner(f: FieldDef, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+    inout fn fieldReachesOwner(f: FieldDef, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Result[Bool, CompileDiagnostic] {
         if f.tyIsArray {
-            return false
+            return <Result.Ok value=false />
         }
-        val g: U64 = self.arcFieldTy(f: f)
+        val g: U64 = (try self.arcFieldTy(f: f))
         if g == 0 {
-            return false
+            return <Result.Ok value=false />
         }
-        return self.typeRefReachesOwner(ref: g, tStart: tStart, tLen: tLen, visited: inout visited)
+        return <Result.Ok value=(try self.typeRefReachesOwner(ref: g, tStart: tStart, tLen: tLen, visited: inout visited)) />
     }
 
     // Codegen query: is field `f` stored boxed (behind a heap pointer)?
@@ -409,7 +409,7 @@ pub impl Comp {
     // cycle back onto its owner. Only concrete (non-generic) owners are boxed; a
     // generic type's recursion is broken at the concrete user field that points into
     // it (so Optional/Result instantiations stay inline and keep their fixed layout).
-    inout fn markBoxedFields() {
+    inout fn markBoxedFields() -> Result[(), CompileDiagnostic] {
         // scan owners with an EMPTY instance env: an owner's own fields are declared
         // concretely, and the per-generic env is set only as `nameReachesOwner` descends
         // into a generic wrapper. Save/restore so a stale env from an earlier phase can
@@ -434,7 +434,7 @@ pub impl Comp {
             while fi < fields.count() {
                 val f: FieldDef = fields[fi]
                 mut val visited: Array[U64] = []
-                if self.fieldReachesOwner(f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
+                if (try self.fieldReachesOwner(f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited)) {
                     self.monoWork.boxedFields.append(f.nameStart)
                 }
                 fi += 1
@@ -452,7 +452,7 @@ pub impl Comp {
                 while fj < vf.count() {
                     val f: FieldDef = vf[fj]
                     mut val visited: Array[U64] = []
-                    if self.fieldReachesOwner(f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
+                    if (try self.fieldReachesOwner(f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited)) {
                         self.monoWork.boxedFields.append(f.nameStart)
                     }
                     fj += 1
@@ -463,5 +463,6 @@ pub impl Comp {
         }
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
+        return <Result.Ok value=() />
     }
 }

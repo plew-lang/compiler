@@ -97,17 +97,17 @@ pub impl Comp {
     // to its concrete class. Falls back to the declared name span when the field
     // carries no structured ref. (Array fields are the callers' fast path — they
     // check fd.tyIsArray before classifying.)
-    inout fn arcFieldTy(f: FieldDef) -> U64 {
+    inout fn arcFieldTy(f: FieldDef) -> Result[U64, CompileDiagnostic] {
         if f.ty != 0U64 {
             if self.cur.typeParams.count() > 0U64 {
-                return self.groundTypeRef(ref: f.ty)
+                return <Result.Ok value=(try self.groundTypeRef(ref: f.ty)) />
             }
-            return f.ty
+            return <Result.Ok value=f.ty />
         }
         if f.tyLen == 0U64 {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
-        return self.findOrAddTypeRef(nameStart: f.tyStart, nameLen: f.tyLen)
+        return <Result.Ok value=self.findOrAddTypeRef(nameStart: f.tyStart, nameLen: f.tyLen) />
     }
 
     // The `deinit` method index of struct `sidx`, or funcs.count() if it has none.
@@ -132,9 +132,9 @@ pub impl Comp {
     // walked DECLARED field names without grounding and had no enum branch, so a
     // bare-T -> heap field, a generic-instance field, or an enum payload never
     // gated true — their heap was silently skipped by every downstream drop.
-    inout fn arcNeedsRelease(ref: U64) -> Bool {
+    inout fn arcNeedsRelease(ref: U64) -> Result[Bool, CompileDiagnostic] {
         mut val visited: Array[U64] = []
-        return self.arcRefNeedsRelease(ref: ref, visited: inout visited)
+        return <Result.Ok value=(try self.arcRefNeedsRelease(ref: ref, visited: inout visited)) />
     }
 
     // The recursive kernel. `visited` terminates containment cycles (the cyclic
@@ -145,27 +145,27 @@ pub impl Comp {
     // (returned false, so the inner `String` never gated release -> leak + skipped
     // deinit). A genuine same-instance cycle is either infinite-size (rejected) or
     // boxed (terminated by `fieldIsBoxed` before recursing), so ref-keying still halts.
-    inout fn arcRefNeedsRelease(ref: U64, visited: inout Array[U64]) -> Bool {
+    inout fn arcRefNeedsRelease(ref: U64, visited: inout Array[U64]) -> Result[Bool, CompileDiagnostic] {
         match self.arcClassOfRef(ref: ref) {
-            ArcClass.Scalar => { return false }
-            ArcClass.StringLike => { return true }
-            ArcClass.BufferLike(elem: _) => { return true }
-            ArcClass.RefCell(inst: _) => { return true }
-            ArcClass.WeakCell(inst: _) => { return true }
-            ArcClass.PromiseCell(inst: _) => { return true }
-            ArcClass.AnyBox => { return true }
-            ArcClass.ClosureVal => { return true }
+            ArcClass.Scalar => { return <Result.Ok value=false />}
+            ArcClass.StringLike => { return <Result.Ok value=true />}
+            ArcClass.BufferLike(elem: _) => { return <Result.Ok value=true />}
+            ArcClass.RefCell(inst: _) => { return <Result.Ok value=true />}
+            ArcClass.WeakCell(inst: _) => { return <Result.Ok value=true />}
+            ArcClass.PromiseCell(inst: _) => { return <Result.Ok value=true />}
+            ArcClass.AnyBox => { return <Result.Ok value=true />}
+            ArcClass.ClosureVal => { return <Result.Ok value=true />}
             ArcClass.StructVal(val sidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {
                     if visited[vk] == ref {
-                        return false
+                        return <Result.Ok value=false />
                     }
                     vk += 1
                 }
                 visited.append(ref)
                 if self.structOwnDeinitFi(sidx: sidx) < self.arena.functionCount() {
-                    return true
+                    return <Result.Ok value=true />
                 }
                 val sd: StructDef = self.arena.structAt(index: sidx)
                 val savedP: Array[Bind] = self.cur.typeParams
@@ -196,8 +196,8 @@ pub impl Comp {
                             if fd.tyIsArray {
                                 need = true
                             } else {
-                                val g: U64 = self.arcFieldTy(f: fd)
-                                if self.arcRefNeedsRelease(ref: g, visited: inout visited) {
+                                val g: U64 = (try self.arcFieldTy(f: fd))
+                                if (try self.arcRefNeedsRelease(ref: g, visited: inout visited)) {
                                     need = true
                                 }
                             }
@@ -207,13 +207,13 @@ pub impl Comp {
                 }
                 self.cur.typeParams = savedP
                 self.cur.typeArgs = savedA
-                return need
+                return <Result.Ok value=need />
             }
             ArcClass.EnumVal(val eidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {
                     if visited[vk] == ref {
-                        return false
+                        return <Result.Ok value=false />
                     }
                     vk += 1
                 }
@@ -245,8 +245,8 @@ pub impl Comp {
                                 if fd.tyIsArray {
                                     need = true
                                 } else {
-                                    val g: U64 = self.arcFieldTy(f: fd)
-                                    if self.arcRefNeedsRelease(ref: g, visited: inout visited) {
+                                    val g: U64 = (try self.arcFieldTy(f: fd))
+                                    if (try self.arcRefNeedsRelease(ref: g, visited: inout visited)) {
                                         need = true
                                     }
                                 }
@@ -258,7 +258,7 @@ pub impl Comp {
                 }
                 self.cur.typeParams = savedP
                 self.cur.typeArgs = savedA
-                return need
+                return <Result.Ok value=need />
             }
         }
     }

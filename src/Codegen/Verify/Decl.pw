@@ -9,11 +9,11 @@ pub impl Comp {
     // declarations and an extension of the same spelling.  Resolve that text
     // to source identities before member lookup; candidate type matching must
     // never silently choose one source for the user.
-    inout fn viewSourceCount(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64) -> U64 {
+    inout fn viewSourceCount(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64) -> Result[U64, CompileDiagnostic] {
         val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         val traitOwner: U64 = self.canonicalTraitOwner(start: srcStart, len: srcLen)
         mut val count: U64 = 0U64
-        if self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef) { count = 1U64 }
+        if (try self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef)) { count = 1U64 }
         mut val firstTraitOwner: U64 = 0U64
         mut val firstTraitArity: U64 = 0U64
         mut val i: U64 = 0U64
@@ -29,13 +29,13 @@ pub impl Comp {
                         firstTraitArity = arity
                         count += 1U64
                     } else if firstTraitOwner != owner || firstTraitArity != arity {
-                        return 2U64
+                        return <Result.Ok value=2U64 />
                     }
                 }
             }
             i += 1U64
         }
-        return count
+        return <Result.Ok value=count />
     }
 
     inout fn verifyProgram(includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
@@ -148,7 +148,7 @@ pub impl Comp {
         mut val traitApplies: Bool = false
         if traitNamed {
             if typeRef != 0U64 {
-                traitApplies = self.conformsInstance(ref: typeRef, traitStart: srcStart, traitLen: srcLen)
+                traitApplies = (try self.conformsInstance(ref: typeRef, traitStart: srcStart, traitLen: srcLen))
             } else if allowMonomorphicFallback {
                 // Scalars (and other monomorphic receiver heads) carry no
                 // TypeRef in TypeInfo.  Name identity is complete only in
@@ -158,9 +158,9 @@ pub impl Comp {
             }
         }
         val extNamed: Bool = self.isExtName(start: srcStart, len: srcLen)
-        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef)
+        val extApplies: Bool = extNamed && (try self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef))
         if traitApplies || extApplies {
-            if self.viewSourceCount(typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, srcStart: srcStart, srcLen: srcLen) > 1U64 {
+            if (try self.viewSourceCount(typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, srcStart: srcStart, srcLen: srcLen)) > 1U64 {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "ambiguous view source: this `#` name denotes multiple declaration sources") />
             }
             return <Result.Ok value=() />
@@ -172,7 +172,6 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
-        return <Result.Ok value=() />
     }
 
     inout fn checkTypeViewSources() -> Result[(), CompileDiagnostic] {
@@ -190,7 +189,7 @@ pub impl Comp {
                     val sourceSelector: ResolvedViewSource = sources[vi]
                     if sourceSelector.surfaceId != 0U64 && sourceSelector.surfaceId <= self.interner.entries.count() {
                         try self.checkResolvedTypeViewSourceValid(typeRef: i, source: sourceSelector, offset: t.siteOffset)
-                        val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
+                        val source: ViewSource = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
                     vi += 1U64
@@ -214,9 +213,9 @@ pub impl Comp {
         // value re-views as `checkTypeViewSources` does for `Type#…`: otherwise
         // only an expression chain could manufacture an unrepresentable
         // two-trait state.
-        val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: intern(c: inout self, start: srcStart, len: srcLen))
+        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: intern(c: inout self, start: srcStart, len: srcLen)))
         if selected.kind == 2U64 {
-            val active: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref)
+            val active: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
             mut val i: U64 = 0U64
             while i < active.count() {
                 if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
@@ -236,14 +235,14 @@ pub impl Comp {
         if strip { return <Result.Ok value=() /> }
         val rt: TypeInfo = (try self.exprType(id: recv))
         if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
-        val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
+        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner))
         if selected.kind != 0U64 {
             // `#Trait` is a singleton selector in the normalized view state.
             // Compare semantic owners carried by both authored selectors; a
             // spelling-only reconstruction here would again make imports part
             // of the later resolver's meaning.
             if selected.kind == 2U64 {
-                val active: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref)
+                val active: Array[ViewSource] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
                 mut val i: U64 = 0U64
                 while i < active.count() {
                     if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
@@ -262,7 +261,6 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
         return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
-        return <Result.Ok value=() />
     }
 
     // Type terms carry the same semantic selector child as value views. A
@@ -271,7 +269,7 @@ pub impl Comp {
     inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val t: TypeRef = self.arena.typeAt(index: typeRef)
-        val selected: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
+        val selected: ViewSource = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner))
         if selected.kind != 0U64 { return <Result.Ok value=() /> }
         if source.traitOwner != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)") />
@@ -281,7 +279,6 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
-        return <Result.Ok value=() />
     }
 
     // A chain of `Expr.ExtView` nodes represents one normalized view, not a

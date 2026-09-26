@@ -496,7 +496,7 @@ pub impl Comp {
     // Source applicability uses the complete receiver pattern when one is
     // available.  A named extension on `Box[I64]` must not make `Box[String]#X`
     // valid merely because both receivers share the `Box` head.
-    inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64, typeRef: U64 = 0U64) -> Bool {
+    inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64, typeRef: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
         val qExt: U64 = intern(c: inout self, start: extStart, len: extLen)
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
@@ -509,19 +509,19 @@ pub impl Comp {
                 // B[String].
                 if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
                     val traitOwner: U64 = self.canonicalTraitOwner(start: f.recvStart, len: f.recvLen)
-                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: <PatternBindInput.Function range=f.typeParams />)
+                    val proof: StaticConformanceProof = (try self.staticTraitPatternProof(receiverRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: <PatternBindInput.Function range=f.typeParams />))
                     match proof {
                         StaticConformanceProof.Missing => {}
-                        _ => { return true }
+                        _ => { return <Result.Ok value=true />}
                     }
                 }
                 if f.recvId == qType {
                     if typeRef == 0U64 || f.recvTy == 0U64 {
-                        return true
+                        return <Result.Ok value=true />
                     }
                     mut val binds: Array[UnifyBind] = []
                     if self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: <PatternBindInput.Function range=f.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
-                        return true
+                        return <Result.Ok value=true />
                     }
                 }
             }
@@ -535,10 +535,10 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             if cf.extId == qExt {
                 if cf.typeId == qType && (typeRef == 0U64 || cf.subjectTy == 0U64) {
-                    return true
+                    return <Result.Ok value=true />
                 }
                 if cf.typeId == qType && self.conformanceSubjectMatches(cf: cf, typeRef: typeRef) {
-                    return true
+                    return <Result.Ok value=true />
                 }
                 // `extension E { impl B as C }` is applicable to an abstract
                 // `T` precisely when the current declaration proves T: B.
@@ -546,10 +546,10 @@ pub impl Comp {
                 // must not be compared to T.
                 if typeRef != 0U64 && self.decls.hasTraitName(nameId: cf.typeId) {
                     val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
-                    val proof: StaticConformanceProof = self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />)
+                    val proof: StaticConformanceProof = (try self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />))
                     match proof {
                         StaticConformanceProof.Missing => {}
-                        _ => { return true }
+                        _ => { return <Result.Ok value=true />}
                     }
                 }
             }
@@ -559,11 +559,11 @@ pub impl Comp {
         mut val ni: U64 = 0
         while ni < self.arena.newtypeCount() {
             if self.arena.newtypeAt(index: ni).nameId == qType {
-                return self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen)
+                return <Result.Ok value=(try self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypeAt(index: ni).underStart, typeLen: self.arena.newtypeAt(index: ni).underLen)) />
             }
             ni += 1
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     inout fn subjectPathCount(tId: U64, aTraitId: U64, aTraitArgs: PatternTypeInput, patternParams: PatternBindInput) -> U64 {
@@ -586,9 +586,9 @@ pub impl Comp {
         return count
     }
 
-    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Bool {
+    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
         if viewId == 0U64 {
-            return false
+            return <Result.Ok value=false />
         }
         val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         val targetId: U64 = intern(c: inout self, start: traitStart, len: traitLen)
@@ -597,10 +597,10 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             // Direct `extension Ext { impl T as P }` conformances are view
             // facts too (not only trait-subject `impl B as A` edges).
-            val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: traitArgs)
-            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && matchResult.conformIdx != 0U64 && self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues) {
+            val matchResult: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: traitArgs))
+            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && matchResult.conformIdx != 0U64 && (try self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues)) {
                 if !(self.decls.hasTraitName(nameId: cf.typeId)) {
-                    return true
+                    return <Result.Ok value=true />
                 }
             }
             val noParams: Array[Bind] = []
@@ -622,14 +622,14 @@ pub impl Comp {
                     if viaView {
                         // does the underlying type conform to the subject trait B?
                         if self.conformExistsTraitInstance(typeId: typeId, traitId: cf.typeId, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
-                            return true
+                            return <Result.Ok value=true />
                         }
                     }
                 }
             }
             i += 1
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     inout fn instantiateTraitSubjectConforms() -> Result[(), CompileDiagnostic] {

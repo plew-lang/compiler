@@ -18,15 +18,15 @@ pub impl Comp {
         val receiver: U64 = self.operatorTypeRef(t: operand)
         if receiver == 0U64 { return <Result.Ok value=operand />}
         val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiver, isUnary: true))
-        val requiredResult: U64 = self.staticRequirementResultType(resolution: resolution)
+        val requiredResult: U64 = (try self.staticRequirementResultType(resolution: resolution))
         if requiredResult != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: requiredResult) />}
         val callee: U64 = self.unaryOperatorCallee(receiverRef: receiver, op: op)
         if callee < self.arena.functionCount() {
             val function = self.arena.functionAt(index: callee)
             val result = function.retTy
             if result != 0U64 {
-                val witness = self.methodReceiverEnvironment(f: function, instRef: receiver)
-                return <Result.Ok value=self.typeInfoOfRef(ref: self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)) />
+                val witness = (try self.methodReceiverEnvironment(f: function, instRef: receiver))
+                return <Result.Ok value=self.typeInfoOfRef(ref: (try self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness))) />
             }
         }
         return <Result.Ok value=<TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 /> />
@@ -41,7 +41,7 @@ pub impl Comp {
         val receiverRef: U64 = (try self.inferType(id: lhs))
         if receiverRef == 0U64 { return <Result.Ok value=0U64 />}
         val resolution: StaticMemberResolution = (try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64))
-        return <Result.Ok value=self.staticRequirementResultType(resolution: resolution) />
+        return <Result.Ok value=(try self.staticRequirementResultType(resolution: resolution)) />
     }
 
     // The result type of a binary operator `a OP b` (spec/12). For an arithmetic/bitwise
@@ -65,18 +65,18 @@ pub impl Comp {
         return self.simpleTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
     }
 
-    inout fn operatorOutputType(lt: TypeInfo, rt: TypeInfo, op: I64) -> TypeInfo {
+    inout fn operatorOutputType(lt: TypeInfo, rt: TypeInfo, op: I64) -> Result[TypeInfo, CompileDiagnostic] {
         if !(isBinTraitOp(op: op)) {
-            return self.bareOperatorResult(t: lt)
+            return <Result.Ok value=self.bareOperatorResult(t: lt) />
         }
         if lt.nameLen == 0U64 {
-            return self.bareOperatorResult(t: lt)
+            return <Result.Ok value=self.bareOperatorResult(t: lt) />
         }
         val trN: Bind = self.internBytes(s: binTraitName(op: op))
         val leftRef: U64 = self.operatorTypeRef(t: lt)
         val rightRef: U64 = self.operatorTypeRef(t: rt)
         if leftRef == 0U64 || rightRef == 0U64 {
-            return self.bareOperatorResult(t: lt)
+            return <Result.Ok value=self.bareOperatorResult(t: lt) />
         }
         mut val requestedArgs: Array[U64] = []
         requestedArgs.append(rightRef)
@@ -85,19 +85,19 @@ pub impl Comp {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.traitId == trN.nameId {
                 if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                    val witness = self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=ab.subjectArgs />, typeParams: <PatternBindInput.Conformance range=ab.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=ab.traitArgs />, typeRef: leftRef, traitArgs: <PatternTypeInput.Values values=requestedArgs />)
+                    val witness = (try self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=ab.subjectArgs />, typeParams: <PatternBindInput.Conformance range=ab.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=ab.traitArgs />, typeRef: leftRef, traitArgs: <PatternTypeInput.Values values=requestedArgs />))
                     if witness.conformIdx != 0U64 {
                         if ab.ty != 0U64 && ab.ty < self.arena.typeCount() {
-                            val output = self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness)
-                            return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: output))
+                            val output = (try self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness))
+                            return <Result.Ok value=self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: output)) />
                         }
-                        return self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray))
+                        return <Result.Ok value=self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)) />
                     }
                 }
             }
             i += 1
         }
-        return self.bareOperatorResult(t: lt)
+        return <Result.Ok value=self.bareOperatorResult(t: lt) />
     }
 
     // The result type of a binary: the operands share a type, so use whichever side
@@ -113,11 +113,11 @@ pub impl Comp {
         mut val lt: TypeInfo = (try self.exprTypeWithChainHole(id: lhs, chainHoleRef: chainHoleRef))
         val rt: TypeInfo = (try self.exprTypeWithChainHole(id: rhs, chainHoleRef: chainHoleRef))
         if lt.kind != 0 {
-            return <Result.Ok value=self.operatorOutputType(lt: lt, rt: rt, op: op) />
+            return <Result.Ok value=(try self.operatorOutputType(lt: lt, rt: rt, op: op)) />
         }
         if lt.nameLen > 0 {
-            return <Result.Ok value=self.operatorOutputType(lt: lt, rt: rt, op: op) />
+            return <Result.Ok value=(try self.operatorOutputType(lt: lt, rt: rt, op: op)) />
         }
-        return <Result.Ok value=self.operatorOutputType(lt: rt, rt: lt, op: op) />
+        return <Result.Ok value=(try self.operatorOutputType(lt: rt, rt: lt, op: op)) />
     }
 }

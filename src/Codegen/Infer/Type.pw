@@ -80,23 +80,23 @@ pub impl Comp {
         return false
     }
 
-    inout fn typesCompatible(expected: U64, inferred: U64) -> Bool {
+    inout fn typesCompatible(expected: U64, inferred: U64) -> Result[Bool, CompileDiagnostic] {
         if expected == 0U64 || inferred == 0U64 {
-            return true
+            return <Result.Ok value=true />
         }
         if expected >= self.arena.typeCount() || inferred >= self.arena.typeCount() {
-            return true
+            return <Result.Ok value=true />
         }
         // ground the expected type through any active generic env (a `-> T` return / `T`
         // param resolves to the concrete instantiation argument); inferred is grounded.
-        val exp: U64 = self.groundTypeRef(ref: expected)
+        val exp: U64 = (try self.groundTypeRef(ref: expected))
         if exp >= self.arena.typeCount() {
-            return true
+            return <Result.Ok value=true />
         }
         val te: TypeRef = self.arena.typeAt(index: exp)
         val tin: TypeRef = self.arena.typeAt(index: inferred)
-        if te.isSendable && !(self.typeRefIsSendable(ref: inferred)) {
-            return false
+        if te.isSendable && !((try self.typeRefIsSendable(ref: inferred))) {
+            return <Result.Ok value=false />
         }
         if te.isAny || tin.isAny {
             // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
@@ -108,9 +108,9 @@ pub impl Comp {
                 if !(tin.isAny) {
                     if self.isActiveTypeParam(t: tin) {
                         if !(self.activeTypeParamConformsToTrait(source: tin, trait: te)) {
-                            return false
+                            return <Result.Ok value=false />
                         }
-                        return true
+                        return <Result.Ok value=true />
                     }
                     val srcId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
                     if srcId != 0U64 {
@@ -119,19 +119,19 @@ pub impl Comp {
                         // does not construct an `any P[String]` box.
                         val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
                         if inferred != 0U64 {
-                            if !(self.conformsTraitConstraint(ref: inferred, constraint: constraint)) {
-                                return false
+                            if !((try self.conformsTraitConstraint(ref: inferred, constraint: constraint))) {
+                                return <Result.Ok value=false />
                             }
                         } else {
                             val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
                             if constraint.key.positionalArgs.count() != 0U64 || !(self.conformExists(typeId: srcId, traitId: traitId)) {
-                                return false
+                                return <Result.Ok value=false />
                             }
                         }
                     }
                 }
             }
-            return true
+            return <Result.Ok value=true />
         }
         // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so
         // an F64 value flowing into an F32 position is not a real mismatch yet, and a float
@@ -143,21 +143,21 @@ pub impl Comp {
         val eFloat: Bool = self.isFloatType(start: te.nameStart, len: te.nameLen)
         val iFloat: Bool = self.isFloatType(start: tin.nameStart, len: tin.nameLen)
         if eFloat && iFloat {
-            return true
+            return <Result.Ok value=true />
         }
         if eFloat || iFloat {
             // one side float, the other not: a mismatch UNLESS the non-float side is an
             // untyped/unknown type (a bare int literal — polymorphic, handled below).
             if eFloat {
                 if self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen) == 0U64 {
-                    return true
+                    return <Result.Ok value=true />
                 }
             } else {
                 if self.knownNamedTypeId(start: te.nameStart, len: te.nameLen) == 0U64 {
-                    return true
+                    return <Result.Ok value=true />
                 }
             }
-            return false
+            return <Result.Ok value=false />
         }
         // generic-body abstract check (spec/06): a type parameter of the function being
         // checked (`self.cur.checkFn`) is an opaque DISTINCT type — incompatible with a
@@ -170,19 +170,19 @@ pub impl Comp {
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.
-                return te.paramId == tin.paramId
+                return <Result.Ok value=te.paramId == tin.paramId />
             }
             // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
             if self.isConcreteTypeName(start: tin.nameStart, len: tin.nameLen) {
-                return false
+                return <Result.Ok value=false />
             }
-            return true
+            return <Result.Ok value=true />
         }
         if iTp {
             if self.isConcreteTypeName(start: te.nameStart, len: te.nameLen) {
-                return false
+                return <Result.Ok value=false />
             }
-            return true
+            return <Result.Ok value=true />
         }
         // the abstract Self of a trait provided-method body is likewise opaque: Self vs a
         // CONCRETE type -> incompatible (`return self` from `-> I64`), Self vs Self -> ok.
@@ -190,18 +190,18 @@ pub impl Comp {
         val iSelf: Bool = self.isSelfTypeInProvided(start: tin.nameStart, len: tin.nameLen)
         if eSelf {
             if iSelf {
-                return true
+                return <Result.Ok value=true />
             }
             if self.isConcreteTypeName(start: tin.nameStart, len: tin.nameLen) {
-                return false
+                return <Result.Ok value=false />
             }
-            return true
+            return <Result.Ok value=true />
         }
         if iSelf {
             if self.isConcreteTypeName(start: te.nameStart, len: te.nameLen) {
-                return false
+                return <Result.Ok value=false />
             }
-            return true
+            return <Result.Ok value=true />
         }
         if te.isRecord || tin.isRecord {
             // A semantic Record may meet a still-legacy layout spelling at the
@@ -211,14 +211,14 @@ pub impl Comp {
             mut val er: U64 = exp
             mut val ir: U64 = inferred
             if !(te.isRecord) {
-                if te.nameLen == 0U64 || self.arena.bytes[te.nameStart] != 40U8 { return false }
-                er = self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />)
+                if te.nameLen == 0U64 || self.arena.bytes[te.nameStart] != 40U8 { return <Result.Ok value=false />}
+                er = (try self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />))
             }
             if !(tin.isRecord) {
-                if tin.nameLen == 0U64 || self.arena.bytes[tin.nameStart] != 40U8 { return false }
-                ir = self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />)
+                if tin.nameLen == 0U64 || self.arena.bytes[tin.nameStart] != 40U8 { return <Result.Ok value=false />}
+                ir = (try self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />))
             }
-            return self.recordsCompatible(teRef: er, tinRef: ir)
+            return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
         }
         // Bootstrap compatibility only: a compiler produced before TypeTerm.Record
         // may still feed this checker a record's synthetic layout spelling.  Reify
@@ -226,43 +226,43 @@ pub impl Comp {
         // every normal record path.  New resolution never constructs this form.
         if te.nameLen > 0U64 && tin.nameLen > 0U64 {
             if self.arena.bytes[te.nameStart] == 40U8 && self.arena.bytes[tin.nameStart] == 40U8 {
-                val er: U64 = self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />)
-                val ir: U64 = self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />)
-                return self.recordsCompatible(teRef: er, tinRef: ir)
+                val er: U64 = (try self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />))
+                val ir: U64 = (try self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />))
+                return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
             }
         }
-        return self.compatNamed(te: te, tin: tin)
+        return <Result.Ok value=(try self.compatNamed(te: te, tin: tin)) />
     }
 
     // Structural field-by-field compatibility of two Record TypeTerms.
-    inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Bool {
+    inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Result[Bool, CompileDiagnostic] {
         val te: TypeRef = self.arena.typeAt(index: teRef)
         val tin: TypeRef = self.arena.typeAt(index: tinRef)
-        if !(te.isRecord) || !(tin.isRecord) { return false }
+        if !(te.isRecord) || !(tin.isRecord) { return <Result.Ok value=false />}
         if te.recordFieldLabels.count() != tin.recordFieldLabels.count() || te.recordFieldTerms.count() != tin.recordFieldTerms.count() || te.recordFieldLabels.count() != te.recordFieldTerms.count() {
-            return false
+            return <Result.Ok value=false />
         }
         // Constructors sort labels, so the corresponding structural children
         // occupy the same index.  Field values themselves are checked by
         // tcCheckMakeFields.
         mut val i: U64 = 0
         while i < te.recordFieldTerms.count() {
-            if i >= te.recordFieldLabels.count() || i >= tin.recordFieldLabels.count() || te.recordFieldLabels[i] != tin.recordFieldLabels[i] { return false }
+            if i >= te.recordFieldLabels.count() || i >= tin.recordFieldLabels.count() || te.recordFieldLabels[i] != tin.recordFieldLabels[i] { return <Result.Ok value=false />}
             // a record/tuple field widening concrete->`any P` has no backend repack (records are
             // not a covariant container the erasure handles), so reject it rather than silently
             // miscompile the differing field layout (spec/08; mirrors compatNamed's gate).
             if self.argWidensToAny(expectedArg: te.recordFieldTerms[i], inferredArg: tin.recordFieldTerms[i]) {
-                return false
+                return <Result.Ok value=false />
             }
-            if !(self.typesCompatible(expected: te.recordFieldTerms[i], inferred: tin.recordFieldTerms[i])) {
-                return false
+            if !((try self.typesCompatible(expected: te.recordFieldTerms[i], inferred: tin.recordFieldTerms[i]))) {
+                return <Result.Ok value=false />
             }
             i += 1
         }
-        return true
+        return <Result.Ok value=true />
     }
 
-    inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Bool {
+    inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Result[Bool, CompileDiagnostic] {
         mut val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
         mut val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
         // a GENERIC struct head (`Box` of `Box[I64]`) is a known type identity too.
@@ -279,10 +279,10 @@ pub impl Comp {
             iId = self.genericStructHeadId(start: tin.nameStart, len: tin.nameLen)
         }
         if eId == 0U64 || iId == 0U64 {
-            return true
+            return <Result.Ok value=true />
         }
         if eId != iId {
-            return false
+            return <Result.Ok value=false />
         }
         // same head: a generic head must agree on its type arguments.
         if te.args.count() == tin.args.count() {
@@ -296,16 +296,16 @@ pub impl Comp {
             while i < te.args.count() {
                 if !(headErasable) {
                     if self.argWidensToAny(expectedArg: te.args[i], inferredArg: tin.args[i]) {
-                        return false
+                        return <Result.Ok value=false />
                     }
                 }
-                if !(self.typesCompatible(expected: te.args[i], inferred: tin.args[i])) {
-                    return false
+                if !((try self.typesCompatible(expected: te.args[i], inferred: tin.args[i]))) {
+                    return <Result.Ok value=false />
                 }
                 i += 1
             }
         }
-        return true
+        return <Result.Ok value=true />
     }
 
     // Whether `inferredArg` (a concrete named type) widens to `expectedArg` (`any P`) — the

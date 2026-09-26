@@ -129,7 +129,7 @@ pub impl Comp {
                 val assoc: Bind = self.assocRecvName(recv: recv)
                 if assoc.nameLen != 0U64 {
                     val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
+                    val source: ViewSource = (try self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner))
                     if source.kind == 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier") />
                     }
@@ -152,7 +152,7 @@ pub impl Comp {
                         // the selected trait owner/source-set and can turn an
                         // already-resolved call into a false ambiguity or a
                         // false nonconformance.
-                        if recvRef != 0U64 && !(self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: self.copyFuncTypes(types: selectedFn.recvTraitArgs))) {
+                        if recvRef != 0U64 && !((try self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: self.copyFuncTypes(types: selectedFn.recvTraitArgs)))) {
                             return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance") />
                         }
                     }
@@ -469,7 +469,7 @@ pub impl Comp {
                                                     // E' -> E via E.from (spec/13). Resolving that overload by
                                                     // the source type is essential — a `from` taking some
                                                     // other type would reinterpret E' bits.
-                                                    if !(self.typeRefHasFromFactory(errRef: fnR.args[1], srcRef: opR.args[1])) {
+                                                    if !((try self.typeRefHasFromFactory(errRef: fnR.args[1], srcRef: opR.args[1]))) {
                                                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)") />
                                                     }
                                                 }
@@ -847,7 +847,7 @@ pub impl Comp {
                 }
                 mut val ft: TypeInfo = scalarInfo()
                 if generic {
-                    ft = self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                    ft = (try self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
                 } else {
                     ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 }
@@ -863,7 +863,7 @@ pub impl Comp {
                 }
                 // Bind concrete and generic payloads through the subject's
                 // declaration identity, preserving its exact field TypeTerm.
-                val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                val bti: TypeInfo = (try self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
                 bi += 1
             }

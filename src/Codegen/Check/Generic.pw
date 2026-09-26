@@ -648,7 +648,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
+                    try self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
                     try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -769,7 +769,7 @@ pub impl Comp {
                         val savedA: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = params
                         self.cur.typeArgs = targs
-                        val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
+                        val grounded: U64 = (try self.groundTypeRef(ref: defFields[di].ty))
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         try self.checkGenericTypeMatch(expectedRef: grounded, valueExpr: makeField.value)
@@ -882,7 +882,7 @@ pub impl Comp {
                 val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
                 if qualifier != 0U64 {
                     val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
-                    val result: U64 = self.staticRequirementResultType(resolution: selected)
+                    val result: U64 = (try self.staticRequirementResultType(resolution: selected))
                     if result != 0U64 { inferred = result }
                 }
             }
@@ -897,22 +897,22 @@ pub impl Comp {
         // `Output = T` succeeds through the bound predicate, while an
         // unbound Output remains distinct from T.
         if inferredFromStaticOperator && (self.typeTermContainsAssociatedProjection(ref: expectedRef) || self.typeTermContainsAssociatedProjection(ref: inferred)) {
-            val expectedTerm: U64 = self.groundTypeRef(ref: expectedRef)
+            val expectedTerm: U64 = (try self.groundTypeRef(ref: expectedRef))
             if !(self.typeRefEq(a: expectedTerm, b: inferred)) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)") />
             }
             return <Result.Ok value=() />
         }
-        if !(self.typesCompatible(expected: expectedRef, inferred: inferred)) {
+        if !((try self.typesCompatible(expected: expectedRef, inferred: inferred))) {
             if self.traceCodegen {
                 eprint(text: "[trace-codegen] generic-type-mismatch expected=")
                 self.traceMonoTypeHead(ref: expectedRef)
                 eprint(text: " grounded-expected=")
-                self.traceMonoTypeHead(ref: self.groundTypeRef(ref: expectedRef))
+                self.traceMonoTypeHead(ref: (try self.groundTypeRef(ref: expectedRef)))
                 eprint(text: " inferred=")
                 self.traceMonoTypeHead(ref: inferred)
                 eprint(text: " grounded-inferred=")
-                self.traceMonoTypeHead(ref: self.groundTypeRef(ref: inferred))
+                self.traceMonoTypeHead(ref: (try self.groundTypeRef(ref: inferred)))
                 eprint(text: "\n")
             }
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)") />
@@ -986,7 +986,7 @@ pub impl Comp {
                 } else {
                     val et: TypeInfo = (try self.typeOf(id: iter))
                     if isStruct {
-                        self.addForStructBinds(et: et, binds: binds)
+                        try self.addForStructBinds(et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
@@ -1006,7 +1006,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
+                    try self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
                     try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -1125,7 +1125,7 @@ pub impl Comp {
                 // Parameter annotations belong to this declaration's
                 // abstract environment, including associated types nested
                 // in a function value's parameter and result types.
-                val parameterTerm: U64 = self.groundTypeRef(ref: p.ty)
+                val parameterTerm: U64 = (try self.groundTypeRef(ref: p.ty))
                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
                 pi += 1
             }

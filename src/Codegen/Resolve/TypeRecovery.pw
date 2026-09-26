@@ -180,7 +180,7 @@ pub impl Comp {
             val sref: U64 = self.semanticExprTerm(exprId: argExpr)
             if sref != 0U64 {
                 if sref < self.arena.typeCount() {
-                    if self.tyRefIsGround(ref: sref) {
+                    if (try self.tyRefIsGround(ref: sref)) {
                         return <Result.Ok value=self.typeInfoOfRef(ref: sref) />
                     }
                 }
@@ -299,7 +299,7 @@ pub impl Comp {
         // by finalization too. Method-owned binders deliberately remain
         // absent while ranking; final callable publication performs their
         // one complete inference.
-        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: recvRef)
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: recvRef))
         mut val calleeParams: Array[Bind] = []
         mut val calleeArgs: Array[U64] = []
         mut val bindI: U64 = 0U64
@@ -331,12 +331,12 @@ pub impl Comp {
             if pi >= f.params.count() {
                 allMatch = false
             } else {
-                val expected: U64 = self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: recvRef))
+                val expected: U64 = (try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: recvRef))))
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, are concrete in calleeEnvironment.
-                if expected != 0U64 && self.tyRefIsGround(ref: expected) {
-                    val actual: TypeInfo = self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem)
+                if expected != 0U64 && (try self.tyRefIsGround(ref: expected)) {
+                    val actual: TypeInfo = (try self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem))
                     if actual.kind == 2I64 {
                         // Keep this discriminator congruent with argMatchesParam:
                         // a plain named type does not necessarily retain a TypeRef

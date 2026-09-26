@@ -53,13 +53,13 @@ pub impl Comp {
                 if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
                 if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return <Result.Ok value=false />}
                 val proof: StaticConformanceProof = self.thawStaticConformanceProof(id: proofId)
-                val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof)
-                val item = self.bodyProvidedItemTerm(f: function, environment: environment)
+                val environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof))
+                val item = (try self.bodyProvidedItemTerm(f: function, environment: environment))
                 mut val parameterTerms: Array[U64] = []
                 mut val index: U64 = 0U64
                 while index < function.params.count() {
                     val parameter = self.funcParamAt(params: function.params, index: index)
-                    parameterTerms.append(self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: item))
+                    parameterTerms.append((try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: item)))
                     index += 1U64
                 }
                 // Source local resolution has ended. Install only the owner
