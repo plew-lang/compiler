@@ -2,8 +2,9 @@
 import @Std/Process with { argCount, argAt, exit }
 import ./Frontend with { Comp }
 import ./FrontendDriver with { runFrontend }
-import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu, LlvmModule }
+import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
 import ./SourceAccess with { SourceAccess }
+import ./Diag with { CompileDiagnostic, emitDiagnostic }
 
 extern(c) {
     fn plew_llvm_initialize_worker(trace~: I32)
@@ -32,7 +33,11 @@ export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I
     }
     mut val compiler: Comp = <Comp />
     runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
-    emitLlvm(c: inout compiler)
+    match emitLlvm(c: inout compiler) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic)
+            exit(code: 1I64) }
+    }
 }
 
 // The frontend arena is scoped to lowering, not the lifetime of LLVM passes.
@@ -42,18 +47,35 @@ unique struct Compilation {
 }
 pub impl Compilation { factory }
 
-fn compileSource(sources: SourceAccess, firstArgument: I64) -> Compilation {
+unique enum CompilationResult {
+    Success(compilation: Compilation)
+    Failure(diagnostic: CompileDiagnostic)
+}
+
+fn compileSource(sources: SourceAccess, firstArgument: I64) -> CompilationResult {
     mut val compiler: Comp = <Comp />
     runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
-    val module = lowerLlvm(c: inout compiler)
-    return <Compilation module=move module trace=compiler.tracePhases />
+    match lowerLlvm(c: inout compiler) {
+        LlvmLoweringResult.Success(module: val module) => {
+            return <CompilationResult.Success compilation=<Compilation module=move module trace=compiler.tracePhases /> />
+        }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+    }
 }
 
 // Object mode keeps lowering and native optimization in one process. A failed
 // native output returns normally so the owned LLVM context is still reclaimed.
 export fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
-    mut val compilation = compileSource(sources: sources, firstArgument: firstArgument)
-    val trace = compilation.trace
-    plew_llvm_initialize_worker(if trace { give 1I32 } else { give 0I32 })
-    return compilation.module.writeObject(output: output, cpu: cpu, trace: trace)
+    match compileSource(sources: sources, firstArgument: firstArgument) {
+        CompilationResult.Success(compilation: val value) => {
+            mut val compilation = move value
+            val trace = compilation.trace
+            plew_llvm_initialize_worker(if trace { give 1I32 } else { give 0I32 })
+            return compilation.module.writeObject(output: output, cpu: cpu, trace: trace)
+        }
+        CompilationResult.Failure(diagnostic: val diagnostic) => {
+            emitDiagnostic(diagnostic: diagnostic)
+            return 1I32
+        }
+    }
 }

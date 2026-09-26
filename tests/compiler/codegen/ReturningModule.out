@@ -1,0 +1,3 @@
+module returned
+`\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)
+module returned

@@ -1,7 +1,6 @@
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram }
-import ./PreparedProgram with { PreparedProgram }
-import ./CompilerDiagnostics with { reportProgramPreparationError }
+import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
 // @Backend — the LLVM emitter of the self-hosted Plew compiler. It consumes the
 // front-end's analyzed `Comp` (built by `./Frontend`'s `analyzeFrontend`) and emits
 // an owned LLVM module via libLLVM-C. Text is an explicit diagnostic/seed
@@ -23,7 +22,7 @@ import ./Mid with { MidParametricBody, MidExecutableBody, MidPreparationError, M
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Diag with { compileErrorAt, digitStrU }
+import ./Diag with { CompileDiagnostic, compileErrorAt, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // The initial backend subset is deliberately fail-closed. Keep the reason as
@@ -718,26 +717,48 @@ pub impl LlvmModule {
     }
 }
 
-export fn emitLlvm(c: inout Comp) {
-    val module = lowerLlvm(c: inout c)
-    module.writeText(c: inout c)
+// Unique native resources cannot be generic arguments in Plew. This result
+// owns the module directly, with the same exclusive lifetime as LlvmModule.
+export unique enum LlvmLoweringResult {
+    Success(module: LlvmModule)
+    Failure(diagnostic: CompileDiagnostic)
 }
 
-export fn lowerLlvm(c: inout Comp) -> LlvmModule {
+export fn emitLlvm(c: inout Comp) -> Result[(), CompileDiagnostic] {
+    match lowerLlvm(c: inout c) {
+        LlvmLoweringResult.Success(module: val module) => {
+            module.writeText(c: inout c)
+            return <Result.Ok value=() />
+        }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+    }
+}
+
+export fn lowerLlvm(c: inout Comp) -> LlvmLoweringResult {
     tracePhase(c: inout c, label: "backend:emit:start")
     val prepared = match PreparedProgram.prepare(c: inout c) {
         Result.Ok(value: val program) => { give program }
         Result.Err(error: val error) => {
-            reportProgramPreparationError(c: inout c, error: error)
-            panic "compiler bug: preparation diagnostic returned"
+            return <LlvmLoweringResult.Failure diagnostic=programPreparationDiagnostic(c: inout c, error: error) />
         }
     }
     return lowerPreparedLlvm(c: inout c, prepared: prepared)
 }
 
-export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmModule {
+// The builder borrows a context and is released before the module owner.
+unique struct LlvmBuilder {
+    pub val handle: LLVMBuilderRef
+    deinit { LLVMDisposeBuilder(self.handle) }
+}
+impl LlvmBuilder {
+    factory owned(handle: LLVMBuilderRef) { return <LlvmBuilder handle=handle /> }
+}
+
+export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweringResult {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
+    val module = <LlvmModule.owned context=ctx module=m />
+    val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
     // Layout-sensitive optimizers must use the same native ABI as the linker.
     val targetTriple = LLVMGetDefaultTargetTriple()
     LLVMSetTarget(m, targetTriple)
@@ -762,7 +783,7 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmMod
     promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
-        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx) ambientProgram=prepared.ambient
+        ctx=ctx mod=m b=builder.handle ambientProgram=prepared.ambient
         midProgram=prepared.executable
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
@@ -935,8 +956,7 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmMod
             exit(code: 1)
         }
     }
-    LLVMDisposeBuilder(st.b)
-    return <LlvmModule.owned context=ctx module=m />
+    return <LlvmLoweringResult.Success module=move module />
 }
 
 // A unique, stable LLVM symbol for the module-level variable at lowering index `idx`

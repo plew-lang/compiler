@@ -2,9 +2,10 @@
 // The compiler implementation is unchanged: supply the SAME empty syntax
 // value explicitly at its construction site. Do not use this entry to claim
 // normal self-host recovery; src/_.pw must compile and run afterwards.
-import @Std/Process with { argCount, argAt }
+import @Std/Process with { argCount, argAt, exit }
 import @Plew/Syntax with { SyntaxFile }
 import ../src/Frontend with { Comp }
+import ../src/Diag with { emitDiagnostic }
 import ../src/FrontendDriver with { runFrontend }
 import ../src/Backend with { emitLlvm, emitLlvmRuntime }
 
@@ -17,5 +18,9 @@ fn main() {
     }
     mut val compiler: Comp = <Comp syntax=<SyntaxFile.empty /> />
     runFrontend(c: inout compiler)
-    emitLlvm(c: inout compiler)
+    match emitLlvm(c: inout compiler) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic)
+            exit(code: 1I64) }
+    }
 }

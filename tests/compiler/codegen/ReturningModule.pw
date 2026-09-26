@@ -1,0 +1,31 @@
+// The common LLVM entry returns a diagnostic and leaves its embedding caller
+// alive. A fresh request can lower another module after the failed request.
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Backend with { lowerLlvm, LlvmLoweringResult }
+import @Std/Io with { print }
+import @Std/Process with { argAt }
+
+fn lowerInput(path: String, shouldFail: Bool) {
+    mut val compiler: Comp = <Comp />
+    match analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot=argAt(3I64).bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    match lowerLlvm(c: inout compiler) {
+        LlvmLoweringResult.Success(module: val module) => {
+            if shouldFail { panic("invalid literal reached an LLVM module") }
+            print("module returned")
+        }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+            if !shouldFail { panic(diagnostic.message) }
+            print(diagnostic.message)
+        }
+    }
+}
+fn main() {
+    lowerInput(path: argAt(1I64), shouldFail: false)
+    lowerInput(path: argAt(2I64), shouldFail: true)
+    lowerInput(path: argAt(1I64), shouldFail: false)
+}
