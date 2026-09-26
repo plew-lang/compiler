@@ -245,42 +245,25 @@ pub impl Comp {
     }
 
     inout fn typeDeclVisibleFrom(useMod: U64, start: U64, len: U64) -> Bool {
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
-        while i < self.arena.structCount() {
-            val sd: StructDef = self.arena.structAt(index: i)
-            if sd.nameId == qId {
-                if self.defModuleVisible(defOffset: sd.defOffset, useMod: useMod) { return true }
+        val qualified = self.modules.qualifiedUseIndex(offset: start)
+        if qualified < self.modules.qualifiedUseCount() {
+            match self.moduleBindingFromOrigin(origin: self.modules.qualifiedUseAt(index: qualified)) {
+                ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
+                    return self.typeDeclIdentityInModule(mod: moduleId, start: nameStart, len: nameLen).nameLen != 0U64
+                }
+                _ => { return false }
             }
-            i = self.arena.nextStructNamed(index: i)
         }
-        i = 0
-        while i < self.arena.enumCount() {
-            val ed: EnumDef = self.arena.enumAt(index: i)
-            if ed.nameId == qId {
-                if self.defModuleVisible(defOffset: ed.defOffset, useMod: useMod) { return true }
+        if self.typeDeclIdentityInModule(mod: useMod, start: start, len: len).nameLen != 0U64 { return true }
+        val nameId = intern(c: inout self, start: start, len: len)
+        val index = self.modules.firstImportOriginNamed(moduleId: useMod, nameId: nameId)
+        if index < self.modules.importOriginCount() {
+            match self.moduleBindingFromOrigin(origin: self.modules.importOriginAt(index: index)) {
+                ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
+                    return self.typeDeclIdentityInModule(mod: moduleId, start: nameStart, len: nameLen).nameLen != 0U64
+                }
+                _ => {}
             }
-            i += 1
-        }
-        i = 0
-        while i < self.decls.traitCount() {
-            val td: TraitDef = self.decls.traitAt(index: i)
-            if td.nameId == qId {
-                if self.defModuleVisible(defOffset: td.nameStart, useMod: useMod) { return true }
-            }
-            i += 1
-        }
-        i = 0
-        while i < self.arena.newtypeCount() {
-            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
-            if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
-                if self.defModuleVisible(defOffset: nt.defOffset, useMod: useMod) { return true }
-            }
-            i += 1
-        }
-        // imported into useMod from a module that exports it (name-text keyed)
-        if self.isImportedInto(mod: useMod, nameStart: start, nameLen: len) {
-            if self.isExportedName(nameStart: start, nameLen: len) { return true }
         }
         return false
     }
@@ -338,9 +321,8 @@ pub impl Comp {
         if len == 0 { return <Result.Ok value=() /> }
         if self.isAmbientInLang(start: start, len: len) { return <Result.Ok value=() /> }
         val useMod: U64 = self.moduleOf(offset: siteOffset)
-        // a `Real as Alias` use resolves to Real (imports/exports are keyed by the real name).
+        if self.typeDeclVisibleFrom(useMod: useMod, start: start, len: len) { return <Result.Ok value=() /> }
         val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
-        if self.typeDeclVisibleFrom(useMod: useMod, start: real.nameStart, len: real.nameLen) { return <Result.Ok value=() /> }
         if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
             return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `import … with { … }`)") />
         }
@@ -506,6 +488,11 @@ pub impl Comp {
     // The real import-name length is stored in the source span itself; recover it
     // through the matching import/re-export provenance entry instead of guessing.
     inout fn typeDeclIdentityAt(useMod: U64, start: U64, len: U64) -> Bind {
+        val qualified = self.modules.qualifiedUseIndex(offset: start)
+        if qualified < self.modules.qualifiedUseCount() {
+            val origin = self.modules.qualifiedUseAt(index: qualified)
+            return self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
+        }
         val local: Bind = self.typeDeclIdentityInModule(mod: useMod, start: start, len: len)
         if local.nameLen != 0U64 { return local }
         val nameId = intern(c: inout self, start: start, len: len)

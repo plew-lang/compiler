@@ -1,0 +1,3 @@
+import ./Models
+fn read(item: Models.Item) {}
+fn main() {}

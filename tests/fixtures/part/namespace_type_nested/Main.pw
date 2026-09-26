@@ -1,0 +1,4 @@
+import ./Facade
+import @Std/Io with { print }
+fn read(item: Facade.Models.Item) -> I64 { return item.value }
+fn main() { print(read(item: <Facade.Models.Item value=41I64 />)) }

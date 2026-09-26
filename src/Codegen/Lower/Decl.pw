@@ -141,6 +141,13 @@ pub impl Comp {
             args.append((try self.normalizeProjectionType(t: t.args[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1
         }
+        if t.projectionAssoc.bytes().count() > 0U64 && t.projectionTrait.bytes().count() == 0U64 {
+            val moduleId = self.typeNamespaceModule(name: t.nameSpan)
+            if moduleId != 4000000000U64 {
+                self.recordNamespaceUse(name: t.projectionAssocSpan, moduleId: moduleId)
+                return <Result.Ok value=<TypeAst name=t.projectionAssoc nameSpan=t.projectionAssocSpan args=args span=t.span extView=t.extView viewNames=t.viewNames isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
+            }
+        }
         mut val projectionTrait: String = t.projectionTrait
         if t.projectionAssoc.bytes().count() > 0 {
             if projectionTrait.bytes().count() == 0 {
@@ -169,7 +176,7 @@ pub impl Comp {
             projectionTraitArgs.append((try self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits)))
             i += 1U64
         }
-        return <Result.Ok value=<TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
+        return <Result.Ok value=<TypeAst name=t.name nameSpan=t.nameSpan args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord /> />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {

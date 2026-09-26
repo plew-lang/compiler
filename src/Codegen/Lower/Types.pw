@@ -2,6 +2,16 @@
 // synthesis, and argument / field / dict-literal lowering.
 
 pub impl Comp {
+    inout fn typeNamespaceModule(name: Span) -> U64 {
+        mut val index = 0U64
+        while index < self.cur.typeParams.count() {
+            val parameter = self.cur.typeParams[index]
+            if spansEqual(c: inout self, aStart: parameter.nameStart, aLen: parameter.nameLen, bStart: name.start, bLen: name.end - name.start) { return 4000000000U64 }
+            index += 1U64
+        }
+        return self.namespaceModuleAt(name: name)
+    }
+
     // Bare associated names are lexical declarations, not nominal type names.
     // Explicit method binders win before this lookup; the owner was selected
     // at the impl boundary and is independent of source declaration order.
@@ -381,7 +391,7 @@ pub impl Comp {
             val rref: U64 = (try self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms))
             return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref /> />
         }
-        val nm: Bind = self.internBytes(s: t.name)
+        val nm: Bind = if t.nameSpan.end > t.nameSpan.start { give <Bind nameStart=t.nameSpan.start nameLen=t.nameSpan.end - t.nameSpan.start fieldStart=0U64 fieldLen=0U64 /> } else { give self.internBytes(s: t.name) }
         mut val args: Array[U64] = []
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0
@@ -555,7 +565,16 @@ pub impl Comp {
         }
 
         val nameLen: U64 = t.name.end - t.name.start
-        val name: Bind = <Bind nameStart=t.name.start nameLen=nameLen fieldStart=t.name.start fieldLen=nameLen />
+        mut val name: Bind = <Bind nameStart=t.name.start nameLen=nameLen fieldStart=t.name.start fieldLen=nameLen />
+        mut val namespaceType = false
+        if t.projectionAssoc.end > t.projectionAssoc.start && t.projectionTrait.end == t.projectionTrait.start {
+            val moduleId = self.typeNamespaceModule(name: t.name)
+            if moduleId != 4000000000U64 {
+                self.recordNamespaceUse(name: t.projectionAssoc, moduleId: moduleId)
+                name = <Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 />
+                namespaceType = true
+            }
+        }
         mut val args: Array[U64] = []
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0U64
@@ -595,7 +614,7 @@ pub impl Comp {
         if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
 
         mut val projectionTrait: Span = t.projectionTrait
-        if t.projectionAssoc.end > t.projectionAssoc.start {
+        if !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
             if projectionTrait.end == projectionTrait.start {
                 projectionTrait = (try self.uniqueSyntaxProjectionTrait(t: t))
             } else {
@@ -642,7 +661,7 @@ pub impl Comp {
         mut val assocNameStart: U64 = 0U64
         mut val assocNameLen: U64 = 0U64
         mut val assocNameId: U64 = 0U64
-        if t.projectionAssoc.end > t.projectionAssoc.start {
+        if !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
             assocNameStart = t.projectionAssoc.start
             assocNameLen = t.projectionAssoc.end - t.projectionAssoc.start
             assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)

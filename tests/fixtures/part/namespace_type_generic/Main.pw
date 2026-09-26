@@ -1,0 +1,4 @@
+import ./Models
+import @Std/Io with { print }
+fn read(item: Models.Box[I64]) -> I64 { return item.value }
+fn main() { print(read(item: <Models.Box[I64] value=41I64 />)) }
