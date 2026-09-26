@@ -116,8 +116,8 @@ pub impl Comp {
                         return <Result.Ok value=() />
                     }
                 }
-                val mf: U64 = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                val rt: TypeInfo = self.typeOf(id: recv)
+                val mf: U64 = (try self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
+                val rt: TypeInfo = (try self.typeOf(id: recv))
                 if rt.nameLen != 0U64 { try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 try self.checkResolvedMethodArgs(mf: mf, args: args)
@@ -133,19 +133,19 @@ pub impl Comp {
                     if source.kind == 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier") />
                     }
-                    val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val mf: U64 = (try self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
                     self.recordResolvedMethodCallee(id: id, callee: mf)
                     try self.checkResolvedMethodArgs(mf: mf, args: args)
                     try self.verifyArgs(args: args)
                     return <Result.Ok value=() />
                 }
                 try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
-                val rt: TypeInfo = self.typeOf(id: recv)
-                val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
+                val rt: TypeInfo = (try self.typeOf(id: recv))
+                val mf: U64 = (try self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
                 if mf < self.arena.functionCount() {
                     val selectedFn: Func = self.arena.functionAt(index: mf)
                     if self.methodRecvIsTrait(f: selectedFn) {
-                        val recvRef: U64 = self.inferType(id: recv)
+                        val recvRef: U64 = (try self.inferType(id: recv))
                         // Candidate selection and applicability validation use
                         // the same normalized receiver view.  Do not rebuild a
                         // proof from a provided copy's origin here: that loses
@@ -177,7 +177,7 @@ pub impl Comp {
                 val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
                 try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
-                    val finalType: TypeInfo = self.typeOf(id: id)
+                    val finalType: TypeInfo = (try self.typeOf(id: id))
                     try self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: sourceSelector.writtenStart)
                 }
                 try self.verifyExpr(id: recv)
@@ -357,7 +357,7 @@ pub impl Comp {
                 // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
                 // (typeOf, not exprType: cached; only `.ref` is read here and an int context's
                 // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
-                val abt: TypeInfo = self.typeOf(id: base)
+                val abt: TypeInfo = (try self.typeOf(id: base))
                 if self.isWeakRefLikeInst(ref: abt.ref) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if self.isStrongRefInst(ref: abt.ref) {
@@ -379,7 +379,7 @@ pub impl Comp {
                 // `Optional` strong reference first. Reject `w->…` with a pointed message rather than the
                 // opaque backend "not a registered struct" error.
                 // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
-                val bt: TypeInfo = self.typeOf(id: base)
+                val bt: TypeInfo = (try self.typeOf(id: base))
                 if self.isWeakRefLikeInst(ref: bt.ref) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if !(self.isStrongRefInst(ref: bt.ref)) {
@@ -396,11 +396,11 @@ pub impl Comp {
                 // backend as an "internal:" error. `Optional` and any user type that
                 // implements `Chain` qualify; a plain struct or scalar does not — and
                 // `Result` is deliberately NOT Chain (propagate its error with `try`).
-                val bt: TypeInfo = self.typeOf(id: base)
+                val bt: TypeInfo = (try self.typeOf(id: base))
                 mut val baseIsChain: Bool = false
                 if bt.kind == 2I64 {
                     if bt.nameLen > 0U64 {
-                        baseIsChain = self.typeConformsToChain(nameStart: bt.nameStart, nameLen: bt.nameLen)
+                        baseIsChain = (try self.typeConformsToChain(nameStart: bt.nameStart, nameLen: bt.nameLen))
                     }
                 }
                 if !(baseIsChain) {
@@ -429,7 +429,7 @@ pub impl Comp {
                 // registered enum (notably `Optional`) used to crash the backend (it
                 // assumed Ok/Err variants and indexed out of bounds). An Optional uses
                 // `unwrapOr` / `?.` / `match` instead.
-                val tti: TypeInfo = self.typeOf(id: expr)
+                val tti: TypeInfo = (try self.typeOf(id: expr))
                 if tti.nameLen > 0U64 {
                     mut val isEnum: Bool = self.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < self.arena.enumCount()
                     if !(isEnum) {
@@ -667,14 +667,14 @@ pub impl Comp {
     }
 
     inout fn checkDestructureSiteBinds(site: DestructureSite) -> Result[(), CompileDiagnostic] {
-        val ti: TypeInfo = self.typeOf(id: site.initId)
+        val ti: TypeInfo = (try self.typeOf(id: site.initId))
         mut val tnStart: U64 = ti.nameStart
         mut val tnLen: U64 = ti.nameLen
         if site.isElem {
             // the loop-source case: the record is the array's ELEMENT — a kind-3
             // TypeInfo's name span already names the element.
             if ti.kind != 3 {
-                val item: TypeInfo = self.iterableItemInfo(et: ti)
+                val item: TypeInfo = (try self.iterableItemInfo(et: ti))
                 tnStart = item.nameStart
                 tnLen = item.nameLen
             }
@@ -775,7 +775,7 @@ pub impl Comp {
         if a.binds.len == 0U64 {
             return <Result.Ok value=() />
         }
-        val subject: TypeInfo = self.typeOf(id: scrut)
+        val subject: TypeInfo = (try self.typeOf(id: scrut))
         val ei: U64 = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: subject)))
         if ei < self.arena.enumCount() {
             val vi: U64 = self.variantIndexInDeclaration(enumIndex: ei, nameStart: a.variantStart, nameLen: a.variantLen)
@@ -816,14 +816,14 @@ pub impl Comp {
             // a struct destructure requires a scrutinee OF that struct type (spec/11). A
             // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
             // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
-            val st: TypeInfo = self.typeOf(id: scrut)
+            val st: TypeInfo = (try self.typeOf(id: scrut))
             if st.nameLen > 0U64 {
                 if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
                     return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
             }
         }
-        self.addArmBinds(a: a, scrut: scrut)
+        try self.addArmBinds(a: a, scrut: scrut)
         return <Result.Ok value=() />
     }
 
@@ -831,11 +831,11 @@ pub impl Comp {
     // half of verifyAddArmBinds, also used by the literal-typing walk (checkLitCtx),
     // which must see a give-value's payload binds at their real type but must not
     // re-emit verifyAddArmBinds's destructure diagnostic (that walk runs first).
-    inout fn addArmBinds(a: MatchArm, scrut: U64) {
+    inout fn addArmBinds(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
-            return
+            return <Result.Ok value=() />
         }
-        val st: TypeInfo = self.typeOf(id: scrut)
+        val st: TypeInfo = (try self.typeOf(id: scrut))
         val generic: Bool = self.isGenericInst(ref: st.ref)
         mut val bi: U64 = 0
         if a.isStruct {
@@ -868,5 +868,6 @@ pub impl Comp {
                 bi += 1
             }
         }
+        return <Result.Ok value=() />
     }
 }

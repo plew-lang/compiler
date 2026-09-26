@@ -155,7 +155,7 @@ pub impl Comp {
                         // the witness's Rhs (I8), not U64.
                         mut val handled: Bool = false
                         // (1) a float operand on either side makes the op float (homogeneous).
-                        if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
+                        if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
                             try self.checkArithNoCtx(lhs: lhs, rhs: rhs)
                             handled = true
                         }
@@ -164,7 +164,7 @@ pub impl Comp {
                         // param, the lhs from its own type. (exprType is non-caching, so a
                         // payload bind resolved here does not poison the typeOf cache.)
                         if !handled {
-                            val lt: TypeInfo = self.exprType(id: lhs)
+                            val lt: TypeInfo = (try self.exprType(id: lhs))
                             if lt.kind == 2 {
                                 if (try self.checkBinTraitRhs(op: op, lhs: lhs, rhs: rhs)) {
                                     try self.checkLitCtx(id: lhs, eKind: 0, eBits: 0, eSgn: false)
@@ -175,7 +175,7 @@ pub impl Comp {
                         // (3) homogeneous integer: a typed operand on EITHER side fixes the shared
                         // type (so `5 + big` types 5 from big, not just `big + 5`).
                         if !handled {
-                            if self.exprIntTy(id: lhs).known || self.exprIntTy(id: rhs).known {
+                            if (try self.exprIntTy(id: lhs)).known || (try self.exprIntTy(id: rhs)).known {
                                 try self.checkArithNoCtx(lhs: lhs, rhs: rhs)
                                 handled = true
                             }
@@ -266,7 +266,7 @@ pub impl Comp {
                             // their real type, not a shadowing outer name — the operator /
                             // literal typing below reads operand types.
                             val armMark: U64 = self.scopeMark()
-                            self.addArmBinds(a: arm, scrut: scrut)
+                            try self.addArmBinds(a: arm, scrut: scrut)
                             try self.checkLitCtx(id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
                             self.popLocals(mark: armMark)
                         }
@@ -333,12 +333,12 @@ pub impl Comp {
     }
 
     inout fn checkBinTraitRhs(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
-        if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
-            val lt: TypeInfo = self.binWitnessType(lhs: lhs, rhs: rhs)
+        if (try self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs)) {
+            val lt: TypeInfo = (try self.binWitnessType(lhs: lhs, rhs: rhs))
             // a bare-literal rhs that could fit MULTIPLE integer right-operand overloads
             // (`impl T as Add[I32]` and `Add[I64]`) is ambiguous — no silent pick by
             // declaration order (spec: 曖昧はエラー). Demand a suffix (`a + 10I64`).
-            val rt: TypeInfo = self.typeOf(id: rhs)
+            val rt: TypeInfo = (try self.typeOf(id: rhs))
             if rt.kind == 0 {
                 if rt.nameLen == 0 {
                     if self.intRhsWitnessCount(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) >= 2U64 {
@@ -346,7 +346,7 @@ pub impl Comp {
                     }
                 }
             }
-            val fi: U64 = self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
+            val fi: U64 = (try self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs))
             if fi < self.arena.functionCount() {
                 val f: Func = self.arena.functionAt(index: fi)
                 if f.params.count() >= 2 {
@@ -371,47 +371,47 @@ pub impl Comp {
     // reports width-less but is nonetheless integer-typed: `arr.count()` (U64) and an
     // array element read `arr[i]` (the element's int type) — so a literal sibling in
     // `0 ..< arr.count()` infers U64 and is not flagged ambiguous.
-    inout fn exprIntTy(id: U64) -> IntTy {
-        val ti: TypeInfo = self.exprType(id: id)
+    inout fn exprIntTy(id: U64) -> Result[IntTy, CompileDiagnostic] {
+        val ti: TypeInfo = (try self.exprType(id: id))
         if self.tiIsInt(ti: ti) {
-            return <IntTy known=true bits=self.intBits(start: ti.nameStart, len: ti.nameLen) sgn=self.intSigned(start: ti.nameStart, len: ti.nameLen) />
+            return <Result.Ok value=<IntTy known=true bits=self.intBits(start: ti.nameStart, len: ti.nameLen) sgn=self.intSigned(start: ti.nameStart, len: ti.nameLen) /> />
         }
         val e: Expr = self.arena.exprs[id]
         match e {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // argCount() is the one integer-returning I/O builtin (I64).
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
-                    return <IntTy known=true bits=64 sgn=true />
+                    return <Result.Ok value=<IntTy known=true bits=64 sgn=true /> />
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                    val bt: TypeInfo = self.exprType(id: base)
+                    val bt: TypeInfo = (try self.exprType(id: base))
                     if bt.kind == 3 {
-                        return <IntTy known=true bits=64 sgn=false />
+                        return <Result.Ok value=<IntTy known=true bits=64 sgn=false /> />
                     }
                     if self.isBufferType(ti: bt) {
-                        return <IntTy known=true bits=64 sgn=false />
+                        return <Result.Ok value=<IntTy known=true bits=64 sgn=false /> />
                     }
                 }
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
-                    val bt: TypeInfo = self.exprType(id: base)
+                    val bt: TypeInfo = (try self.exprType(id: base))
                     if self.isBufferType(ti: bt) {
-                        return <IntTy known=true bits=64 sgn=false />
+                        return <Result.Ok value=<IntTy known=true bits=64 sgn=false /> />
                     }
                 }
             }
             Expr.Index(val base, val index) => {
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = (try self.exprType(id: base))
                 if bt.kind == 3 {
                     if self.isIntType(start: bt.nameStart, len: bt.nameLen) {
-                        return <IntTy known=true bits=self.intBits(start: bt.nameStart, len: bt.nameLen) sgn=self.intSigned(start: bt.nameStart, len: bt.nameLen) />
+                        return <Result.Ok value=<IntTy known=true bits=self.intBits(start: bt.nameStart, len: bt.nameLen) sgn=self.intSigned(start: bt.nameStart, len: bt.nameLen) /> />
                     }
                 }
             }
             _ => {}
         }
-        return <IntTy known=false bits=0 sgn=false />
+        return <Result.Ok value=<IntTy known=false bits=0 sgn=false /> />
     }
 
     // Infer an arithmetic/comparison's literal operand type from a typed sibling
@@ -420,18 +420,18 @@ pub impl Comp {
     inout fn checkArithNoCtx(lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
         // a float-typed sibling makes the whole arith float (`1.5 + 2`); the untyped
         // literal types as a float there (spec/02,12).
-        if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
+        if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
             try self.checkLitCtx(id: lhs, eKind: 2, eBits: 64, eSgn: false)
             try self.checkLitCtx(id: rhs, eKind: 2, eBits: 64, eSgn: false)
             return <Result.Ok value=() />
         }
-        val lt: IntTy = self.exprIntTy(id: lhs)
+        val lt: IntTy = (try self.exprIntTy(id: lhs))
         if lt.known {
             try self.checkLitCtx(id: lhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
             try self.checkLitCtx(id: rhs, eKind: 1, eBits: lt.bits, eSgn: lt.sgn)
             return <Result.Ok value=() />
         }
-        val rt: IntTy = self.exprIntTy(id: rhs)
+        val rt: IntTy = (try self.exprIntTy(id: rhs))
         if rt.known {
             try self.checkLitCtx(id: lhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
             try self.checkLitCtx(id: rhs, eKind: 1, eBits: rt.bits, eSgn: rt.sgn)
@@ -470,7 +470,7 @@ pub impl Comp {
         if arn.nameLen == 0U64 {
             return <Result.Ok value=false />
         }
-        val ai: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val ai: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
         if ai >= self.arena.functionCount() {
             return <Result.Ok value=false />
         }
@@ -488,7 +488,7 @@ pub impl Comp {
         if ct.args.count() != f.typeParams.count() {
             return <Result.Ok value=false />
         }
-        mut val ginf: Array[U64] = self.inferFnArgs(f: f, args: args)
+        mut val ginf: Array[U64] = (try self.inferFnArgs(f: f, args: args))
         mut val gi: U64 = 0
         while gi < ginf.count() {
             mut val needsGround: Bool = ginf[gi] == 0U64
@@ -569,7 +569,7 @@ pub impl Comp {
     // (`xs[0]`) already recovers the element scalar; a generic-instance place carries its
     // ref so make fields ground. Mirrors Stmt.Let's checkLitSpanCtx.
     inout fn checkAssignRhsLit(target: U64, value: U64) -> Result[(), CompileDiagnostic] {
-        val ti: TypeInfo = self.typeOf(id: target)
+        val ti: TypeInfo = (try self.typeOf(id: target))
         if ti.kind == 3 {
             try self.checkLitSpan(id: value, tyStart: ti.nameStart, tyLen: ti.nameLen, isArray: true)
             return <Result.Ok value=() />

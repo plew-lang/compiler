@@ -12,7 +12,7 @@ pub impl Comp {
         try self.checkFnValueSig(declTy: expectedRef, init: valueExpr)
         // a void function's result is `()` — using it where a typed value is expected
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
-        if self.exprIsVoidCall(id: valueExpr) {
+        if (try self.exprIsVoidCall(id: valueExpr)) {
             if !(self.tcLog) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use the result of a function that returns no value (spec/04)") />
             }
@@ -109,7 +109,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        val inferred: U64 = self.inferType(id: valueExpr)
+        val inferred: U64 = (try self.inferType(id: valueExpr))
         if self.typesCompatible(expected: expectedRef, inferred: inferred) {
             return <Result.Ok value=() />
         }
@@ -178,8 +178,8 @@ pub impl Comp {
         if !(handled) {
             return <Result.Ok value=() />
         }
-        val l: U64 = self.inferType(id: lhs)
-        val r: U64 = self.inferType(id: rhs)
+        val l: U64 = (try self.inferType(id: lhs))
+        val r: U64 = (try self.inferType(id: rhs))
         if l == 0U64 || r == 0U64 {
             return <Result.Ok value=() />
         }
@@ -224,7 +224,7 @@ pub impl Comp {
             eprint(text: "TC unary ")
             eprint(text: msg)
             eprint(text: " got=")
-            eprint(text: self.tcRefName(ref: self.inferType(id: operand)))
+            eprint(text: self.tcRefName(ref: (try self.inferType(id: operand))))
             eprint(text: " line=")
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: operand)))
             eprint(text: "\n")
@@ -235,7 +235,7 @@ pub impl Comp {
     }
 
     inout fn tcCheckUnary(op: I64, operand: U64) -> Result[(), CompileDiagnostic] {
-        val t: U64 = self.inferType(id: operand)
+        val t: U64 = (try self.inferType(id: operand))
         if t == 0U64 || t >= self.arena.typeCount() {
             return <Result.Ok value=() />
         }
@@ -281,7 +281,7 @@ pub impl Comp {
     }
 
     inout fn tcCheckArrayIndex(base: U64, index: U64) -> Result[(), CompileDiagnostic] {
-        val bt: TypeInfo = self.typeOf(id: base)
+        val bt: TypeInfo = (try self.typeOf(id: base))
         if bt.kind == 3 {
             val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3U64)
             if u64.nameLen == 0U64 {
@@ -290,7 +290,7 @@ pub impl Comp {
             try self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: u64.nameStart, nameLen: u64.nameLen), valueExpr: index, pos: "index")
             return <Result.Ok value=() />
         }
-        val br: U64 = self.inferType(id: base)
+        val br: U64 = (try self.inferType(id: base))
         if br != 0U64 {
             if br < self.arena.typeCount() {
                 val bref: TypeRef = self.arena.typeAt(index: br)

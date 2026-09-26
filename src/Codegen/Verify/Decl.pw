@@ -206,7 +206,7 @@ pub impl Comp {
 
     inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) -> Result[(), CompileDiagnostic] {
         if strip { return <Result.Ok value=() /> }
-        val rt: TypeInfo = self.exprType(id: recv)
+        val rt: TypeInfo = (try self.exprType(id: recv))
         if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
         try self.checkViewSourceValid(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen, offset: self.exprOffset(id: recv), allowMonomorphicFallback: rt.ref == 0U64 && self.recvOwnParamCount(rt: rt) == 0U64)
         // Views are normalized as an unordered extension set plus one optional
@@ -234,7 +234,7 @@ pub impl Comp {
     // select a same-spelled trait from another loaded module.
     inout fn checkResolvedViewValid(recv: U64, source: ResolvedViewSource, strip: Bool) -> Result[(), CompileDiagnostic] {
         if strip { return <Result.Ok value=() /> }
-        val rt: TypeInfo = self.exprType(id: recv)
+        val rt: TypeInfo = (try self.exprType(id: recv))
         if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
         val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
         if selected.kind != 0U64 {

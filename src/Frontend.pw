@@ -1686,11 +1686,11 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     tracePhase(c: inout c, label: "instantiation-collection:start")
     c.traceExprInstScans = 0U64
     tracePhase(c: inout c, label: "instantiation-collection:infer-construct:start")
-    c.inferConstructTypeArgs()
+    try c.inferConstructTypeArgs()
     tracePhase(c: inout c, label: "instantiation-collection:infer-construct:done")
     c.inCollection = true
     tracePhase(c: inout c, label: "instantiation-collection:collect-generic:start")
-    c.collectGenInsts()
+    try c.collectGenInsts()
     tracePhase(c: inout c, label: "instantiation-collection:collect-generic:done")
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "instantiation-collection:scan-exprs", count: c.traceExprInstScans)
@@ -1742,7 +1742,7 @@ export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAc
     tracePhaseCount(c: inout c, label: "call-template-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "call-template-record:done")
     tracePhase(c: inout c, label: "default-call-completion:start")
-    val incompleteDefaults = c.completeRecordedDefaultCalls()
+    val incompleteDefaults = (try c.completeRecordedDefaultCalls())
     if incompleteDefaults != 0U64 {
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: default argument plans are incomplete") />
     }

@@ -30,30 +30,30 @@ pub impl Comp {
 
     // Name lookup installs declarations without evaluating their type queries.
     // Only a value-type consumer forces an unannotated global's initializer.
-    inout fn typedLocal(index: U64) -> Local {
+    inout fn typedLocal(index: U64) -> Result[Local, CompileDiagnostic] {
         val local: Local = self.cur.locals[index]
-        if !local.globalTypePending { return local }
+        if !local.globalTypePending { return <Result.Ok value=local />}
         val globalIndex: U64 = self.globalIndexForDeclarationTarget(target: local.nameStart)
         if globalIndex >= self.arena.globals.count() {
-            self.errorAt(offset: local.nameStart, msg: "internal error: pending global type has no declaration")
-            return local
+            return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "internal error: pending global type has no declaration") />
+            return <Result.Ok value=local />
         }
         mut val resolving: U64 = 0U64
         while resolving < self.resolvingGlobalTypes.count() {
             if self.resolvingGlobalTypes[resolving] == local.nameStart {
-                self.errorAt(offset: local.nameStart, msg: "cyclic global type inference")
-                return local
+                return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "cyclic global type inference") />
+                return <Result.Ok value=local />
             }
             resolving += 1U64
         }
         val saved = self.cur
         val priorQueries = self.resolvingGlobalTypes
         self.resolvingGlobalTypes.append(local.nameStart)
-        self.enterGlobalInitializer(target: local.nameStart)
+        try self.enterGlobalInitializer(target: local.nameStart)
         mut val result: Local = local
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val inferred = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                val inferred = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 result = <Local nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
             }
             _ => {}
@@ -61,10 +61,10 @@ pub impl Comp {
         self.resolvingGlobalTypes = priorQueries
         self.cur = saved
         self.cur.locals.set(i: index, value: result)
-        return result
+        return <Result.Ok value=result />
     }
 
-    inout fn enterGlobalInitializer(target: U64) {
+    inout fn enterGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
         self.cur.locals = []
         self.cur.hasRecv = false
         self.cur.extId = 0U64
@@ -87,23 +87,24 @@ pub impl Comp {
         self.cur.globalInitializerTarget = <Optional.Some v=target />
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
         val init: U64 = self.globalInitExpr(g: self.arena.globals[index])
-        self.seedGlobalLocals(useMod: self.moduleOf(offset: self.exprOffset(id: init)))
+        try self.seedGlobalLocals(useMod: self.moduleOf(offset: self.exprOffset(id: init)))
+        return <Result.Ok value=() />
     }
 
     inout fn prepareGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
         if self.globalInitializerPrepared(target: target) { return <Result.Ok value=() /> }
         val saved = self.cur
-        self.enterGlobalInitializer(target: target)
+        try self.enterGlobalInitializer(target: target)
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
         try self.recordStmt(stmtId: stmt)
-        self.enterGlobalInitializer(target: target)
+        try self.enterGlobalInitializer(target: target)
         try self.verifyStmt(stmtId: stmt)
-        self.enterGlobalInitializer(target: target)
+        try self.enterGlobalInitializer(target: target)
         self.cur.recordCallTemplates = true
         try self.recordStmt(stmtId: stmt)
         self.cur.recordCallTemplates = false
-        if self.completeRecordedDefaultCalls() != 0U64 {
+        if (try self.completeRecordedDefaultCalls()) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: global default argument plans are incomplete") />
         }
         self.preparedGlobalTargets.append(target)

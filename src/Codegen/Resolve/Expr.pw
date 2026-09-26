@@ -46,18 +46,18 @@ pub impl Comp {
         }
     }
 
-    inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
-        return self.resolveMethodFinalForType(recv: recv, receiverType: self.typeOf(id: recv), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
+    inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        return <Result.Ok value=(try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))) />
     }
 
     // Pre-resolved final callable for Call / Method / ExtMethod expression `id`.
     // The AST node owns the decision, including a `#` source key; verification,
     // type recovery and codegen therefore cannot drift by looking it up again.
-    inout fn resolvedCallee(id: U64) -> U64 {
+    inout fn resolvedCallee(id: U64) -> Result[U64, CompileDiagnostic] {
         if id < self.typeCache.callee.count() {
             match self.typeCache.callee[id] {
-                CachedCallee.Selected(val callee) => { return callee }
-                CachedCallee.NoStaticCallee => { return self.arena.functionCount() }
+                CachedCallee.Selected(val callee) => { return <Result.Ok value=callee />}
+                CachedCallee.NoStaticCallee => { return <Result.Ok value=self.arena.functionCount() />}
                 CachedCallee.Uncomputed => {}
             }
         }
@@ -69,7 +69,7 @@ pub impl Comp {
                 // sentinel here; Mono records the closure target in CallResolution.
                 val li: U64 = self.localIndexByName(start: nameStart, len: nameLen)
                 if li >= self.cur.locals.count() || !(self.isFnType(ref: self.cur.locals[li].ty)) {
-                    r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+                    r = (try self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args))
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -89,12 +89,12 @@ pub impl Comp {
                     _ => {}
                 }
                 if !abstractBound {
-                    r = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                    r = (try self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
                 val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
-                r = self.resolveExtMethodFinal(recv: recv, srcStart: src.start, srcLen: src.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
+                r = (try self.resolveExtMethodFinal(recv: recv, srcStart: src.start, srcLen: src.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args))
             }
             _ => {}
         }
@@ -109,7 +109,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return r
+        return <Result.Ok value=r />
     }
 
     inout fn recordResolvedMethodCallee(id: U64, callee: U64) {
@@ -176,11 +176,11 @@ pub impl Comp {
     // secondary), which is exactly what the backend's env-aware exprTypeRef path already
     // does for most generic reads. (intCtx width-less recovery below stays env-independent
     // — it reads the checker-recorded literal context, not the live env.)
-    inout fn typeOf(id: U64) -> TypeInfo {
+    inout fn typeOf(id: U64) -> Result[TypeInfo, CompileDiagnostic] {
         mut val t: TypeInfo = scalarInfo()
         if id < self.typeCache.kind.count() {
             if self.typeCache.kind[id] == typeUnfilled() {
-                t = self.exprType(id: id)
+                t = (try self.exprType(id: id))
                 // Cache the result ONLY in an instance-independent context (no active
                 // monomorphization env). Under a live env — `recvInstRef` set (front-end
                 // mono), or `cur.typeParams` non-empty during backend generic-instance
@@ -202,7 +202,7 @@ pub impl Comp {
                 t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] viewExtId=self.typeCache.viewId[id] />
             }
         } else {
-            t = self.exprType(id: id)
+            t = (try self.exprType(id: id))
         }
         // width-less recovery: a form whose type came only from context (`0-1` in an
         // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
@@ -212,11 +212,11 @@ pub impl Comp {
             if t.nameLen == 0 {
                 val ctx: TypeInfo = self.exprIntCtxTypeInfo(id: id)
                 if ctx.nameLen != 0 {
-                    return ctx
+                    return <Result.Ok value=ctx />
                 }
             }
         }
-        return t
+        return <Result.Ok value=t />
     }
 
     // The structured TypeRef for a recovered TypeInfo, for the typed-IR store: like
@@ -799,24 +799,24 @@ pub impl Comp {
         return <CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) />
     }
 
-    inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> StaticMemberResolution {
-        if self.cur.checkFn >= self.arena.functionCount() || receiverTerm == 0U64 { return <StaticMemberResolution.Missing /> }
+    inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        if self.cur.checkFn >= self.arena.functionCount() || receiverTerm == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
         if isUnary {
             if op == opSub() || op == opNot() || op == opBitNot() {
-                return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.unOpTraitName(op: op), memberName: unaryMethodName(op: op), arity: 1U64)
+                return <Result.Ok value=(try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.unOpTraitName(op: op), memberName: unaryMethodName(op: op), arity: 1U64)) />
             }
-            return <StaticMemberResolution.Missing />
+            return <Result.Ok value=<StaticMemberResolution.Missing /> />
         }
         if isBinTraitOp(op: op) {
-            return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64)
+            return <Result.Ok value=(try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64)) />
         }
         if op == opEq() || op == opNe() {
-            return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: "Eq", memberName: "eq", arity: 2U64)
+            return <Result.Ok value=(try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: "Eq", memberName: "eq", arity: 2U64)) />
         }
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-            return self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: "Ord", memberName: "compare", arity: 2U64)
+            return <Result.Ok value=(try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, traitName: "Ord", memberName: "compare", arity: 2U64)) />
         }
-        return <StaticMemberResolution.Missing />
+        return <Result.Ok value=<StaticMemberResolution.Missing /> />
     }
 
     // Ordering syntax is a projection of the selected Ord requirement, not a
@@ -833,8 +833,8 @@ pub impl Comp {
         return self.staticRequirementResultType(resolution: resolution)
     }
 
-    inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) {
-        if !isUnary && (op == opAnd() || op == opOr()) { return }
+    inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) -> Result[(), CompileDiagnostic] {
+        if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
@@ -843,19 +843,20 @@ pub impl Comp {
         }
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
-        val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary)
+        val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary))
         val staticResult: U64 = self.staticOperatorTemplateResultTerm(op: op, resolution: resolution)
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
-        if !(self.cur.recordCallTemplates) { return }
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
-            return
+            return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> />)
+        return <Result.Ok value=() />
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
@@ -1134,7 +1135,7 @@ pub impl Comp {
     // Record selection evidence independently from the expression result
     // TypeTerm.  A later body-instance ground reads the term for type equality
     // and the provenance for CallResolution; neither reader needs AST recovery.
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) {
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex fieldProjectionIsBoxed=prior.fieldProjectionIsBoxed />
@@ -1154,7 +1155,7 @@ pub impl Comp {
             if f.isProvided {
                 match receiver {
                     CallTemplateReceiver.Term(term: val receiverTerm) => {
-                        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+                        val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args))
                         match resolution {
                             StaticMemberResolution.Requirement(proof: val resolved, traitIdx: _, reqIdx: _) => { selectedProof = resolved }
                             StaticMemberResolution.Provided(proof: val resolved, traitIdx: _, callee: _) => { selectedProof = resolved }
@@ -1166,6 +1167,7 @@ pub impl Comp {
             }
         }
         self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
+        return <Result.Ok value=() />
     }
 
     // Select bidirectional construction context without recording its children.
@@ -1366,7 +1368,7 @@ pub impl Comp {
                 if floatingContext && self.contextualNumericExpression(exprId: exprId) {
                     try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
                     self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
-                    self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
+                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
                 } else if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
                     try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
                 }
@@ -1376,7 +1378,7 @@ pub impl Comp {
                     try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
                     try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
                     self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
-                    self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false)
+                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false)
                 } else if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
                     try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
                     try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
@@ -1423,7 +1425,7 @@ pub impl Comp {
     // resolution transiently points at a CALLEE's env while this expr belongs to the
     // caller. Falls back to the instance-independent typeCache/typeOf projection (a
     // node the record pass could not reach).
-    inout fn groundedTypeOf(id: U64) -> U64 {
+    inout fn groundedTypeOf(id: U64) -> Result[U64, CompileDiagnostic] {
         // A shared generic body cannot take a field/index result from the
         // AST-global parametric cache: `self.items[i]` in `Set[E]` is stored
         // there as the lexical `E`, while this concrete body may be
@@ -1435,7 +1437,7 @@ pub impl Comp {
                 if self.cur.hasRecv && self.cur.bodyEnvironment.receiverRef != 0U64 {
                     val selfName: Bind = self.kwSpan(kw: "self", kwLen: 4U64)
                     if spansEqual(c: inout self, aStart: start, aLen: len, bStart: selfName.nameStart, bLen: selfName.nameLen) {
-                        return self.cur.bodyEnvironment.receiverRef
+                        return <Result.Ok value=self.cur.bodyEnvironment.receiverRef />
                     }
                 }
                 // A body-local is a resolved semantic binding. Its TypeRef is
@@ -1449,7 +1451,7 @@ pub impl Comp {
                 val localIdx: U64 = self.localIndexByName(start: start, len: len)
                 if localIdx < self.cur.locals.count() {
                     val local: Local = self.cur.locals[localIdx]
-                    if local.ty != 0U64 { return self.groundBodyTerm(ref: local.ty) }
+                    if local.ty != 0U64 { return <Result.Ok value=self.groundBodyTerm(ref: local.ty) />}
                 }
             }
             // Field selection consumes the concrete receiver term.  In
@@ -1469,19 +1471,19 @@ pub impl Comp {
                     Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
                     _ => {}
                 }
-                if baseRef == 0U64 { baseRef = self.groundedTypeOf(id: base) }
+                if baseRef == 0U64 { baseRef = (try self.groundedTypeOf(id: base)) }
                 if baseRef != 0U64 && baseRef < self.arena.typeCount() {
                     val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
-                    if fieldRef != 0U64 { return fieldRef }
+                    if fieldRef != 0U64 { return <Result.Ok value=fieldRef />}
                 }
             }
             Expr.Index(val base, index: _) => {
-                val baseRef: U64 = self.groundedTypeOf(id: base)
+                val baseRef: U64 = (try self.groundedTypeOf(id: base))
                 if baseRef != 0U64 && baseRef < self.arena.typeCount() {
                     val baseTy: TypeRef = self.arena.typeAt(index: baseRef)
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
-                            return baseTy.args[0]
+                            return <Result.Ok value=baseTy.args[0] />
                         }
                     }
                 }
@@ -1489,8 +1491,8 @@ pub impl Comp {
             _ => {}
         }
         val recorded: U64 = self.groundSemanticExprTypeRef(exprId: id, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        if recorded != 0U64 { return recorded }
-        return self.typedIrRefOfInfo(ti: self.typeOf(id: id))
+        if recorded != 0U64 { return <Result.Ok value=recorded />}
+        return <Result.Ok value=self.typedIrRefOfInfo(ti: (try self.typeOf(id: id))) />
     }
 }
 
@@ -1505,14 +1507,14 @@ pub impl Comp {
     // if every parameter is pinned consistently, rewrite Make.ty to the grounded instance.
     // Otherwise leave it un-grounded — a top-down context (backend expectedTy) may still
     // ground it, and a genuinely un-inferable construction is reported at construction.
-    inout fn inferConstructTypeArgs() {
+    inout fn inferConstructTypeArgs() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                     if !isEnum {
                         if !(self.isGenericInst(ref: ty)) {
-                            val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
+                            val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields))
                             if inferred != 0U64 {
                                 self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
                             }
@@ -1523,6 +1525,7 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // The synthetic record-struct TypeRef for a context-less record literal
@@ -1532,7 +1535,7 @@ pub impl Comp {
     // so both spellings are one structural type. Returns 0 when any field
     // value's type is not inferable here (an unsuffixed literal keeps its
     // "no type from context" report; array-typed fields are not modeled).
-    inout fn inferRecordMakeRef(fields: MakeFieldRange) -> U64 {
+    inout fn inferRecordMakeRef(fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         // the empty record `()` is the unit value — self-description degenerates to
         // the zero-field canonical struct `()` (the same struct an annotated
         // `val u: () = ()` lowers to), so a bare bind types without an annotation.
@@ -1542,9 +1545,9 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < fields.len {
             val mf: MakeField = self.makeFieldAt(fields: fields, index: i)
-            val ti: TypeInfo = self.exprType(id: mf.value)
+            val ti: TypeInfo = (try self.exprType(id: mf.value))
             if ti.kind == 3 || ti.nameLen == 0U64 {
-                return 0U64
+                return <Result.Ok value=0U64 />
             }
             mut val fref: U64 = ti.ref
             if fref == 0U64 {
@@ -1562,25 +1565,25 @@ pub impl Comp {
             i += 1
         }
         val rnm: Bind = self.ensureRecordStruct(fieldNames: names, fieldTys: tys)
-        return self.recordTypeTerm(name: rnm, fieldNames: names, fieldTerms: terms)
+        return <Result.Ok value=self.recordTypeTerm(name: rnm, fieldNames: names, fieldTerms: terms) />
     }
 
     // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
     // be inferred: not a generic struct, a parameter no bare field pins, or a field value
     // that is untyped / an array element / conflicts with another field's binding.
-    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, fields: MakeFieldRange) -> U64 {
+    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         // generic structs are excluded from structIndexByName, so resolve the template
         // through genericStructIndex (a 0-arg / non-generic head is not our case).
         val sidx: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
         if sidx >= self.arena.structCount() {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
         val sd: StructDef = self.arena.structAt(index: sidx)
         if sd.typeParams.count() == 0U64 {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
         if sd.fields.count() == 0U64 {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
         mut val args: Array[U64] = []
         mut val pi: U64 = 0
@@ -1598,12 +1601,12 @@ pub impl Comp {
                         // skip it; another (typed) field must, and this one is grounded to the
                         // inferred type by context downstream (`0..<n` binds T from `n`, then
                         // `0` takes T). A conflict between two TYPED fields fails inference.
-                        val cand: U64 = self.makeFieldArgRef(fieldNameId: fd.nameId, fields: fields)
+                        val cand: U64 = (try self.makeFieldArgRef(fieldNameId: fd.nameId, fields: fields))
                         if cand != 0U64 {
                             if argRef == 0U64 {
                                 argRef = cand
                             } else if !(self.typeRefEq(a: argRef, b: cand)) {
-                                return 0U64
+                                return <Result.Ok value=0U64 />
                             }
                         }
                     }
@@ -1611,7 +1614,7 @@ pub impl Comp {
                 fj += 1
             }
             if argRef == 0U64 {
-                return 0U64
+                return <Result.Ok value=0U64 />
             }
             args.append(argRef)
             pi += 1
@@ -1619,13 +1622,13 @@ pub impl Comp {
         // Inference selects the arguments of this declaration; it must not
         // erase its nominal identity. Mid ownership classification and later
         // substitutions consume that identity without repeating name lookup.
-        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=sd.defOffset args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=sd.defOffset args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
     }
 
     // The TypeRef for the value supplied to the make-field named `fieldNameId`, or 0 when
     // the field is absent, or its value's type is untyped / unknown / an array (which a
     // bare parameter can't take in this increment).
-    inout fn makeFieldArgRef(fieldNameId: U64, fields: MakeFieldRange) -> U64 {
+    inout fn makeFieldArgRef(fieldNameId: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
         mut val k: U64 = 0
         while k < fields.len {
             val mf: MakeField = self.makeFieldAt(fields: fields, index: k)
@@ -1634,25 +1637,25 @@ pub impl Comp {
                 // complete generic arguments. The early pre-Record scan has
                 // no such fact yet and retains its existing TypeInfo bridge.
                 val recorded: U64 = self.semanticExprTerm(exprId: mf.value)
-                if recorded != 0U64 { return recorded }
-                val ti: TypeInfo = self.exprType(id: mf.value)
+                if recorded != 0U64 { return <Result.Ok value=recorded />}
+                val ti: TypeInfo = (try self.exprType(id: mf.value))
                 if ti.kind == 3 {
-                    return 0U64
+                    return <Result.Ok value=0U64 />
                 }
                 if ti.nameLen == 0U64 {
-                    return 0U64
+                    return <Result.Ok value=0U64 />
                 }
                 // a generic-instance value (`v=<Box v2=1I32/>`): reuse its grounded ref.
                 if ti.ref != 0U64 {
                     if self.isGenericInst(ref: ti.ref) {
-                        return ti.ref
+                        return <Result.Ok value=ti.ref />
                     }
                 }
                 mut val noArgs: Array[U64] = []
-                return self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                return <Result.Ok value=self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
             }
             k += 1
         }
-        return 0U64
+        return <Result.Ok value=0U64 />
     }
 }

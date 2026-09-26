@@ -85,7 +85,7 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
-        self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+        try self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
         try self.checkGenericArity(ref: f.retTy, offset: f.nameStart)
         mut val pi: U64 = 0
         while pi < f.params.count() {
@@ -182,7 +182,7 @@ pub impl Comp {
     }
 
     inout fn checkIndexKeyType(base: U64, index: U64) -> Result[(), CompileDiagnostic] {
-        val bt: TypeInfo = self.typeOf(id: base)
+        val bt: TypeInfo = (try self.typeOf(id: base))
         if bt.ref != 0U64 {
             if bt.ref < self.arena.typeCount() {
                 val t: TypeRef = self.arena.typeAt(index: bt.ref)
@@ -196,26 +196,26 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn valueIsReliablyNonArray(value: U64) -> Bool {
+    inout fn valueIsReliablyNonArray(value: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[value] {
-            Expr.Array(elems: _) => { return false }
-            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
-            Expr.Str(start: _, len: _) => { return true }
+            Expr.Array(elems: _) => { return <Result.Ok value=false />}
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return <Result.Ok value=true />}
+            Expr.Str(start: _, len: _) => { return <Result.Ok value=true />}
             // `<Array data=buf />` constructs the array struct directly (the only way to
             // wrap an existing `Buffer` as an `Array`, e.g. `String.bytes()`): it IS an
             // array value, so it satisfies an `-> Array[T]` return.
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
                 if rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "Array") {
-                    return false
+                    return <Result.Ok value=false />
                 }
-                return true
+                return <Result.Ok value=true />
             }
             _ => {
-                val it: TypeInfo = self.typeOf(id: value)
+                val it: TypeInfo = (try self.typeOf(id: value))
                 if it.kind == 2 {
-                    return true
+                    return <Result.Ok value=true />
                 }
-                return false
+                return <Result.Ok value=false />
             }
         }
     }

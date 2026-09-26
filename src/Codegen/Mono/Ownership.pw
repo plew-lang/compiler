@@ -254,7 +254,7 @@ pub impl Comp {
         // CPtr is a builtin FFI type constructor without a StructDef.
         mut val isOpaquePointer = rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr")
         if type.isRecord {
-            self.collectRecordLayout(ref: typeRef)
+            try self.collectRecordLayout(ref: typeRef)
             val layout = self.recordStructIndex(ref: typeRef)
             if layout >= self.arena.structCount() {
                 return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: finalized record has no physical layout") />

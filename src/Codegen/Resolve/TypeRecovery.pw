@@ -34,7 +34,7 @@ pub impl Comp {
     // explicit view syntax.  The latter is essential during first-pass free
     // overload resolution, before a local `P` has been promoted to a typed
     // local but after `p#E` has already made its provenance explicit.
-    inout fn argViewIds(argExpr: U64, ti: TypeInfo) -> Array[U64] {
+    inout fn argViewIds(argExpr: U64, ti: TypeInfo) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         mut val cur: U64 = argExpr
         mut val keepBase: Bool = true
@@ -55,7 +55,7 @@ pub impl Comp {
             }
         }
         if keepBase {
-            val base: TypeInfo = self.exprType(id: cur)
+            val base: TypeInfo = (try self.exprType(id: cur))
             val baseIds: Array[U64] = self.typeRefViewIds(ref: base.ref)
             mut val i: U64 = 0U64
             while i < baseIds.count() {
@@ -72,7 +72,7 @@ pub impl Comp {
                 }
             }
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn argMatchesParamLabel(param: Param, arg: Arg) -> Bool {
@@ -175,43 +175,43 @@ pub impl Comp {
     // memory-unsafe type pun). Only a GROUND recorded type overrides: a still-parametric
     // `T` argument does not discriminate overloads (spec/06), so it is left to the
     // exprType path unchanged.
-    inout fn argResolvedTypeInfo(argExpr: U64) -> TypeInfo {
+    inout fn argResolvedTypeInfo(argExpr: U64) -> Result[TypeInfo, CompileDiagnostic] {
         if argExpr < self.arena.semanticExprTypes.count() {
             val sref: U64 = self.semanticExprTerm(exprId: argExpr)
             if sref != 0U64 {
                 if sref < self.arena.typeCount() {
                     if self.tyRefIsGround(ref: sref) {
-                        return self.typeInfoOfRef(ref: sref)
+                        return <Result.Ok value=self.typeInfoOfRef(ref: sref) />
                     }
                 }
             }
         }
-        return self.exprType(id: argExpr)
+        return <Result.Ok value=(try self.exprType(id: argExpr)) />
     }
 
     // Whether an argument's recovered type matches a parameter's declared type head
     // (used to discriminate same-label overloads — spec: overload by argument type).
     // An untyped integer literal (no suffix) matches any integer-typed parameter.
-    inout fn argMatchesParam(argExpr: U64, p: Param) -> Bool {
-        val ti: TypeInfo = self.argResolvedTypeInfo(argExpr: argExpr)
+    inout fn argMatchesParam(argExpr: U64, p: Param) -> Result[Bool, CompileDiagnostic] {
+        val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if p.tyIsArray {
             if ti.kind == 3 {
-                return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+                return <Result.Ok value=intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId />
             }
-            return false
+            return <Result.Ok value=false />
         }
         // Array TypeInfo carries the element name; it cannot match a scalar
         // parameter merely because that scalar has the same name.
-        if ti.kind == 3 { return false }
+        if ti.kind == 3 { return <Result.Ok value=false />}
         if ti.kind == 2 {
             // A source set is ordinary named-type identity.  Compare it even
             // when the base local has not acquired a TypeRef yet: `p#E` must
             // select `f(P#E)` rather than falling through to first-declared
             // `f(P)` and failing only in backend validation.
-            val actualViews: Array[U64] = self.argViewIds(argExpr: argExpr, ti: ti)
+            val actualViews: Array[U64] = (try self.argViewIds(argExpr: argExpr, ti: ti))
             val paramViews: Array[U64] = self.typeRefViewIds(ref: p.ty)
             if !(self.sameViewIdSet(a: actualViews, b: paramViews)) {
-                return false
+                return <Result.Ok value=false />
             }
             // generic-instance discrimination (spec/07: distinguish at concrete argument
             // positions): `f(b: Box[I64])` vs `f(b: Box[String])` share a head name but
@@ -219,13 +219,13 @@ pub impl Comp {
             // comparable generic instances — head-name-only would mis-merge them (the
             // parametric store now hands us the ground `Box[String]` ref).
             if self.refsGenericArgComparable(a: ti.ref, b: p.ty) {
-                return self.typeRefEq(a: ti.ref, b: p.ty)
+                return <Result.Ok value=self.typeRefEq(a: ti.ref, b: p.ty) />
             }
             // Function types are structural (labels, parameters, return type,
             // and sendability).  They must not collapse to the shared `fn`
             // head during overload resolution.
             if self.isFnType(ref: ti.ref) && self.isFnType(ref: p.ty) {
-                return self.typeRefEq(a: ti.ref, b: p.ty)
+                return <Result.Ok value=self.typeRefEq(a: ti.ref, b: p.ty) />
             }
             // Existentials share their trait name as a head, but `any P` and
             // `any sendable P` are distinct callable parameter forms.  Route
@@ -233,45 +233,45 @@ pub impl Comp {
             // types instead of letting the fallback erase the capability.
             if ti.ref != 0U64 && p.ty != 0U64 && ti.ref < self.arena.typeCount() && p.ty < self.arena.typeCount() {
                 if self.arena.typeAt(index: ti.ref).isAny || self.arena.typeAt(index: p.ty).isAny {
-                    return self.typeRefEq(a: ti.ref, b: p.ty)
+                    return <Result.Ok value=self.typeRefEq(a: ti.ref, b: p.ty) />
                 }
             }
-            return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+            return <Result.Ok value=intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId />
         }
         // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;
         // an untyped literal (no name) adapts to any integer parameter.
         if ti.nameLen != 0 {
-            return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
+            return <Result.Ok value=intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId />
         }
-        return self.isIntType(start: p.tyStart, len: p.tyLen)
+        return <Result.Ok value=self.isIntType(start: p.tyStart, len: p.tyLen) />
     }
 
     // Whether every provided argument's type matches its parameter's declared type.
     // Defaulted positions have already been checked at the declaration.
-    inout fn paramsTypesMatch(params: FuncParamRange, args: ArgRange) -> Bool {
+    inout fn paramsTypesMatch(params: FuncParamRange, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         mut val ai: U64 = 0
         while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: params, args: args, argIdx: ai)
             if pi < params.count() {
-                if !(self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: self.funcParamAt(params: params, index: pi))) {
-                    return false
+                if !((try self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: self.funcParamAt(params: params, index: pi)))) {
+                    return <Result.Ok value=false />
                 }
             } else {
-                return false
+                return <Result.Ok value=false />
             }
             ai += 1
         }
-        return true
+        return <Result.Ok value=true />
     }
 
     // The resolver's one argument-side classification.  Rank 0 is no exposed
     // callable form, 1 is a selector-only match (for diagnostics/fallback),
     // and 2 is a complete call match.  Every resolver entry point consumes the
     // same rank instead of composing label and type tests independently.
-    inout fn callableArgMatchRank(f: Func, args: ArgRange) -> U64 {
-        if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
-        if self.paramsTypesMatch(params: f.params, args: args) { return 2U64 }
-        return 1U64
+    inout fn callableArgMatchRank(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        if !(self.paramsLabelsOk(params: f.params, args: args)) { return <Result.Ok value=0U64 />}
+        if (try self.paramsTypesMatch(params: f.params, args: args)) { return <Result.Ok value=2U64 />}
+        return <Result.Ok value=1U64 />
     }
 
     // Method declarations carry the receiver's generic binders in their
@@ -281,10 +281,10 @@ pub impl Comp {
     // eager overload and reach LLVM as an integer.  The argument belongs to
     // the *caller* body, however: never install the candidate callee cursor
     // before reading its recorded semantic TypeTerm.
-    inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> U64 {
-        if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
+    inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> Result[U64, CompileDiagnostic] {
+        if !(self.paramsLabelsOk(params: f.params, args: args)) { return <Result.Ok value=0U64 />}
         if recvRef == 0U64 || recvRef >= self.arena.typeCount() {
-            return self.callableArgMatchRank(f: f, args: args)
+            return <Result.Ok value=(try self.callableArgMatchRank(f: f, args: args)) />
         }
         // Capture the caller meaning before selecting a callee. The semantic
         // term of `v` in `out.append(v)` can be
@@ -343,7 +343,7 @@ pub impl Comp {
                         // during method lookup, while generic/fn/any/view terms do
                         // require their complete semantic identity.
                         val expectedTerm: TypeRef = self.arena.typeAt(index: expected)
-                        val actualViews: Array[U64] = self.argViewIds(argExpr: self.argAt(args: args, index: ai).expr, ti: actual)
+                        val actualViews: Array[U64] = (try self.argViewIds(argExpr: self.argAt(args: args, index: ai).expr, ti: actual))
                         val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
                         if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
                             allMatch = false
@@ -364,58 +364,59 @@ pub impl Comp {
             }
             ai += 1U64
         }
-        if allMatch { return 2U64 }
-        return 1U64
+        if allMatch { return <Result.Ok value=2U64 />}
+        return <Result.Ok value=1U64 />
     }
 
     // An argument that is an unsuffixed integer literal carries no type name, so it
     // adapts to any integer parameter (argMatchesParam's last clause). Such an
     // argument is the only source of "one call matches two overloads": a typed value
     // matches exactly one parameter type.
-    inout fn argIsUntypedIntLit(argExpr: U64) -> Bool {
-        val ti: TypeInfo = self.argResolvedTypeInfo(argExpr: argExpr)
+    inout fn argIsUntypedIntLit(argExpr: U64) -> Result[Bool, CompileDiagnostic] {
+        val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if ti.kind == 0 {
-            return ti.nameLen == 0
+            return <Result.Ok value=ti.nameLen == 0 />
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // Two type-matching overloads are genuinely ambiguous for this call iff some
     // untyped integer-literal argument maps to differing parameter types between
     // them. (Overloads that agree on every provided arg type but differ only via
     // defaulted/omitted params are a separate concern, not flagged here.)
-    inout fn overloadsAmbiguous(fa: Func, fb: Func, args: ArgRange) -> Bool {
+    inout fn overloadsAmbiguous(fa: Func, fb: Func, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         mut val i: U64 = 0
         while i < args.len {
-            if self.argIsUntypedIntLit(argExpr: self.argAt(args: args, index: i).expr) {
+            if (try self.argIsUntypedIntLit(argExpr: self.argAt(args: args, index: i).expr)) {
                 val pa: U64 = self.paramIndexForArg(params: fa.params, args: args, argIdx: i)
                 val pb: U64 = self.paramIndexForArg(params: fb.params, args: args, argIdx: i)
                 if pa < fa.params.count() {
                     if pb < fb.params.count() {
                         if self.funcParamAt(params: fa.params, index: pa).tyNameId != self.funcParamAt(params: fb.params, index: pb).tyNameId {
-                            return true
+                            return <Result.Ok value=true />
                         }
                     }
                 }
             }
             i += 1
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // Loudly reject (exits) when the two type-matching overloads `a`/`b` are
     // ambiguous for this call — picking the first silently would invent meaning
     // (spec: 補完はする／忖度はしない／曖昧はエラー).
-    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) {
+    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if b != self.arena.functionCount() {
-            if self.overloadsAmbiguous(fa: self.arena.functionAt(index: a), fb: self.arena.functionAt(index: b), args: args) {
+            if (try self.overloadsAmbiguous(fa: self.arena.functionAt(index: a), fb: self.arena.functionAt(index: b), args: args)) {
                 mut val off: U64 = 0
                 if args.len > 0 {
                     off = self.exprOffset(id: self.argAt(args: args, index: 0U64).expr)
                 }
-                self.errorAt(offset: off, msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
+                return <Result.Err error=self.diagnosticAt(offset: off, msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)") />
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Does some arm cover the variant (variantStart,variantLen)? A wildcard arm

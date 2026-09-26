@@ -772,25 +772,25 @@ pub impl Comp {
     // Materialize an ABI layout from closed semantic fields at the collection
     // boundary. Grounding itself may already have happened in a BodyInstance;
     // neither a changed child nor an attached template is a prerequisite here.
-    inout fn collectRecordLayout(ref: U64) {
-        if !self.inCollection || !self.tyRefIsGround(ref: ref) { return }
+    inout fn collectRecordLayout(ref: U64) -> Result[(), CompileDiagnostic] {
+        if !self.inCollection || !self.tyRefIsGround(ref: ref) { return <Result.Ok value=() /> }
         val existingLayout = self.recordStructIndex(ref: ref)
         if existingLayout < self.arena.structCount() {
             self.arena.recordTypeByLayout[existingLayout] = ref
-            return
+            return <Result.Ok value=() />
         }
         val term: TypeRef = self.arena.typeAt(index: ref)
         if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() {
-            self.errorAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record fields during layout collection")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record fields during layout collection") />
+            return <Result.Ok value=() />
         }
         mut val fields: Array[FieldDef] = []
         mut val index: U64 = 0U64
         while index < term.recordFieldTerms.count() {
             val labelId: U64 = term.recordFieldLabels[index]
             if labelId == 0U64 || labelId > self.interner.entries.count() {
-                self.errorAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record label during layout collection")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: term.nameStart, msg: "internal error (compiler bug): invalid record label during layout collection") />
+                return <Result.Ok value=() />
             }
             val label: InternedSpan = self.interner.entries[labelId - 1U64]
             val fieldRef: U64 = term.recordFieldTerms[index]
@@ -810,6 +810,7 @@ pub impl Comp {
         val layout = self.arena.structCount()
         self.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=fields isUnique=false isExtern=false isStructuralLayout=true />)
         self.arena.recordTypeByLayout[layout] = ref
+        return <Result.Ok value=() />
     }
 
     inout fn groundRecordStruct(ref: U64) -> U64 {
@@ -905,10 +906,11 @@ pub impl Comp {
     // fresh, deeper instance every worklist round — without a ceiling the collection
     // fixpoint never converges and the compiler hangs (audit-5 L5). Any legitimate
     // program's type nesting is far below 64.
-    inout fn checkInstDepth(ref: U64) {
+    inout fn checkInstDepth(ref: U64) -> Result[(), CompileDiagnostic] {
         if self.tyRefDepth(ref: ref) > 64U64 {
-            self.errorAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)") />
         }
+        return <Result.Ok value=() />
     }
 
     inout fn groundTypeRef(ref: U64) -> U64 {
@@ -1258,21 +1260,21 @@ pub impl Comp {
         return false
     }
 
-    inout fn scanType(ref: U64) {
+    inout fn scanType(ref: U64) -> Result[(), CompileDiagnostic] {
         if ref >= self.arena.typeCount() {
-            return
+            return <Result.Ok value=() />
         }
         // resolve any active env (a generic struct's field `Array[T]` -> `Array[I64]`)
         // so the grounded instantiation, not the template, is what gets registered.
         // (Shadows the parameter; the public label stays `ref` for all callers.)
         val ref: U64 = self.groundTypeRef(ref: ref)
         if ref >= self.arena.typeCount() {
-            return
+            return <Result.Ok value=() />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val i: U64 = 0
         while i < t.args.count() {
-            self.scanType(ref: t.args[i])
+            try self.scanType(ref: t.args[i])
             i += 1
         }
         // an `Array[E]` reached via a type argument (e.g. inside `Box[Array[I32]]`)
@@ -1301,10 +1303,10 @@ pub impl Comp {
         if t.isRecord {
             mut val field: U64 = 0U64
             while field < t.recordFieldTerms.count() {
-                self.scanType(ref: t.recordFieldTerms[field])
+                try self.scanType(ref: t.recordFieldTerms[field])
                 field += 1U64
             }
-            self.collectRecordLayout(ref: ref)
+            try self.collectRecordLayout(ref: ref)
         }
         // Legacy name-only adapters still use groundRecordStruct and carry
         // their fields in the registered layout instead of explicit children.
@@ -1315,7 +1317,7 @@ pub impl Comp {
                     val rfs: Array[FieldDef] = self.arena.structAt(index: rsi).fields
                     mut val rk: U64 = 0
                     while rk < rfs.count() {
-                        self.scanType(ref: rfs[rk].ty)
+                        try self.scanType(ref: rfs[rk].ty)
                         rk += 1
                     }
                 }
@@ -1326,30 +1328,31 @@ pub impl Comp {
                 mut val j: U64 = 0
                 while j < self.monoWork.genInsts.count() {
                     if self.typeRefEq(a: self.monoWork.genInsts[j], b: ref) {
-                        return
+                        return <Result.Ok value=() />
                     }
                     j += 1
                 }
                 if self.instArgCollidesParamName(instRef: ref) {
-                    self.errorAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
+                    return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type") />
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {
                     if self.refArgNamesADeriveTarget(ref: ref) {
-                        return
+                        return <Result.Ok value=() />
                     }
                 }
-                self.checkInstDepth(ref: ref)
+                try self.checkInstDepth(ref: ref)
                 self.monoWork.genInsts.append(ref)
                 // scan the generic struct's fields under this instantiation's env so an
                 // `Array[T]` field registers its concrete element (`Array[I32]`) — the
                 // runtime is keyed off the instantiation, not the `PlewArray_T` template.
-                self.scanGenInstFields(instRef: ref)
+                try self.scanGenInstFields(instRef: ref)
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn scanGenInstFields(instRef: U64) {
+    inout fn scanGenInstFields(instRef: U64) -> Result[(), CompileDiagnostic] {
         val inst: TypeRef = self.arena.typeAt(index: instRef)
         val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
         mut val si: U64 = self.arena.firstStructNamed(nameId: qInst)
@@ -1365,7 +1368,7 @@ pub impl Comp {
                         val fs: Array[FieldDef] = sd.fields
                         mut val k: U64 = 0
                         while k < fs.count() {
-                            self.scanType(ref: fs[k].ty)
+                            try self.scanType(ref: fs[k].ty)
                             k += 1
                         }
                         // also scan this struct's methods' return/param types under the
@@ -1386,12 +1389,12 @@ pub impl Comp {
                                     // (`fn iterator() -> Self`); resolve them to this inst.
                                     self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
                                     if mf.hasRet {
-                                        self.scanType(ref: mf.retTy)
+                                        try self.scanType(ref: mf.retTy)
                                     }
                                     val mps: Array[Param] = self.copyFuncParams(params: mf.params)
                                     mut val mpi: U64 = 0
                                     while mpi < mps.count() {
-                                        self.scanType(ref: mps[mpi].ty)
+                                        try self.scanType(ref: mps[mpi].ty)
                                         mpi += 1
                                     }
                                     self.clearSelfItemEnv()
@@ -1407,9 +1410,10 @@ pub impl Comp {
             }
             si = self.arena.nextStructNamed(index: si)
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn collectGenInsts() {
+    inout fn collectGenInsts() -> Result[(), CompileDiagnostic] {
         mut val fi: U64 = 0
         while fi < self.arena.functionCount() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:function", count: fi, stride: 64U64)
@@ -1445,12 +1449,12 @@ pub impl Comp {
                     self.clearSelfItemEnv()
                 }
                 if f.hasRet {
-                    self.scanType(ref: f.retTy)
+                    try self.scanType(ref: f.retTy)
                 }
                 val ps: Array[Param] = self.copyFuncParams(params: f.params)
                 mut val pi: U64 = 0
                 while pi < ps.count() {
-                    self.scanType(ref: ps[pi].ty)
+                    try self.scanType(ref: ps[pi].ty)
                     pi += 1
                 }
                 self.clearSelfItemEnv()
@@ -1466,7 +1470,7 @@ pub impl Comp {
                 val fs: Array[FieldDef] = s.fields
                 mut val k: U64 = 0
                 while k < fs.count() {
-                    self.scanType(ref: fs[k].ty)
+                    try self.scanType(ref: fs[k].ty)
                     k += 1
                 }
             }
@@ -1483,7 +1487,7 @@ pub impl Comp {
                     val vfs: Array[FieldDef] = vs[vi].fields
                     mut val k: U64 = 0
                     while k < vfs.count() {
-                        self.scanType(ref: vfs[k].ty)
+                        try self.scanType(ref: vfs[k].ty)
                         k += 1
                     }
                     vi += 1
@@ -1502,7 +1506,7 @@ pub impl Comp {
                     // globals walk in collectFnInsts), which carry the right locals env.
                     // An env-less flat inference here typed body-locals under an empty
                     // scope, making the registered instance set walk-order dependent.
-                    self.scanType(ref: ty)
+                    try self.scanType(ref: ty)
                 }
                 _ => {}
             }
@@ -1513,14 +1517,15 @@ pub impl Comp {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:expression", count: xi, stride: 256U64)
             match self.arena.exprs[xi] {
                 Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
-                    self.scanType(ref: ty)
+                    try self.scanType(ref: ty)
                 }
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                    self.scanType(ref: ty)
+                    try self.scanType(ref: ty)
                 }
                 _ => {}
             }
             xi += 1
         }
+        return <Result.Ok value=() />
     }
 }

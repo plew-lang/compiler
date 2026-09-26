@@ -357,7 +357,7 @@ pub impl Comp {
                 try self.checkBoundsExpr(exprId: operand)
                 // a unary operator on a type-parameter value needs the matching bound
                 // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
-                val ut: TypeInfo = self.typeOf(id: operand)
+                val ut: TypeInfo = (try self.typeOf(id: operand))
                 if ut.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
                         val need: String = self.unOpTraitName(op: op)
@@ -379,7 +379,7 @@ pub impl Comp {
                 if self.cur.checkFn < self.arena.functionCount() {
                     try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                 }
-                val lt: TypeInfo = self.typeOf(id: lhs)
+                val lt: TypeInfo = (try self.typeOf(id: lhs))
                 if lt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
                         mut val need: String = ""
@@ -397,7 +397,7 @@ pub impl Comp {
                         if need.bytes().count() != 0U64 {
                             // Capability checking and call recording consume
                             // the same requirement and inherited-bound proof.
-                            val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: self.inferType(id: lhs), isUnary: false)
+                            val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: (try self.inferType(id: lhs)), isUnary: false))
                             match resolution {
                                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
                                 StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
@@ -418,7 +418,7 @@ pub impl Comp {
                 // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
                 // and `f`'s `x: I64`) is a type error at the definition. The callee's own
                 // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
-                val fi: U64 = self.resolvedCallee(id: exprId)
+                val fi: U64 = (try self.resolvedCallee(id: exprId))
                 if fi < self.arena.functionCount() {
                     val ps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: fi).params)
                     mut val k: U64 = 0
@@ -435,7 +435,7 @@ pub impl Comp {
             }
             Expr.ExtMethod(val recv, val source, nameStart: _, nameLen: _, val args) => {
                 try self.checkBoundsExpr(exprId: recv)
-                val rt: TypeInfo = self.typeOf(id: recv)
+                val rt: TypeInfo = (try self.typeOf(id: recv))
                 val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                 val srcStart: U64 = src.start
                 val srcLen: U64 = src.len
@@ -456,7 +456,7 @@ pub impl Comp {
                 }
                 try self.checkBoundsExpr(exprId: recv)
                 if !strip {
-                    val rt: TypeInfo = self.typeOf(id: recv)
+                    val rt: TypeInfo = (try self.typeOf(id: recv))
                     val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
                     val srcStart: U64 = src.start
                     val srcLen: U64 = src.len
@@ -476,7 +476,7 @@ pub impl Comp {
                 }
                 val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
                 if qualifier != 0U64 {
-                    val selected: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
                     match selected {
                         StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                             if !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
@@ -499,7 +499,7 @@ pub impl Comp {
                     }
                     return <Result.Ok value=() />
                 }
-                val rt: TypeInfo = self.typeOf(id: recv)
+                val rt: TypeInfo = (try self.typeOf(id: recv))
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
@@ -526,7 +526,7 @@ pub impl Comp {
                         // and compare it to rigid T; the proof query owns that
                         // distinction.  Monomorphization resolves the grounded
                         // witness later.
-                        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: self.inferType(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
+                        val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
                         mut val staticBoundMember: Bool = false
                         match staticResolution {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
@@ -546,7 +546,7 @@ pub impl Comp {
                             _ => {}
                         }
                         if !(staticBoundMember) && !(self.isGenericInst(ref: rt.ref)) {
-                            val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                            val mi: U64 = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
                             if mi != self.arena.functionCount() {
                                 val mps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: mi).params)
                                 mut val mk: U64 = 0
@@ -583,7 +583,7 @@ pub impl Comp {
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
                 // (spec/06). `.count()`/`.bytes()` etself. on a `T` value have no meaning.
-                val bt: TypeInfo = self.typeOf(id: base)
+                val bt: TypeInfo = (try self.typeOf(id: base))
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)") />
@@ -595,7 +595,7 @@ pub impl Comp {
                 try self.checkBoundsExpr(exprId: index)
                 // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
                 // subscript desugars to the Index trait).
-                val ibt: TypeInfo = self.typeOf(id: base)
+                val ibt: TypeInfo = (try self.typeOf(id: base))
                 if ibt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
                         if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
@@ -648,7 +648,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
                     try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -868,11 +868,11 @@ pub impl Comp {
         // expressions, but it cannot represent an unbound associated Output
         // without collapsing its receiver head.  Preserve the semantic term at
         // this generic-check boundary instead.
-        mut val inferred: U64 = self.inferType(id: valueExpr)
+        mut val inferred: U64 = (try self.inferType(id: valueExpr))
         mut val inferredFromStaticOperator: Bool = false
         match self.arena.exprs[valueExpr] {
             Expr.Binary(val op, lhs: val lhs, rhs: _) => {
-                val operatorResult: U64 = self.staticBinaryOperatorResultRef(lhs: lhs, op: op)
+                val operatorResult: U64 = (try self.staticBinaryOperatorResultRef(lhs: lhs, op: op))
                 if operatorResult != 0U64 {
                     inferred = operatorResult
                     inferredFromStaticOperator = true
@@ -881,7 +881,7 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 val qualifier: U64 = self.typeParameterQualifierTerm(exprId: recv)
                 if qualifier != 0U64 {
-                    val selected: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val selected: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: qualifier, nameStart: nameStart, nameLen: nameLen, args: args))
                     val result: U64 = self.staticRequirementResultType(resolution: selected)
                     if result != 0U64 { inferred = result }
                 }
@@ -948,14 +948,14 @@ pub impl Comp {
                     // and wrap at runtime instead of being rejected (spec/12: no wraparound).
                     try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
                 }
-                self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
                 try self.checkBoundsExpr(exprId: target)
                 try self.checkBoundsExpr(exprId: value)
                 // the assigned value must match the place's type (`x = a` / `x += a` where
                 // x: I64 and a: T is a type error). The place type is inferType(target).
-                try self.checkGenericTypeMatch(expectedRef: self.inferType(id: target), valueExpr: value)
+                try self.checkGenericTypeMatch(expectedRef: (try self.inferType(id: target)), valueExpr: value)
             }
             Stmt.ExprStmt(val expr) => { try self.checkBoundsExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
@@ -984,7 +984,7 @@ pub impl Comp {
                     try self.checkBoundsExpr(exprId: rangeHi)
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = self.typeOf(id: iter)
+                    val et: TypeInfo = (try self.typeOf(id: iter))
                     if isStruct {
                         self.addForStructBinds(et: et, binds: binds)
                     } else {
@@ -992,7 +992,7 @@ pub impl Comp {
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                         } else {
                             // a general Iterable: the loop var is the iterator's Item type.
-                            val elemTi: TypeInfo = self.iterableItemInfo(et: et)
+                            val elemTi: TypeInfo = (try self.iterableItemInfo(et: et))
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                         }
                     }
@@ -1006,7 +1006,7 @@ pub impl Comp {
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: (try self.typeOf(id: scrut)))
                     try self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -1080,7 +1080,7 @@ pub impl Comp {
             try self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
             val noArgs: Array[U64] = []
             self.cur.locals = []
-            self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+            try self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
             self.cur.hasRecv = f.hasRecv
             self.cur.recvStart = f.recvStart
             self.cur.recvLen = f.recvLen

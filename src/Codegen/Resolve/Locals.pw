@@ -17,8 +17,8 @@ pub impl Comp {
     // unannotated `val it = self` in a provided trait method must remain
     // abstract `Self`, rather than degrading to a name-shaped fallback during
     // the later checker walk.
-    inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool) {
-        val inferred: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+    inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool) -> Result[(), CompileDiagnostic] {
+        val inferred: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
         // An annotation can contain abstract associated types below a nominal
         // constructor. Store Array[Self#Iterator.Item], not the unresolved
         // Array[Item] spelling that could alias an unrelated nominal Item.
@@ -28,6 +28,7 @@ pub impl Comp {
             if initializerTerm != 0U64 { term = initializerTerm }
         }
         self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: inferred.start, tyLen: inferred.len, isArray: inferred.arr, ty: term, isInout: false, isMut: mutable, owned: owned)
+        return <Result.Ok value=() />
     }
 
     // The "seed every global" sentinel for `seedGlobalLocals`: used when the referencing
@@ -74,7 +75,7 @@ pub impl Comp {
     // seeds every global (conservative, for a function with no reliable module). A global's
     // own module is `moduleOf` of its initializer offset (a real source offset — its name is
     // re-interned, so `nameStart` cannot serve `moduleOf`).
-    inout fn seedGlobalLocals(useMod: U64) {
+    inout fn seedGlobalLocals(useMod: U64) -> Result[(), CompileDiagnostic] {
         mut val gi: U64 = 0
         while gi < self.arena.globals.count() {
             match self.arena.stmts[self.arena.globals[gi].letStmt] {
@@ -88,7 +89,7 @@ pub impl Comp {
                         if self.genMode && tyLen == 0U64 && !tyIsArray {
                             self.cur.locals.append(<Local globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=false ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
                         } else {
-                            val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                            val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                             self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
                         }
                     }
@@ -97,6 +98,7 @@ pub impl Comp {
             }
             gi += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn scopeMark() -> U64 {
@@ -225,22 +227,22 @@ pub impl Comp {
     // Result `Optional[U]` of a NON-rewritten `?.` on an Optional base (the fallback
     // path — a Chain base goes through chainResultRef). U = the type of the trailing
     // chain `cont` with the ChainHole bound to the Optional's payload T.
-    inout fn optChainResultRef(base: U64, cont: U64) -> U64 {
-        val bt: TypeInfo = self.typeOf(id: base)
+    inout fn optChainResultRef(base: U64, cont: U64) -> Result[U64, CompileDiagnostic] {
+        val bt: TypeInfo = (try self.typeOf(id: base))
         if bt.kind != 2 {
-            return 0
+            return <Result.Ok value=0 />
         }
         if bt.ref >= self.arena.typeCount() {
-            return 0
+            return <Result.Ok value=0 />
         }
         val ot: TypeRef = self.arena.typeAt(index: bt.ref)
         if !(rangeEquals(bytes: self.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
-            return 0
+            return <Result.Ok value=0 />
         }
         if ot.args.count() < 1 {
-            return 0
+            return <Result.Ok value=0 />
         }
-        val uInfo: TypeInfo = self.exprTypeWithChainHole(id: cont, chainHoleRef: ot.args[0])
+        val uInfo: TypeInfo = (try self.exprTypeWithChainHole(id: cont, chainHoleRef: ot.args[0]))
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noArgs: Array[U64] = []
@@ -248,7 +250,7 @@ pub impl Comp {
         }
         mut val args: Array[U64] = []
         args.append(uRef)
-        return self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
     }
 
     inout fn fieldType(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
@@ -543,53 +545,53 @@ pub impl Comp {
         return self.decls.placeSource(exprId: id)
     }
 
-    inout fn placeIsMutable(id: U64) -> Bool {
+    inout fn placeIsMutable(id: U64) -> Result[Bool, CompileDiagnostic] {
         val e: Expr = self.arena.exprs[id]
         match e {
             Expr.Ident(val start, val len) => {
-                return self.localIsMutable(start: start, len: len)
+                return <Result.Ok value=self.localIsMutable(start: start, len: len) />
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val bt: TypeInfo = self.typeOf(id: base)
+                val bt: TypeInfo = (try self.typeOf(id: base))
                 if bt.kind == 2 {
                     if self.fieldDeclaredMut(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
-                        return self.placeIsMutable(id: base)
+                        return <Result.Ok value=(try self.placeIsMutable(id: base)) />
                     }
-                    return false
+                    return <Result.Ok value=false />
                 }
-                return self.placeIsMutable(id: base)
+                return <Result.Ok value=(try self.placeIsMutable(id: base)) />
             }
             Expr.Index(val base, val index) => {
-                return self.placeIsMutable(id: base)
+                return <Result.Ok value=(try self.placeIsMutable(id: base)) />
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
-                return self.placeIsMutable(id: operand)
+                return <Result.Ok value=(try self.placeIsMutable(id: operand)) />
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
-                return self.placeIsMutable(id: recv)
+                return <Result.Ok value=(try self.placeIsMutable(id: recv)) />
             }
             Expr.Deref(val base) => {
-                return self.isMutableRefInst(ref: self.typeOf(id: base).ref)
+                return <Result.Ok value=self.isMutableRefInst(ref: (try self.typeOf(id: base)).ref) />
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 // A MutableRef's pointee is writable through a `val` MutableRef BINDING — the
                 // exception waives only the binding's val/mut (sharing is the MutableRef's
                 // purpose), NOT the pointee field's own mutability. A `Ref` is read-only.
-                val bt: TypeInfo = self.typeOf(id: base)
+                val bt: TypeInfo = (try self.typeOf(id: base))
                 if self.isMutableRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
-                        return self.fieldDeclaredMut(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                        return <Result.Ok value=self.fieldDeclaredMut(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen) />
                     }
-                    return true
+                    return <Result.Ok value=true />
                 }
                 if self.isRefInst(ref: bt.ref) {
-                    return false
+                    return <Result.Ok value=false />
                 }
-                return true
+                return <Result.Ok value=true />
             }
-            _ => { return true }
+            _ => { return <Result.Ok value=true />}
         }
     }
 }

@@ -349,14 +349,14 @@ pub impl Comp {
     // Write capability belongs to the nearest dereference, not to every
     // reference used to obtain its handle. A MutableRef stored inside a Ref
     // can still mutate its own referent.
-    inout fn placeHasReadOnlyReference(id: U64) -> Bool {
+    inout fn placeHasReadOnlyReference(id: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[id] {
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.placeHasReadOnlyReference(id: base) }
-            Expr.Index(val base, index: _) => { return self.placeHasReadOnlyReference(id: base) }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.placeHasReadOnlyReference(id: operand) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.isRefInst(ref: self.typeOf(id: base).ref) }
-            Expr.Deref(val base) => { return self.isRefInst(ref: self.typeOf(id: base).ref) }
-            _ => { return false }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return <Result.Ok value=(try self.placeHasReadOnlyReference(id: base)) />}
+            Expr.Index(val base, index: _) => { return <Result.Ok value=(try self.placeHasReadOnlyReference(id: base)) />}
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return <Result.Ok value=(try self.placeHasReadOnlyReference(id: operand)) />}
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return <Result.Ok value=self.isRefInst(ref: (try self.typeOf(id: base)).ref) />}
+            Expr.Deref(val base) => { return <Result.Ok value=self.isRefInst(ref: (try self.typeOf(id: base)).ref) />}
+            _ => { return <Result.Ok value=false />}
         }
     }
 
@@ -374,7 +374,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        val bt: TypeInfo = self.typeOf(id: base)
+        val bt: TypeInfo = (try self.typeOf(id: base))
         if bt.kind == 2 {
             // an enum value has no fields — `opt.x` / `e.field` is always invalid (reach a
             // payload with `match`, an Optional with `?.` / `unwrapOr`). Without this the
@@ -412,13 +412,13 @@ pub impl Comp {
                 // value that is immediately discarded — spec/03).
                 if self.arena.functionAt(index: mf).selfInout {
                     val receiverPlace: U64 = self.materializablePlace(id: recv)
-                    if self.placeHasReadOnlyReference(id: receiverPlace) {
+                    if (try self.placeHasReadOnlyReference(id: receiverPlace)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot use read-only Ref as an inout place; expected MutableRef") />
                     }
                     if !(self.exprIsPlace(id: receiverPlace)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)") />
                     }
-                    if !(self.placeIsMutable(id: receiverPlace)) {
+                    if !((try self.placeIsMutable(id: receiverPlace))) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`") />
                     }
                     // overlapping `inout` (spec/03): an `inout fn` self IS an inout
@@ -439,11 +439,11 @@ pub impl Comp {
     }
 
     inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        val rt: TypeInfo = self.typeOf(id: recv)
+        val rt: TypeInfo = (try self.typeOf(id: recv))
         if rt.kind == 2 {
             // Resolve once, then validate the resolved callable. `#` methods
             // use the same final validation entry point below.
-            val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            val mi: U64 = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
             try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mi, args: args)
         }
         // a mutating built-in array method (`append`) on an immutable / non-place array.
@@ -452,7 +452,7 @@ pub impl Comp {
                 if !(self.exprIsPlace(id: recv)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)") />
                 }
-                if !(self.placeIsMutable(id: recv)) {
+                if !((try self.placeIsMutable(id: recv))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`") />
                 }
             }
@@ -460,29 +460,29 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn exprIsFloat(id: U64) -> Bool {
+    inout fn exprIsFloat(id: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[id] {
-            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return true }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return <Result.Ok value=true />}
             _ => {}
         }
         // a value whose recovered type names a float type — by NAME regardless of kind
         // (F64 is in isPrimType so typeOf gives kind 0 for a local, but kind 2 for a literal).
-        val ti: TypeInfo = self.typeOf(id: id)
+        val ti: TypeInfo = (try self.typeOf(id: id))
         if ti.nameLen > 0U64 {
             if rangeEquals(bytes: self.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F64") {
-                return true
+                return <Result.Ok value=true />
             }
             if rangeEquals(bytes: self.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "F32") {
-                return true
+                return <Result.Ok value=true />
             }
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     inout fn verifyBinaryOp(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
         // float arithmetic / comparison is accepted directly (the backend emits the IEEE
         // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
-        if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
+        if (try self.exprIsFloat(id: lhs)) || (try self.exprIsFloat(id: rhs)) {
             if op == opRem() {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") />
             }
@@ -491,34 +491,34 @@ pub impl Comp {
         // String `==`/`!=` is no longer a name-special case: String conforms to `Eq`
         // (`impl String as Eq` in Core, riding `bufferEq`), so it is accepted by the
         // general witness path below like any other Eq type (collections.md §3-付録4).
-        if self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs) {
+        if (try self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Ok value=() />
         }
-        if self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
+        if (try self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
             return <Result.Ok value=() />
         }
-        if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
+        if (try self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Ok value=() />
         }
-        if self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
+        if (try self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type") />
         }
         return <Result.Ok value=() />
     }
 
-    inout fn castOperandIsBool(operand: U64) -> Bool {
+    inout fn castOperandIsBool(operand: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[operand] {
             Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
-                if isBool { return true }
+                if isBool { return <Result.Ok value=true />}
             }
             _ => {}
         }
-        val st: TypeInfo = self.typeOf(id: operand)
+        val st: TypeInfo = (try self.typeOf(id: operand))
         if st.nameLen > 0U64 {
-            return rangeEquals(bytes: self.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool")
+            return <Result.Ok value=rangeEquals(bytes: self.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "Bool") />
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     inout fn verifyCastLossless(operand: U64, tyStart: U64, tyLen: U64, targetTerm: U64) -> Result[(), CompileDiagnostic] {
@@ -527,7 +527,7 @@ pub impl Comp {
         // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
         val targetBool: Bool = rangeEquals(bytes: self.arena.bytes, start: tyStart, len: tyLen, kw: "Bool")
         val targetNum: Bool = self.isIntType(start: tyStart, len: tyLen) || self.isFloatType(start: tyStart, len: tyLen)
-        if self.castOperandIsBool(operand: operand) {
+        if (try self.castOperandIsBool(operand: operand)) {
             if targetNum {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)") />
                 return <Result.Ok value=() />
@@ -541,7 +541,7 @@ pub impl Comp {
         if self.isIntType(start: tyStart, len: tyLen) {
             // a float -> int `as` truncates the fractional part = lossy, so it is not a
             // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
-            if self.exprIsFloat(id: operand) {
+            if (try self.exprIsFloat(id: operand)) {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)") />
                 return <Result.Ok value=() />
             }
@@ -552,7 +552,7 @@ pub impl Comp {
                     }
                 }
                 _ => {
-                    val st: TypeInfo = self.typeOf(id: operand)
+                    val st: TypeInfo = (try self.typeOf(id: operand))
                     if self.isIntType(start: st.nameStart, len: st.nameLen) {
                         if !(self.losslessInt(srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen)) {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion") />

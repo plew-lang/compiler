@@ -31,7 +31,7 @@ pub impl Comp {
                 // declared an array but initialized with a non-array (`val a: Array[I64] =
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
-                    if self.valueIsReliablyNonArray(value: init) {
+                    if (try self.valueIsReliablyNonArray(value: init)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: init), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)") />
                     }
                 }
@@ -67,7 +67,7 @@ pub impl Comp {
                                 if ty != 0U64 {
                                     if self.arena.typeAt(index: ty).args.count() > 0U64 {
                                         val de: TypeRef = self.arena.typeAt(index: self.arena.typeAt(index: ty).args[0])
-                                        val it: TypeInfo = self.typeOf(id: init)
+                                        val it: TypeInfo = (try self.typeOf(id: init))
                                         if it.kind == 3 {
                                             if it.nameLen > 0U64 {
                                                 if self.isPrimType(start: de.nameStart, len: de.nameLen) {
@@ -87,7 +87,7 @@ pub impl Comp {
                 }
                 // register the binding (after the init, so it can't see itself) with its
                 // effective type and mutability, so later places resolve / check.
-                val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 // an UN-annotated array-literal binding infers `Array[E]` from its FIRST
                 // element (inferLetType); the remaining elements must be checked against
                 // that E exactly like the annotated loop above — without this a
@@ -133,7 +133,7 @@ pub impl Comp {
                     // returning a non-array where the declared return type IS an array
                     // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                     if self.cur.retIsArray {
-                        if self.valueIsReliablyNonArray(value: value) {
+                        if (try self.valueIsReliablyNonArray(value: value)) {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)") />
                         }
                     }
@@ -192,7 +192,7 @@ pub impl Comp {
                     // a range is iterated via `Step`, which is integer-only (spec/02,11):
                     // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
                     // (by the loop-var annotation or either bound).
-                    mut val rangeIsFloat: Bool = self.exprIsFloat(id: iter) || self.exprIsFloat(id: rangeHi)
+                    mut val rangeIsFloat: Bool = (try self.exprIsFloat(id: iter)) || (try self.exprIsFloat(id: rangeHi))
                     if varTyLen != 0U64 {
                         if self.isFloatType(start: varTyStart, len: varTyLen) {
                             rangeIsFloat = true
@@ -216,7 +216,7 @@ pub impl Comp {
                     } else {
                         try self.checkArithNoCtx(lhs: iter, rhs: rangeHi)
                         // both bounds must share a type (`0I64..<5I32` is a width mismatch).
-                        try self.tcCheckValue(expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
+                        try self.tcCheckValue(expectedRef: (try self.inferType(id: iter)), valueExpr: rangeHi, pos: "range bound")
                     }
                 }
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
@@ -228,7 +228,7 @@ pub impl Comp {
                     mut val ltS: U64 = varTyStart
                     mut val ltL: U64 = varTyLen
                     if ltL == 0U64 {
-                        val bt2: TypeInfo = self.typeOf(id: rangeHi)
+                        val bt2: TypeInfo = (try self.typeOf(id: rangeHi))
                         if bt2.kind == 0 {
                             ltS = bt2.nameStart
                             ltL = bt2.nameLen
@@ -236,7 +236,7 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = self.typeOf(id: iter)
+                    val et: TypeInfo = (try self.typeOf(id: iter))
                     if et.kind == 3 {
                         if isStruct {
                             // the destructure pattern type must name the element struct.
@@ -261,7 +261,7 @@ pub impl Comp {
                         // and bind it, so the body's references to it resolve. (When the Item is
                         // unresolvable — e.g. an existential's associated type — it degrades to a
                         // scalar binding, still in scope.)
-                        val item: TypeInfo = self.iterableItemInfo(et: et)
+                        val item: TypeInfo = (try self.iterableItemInfo(et: et))
                         if isStruct {
                             self.addForStructBinds(et: item, binds: binds)
                         } else {
@@ -302,7 +302,7 @@ pub impl Comp {
             Stmt.Give(val value) => {
                 // a value-position if/match yielding a unique value isn't supported yet
                 // (per-path move/drop handling); mirrors genStmt's Give guard.
-                val gvt: TypeInfo = self.typeOf(id: value)
+                val gvt: TypeInfo = (try self.typeOf(id: value))
                 if gvt.kind == 2 {
                     if self.typeIsUnique(start: gvt.nameStart, len: gvt.nameLen) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a value-position if/match cannot yield a unique value yet; use a statement form") />
@@ -327,7 +327,7 @@ pub impl Comp {
     inout fn verifyAssign(target: U64, value: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
-                if !(self.placeIsMutable(id: base)) {
+                if !((try self.placeIsMutable(id: base))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`") />
                 }
                 try self.verifyExpr(id: base)
@@ -336,11 +336,11 @@ pub impl Comp {
             }
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
-                if !(self.placeIsMutable(id: target)) {
+                if !((try self.placeIsMutable(id: target))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`") />
                 }
                 // field-write visibility on the base's owner type.
-                val bt: TypeInfo = self.typeOf(id: fbase)
+                val bt: TypeInfo = (try self.typeOf(id: fbase))
                 if bt.kind == 2 {
                     try self.checkFieldWriteVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                 }
@@ -362,7 +362,7 @@ pub impl Comp {
                 if !(self.identIsBinding(start: start, len: len)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an undeclared name: it is not a local, parameter, or global in scope — declare it first with `val`/`mut val` (spec/03)") />
                 }
-                if !(self.placeIsMutable(id: target)) {
+                if !((try self.placeIsMutable(id: target))) {
                     // exprOffset, not the raw token start: a destructure's synthesized
                     // assign (`(x, val y) = r`) idents an INTERNED name — its source
                     // position lives in exprSpanStart (same for hand-written idents,
@@ -374,7 +374,7 @@ pub impl Comp {
                 // Only `MutableRef[T]` grants write capability through `->`. `Ref[T]` is
                 // read-only, and weak refs must be upgraded first (spec/03). `->` also obeys
                 // the pointee type's field WRITE visibility just like `.` (spec/05).
-                val abt: TypeInfo = self.typeOf(id: base)
+                val abt: TypeInfo = (try self.typeOf(id: base))
                 if self.isWeakRefLikeInst(ref: abt.ref) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if self.isRefInst(ref: abt.ref) {
@@ -382,7 +382,7 @@ pub impl Comp {
                 } else if self.isMutableRefInst(ref: abt.ref) {
                     // the pointee FIELD must be `mut val` — the MutableRef exception waives only the
                     // binding's mutability, not the field's (spec/03 `val` immutability).
-                    if !(self.placeIsMutable(id: target)) {
+                    if !((try self.placeIsMutable(id: target))) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)") />
                     }
                     val inst: TypeRef = self.arena.typeAt(index: abt.ref)
@@ -415,7 +415,7 @@ pub impl Comp {
         // precision and Bool/width/sign distinctions). Compound assign was desugared to
         // `place = place OP value` in Lower, so the OP's operand check rides the binary's
         // own witness resolution — there is no separate compound check.
-        try self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
+        try self.tcCheckValue(expectedRef: (try self.inferType(id: target)), valueExpr: value, pos: "assign")
         return <Result.Ok value=() />
     }
 }

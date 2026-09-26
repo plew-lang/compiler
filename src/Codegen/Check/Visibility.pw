@@ -745,7 +745,7 @@ pub impl Comp {
         if g.letStmt >= self.arena.stmts.count() { return <Result.Ok value=() /> }
         match self.arena.stmts[g.letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val eff: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                val eff: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 try self.checkSurfaceType(surfaceMod: surfaceMod, ref: eff.ty, offset: g.nameStart)
             }
             _ => {}

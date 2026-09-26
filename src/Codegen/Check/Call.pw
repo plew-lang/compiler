@@ -15,7 +15,7 @@ pub impl Comp {
         if self.isPlaceExpr(id: exprId) {
             // (typeOf, cached: read only via kind==2; a width-less int — typeOf's sole
             // divergence from exprType — is kind 0, taking neither this nor any sibling branch.)
-            val ti: TypeInfo = self.typeOf(id: exprId)
+            val ti: TypeInfo = (try self.typeOf(id: exprId))
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`") />
@@ -80,7 +80,7 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         if self.isPlaceExpr(id: scrut) {
-            val ti: TypeInfo = self.typeOf(id: scrut)
+            val ti: TypeInfo = (try self.typeOf(id: scrut))
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)") />
@@ -116,7 +116,7 @@ pub impl Comp {
                     // binding.  A projection such as `T#Parser.Output` has
                     // the same legacy head spelling but cannot determine T.
                     if self.plainBinder(ref: p.ty, params: <PatternBindInput.Function range=f.typeParams />) == tpi {
-                        val ar: U64 = self.inferType(id: self.argAt(args: args, index: ai).expr)
+                        val ar: U64 = (try self.inferType(id: self.argAt(args: args, index: ai).expr))
                         if ar != 0U64 {
                             if firstRef == 0U64 {
                                 firstRef = ar
@@ -145,7 +145,7 @@ pub impl Comp {
                 if !(self.exprIsPlace(id: place)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)") />
                 }
-                if !(self.placeIsMutable(id: place)) {
+                if !((try self.placeIsMutable(id: place))) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)") />
                 }
             } else {
@@ -210,7 +210,7 @@ pub impl Comp {
 
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         try self.checkUniqueArgModes(args: args)
-        val fi: U64 = self.resolvedCallee(id: id)
+        val fi: U64 = (try self.resolvedCallee(id: id))
         if fi == self.arena.functionCount() {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
             // is a local, not a declared function, so check each arg against the fn type's
@@ -333,7 +333,7 @@ pub impl Comp {
         try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
         // int form, so this matches exprType exactly.)
-        val rt: TypeInfo = self.typeOf(id: recv)
+        val rt: TypeInfo = (try self.typeOf(id: recv))
         // `dict.insert(key:, value:)` on a Dictionary[K, V] (also how a `[k: v]` literal
         // lowers): the generic-receiver arg grounding is incomplete, so check key->K and
         // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.
@@ -374,7 +374,7 @@ pub impl Comp {
             if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                 return <Result.Ok value=() />
             }
-            val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            val mi: U64 = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
             if mi != self.arena.functionCount() {
                 val mf: Func = self.arena.functionAt(index: mi)
                 try self.tcCheckGenericArgConsistency(f: mf, args: args)
@@ -495,15 +495,15 @@ pub impl Comp {
         // (the value `S.make(n: true)` would otherwise reinterpret a Bool as I64).
         match self.arena.exprs[recv] {
             Expr.Ident(start: val rStart, len: val rLen) => {
-                val ai: U64 = self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val ai: U64 = (try self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args))
                 if ai < self.arena.functionCount() {
                     val af: Func = self.arena.functionAt(index: ai)
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)
                     mut val qualifier = self.concreteTypeQualifierTerm(exprId: recv)
-                    if qualifier == 0U64 { qualifier = self.associatedReceiverFromArguments(f: af, args: args) }
+                    if qualifier == 0U64 { qualifier = (try self.associatedReceiverFromArguments(f: af, args: args)) }
                     mut val ginf: Array[U64] = []
                     if af.typeParams.count() > 0U64 {
-                        ginf = self.inferFnArgs(f: af, args: args)
+                        ginf = (try self.inferFnArgs(f: af, args: args))
                     }
                     mut val k: U64 = 0
                     while k < args.len {
@@ -513,7 +513,7 @@ pub impl Comp {
                             try self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
                             mut val checkedGround: Bool = false
                             if qualifier != 0U64 && ap.ty != 0U64 {
-                                val parameter = self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty)
+                                val parameter = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty))
                                 if parameter != 0U64 && self.tyRefIsGround(ref: parameter) {
                                     try self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: parameter))
                                     try self.tcCheckValue(expectedRef: parameter, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")

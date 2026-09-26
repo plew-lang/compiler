@@ -140,7 +140,7 @@ pub impl Comp {
     }
 
     inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        val rt: TypeInfo = self.typeOf(id: recv)
+        val rt: TypeInfo = (try self.typeOf(id: recv))
         if rt.kind != 2 {
             return <Result.Ok value=() />
         }
@@ -232,7 +232,7 @@ pub impl Comp {
     }
 
     inout fn checkMatchArmsEnum(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
-        val st0: TypeInfo = self.typeOf(id: scrut)
+        val st0: TypeInfo = (try self.typeOf(id: scrut))
         if st0.kind != 2 {
             return <Result.Ok value=() />
         }

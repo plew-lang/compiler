@@ -38,41 +38,41 @@ pub impl Comp {
     // `Eq`/`Ord` with `Self` substituted, so a comparison of two values of the SAME newtype
     // resolves to the underlying's witness; a newtype compared with anything else stays the
     // newtype (no witness) and is rejected (sound, like the arithmetic path).
-    inout fn cmpOperandType(lhs: U64, rhs: U64) -> TypeInfo {
-        val lt: TypeInfo = self.typeOf(id: lhs)
+    inout fn cmpOperandType(lhs: U64, rhs: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val lt: TypeInfo = (try self.typeOf(id: lhs))
         if lt.kind == 2 {
             val under: Bind = self.newtypeUnderName(start: lt.nameStart, len: lt.nameLen)
             if under.nameStart != lt.nameStart || under.nameLen != lt.nameLen {
-                val rt: TypeInfo = self.typeOf(id: rhs)
+                val rt: TypeInfo = (try self.typeOf(id: rhs))
                 if rt.kind == 2 {
                     if spansEqual(c: inout self, aStart: lt.nameStart, aLen: lt.nameLen, bStart: rt.nameStart, bLen: rt.nameLen) {
-                        return self.typeInfoOfName(start: under.nameStart, len: under.nameLen, isArray: false)
+                        return <Result.Ok value=self.typeInfoOfName(start: under.nameStart, len: under.nameLen, isArray: false) />
                     }
                 }
             }
         }
-        return lt
+        return <Result.Ok value=lt />
     }
 
-    inout fn compareNeedsTrait(op: I64, lhs: U64, rhs: U64) -> Bool {
+    inout fn compareNeedsTrait(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         if op < 50 {
-            return false
+            return <Result.Ok value=false />
         }
         if op > 55 {
-            return false
+            return <Result.Ok value=false />
         }
-        val lt: TypeInfo = self.cmpOperandType(lhs: lhs, rhs: rhs)
+        val lt: TypeInfo = (try self.cmpOperandType(lhs: lhs, rhs: rhs))
         if lt.kind == 3 {
-            return true
+            return <Result.Ok value=true />
         }
         // A named aggregate — struct OR enum — with no witness (a witnessed type is
         // accepted by hasCompareWitness before this) needs an explicit `Eq`/`Ord` impl.
         // Enums are no longer exempt: there is no built-in tag comparison, so a bare
         // `enum ==` without `@[Eq]` is a clean "needs a witness" error, same as a struct.
         if lt.kind == 2 {
-            return true
+            return <Result.Ok value=true />
         }
-        return false
+        return <Result.Ok value=false />
     }
 }
 
@@ -126,8 +126,8 @@ pub impl Comp {
     // witness — primitives are not special-cased (O6): `I32 < I32` routes through Core's
     // `impl I32 as Ord` to the `i32Lt` intrinsic. An untyped literal / String / enum has
     // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
-    inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Bool {
-        val lt: TypeInfo = self.cmpOperandType(lhs: lhs, rhs: rhs)
+    inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
+        val lt: TypeInfo = (try self.cmpOperandType(lhs: lhs, rhs: rhs))
         // An array operand (kind 3) carries only `Eq` (`impl[T] Array[T] as Eq where T: Eq`),
         // no `Ord`. The `where T: Eq` bound requires the ELEMENT type to carry Eq too. An array
         // is represented as kind 3 with its element carried by NAME (its whole-array ref is not
@@ -159,32 +159,32 @@ pub impl Comp {
                 }
                 if elemOk {
                     val arr: Bind = self.internBytes(s: "Array")
-                    return self.findAssocByName(typeStart: arr.nameStart, typeLen: arr.nameLen, name: "eq") < self.arena.functionCount()
+                    return <Result.Ok value=self.findAssocByName(typeStart: arr.nameStart, typeLen: arr.nameLen, name: "eq") < self.arena.functionCount() />
                 }
             }
-            return false
+            return <Result.Ok value=false />
         }
         if lt.kind == 2 || lt.kind == 0 {
             if lt.nameLen == 0 {
-                return false
+                return <Result.Ok value=false />
             }
             // `==`/`!=` desugar to Eq.eq; gated on an explicit `impl T as Eq` (spec/12:
             // operators are trait sugar, not implicit). `< <= > >=` likewise on Ord.
             if op == opEq() {
-                return self.eqWitnessReady(ti: lt)
+                return <Result.Ok value=self.eqWitnessReady(ti: lt) />
             }
             if op == opNe() {
-                return self.eqWitnessReady(ti: lt)
+                return <Result.Ok value=self.eqWitnessReady(ti: lt) />
             }
             if op >= 52 {
                 if op <= 55 {
                     if self.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: "Ord") {
-                        return self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < self.arena.functionCount()
+                        return <Result.Ok value=self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < self.arena.functionCount() />
                     }
                 }
             }
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // Whether the operand type both conforms to Eq and carries the `eq` witness.
@@ -202,9 +202,9 @@ pub impl Comp {
     // disambiguating right-operand overloads (`Mul[Vector]` vs `Mul[F64]`) by the rhs
     // type: the assoc whose 2nd param type's head id matches typeOf(rhs). Falls back to
     // the first assoc of that name (e.g. an untyped-literal rhs). c.arena.functionCount() = none.
-    inout fn findBinTraitWitness(typeStart: U64, typeLen: U64, name: String, rhs: U64) -> U64 {
+    inout fn findBinTraitWitness(typeStart: U64, typeLen: U64, name: String, rhs: U64) -> Result[U64, CompileDiagnostic] {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        val rt: TypeInfo = self.typeOf(id: rhs)
+        val rt: TypeInfo = (try self.typeOf(id: rhs))
         val rhsId: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
         // an unsuffixed integer literal has no recovered type (kind 0, no name); it can
         // adapt to any integer rhs, so prefer an overload whose rhs param is an int type.
@@ -223,7 +223,7 @@ pub impl Comp {
                         if f.params.count() >= 2 {
                             val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
                             if rhs.tyNameId == rhsId {
-                                return i
+                                return <Result.Ok value=i />
                             }
                             if intMatch == self.arena.functionCount() {
                                 if self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
@@ -238,10 +238,10 @@ pub impl Comp {
         }
         if rhsUntyped {
             if intMatch < self.arena.functionCount() {
-                return intMatch
+                return <Result.Ok value=intMatch />
             }
         }
-        return firstMatch
+        return <Result.Ok value=firstMatch />
     }
 
     // The type to use for an operator's witness lookup. A named struct (kind 2) or a
@@ -249,8 +249,8 @@ pub impl Comp {
     // `typeOf` that recovers no name — e.g. some method-return / chain forms) recovers
     // the SHARED int type from both operands (Plew: operands share a type), so
     // `someU64Fn() + 1` still finds `impl U64 as Add` rather than falling to built-in.
-    inout fn binWitnessType(lhs: U64, rhs: U64) -> TypeInfo {
-        val lt: TypeInfo = self.typeOf(id: lhs)
+    inout fn binWitnessType(lhs: U64, rhs: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val lt: TypeInfo = (try self.typeOf(id: lhs))
         if lt.kind == 2 {
             // a `newtype` operand (spec/10) inherits its underlying's operators with Self
             // substituted: `Meter` has `Add[Meter]` (from the underlying's `Add[Self]`), so
@@ -260,14 +260,14 @@ pub impl Comp {
             // witness lookup fails and the mix is rejected (sound).
             val under: Bind = self.newtypeUnderName(start: lt.nameStart, len: lt.nameLen)
             if under.nameStart != lt.nameStart || under.nameLen != lt.nameLen {
-                val rt: TypeInfo = self.typeOf(id: rhs)
+                val rt: TypeInfo = (try self.typeOf(id: rhs))
                 if rt.kind == 2 {
                     if spansEqual(c: inout self, aStart: lt.nameStart, aLen: lt.nameLen, bStart: rt.nameStart, bLen: rt.nameLen) {
-                        return self.typeInfoOfName(start: under.nameStart, len: under.nameLen, isArray: false)
+                        return <Result.Ok value=self.typeInfoOfName(start: under.nameStart, len: under.nameLen, isArray: false) />
                     }
                 }
             }
-            return lt
+            return <Result.Ok value=lt />
         }
         // a String operand: `String as Add[String]` makes `"a" + "b"` desugar to
         // `String.add(lhs:, rhs:)` (spec/02,12). String is a named struct (kind 2) carrying
@@ -276,10 +276,10 @@ pub impl Comp {
         // `"a" - "b"` still errors (sound).
         if lt.kind == 0 {
             if lt.nameLen > 0 {
-                return lt
+                return <Result.Ok value=lt />
             }
         }
-        return self.arithIntType(lhs: lhs, rhs: rhs)
+        return <Result.Ok value=(try self.arithIntType(lhs: lhs, rhs: rhs)) />
     }
 
     // Whether an arithmetic op's operands carry the operator-trait witness (spec/12:
@@ -288,19 +288,19 @@ pub impl Comp {
     // whose type conforms desugars to the witness — primitives are not special-cased
     // (O6). A genuinely typeless operand (untyped literal / String / array) keeps the
     // built-in arithmetic (the fallback in the dispatch).
-    inout fn hasBinTraitWitness(op: I64, lhs: U64, rhs: U64) -> Bool {
+    inout fn hasBinTraitWitness(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         if !(isBinTraitOp(op: op)) {
-            return false
+            return <Result.Ok value=false />
         }
-        val lt: TypeInfo = self.binWitnessType(lhs: lhs, rhs: rhs)
+        val lt: TypeInfo = (try self.binWitnessType(lhs: lhs, rhs: rhs))
         if lt.kind == 2 || lt.kind == 0 {
             if lt.nameLen > 0 {
                 if self.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
-                    return self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < self.arena.functionCount()
+                    return <Result.Ok value=self.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < self.arena.functionCount() />
                 }
             }
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // A typed operand under an arithmetic op with no operator-trait witness: the C
@@ -308,21 +308,21 @@ pub impl Comp {
     // callable when its trait is implemented), not a fall-through to clang. Covers a
     // struct/enum (kind 2) and a known primitive with no conformance (e.g. arithmetic
     // in a program that never loaded @Std/Core, so the primitive witnesses are absent).
-    inout fn binTraitNeedsTrait(op: I64, lhs: U64, rhs: U64) -> Bool {
+    inout fn binTraitNeedsTrait(op: I64, lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         if isBinTraitOp(op: op) {
-            val lt: TypeInfo = self.binWitnessType(lhs: lhs, rhs: rhs)
+            val lt: TypeInfo = (try self.binWitnessType(lhs: lhs, rhs: rhs))
             if lt.kind == 2 {
-                return true
+                return <Result.Ok value=true />
             }
             if lt.kind == 0 {
                 // any scalar operand under an arithmetic operator must resolve to a
                 // witness (no built-in fast path): a known primitive with no witness
                 // (no @Std/Core) and a width-less operand both error. [WIP: width-less
                 // error is on to catch every typeOf gap before deleting the built-in.]
-                return true
+                return <Result.Ok value=true />
             }
         }
-        return false
+        return <Result.Ok value=false />
     }
 }
 

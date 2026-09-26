@@ -7,7 +7,7 @@ pub impl Comp {
     // are already complete and must not turn this walk into a growing queue.
     // Return the incomplete count so the pipeline cannot mistake a partial
     // completion for readiness to close its call graph.
-    inout fn completeRecordedDefaultCalls() -> U64 {
+    inout fn completeRecordedDefaultCalls() -> Result[U64, CompileDiagnostic] {
         val limit = self.decls.callTemplates.count()
         mut val incomplete: U64 = 0U64
         mut val index: U64 = 0U64
@@ -16,7 +16,7 @@ pub impl Comp {
             val template = self.decls.callTemplates[index]
             match template.kind {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                    if !self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm) {
+                    if !(try self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
                         incomplete += 1U64
                         tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-callee", count: callee)
                         tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
@@ -26,32 +26,32 @@ pub impl Comp {
             }
             index += 1U64
         }
-        return incomplete
+        return <Result.Ok value=incomplete />
     }
 
     // Complete an already selected call after Record has joined its argument
     // and expected-result evidence. `receiverTerm` is the recorded receiver
     // recipe's result in the caller environment, never a fresh name lookup.
     // The parent row is published only once every parameter has an operand.
-    inout fn completeRecordedDirectDefaults(templateIndex: U64, receiverTerm: U64) -> Bool {
-        if templateIndex >= self.decls.callTemplates.count() { return false }
+    inout fn completeRecordedDirectDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
+        if templateIndex >= self.decls.callTemplates.count() { return <Result.Ok value=false />}
         val template = self.decls.callTemplates[templateIndex]
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
-                if callee >= self.arena.functionCount() { return false }
+                if callee >= self.arena.functionCount() { return <Result.Ok value=false />}
                 val function = self.arena.functionAt(index: callee)
                 val argumentValues: Array[CallTemplateArgument] = self.callTemplateArguments(range: arguments)
                 val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
-                if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return false }
+                if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return <Result.Ok value=false />}
                 // This also makes completion idempotent: the saved ordinary
                 // default calls are not reclassified as omitted arguments.
-                if argumentValues.count() == function.params.count() { return true }
-                if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return false }
-                if typeArgValues.count() != function.typeParams.count() { return false }
+                if argumentValues.count() == function.params.count() { return <Result.Ok value=true />}
+                if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return <Result.Ok value=false />}
+                if typeArgValues.count() != function.typeParams.count() { return <Result.Ok value=false />}
                 // Empty substitutions are complete for a zero-binder callable.
                 // The inference helper also uses empty to mean no inference.
-                if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return false }
-                if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return false }
+                if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
+                if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return <Result.Ok value=false />}
                 val proof: StaticConformanceProof = self.thawStaticConformanceProof(id: proofId)
                 val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof)
                 val item = self.bodyProvidedItemTerm(f: function, environment: environment)
@@ -68,18 +68,18 @@ pub impl Comp {
                 val previousRecording = self.cur.recordCallTemplates
                 self.cur.checkFn = template.siteKey.ownerFnIdx
                 self.cur.recordCallTemplates = true
-                val completed = self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm)
+                val completed = (try self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm))
                 self.cur.checkFn = previousOwner
                 self.cur.recordCallTemplates = previousRecording
                 match completed {
                     Optional.Some(v: val args) => {
                         self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate resultTypeRecipe=template.resultTypeRecipe siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=self.publishCallTemplateArguments(args: args) calleeTypeArgs=self.publishCallTemplateTypeArgs(args: typeArgValues) proofId=proofId /> />)
-                        return true
+                        return <Result.Ok value=true />
                     }
-                    Optional.None => { return false }
+                    Optional.None => { return <Result.Ok value=false />}
                 }
             }
-            _ => { return false }
+            _ => { return <Result.Ok value=false />}
         }
     }
 
@@ -87,16 +87,16 @@ pub impl Comp {
     // consumed by finalization and Mid. Signature terms/substitutions arrive
     // from the caller's completed parametric selection, not from AST recovery.
     // An incomplete binding/signature does not publish a partial argument list.
-    inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Optional[Array[CallTemplateArgument]] {
+    inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[Optional[Array[CallTemplateArgument]], CompileDiagnostic] {
         mut val bindings: Array[CallParameterBinding] = []
         match self.bindCallParameters(callee: callee, args: self.templateArgumentRangeFromValues(arguments: args)) {
             Optional.Some(val v) => { bindings = v }
             Optional.None => {
                 tracePhase(c: inout self, label: "default-call-completion:binding-unresolved")
-                return <Optional.None />
+                return <Result.Ok value=<Optional.None /> />
             }
         }
-        if parameterTerms.count() != bindings.count() { return <Optional.None /> }
+        if parameterTerms.count() != bindings.count() { return <Result.Ok value=<Optional.None /> />}
         // Check all required result terms before creating any call occurrence.
         mut val generatorArgs: Array[U64] = []
         mut val hasGeneratorArgs: Bool = false
@@ -106,14 +106,14 @@ pub impl Comp {
                 CallParameterBinding.Default(val generator) => {
                     if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.typeCount() {
                         tracePhaseCount(c: inout self, label: "default-call-completion:invalid-parameter-term", count: parameterTerms[index])
-                        return <Optional.None />
+                        return <Result.Ok value=<Optional.None /> />
                     }
                     // Every default of this callable shares one lexical binder
                     // environment. Project it once, not once per parameter.
                     if !hasGeneratorArgs {
                         match self.defaultGeneratorTypeArguments(callee: callee, generator: generator, args: calleeTypeArgs) {
                             Optional.Some(val v) => { generatorArgs = v }
-                            Optional.None => { return <Optional.None /> }
+                            Optional.None => { return <Result.Ok value=<Optional.None /> />}
                         }
                         hasGeneratorArgs = true
                     }
@@ -151,14 +151,14 @@ pub impl Comp {
                             _ => {}
                         }
                     }
-                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof, receiverTypeTerm: receiverTypeTerm)
+                    val call: U64 = (try self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof, receiverTypeTerm: receiverTypeTerm))
                     val parameter: Param = self.funcParamAt(params: parameters, index: index)
                     completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: call) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
                 }
             }
             index += 1U64
         }
-        return <Optional.Some v=completed />
+        return <Result.Ok value=<Optional.Some v=completed /> />
     }
 
     // A default slot evaluates an ordinary, declaration-selected zero-argument
@@ -168,15 +168,15 @@ pub impl Comp {
     // while a different call occurrence allocates a fresh synthetic origin.
     // `resultTerm` and substitutions are already expressed in the caller's
     // parametric environment. This method performs no inference/name lookup.
-    inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> U64 {
+    inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if !self.cur.recordCallTemplates || generator >= self.arena.functionCount() {
-            self.errorAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         val function: Func = self.arena.functionAt(index: generator)
         if function.params.count() != 0U64 || function.hasRecv {
-            self.errorAt(offset: function.defOffset, msg: "internal error: default argument generator captures value parameters")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: default argument generator captures value parameters") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         mut val call: U64 = existingExpr
         val noArgs: ArgRange = self.pushArgs(args: [])
@@ -190,15 +190,15 @@ pub impl Comp {
                 _ => {}
             }
             if !matches {
-                self.errorAt(offset: function.defOffset, msg: "internal error: default argument evaluation identity changed")
-                return self.arena.exprs.count()
+                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "internal error: default argument evaluation identity changed") />
+                return <Result.Ok value=self.arena.exprs.count() />
             }
         } else {
             call = self.pushExpr(e: <Expr.Call nameStart=function.nameStart nameLen=function.nameLen args=noArgs />)
             self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
         }
-        self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof, receiverTypeTerm: receiverTypeTerm)
-        return call
+        try self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof, receiverTypeTerm: receiverTypeTerm)
+        return <Result.Ok value=call />
     }
 
     // Bind only after selecting the declaration. Keep the authored arguments
@@ -319,33 +319,33 @@ pub impl Comp {
         }
     }
 
-    inout fn recordFieldDefaultCall(field: MakeField, instance: U64, resultTerm: U64) -> U64 {
+    inout fn recordFieldDefaultCall(field: MakeField, instance: U64, resultTerm: U64) -> Result[U64, CompileDiagnostic] {
         if instance == 0U64 || instance >= self.arena.typeCount() {
-            self.errorAt(offset: field.offset, msg: "internal error: field default has no selected construction instance")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected construction instance") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         val instanceType: TypeRef = self.arena.typeAt(index: instance)
         val structIndex: U64 = self.anyStructIndex(nameStart: instanceType.nameStart, nameLen: instanceType.nameLen)
         val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
         if structIndex >= self.decls.fieldDefaultGeneratorRanges.count() {
-            self.errorAt(offset: field.offset, msg: "internal error: field default has no declaration owner")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration owner") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         val range: DefaultGeneratorRange = self.decls.fieldDefaultGeneratorRanges[structIndex]
         if fieldIndex >= range.len {
-            self.errorAt(offset: field.offset, msg: "internal error: field default has no declaration slot")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration slot") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         val functionId: U64 = self.decls.fieldDefaultGeneratorFunctions[range.start + fieldIndex]
         if functionId == 0U64 {
-            self.errorAt(offset: field.offset, msg: "internal error: field default has no selected generator")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected generator") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         val generator: U64 = functionId - 1U64
         val arguments: Array[U64] = self.copyTypeTermArgs(ref: instance)
         if arguments.count() != self.arena.functionAt(index: generator).typeParams.count() {
-            self.errorAt(offset: field.offset, msg: "internal error: field default instance has incomplete type arguments")
-            return self.arena.exprs.count()
+            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default instance has incomplete type arguments") />
+            return <Result.Ok value=self.arena.exprs.count() />
         }
         // The authored expression belongs only to the generator. A previously
         // completed occurrence retains its own synthetic call identity.
@@ -353,7 +353,7 @@ pub impl Comp {
         if field.value != self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex).defaultVal {
             existing = field.value
         }
-        return self.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.None />, calleeTypeArgs: arguments, resultTerm: resultTerm, existingExpr: existing)
+        return <Result.Ok value=(try self.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.None />, calleeTypeArgs: arguments, resultTerm: resultTerm, existingExpr: existing)) />
     }
 
     // Prepare before semantic recording, after checking the authored defaults.

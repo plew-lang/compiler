@@ -14,34 +14,34 @@ pub impl Comp {
         return self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
     }
 
-    inout fn unaryOperatorResultType(operand: TypeInfo, op: I64) -> TypeInfo {
+    inout fn unaryOperatorResultType(operand: TypeInfo, op: I64) -> Result[TypeInfo, CompileDiagnostic] {
         val receiver: U64 = self.operatorTypeRef(t: operand)
-        if receiver == 0U64 { return operand }
-        val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: receiver, isUnary: true)
+        if receiver == 0U64 { return <Result.Ok value=operand />}
+        val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiver, isUnary: true))
         val requiredResult: U64 = self.staticRequirementResultType(resolution: resolution)
-        if requiredResult != 0U64 { return self.typeInfoOfRef(ref: requiredResult) }
+        if requiredResult != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: requiredResult) />}
         val callee: U64 = self.unaryOperatorCallee(receiverRef: receiver, op: op)
         if callee < self.arena.functionCount() {
             val function = self.arena.functionAt(index: callee)
             val result = function.retTy
             if result != 0U64 {
                 val witness = self.methodReceiverEnvironment(f: function, instRef: receiver)
-                return self.typeInfoOfRef(ref: self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness))
+                return <Result.Ok value=self.typeInfoOfRef(ref: self.groundWitnessTypeTerm(ref: result, params: <PatternBindInput.Function range=function.typeParams />, matchResult: witness)) />
             }
         }
-        return <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />
+        return <Result.Ok value=<TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 /> />
     }
 
     // Declaration-time generic operators use the bound proof, never a
     // currently-visible concrete witness.  In particular `T: Add[T,
     // Output=I64]` gives `a + b` the semantic term I64 even though T has no
     // concrete implementation while its body is checked.
-    inout fn staticBinaryOperatorResultRef(lhs: U64, op: I64) -> U64 {
-        if !(isBinTraitOp(op: op)) || self.cur.checkFn >= self.arena.functionCount() { return 0U64 }
-        val receiverRef: U64 = self.inferType(id: lhs)
-        if receiverRef == 0U64 { return 0U64 }
-        val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64)
-        return self.staticRequirementResultType(resolution: resolution)
+    inout fn staticBinaryOperatorResultRef(lhs: U64, op: I64) -> Result[U64, CompileDiagnostic] {
+        if !(isBinTraitOp(op: op)) || self.cur.checkFn >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
+        val receiverRef: U64 = (try self.inferType(id: lhs))
+        if receiverRef == 0U64 { return <Result.Ok value=0U64 />}
+        val resolution: StaticMemberResolution = (try self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64, traitArity: 1U64))
+        return <Result.Ok value=self.staticRequirementResultType(resolution: resolution) />
     }
 
     // The result type of a binary operator `a OP b` (spec/12). For an arithmetic/bitwise
@@ -103,21 +103,21 @@ pub impl Comp {
     // The result type of a binary: the operands share a type, so use whichever side
     // carries one (a struct/String/array result or a typed scalar), else the other
     // operand. Lets a chained `0 - big - 1` recover I32 from `big` not the untyped `0`.
-    inout fn binResultTypeInfo(lhs: U64, rhs: U64, op: I64) -> TypeInfo {
-        return self.binResultTypeInfoWithChainHole(lhs: lhs, rhs: rhs, op: op, chainHoleRef: 0U64)
+    inout fn binResultTypeInfo(lhs: U64, rhs: U64, op: I64) -> Result[TypeInfo, CompileDiagnostic] {
+        return <Result.Ok value=(try self.binResultTypeInfoWithChainHole(lhs: lhs, rhs: rhs, op: op, chainHoleRef: 0U64)) />
     }
 
-    inout fn binResultTypeInfoWithChainHole(lhs: U64, rhs: U64, op: I64, chainHoleRef: U64) -> TypeInfo {
-        val staticResult: U64 = self.staticBinaryOperatorResultRef(lhs: lhs, op: op)
-        if staticResult != 0U64 { return self.typeInfoOfRef(ref: staticResult) }
-        mut val lt: TypeInfo = self.exprTypeWithChainHole(id: lhs, chainHoleRef: chainHoleRef)
-        val rt: TypeInfo = self.exprTypeWithChainHole(id: rhs, chainHoleRef: chainHoleRef)
+    inout fn binResultTypeInfoWithChainHole(lhs: U64, rhs: U64, op: I64, chainHoleRef: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val staticResult: U64 = (try self.staticBinaryOperatorResultRef(lhs: lhs, op: op))
+        if staticResult != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: staticResult) />}
+        mut val lt: TypeInfo = (try self.exprTypeWithChainHole(id: lhs, chainHoleRef: chainHoleRef))
+        val rt: TypeInfo = (try self.exprTypeWithChainHole(id: rhs, chainHoleRef: chainHoleRef))
         if lt.kind != 0 {
-            return self.operatorOutputType(lt: lt, rt: rt, op: op)
+            return <Result.Ok value=self.operatorOutputType(lt: lt, rt: rt, op: op) />
         }
         if lt.nameLen > 0 {
-            return self.operatorOutputType(lt: lt, rt: rt, op: op)
+            return <Result.Ok value=self.operatorOutputType(lt: lt, rt: rt, op: op) />
         }
-        return self.operatorOutputType(lt: rt, rt: lt, op: op)
+        return <Result.Ok value=self.operatorOutputType(lt: rt, rt: lt, op: op) />
     }
 }

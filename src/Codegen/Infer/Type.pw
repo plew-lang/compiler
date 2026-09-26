@@ -38,7 +38,7 @@ pub impl Comp {
         return out
     }
 
-    inout fn inferType(id: U64) -> U64 {
+    inout fn inferType(id: U64) -> Result[U64, CompileDiagnostic] {
         // an un-suffixed integer literal has no intrinsic type — it adapts to its context
         // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
         // it, but for type CHECKING it is genuinely unknown, so report 0 (a typed literal
@@ -47,24 +47,24 @@ pub impl Comp {
             Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                 if !(isBool) {
                     if tyLen == 0U64 {
-                        return 0U64
+                        return <Result.Ok value=0U64 />
                     }
                 }
             }
             _ => {}
         }
-        val ti: TypeInfo = self.typeOf(id: id)
+        val ti: TypeInfo = (try self.typeOf(id: id))
         if ti.ref != 0U64 {
-            return ti.ref
+            return <Result.Ok value=ti.ref />
         }
         if ti.nameLen == 0U64 {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
         // arrays (kind 3): conservative for now — their element comparison is deferred.
         if ti.kind == 3 {
-            return 0U64
+            return <Result.Ok value=0U64 />
         }
-        return self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
+        return <Result.Ok value=self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen) />
     }
 
     inout fn isConcreteTypeName(start: U64, len: U64) -> Bool {
@@ -388,31 +388,31 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn exprIsVoidCall(id: U64) -> Bool {
+    inout fn exprIsVoidCall(id: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
-                val fi: U64 = self.resolvedCallee(id: id)
+                val fi: U64 = (try self.resolvedCallee(id: id))
                 if fi < self.arena.functionCount() {
-                    return !self.arena.functionAt(index: fi).hasRet
+                    return <Result.Ok value=!self.arena.functionAt(index: fi).hasRet />
                 }
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 // The verifier has already resolved every method-shaped call to its
                 // final callable.  Value-context checking must consume that decision,
                 // not re-resolve only the bare spelling and accidentally exclude `#`.
-                val mi: U64 = self.resolvedCallee(id: id)
+                val mi: U64 = (try self.resolvedCallee(id: id))
                 if mi < self.arena.functionCount() {
-                    return !self.arena.functionAt(index: mi).hasRet
+                    return <Result.Ok value=!self.arena.functionAt(index: mi).hasRet />
                 }
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                val mi: U64 = self.resolvedCallee(id: id)
+                val mi: U64 = (try self.resolvedCallee(id: id))
                 if mi < self.arena.functionCount() {
-                    return !self.arena.functionAt(index: mi).hasRet
+                    return <Result.Ok value=!self.arena.functionAt(index: mi).hasRet />
                 }
             }
             _ => {}
         }
-        return false
+        return <Result.Ok value=false />
     }
 }

@@ -204,25 +204,25 @@ pub impl Comp {
     // not just an Ident local (an Ident-only walk left `f(xs: mkArr())` uninferred).
     // A NON-EMPTY array-literal argument (`f(xs: ["a", "b"])`) derives from its first
     // element (exprType reports the literal itself as unknown — element-wise typing).
-    inout fn argArrayElemRef(argExpr: U64) -> U64 {
-        val r: U64 = self.typedIrRefOfInfo(ti: self.typeOf(id: argExpr))
+    inout fn argArrayElemRef(argExpr: U64) -> Result[U64, CompileDiagnostic] {
+        val r: U64 = self.typedIrRefOfInfo(ti: (try self.typeOf(id: argExpr)))
         if r != 0 && r < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: r)
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
                 if t.args.count() == 1 {
-                    return t.args[0]
+                    return <Result.Ok value=t.args[0] />
                 }
             }
         }
         match self.arena.exprs[argExpr] {
             Expr.Array(val elems) => {
                 if elems.len > 0 {
-                    return self.typedIrRefOfInfo(ti: self.exprType(id: self.exprAt(exprs: elems, index: 0U64)))
+                    return <Result.Ok value=self.typedIrRefOfInfo(ti: (try self.exprType(id: self.exprAt(exprs: elems, index: 0U64)))) />
                 }
             }
             _ => {}
         }
-        return 0
+        return <Result.Ok value=0 />
     }
 
     inout fn argViewRef(argExpr: U64, baseRef: U64) -> U64 {
@@ -251,7 +251,7 @@ pub impl Comp {
         }
     }
 
-    inout fn inferFnArgs(f: Func, args: ArgRange) -> Array[U64] {
+    inout fn inferFnArgs(f: Func, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         mut val ti: U64 = 0
         while ti < f.typeParams.count() {
@@ -266,7 +266,7 @@ pub impl Comp {
                     if p.tyNameId == tp.nameId {
                         val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                         if ai < args.len {
-                            cand = self.argArrayElemRef(argExpr: self.argAt(args: args, index: ai).expr)
+                            cand = (try self.argArrayElemRef(argExpr: self.argAt(args: args, index: ai).expr))
                         }
                     }
                 } else {
@@ -282,7 +282,7 @@ pub impl Comp {
                         // is where `Optional[I64].Some(v)` gives `v: I64`.
                         // Generic inference must use that same concrete type
                         // authority as final-callable resolution.
-                        val at: TypeInfo = self.exprType(id: self.argAt(args: args, index: ai).expr)
+                        val at: TypeInfo = (try self.exprType(id: self.argAt(args: args, index: ai).expr))
                         mut val baseRef: U64 = self.tyRefOfInfo(ti: at)
                         // A final body instance owns the concrete type of a
                         // local/receiver.  It takes precedence even when the
@@ -312,7 +312,7 @@ pub impl Comp {
                             _ => {}
                         }
                         if !literalIsExplicit {
-                            val grounded: U64 = self.groundedBodyReceiverRef(exprId: self.argAt(args: args, index: ai).expr)
+                            val grounded: U64 = (try self.groundedBodyReceiverRef(exprId: self.argAt(args: args, index: ai).expr))
                             if grounded != 0U64 { baseRef = grounded }
                             // A nested call/operator's selected result is the
                             // exact semantic type for this body instance.  The
@@ -336,7 +336,7 @@ pub impl Comp {
                             // bridges.  This is not a second inference pass:
                             // it merely consumes the same semantic term used
                             // by Mono and LLVM elsewhere.
-                            val semantic: U64 = self.groundedTypeOf(id: self.argAt(args: args, index: ai).expr)
+                            val semantic: U64 = (try self.groundedTypeOf(id: self.argAt(args: args, index: ai).expr))
                             if semantic != 0U64 {
                                 baseRef = semantic
                             }
@@ -367,7 +367,7 @@ pub impl Comp {
                                 if ai < args.len {
                                     off = self.exprOffset(id: self.argAt(args: args, index: ai).expr)
                                 }
-                                self.errorAt(offset: off, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                                return <Result.Err error=self.diagnosticAt(offset: off, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)") />
                             }
                         }
                     }
@@ -377,7 +377,7 @@ pub impl Comp {
             out.append(found)
             ti += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn fnArgsAllGround(args: Array[U64]) -> Bool {
@@ -427,13 +427,13 @@ pub impl Comp {
         return false
     }
 
-    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64) {
+    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64) -> Result[(), CompileDiagnostic] {
         val fi: U64 = finalIdx
         if fi < self.arena.functionCount() {
             if self.arena.functionAt(index: fi).isExtern {
                 // a generic `extern(plewIntrinsic)` (e.g. `arrayPush[T]`, `arrayGet[T]`):
                 // lowered inline at the call site, so it has no monomorphized instance —
-                // never register one (else a bogus prototype/body with an unmapped return
+                // never register one (else a bogus prototype/body with an unmapped return <Result.Ok value=() />
                 // type leaks out).
             } else {
             if self.isGenericFreeFn(fi: fi) {
@@ -451,7 +451,7 @@ pub impl Comp {
                         // without a matching genInst — gate here too, not only in scanType.
                         mut val di: U64 = 0
                         while di < finalArgs.count() {
-                            self.checkInstDepth(ref: finalArgs[di])
+                            try self.checkInstDepth(ref: finalArgs[di])
                             di += 1
                         }
                         self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=finalArgs />)
@@ -460,6 +460,7 @@ pub impl Comp {
             }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Ground unfound (or name-less) inferred type args from the call's result type when
@@ -498,15 +499,15 @@ pub impl Comp {
     // Register a method instance from the final callable chosen by resolution.  The
     // optional index lets every call spelling (`.` and `#`) share demand discovery
     // without a second source-selection query in Mono.
-    inout fn registerMethodInst(callId: U64 = 4000000000U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64 = 4000000000U64) {
-        val rt0: TypeInfo = self.typeOf(id: recv)
+    inout fn registerMethodInst(callId: U64 = 4000000000U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64 = 4000000000U64) -> Result[(), CompileDiagnostic] {
+        val rt0: TypeInfo = (try self.typeOf(id: recv))
         // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
         // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
         // already carries its name. A generic method on a primitive (`u64.hash[H]`)
         // must register its instance too, so we no longer bail on non-struct kinds —
         // only arrays (kind 3, handled per element type) and nameless values are skipped.
         mut val rt: TypeInfo = rt0
-        val concreteRecvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+        val concreteRecvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
         if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.typeCount() {
             rt = self.typeInfoOfRef(ref: concreteRecvRef)
         }
@@ -515,32 +516,32 @@ pub impl Comp {
         // receiver before resolving its call so the final-callee body walk is
         // complete before backend starts emitting lazy generic methods.
         if concreteRecvRef != 0U64 {
-            self.scanType(ref: concreteRecvRef)
+            try self.scanType(ref: concreteRecvRef)
         } else if rt.ref != 0U64 {
-            self.scanType(ref: rt.ref)
+            try self.scanType(ref: rt.ref)
         }
         if rt.kind == 3 {
-            return
+            return <Result.Ok value=() />
         }
         if rt.nameLen == 0 {
-            return
+            return <Result.Ok value=() />
         }
         val genericRecv: Bool = self.isGenericInst(ref: concreteRecvRef)
         mut val mi: U64 = finalIdx
         if mi == 4000000000U64 {
-            mi = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            mi = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
         }
         if mi == self.arena.functionCount() {
-            return
+            return <Result.Ok value=() />
         }
         val mf: Func = self.arena.functionAt(index: mi)
         // Associated functions have no value receiver.  Their instance is
         // registered from the completed final-callee table, where the selected
         // subject is explicit; treating the type-name AST as a method receiver
         // here creates a competing (often receiver-less) FnInst.
-        if mf.isAssoc { return }
+        if mf.isAssoc { return <Result.Ok value=() /> }
         if mf.typeParams.count() == 0 {
-            return
+            return <Result.Ok value=() />
         }
         // a generic receiver supplies the first `rcount` type params; the method must
         // have its OWN params beyond that to need a call-site instance (`filterIter.map`).
@@ -552,7 +553,7 @@ pub impl Comp {
             rcount = self.recvParamCount(nameStart: rt.nameStart, nameLen: rt.nameLen)
             recvInst = concreteRecvRef
             if mf.typeParams.count() <= rcount {
-                return
+                return <Result.Ok value=() />
             }
         }
         self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
@@ -578,11 +579,12 @@ pub impl Comp {
             if mf.hasRet && callId != 4000000000U64 {
                 val finalResult: U64 = self.bodyCalleeResultRef(exprId: callId)
                 if finalResult != 0U64 {
-                    self.scanType(ref: finalResult)
+                    try self.scanType(ref: finalResult)
                 }
             }
         }
         self.clearSelfItemEnv()
+        return <Result.Ok value=() />
     }
 
     inout fn recvParamCount(nameStart: U64, nameLen: U64) -> U64 {

@@ -69,9 +69,9 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn iterableItemInfo(et: TypeInfo) -> TypeInfo {
+    inout fn iterableItemInfo(et: TypeInfo) -> Result[TypeInfo, CompileDiagnostic] {
         val protocolItem: U64 = self.iterableProtocolItemTerm(iterTerm: et.ref)
-        if protocolItem != 0U64 { return self.typeInfoOfRef(ref: protocolItem) }
+        if protocolItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: protocolItem) />}
         val noArgs: Array[Arg] = []
         // an existential iterand (`for x in it` with `it: any Iter2[Item=I64]`,
         // spec/08): the item is the trait's `next` requirement return
@@ -90,21 +90,21 @@ pub impl Comp {
                             if oi.ref != 0U64 && oi.ref < self.arena.typeCount() {
                                 val ot2: TypeRef = self.arena.typeAt(index: oi.ref)
                                 if ot2.args.count() > 0U64 {
-                                    return self.typeInfoOfRef(ref: ot2.args[0])
+                                    return <Result.Ok value=self.typeInfoOfRef(ref: ot2.args[0]) />
                                 }
                             }
-                            return scalarInfo()
+                            return <Result.Ok value=scalarInfo() />
                         }
                         ari += 1
                     }
                 }
-                return scalarInfo()
+                return <Result.Ok value=scalarInfo() />
             }
         }
         // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
         // iterator (so `for v in xs.filter(p)` recovers the right element type).
         val itName: Bind = self.kwSpan(kw: "iterator", kwLen: 8)
-        val imi: U64 = self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: self.pushArgs(args: noArgs))
+        val imi: U64 = (try self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: self.pushArgs(args: noArgs)))
         mut val itRef: U64 = et.ref
         mut val nrStart: U64 = et.nameStart
         mut val nrLen: U64 = et.nameLen
@@ -115,9 +115,9 @@ pub impl Comp {
             nrLen = imf.retLen
         }
         val nxName: Bind = self.kwSpan(kw: "next", kwLen: 4)
-        val nmi: U64 = self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: self.pushArgs(args: noArgs))
+        val nmi: U64 = (try self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: self.pushArgs(args: noArgs)))
         if nmi == self.arena.functionCount() {
-            return scalarInfo()
+            return <Result.Ok value=scalarInfo() />
         }
         val nmf: Func = self.arena.functionAt(index: nmi)
         // resolve Optional[Item] through the iterand's instantiation (Box[I64] ->
@@ -126,10 +126,10 @@ pub impl Comp {
         if optRef < self.arena.typeCount() {
             val ot: TypeRef = self.arena.typeAt(index: optRef)
             if ot.args.count() > 0 {
-                return self.typeInfoOfRef(ref: ot.args[0])
+                return <Result.Ok value=self.typeInfoOfRef(ref: ot.args[0]) />
             }
         }
-        return scalarInfo()
+        return <Result.Ok value=scalarInfo() />
     }
 
     inout fn groundedArrayFieldInfo(params: Array[Bind], instArgs: Array[U64], arrayTyRef: U64) -> TypeInfo {

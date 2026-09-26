@@ -6,19 +6,19 @@ pub impl Comp {
     // The integer result type of an arithmetic binary (operands share a type, so
     // either operand's recovered int type works). Width-less scalar if neither is a
     // recoverable integer type — then the overflow check is skipped (documented gap).
-    inout fn arithIntType(lhs: U64, rhs: U64) -> TypeInfo {
-        val lt: TypeInfo = self.typeOf(id: lhs)
+    inout fn arithIntType(lhs: U64, rhs: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val lt: TypeInfo = (try self.typeOf(id: lhs))
         if lt.kind == 0 {
             if self.isIntType(start: lt.nameStart, len: lt.nameLen) {
-                return lt
+                return <Result.Ok value=lt />
             }
         }
-        val rt: TypeInfo = self.typeOf(id: rhs)
+        val rt: TypeInfo = (try self.typeOf(id: rhs))
         if rt.kind == 0 {
             if self.isIntType(start: rt.nameStart, len: rt.nameLen) {
-                return rt
+                return <Result.Ok value=rt />
             }
         }
-        return scalarInfo()
+        return <Result.Ok value=scalarInfo() />
     }
 }
