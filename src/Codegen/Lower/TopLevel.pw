@@ -28,7 +28,7 @@ pub impl Comp {
                     pj += 1
                 }
             }
-            (try self.registerDeclaredFunc(f: self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC)))
+            (try self.registerDeclaredFunc(f: (try self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))))
             fi += 1
         }
         mut val si: U64 = 0
@@ -75,7 +75,7 @@ pub impl Comp {
             if si < e.structDirectives.count() {
                 val dir: DirectiveAst = e.structDirectives[si]
                 if dir.reqs.count() > 0U64 {
-                    self.lowerDirective(dir: dir)
+                    try self.lowerDirective(dir: dir)
                     val sp: Span = e.structSpans[si]
                     self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: sp.start, declEnd: sp.end)
                 }
@@ -133,7 +133,7 @@ pub impl Comp {
             // consumed, matching the value-AST path exactly.
             val directive: SyntaxDirective = syntaxDirective(file: self.syntax, id: syntaxExternStructDirective(file: self.syntax, ext: ext, index: i))
             if syntaxDirectiveReqCount(file: self.syntax, directive: directive) > 0U64 {
-                self.lowerSyntaxDirective(dir: directive)
+                try self.lowerSyntaxDirective(dir: directive)
                 self.drainDerives(typeStart: name.start, typeLen: name.end - name.start, isEnum: false, declStart: defSpan.start, declEnd: defSpan.end)
             }
             i += 1U64
@@ -144,7 +144,7 @@ pub impl Comp {
     inout fn lowerDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         match d.kind {
             DeclKind.Struct => { try self.lowerStructDecl(d: d) }
-            DeclKind.Enum => { self.lowerEnumDecl(d: d) }
+            DeclKind.Enum => { try self.lowerEnumDecl(d: d) }
             DeclKind.Func => { try self.lowerFuncDecl(d: d) }
         }
         return <Result.Ok value=() />
@@ -153,7 +153,7 @@ pub impl Comp {
     inout fn lowerSyntaxDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         match d.kind {
             DeclKind.Struct => { try self.lowerSyntaxStructDecl(d: d) }
-            DeclKind.Enum => { self.lowerSyntaxEnumDecl(d: d) }
+            DeclKind.Enum => { try self.lowerSyntaxEnumDecl(d: d) }
             DeclKind.Func => { try self.lowerSyntaxFuncDecl(d: d) }
         }
         return <Result.Ok value=() />
@@ -269,17 +269,18 @@ pub impl Comp {
         return false
     }
 
-    inout fn lowerDirective(dir: DirectiveAst) {
+    inout fn lowerDirective(dir: DirectiveAst) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < dir.reqs.count() {
             val r: DeriveReqAst = dir.reqs[i]
-            val args: Array[MakeField] = self.lowerMakeFields(fields: r.args, typeName: "", variant: "", isEnum: false)
+            val args: Array[MakeField] = (try self.lowerMakeFields(fields: r.args, typeName: "", variant: "", isEnum: false))
             self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxDirective(dir: SyntaxDirective) {
+    inout fn lowerSyntaxDirective(dir: SyntaxDirective) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < syntaxDirectiveReqCount(file: self.syntax, directive: dir) {
             val req: SyntaxDeriveReq = syntaxDeriveReq(file: self.syntax, id: syntaxDirectiveReq(file: self.syntax, directive: dir, index: i))
@@ -287,12 +288,13 @@ pub impl Comp {
             mut val ai: U64 = 0U64
             while ai < syntaxDeriveReqArgCount(file: self.syntax, req: req) {
                 val field: SyntaxMakeField = syntaxMakeField(file: self.syntax, id: syntaxDeriveReqArg(file: self.syntax, req: req, index: ai))
-                args.append(<MakeField nameStart=field.name.start nameLen=field.name.end - field.name.start value=self.lowerSyntaxExpr(id: field.value) offset=field.span.start />)
+                args.append(<MakeField nameStart=field.name.start nameLen=field.name.end - field.name.start value=(try self.lowerSyntaxExpr(id: field.value)) offset=field.span.start />)
                 ai += 1U64
             }
             self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0U64 typeLen=0U64 isEnum=false nameStart=req.name.start nameLen=req.name.end - req.name.start declStart=0U64 declEnd=0U64 args=args />)
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn lowerExportItem(inner: TopItemAst) -> Result[(), CompileDiagnostic] {
@@ -325,12 +327,12 @@ pub impl Comp {
             }
             TopItemAst.Trait(val t) => {
                 val tB: U64 = self.decls.traitCount()
-                self.lowerTrait(t: t)
+                try self.lowerTrait(t: t)
                 self.recordExport(nameStart: self.decls.traitAt(index: tB).nameStart, nameLen: self.decls.traitAt(index: tB).nameLen)
             }
             TopItemAst.GlobalVal(val s) => {
                 val gB: U64 = self.arena.globals.count()
-                self.lowerGlobalVal(s: s)
+                try self.lowerGlobalVal(s: s)
                 if self.arena.globals.count() > gB {
                     self.recordExport(nameStart: self.arena.globals[gB].nameStart, nameLen: self.arena.globals[gB].nameLen)
                 }
@@ -358,13 +360,13 @@ pub impl Comp {
         match item {
             TopItemAst.Decl(val d) => { try self.lowerDecl(d: d) }
             TopItemAst.Impl(val im) => { try self.lowerImpl(im: im) }
-            TopItemAst.Trait(val t) => { self.lowerTrait(t: t) }
+            TopItemAst.Trait(val t) => { try self.lowerTrait(t: t) }
             TopItemAst.Extern(val e) => { try self.lowerExtern(e: e) }
             TopItemAst.Import(val imp) => { self.lowerImport(imp: imp) }
             TopItemAst.Export(val inner) => { try self.lowerExportItem(inner: inner) }
             TopItemAst.ReExport(val imp) => { self.lowerReExport(imp: imp) }
-            TopItemAst.Directive(val dir) => { self.lowerDirective(dir: dir) }
-            TopItemAst.GlobalVal(val s) => { self.lowerGlobalVal(s: s) }
+            TopItemAst.Directive(val dir) => { try self.lowerDirective(dir: dir) }
+            TopItemAst.GlobalVal(val s) => { try self.lowerGlobalVal(s: s) }
             TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
         }
         return <Result.Ok value=() />
@@ -406,7 +408,7 @@ pub impl Comp {
             }
             SyntaxTopItemKind.GlobalVal => {
                 val before: U64 = self.arena.globals.count()
-                self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
                 if self.arena.globals.count() > before { self.recordExport(nameStart: self.arena.globals[before].nameStart, nameLen: self.arena.globals[before].nameLen) }
             }
             SyntaxTopItemKind.NewType => {
@@ -429,8 +431,8 @@ pub impl Comp {
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Export => { try self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.ReExport => { self.lowerSyntaxReExport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Directive => { self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.GlobalVal => { self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.GlobalVal => { try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.NewType => { self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
         }
         return <Result.Ok value=() />
@@ -456,13 +458,15 @@ pub impl Comp {
         self.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
-    inout fn lowerGlobalVal(s: StmtAst) {
-        val stid: U64 = self.lowerStmt(s: s)
+    inout fn lowerGlobalVal(s: StmtAst) -> Result[(), CompileDiagnostic] {
+        val stid: U64 = (try self.lowerStmt(s: s))
         self.appendLoweredGlobal(letStmt: stid)
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxGlobalVal(id: StmtId) {
-        self.appendLoweredGlobal(letStmt: self.lowerSyntaxStmt(id: id))
+    inout fn lowerSyntaxGlobalVal(id: StmtId) -> Result[(), CompileDiagnostic] {
+        self.appendLoweredGlobal(letStmt: (try self.lowerSyntaxStmt(id: id)))
+        return <Result.Ok value=() />
     }
 
     inout fn appendLoweredGlobal(letStmt: U64) {

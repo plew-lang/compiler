@@ -775,7 +775,7 @@ pub impl Comp {
         return self.callArgTypeByNameIds(nameId: intern(c: inout self, start: methodName.start, len: methodName.end - methodName.start), labelId: intern(c: inout self, start: argLabel.start, len: argLabel.end - argLabel.start), hasReceiver: true)
     }
 
-    inout fn lowerArgs(args: Array[ArgAst], fnName: String) -> Array[Arg] {
+    inout fn lowerArgs(args: Array[ArgAst], fnName: String) -> Result[Array[Arg], CompileDiagnostic] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0
         while i < args.count() {
@@ -786,9 +786,9 @@ pub impl Comp {
             val actx: U64 = self.callArgType(fnName: fnName, argLabel: a.label)
             mut val e: U64 = 0
             if actx != 0U64 {
-                e = self.lowerExprWithCtx(e: a.value, ctxRef: actx)
+                e = (try self.lowerExprWithCtx(e: a.value, ctxRef: actx))
             } else {
-                e = self.lowerExpr(e: a.value)
+                e = (try self.lowerExpr(e: a.value))
             }
             mut val label: Span = <Span start=0U64 end=0U64 />
             if a.hasLabel {
@@ -798,13 +798,13 @@ pub impl Comp {
             out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // Lower a method call's arguments, flowing each resolved parameter type (via
     // methodArgType) to a context-typed argument literal. Mirrors lowerArgs but resolves
     // by method name instead of free-fn name.
-    inout fn lowerMethodArgs(args: Array[ArgAst], methodName: String) -> Array[Arg] {
+    inout fn lowerMethodArgs(args: Array[ArgAst], methodName: String) -> Result[Array[Arg], CompileDiagnostic] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0
         while i < args.count() {
@@ -812,9 +812,9 @@ pub impl Comp {
             val actx: U64 = self.methodArgType(methodName: methodName, argLabel: a.label)
             mut val e: U64 = 0
             if actx != 0U64 {
-                e = self.lowerExprWithCtx(e: a.value, ctxRef: actx)
+                e = (try self.lowerExprWithCtx(e: a.value, ctxRef: actx))
             } else {
-                e = self.lowerExpr(e: a.value)
+                e = (try self.lowerExpr(e: a.value))
             }
             mut val label: Span = <Span start=0U64 end=0U64 />
             if a.hasLabel {
@@ -824,13 +824,13 @@ pub impl Comp {
             out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // SyntaxFile counterpart of lowerArgs.  The source name remains a span so
     // contextual literal typing uses the same declaration lookup without
     // allocating a transient call-name String.
-    inout fn lowerSyntaxArgs(expr: SyntaxExpr, fnName: Span) -> Array[Arg] {
+    inout fn lowerSyntaxArgs(expr: SyntaxExpr, fnName: Span) -> Result[Array[Arg], CompileDiagnostic] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
@@ -838,20 +838,20 @@ pub impl Comp {
             val actx: U64 = self.callArgTypeSpans(fnName: fnName, argLabel: a.label)
             mut val value: U64 = 0U64
             if actx != 0U64 {
-                value = self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx)
+                value = (try self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx))
             } else {
-                value = self.lowerSyntaxExpr(id: a.value)
+                value = (try self.lowerSyntaxExpr(id: a.value))
             }
             out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // SyntaxFile counterpart of lowerMethodArgs.  It is deliberately separate
     // from free-call context lookup: a receiver call must remain ambiguous
     // until method candidate selection, exactly as on the value-AST path.
-    inout fn lowerSyntaxMethodArgs(expr: SyntaxExpr, methodName: Span) -> Array[Arg] {
+    inout fn lowerSyntaxMethodArgs(expr: SyntaxExpr, methodName: Span) -> Result[Array[Arg], CompileDiagnostic] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
@@ -859,14 +859,14 @@ pub impl Comp {
             val actx: U64 = self.methodArgTypeSpans(methodName: methodName, argLabel: a.label)
             mut val value: U64 = 0U64
             if actx != 0U64 {
-                value = self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx)
+                value = (try self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx))
             } else {
-                value = self.lowerSyntaxExpr(id: a.value)
+                value = (try self.lowerSyntaxExpr(id: a.value))
             }
             out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn appendLoweredArg(value: U64, isInout: Bool, label: Span, hasLabel: Bool) -> Arg {
@@ -1020,7 +1020,7 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Array[MakeField] {
+    inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0
         while i < fields.count() {
@@ -1031,21 +1031,21 @@ pub impl Comp {
             val fctx: U64 = self.makeFieldType(typeName: typeName, variant: variant, isEnum: isEnum, fieldName: f.name)
             mut val v: U64 = 0
             if fctx != 0U64 {
-                v = self.lowerExprWithCtx(e: f.value, ctxRef: fctx)
+                v = (try self.lowerExprWithCtx(e: f.value, ctxRef: fctx))
             } else {
-                v = self.lowerExpr(e: f.value)
+                v = (try self.lowerExpr(e: f.value))
             }
             val nm: Bind = self.internBytes(s: f.name)
             out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // SyntaxFile counterpart of lowerMakeFields. The declaration lookup is by
     // canonical name IDs so this also serves anonymous-record contexts, whose
     // synthesized record name has no source spelling to reconstruct.
-    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeId: U64, variantId: U64, isEnum: Bool) -> Array[MakeField] {
+    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeId: U64, variantId: U64, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0U64
         while i < syntaxExprMakeFieldCount(file: self.syntax, expr: expr) {
@@ -1053,14 +1053,14 @@ pub impl Comp {
             val fctx: U64 = self.makeFieldTypeByNameIds(typeId: typeId, variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start))
             mut val value: U64 = 0U64
             if fctx != 0U64 {
-                value = self.lowerSyntaxExprWithCtx(id: f.value, ctxRef: fctx)
+                value = (try self.lowerSyntaxExprWithCtx(id: f.value, ctxRef: fctx))
             } else {
-                value = self.lowerSyntaxExpr(id: f.value)
+                value = (try self.lowerSyntaxExpr(id: f.value))
             }
             out.append(<MakeField nameStart=f.name.start nameLen=f.name.end - f.name.start value=value offset=f.span.start />)
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // A fresh `Buffer.new()` call for one statically selected parametric
@@ -1122,39 +1122,39 @@ pub impl Comp {
     // the temp is marked moved so the scope exit does not release it (the caller's
     // binding owns it). The else branch is dead (the cond is the constant `1`) but must
     // still yield a `Dictionary[K,V]` so the value-position block type-checks.
-    inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
+    inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> Result[U64, CompileDiagnostic] {
         if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
-            self.errorAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
-            return self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
+            return <Result.Err error=self.diagnosticAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
+            return <Result.Ok value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />
         }
         mut val loweredKeys: Array[U64] = []
         mut val loweredVals: Array[U64] = []
         mut val i: U64 = 0U64
         while i < keys.count() {
-            loweredKeys.append(self.lowerExpr(e: keys[i]))
-            loweredVals.append(self.lowerExpr(e: vals[i]))
+            loweredKeys.append((try self.lowerExpr(e: keys[i])))
+            loweredVals.append((try self.lowerExpr(e: vals[i])))
             i += 1U64
         }
-        return self.lowerDictLitValues(keys: loweredKeys, vals: loweredVals, ctxRef: ctxRef, span: span)
+        return <Result.Ok value=self.lowerDictLitValues(keys: loweredKeys, vals: loweredVals, ctxRef: ctxRef, span: span) />
     }
 
     // SyntaxFile decoder for a dictionary literal. Validate the contextual type
     // before reading entries, exactly like the value-AST route: an invalid
     // container must not cause unrelated child diagnostics first.
-    inout fn lowerSyntaxDictLit(expr: SyntaxExpr, ctxRef: U64) -> U64 {
+    inout fn lowerSyntaxDictLit(expr: SyntaxExpr, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
         if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
-            self.errorAt(offset: expr.span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
-            return self.pushExpr(e: <Expr.Int value=0 offset=expr.span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
+            return <Result.Err error=self.diagnosticAt(offset: expr.span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)") />
+            return <Result.Ok value=self.pushExpr(e: <Expr.Int value=0 offset=expr.span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />
         }
         mut val keys: Array[U64] = []
         mut val vals: Array[U64] = []
         mut val i: U64 = 0U64
         while i < syntaxExprDictEntryCount(file: self.syntax, expr: expr) {
-            keys.append(self.lowerSyntaxExpr(id: syntaxExprDictKey(file: self.syntax, expr: expr, index: i)))
-            vals.append(self.lowerSyntaxExpr(id: syntaxExprDictValue(file: self.syntax, expr: expr, index: i)))
+            keys.append((try self.lowerSyntaxExpr(id: syntaxExprDictKey(file: self.syntax, expr: expr, index: i))))
+            vals.append((try self.lowerSyntaxExpr(id: syntaxExprDictValue(file: self.syntax, expr: expr, index: i))))
             i += 1U64
         }
-        return self.lowerDictLitValues(keys: keys, vals: vals, ctxRef: ctxRef, span: expr.span)
+        return <Result.Ok value=self.lowerDictLitValues(keys: keys, vals: vals, ctxRef: ctxRef, span: expr.span) />
     }
 
     inout fn hasDictionaryLiteralContext(ctxRef: U64) -> Bool {

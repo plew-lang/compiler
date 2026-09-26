@@ -467,19 +467,19 @@ pub impl Comp {
         return self.lowerTypeParamSpans(spans: spans, anchor: member.name.start, sendableFlags: flags)
     }
 
-    inout fn lowerSyntaxMemberParams(member: SyntaxMember) -> Array[Param] {
+    inout fn lowerSyntaxMemberParams(member: SyntaxMember) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0U64
         while i < syntaxMemberParamCount(file: self.syntax, member: member) {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxMemberParam(file: self.syntax, member: member, index: i))
             val ty: PType = self.lowerSyntaxType(id: p.ty)
             mut val defaultExpr: U64 = 0U64
-            if p.hasDefault { defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal) }
+            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn appendSyntaxMemberWhere(member: SyntaxMember, types: inout Array[TypeId], traits: inout Array[Span]) {
@@ -549,7 +549,7 @@ pub impl Comp {
         self.cur.typeParams = skipScope
         self.lowerWhereSyntaxTypes = boundTypes
         self.lowerWhereSyntaxTraits = boundTraits
-        val params: Array[Param] = self.lowerSyntaxMemberParams(member: m)
+        val params: Array[Param] = (try self.lowerSyntaxMemberParams(member: m))
         mut val retStart: U64 = 0U64
         mut val retLen: U64 = 0U64
         mut val retIsArray: Bool = false
@@ -610,7 +610,7 @@ pub impl Comp {
         if recvTraitOwner == 0U64 {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
-        val body: U64 = self.lowerSyntaxBlock(id: m.body)
+        val body: U64 = (try self.lowerSyntaxBlock(id: m.body))
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
         mut val extId: U64 = 0U64
@@ -691,7 +691,7 @@ pub impl Comp {
         self.lowerWhereTypes = boundTypes
         self.lowerWhereTraits = boundTraits
         val normParams: Array[ParamAst] = self.normalizeParams(params: m.params, whereTypes: boundTypes, whereTraits: boundTraits)
-        val params: Array[Param] = self.lowerParams(params: normParams)
+        val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
@@ -759,7 +759,7 @@ pub impl Comp {
         if recvTraitOwner == 0U64 {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
-        val body: U64 = self.lowerBlock(b: m.body)
+        val body: U64 = (try self.lowerBlock(b: m.body))
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.functionCount()
         // an extension method (spec/09) is tagged with its extension's name id so it is
@@ -863,7 +863,7 @@ pub impl Comp {
                 }
                 MemberKind.Deinit => {
                     val deinitN: Bind = self.internBytes(s: "deinit")
-                    val body: U64 = self.lowerBlock(b: m.body)
+                    val body: U64 = (try self.lowerBlock(b: m.body))
                     val noParams: Array[Param] = []
                     val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=self.pushFuncBinds(binds: implParamBinds) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=im.span.start />))
                     self.decls.deinits.append(destructor)
@@ -987,7 +987,7 @@ pub impl Comp {
                 MemberKind.Deinit => {
                     val deinitN: Bind = self.internBytes(s: "deinit")
                     val noParams: Array[Param] = []
-                    val body: U64 = self.lowerSyntaxBlock(id: m.body)
+                    val body: U64 = (try self.lowerSyntaxBlock(id: m.body))
                     val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=self.pushFuncBinds(binds: implParamBinds) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=im.span.start />))
                     self.decls.deinits.append(destructor)
                 }
@@ -1025,7 +1025,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {
+    inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart, sendableFlags: sig.typeParamSendable)
@@ -1039,7 +1039,7 @@ pub impl Comp {
             stpi += 1
         }
         self.cur.typeParams = scopeTP
-        val params: Array[Param] = self.lowerParams(params: sig.params)
+        val params: Array[Param] = (try self.lowerParams(params: sig.params))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
@@ -1053,7 +1053,7 @@ pub impl Comp {
         }
         self.cur.typeParams = savedTP
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart />
+        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart /> />
     }
 
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Func {
@@ -1099,7 +1099,7 @@ pub impl Comp {
         return <Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start />
     }
 
-    inout fn lowerTrait(t: TraitAst) {
+    inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
         mut val supertraits: Array[Bind] = []
@@ -1139,7 +1139,7 @@ pub impl Comp {
         mut val reqs: Array[Func] = []
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            reqs.append(self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false))
+            reqs.append((try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)))
             ri += 1
         }
         self.cur.typeParams = savedTP
@@ -1147,6 +1147,7 @@ pub impl Comp {
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
+        return <Result.Ok value=() />
     }
 
     inout fn lowerSyntaxTrait(t: SyntaxTrait) {

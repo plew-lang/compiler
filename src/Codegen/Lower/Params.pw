@@ -2,7 +2,7 @@
 // lowering.
 
 pub impl Comp {
-    inout fn lowerParams(params: Array[ParamAst]) -> Array[Param] {
+    inout fn lowerParams(params: Array[ParamAst]) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0
         while i < params.count() {
@@ -21,19 +21,19 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0
             if p.hasDefault {
-                defaultExpr = self.lowerExpr(e: p.defaultVal)
+                defaultExpr = (try self.lowerExpr(e: p.defaultVal))
                 hasDefault = true
             }
             out.append(self.appendLoweredParam(name: nm, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
             i += 1
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // SyntaxFile counterpart of lowerParams.  A parameter's default remains an
     // expression ID until the semantic lowerer consumes it; no ParamAst or
     // String is reconstructed from the immutable syntax arena.
-    inout fn lowerSyntaxExprParams(expr: SyntaxExpr) -> Array[Param] {
+    inout fn lowerSyntaxExprParams(expr: SyntaxExpr) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0U64
         while i < syntaxExprParamCount(file: self.syntax, expr: expr) {
@@ -48,14 +48,14 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0U64
             if p.hasDefault {
-                defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal)
+                defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal))
                 hasDefault = true
             }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     // Both value-AST and SyntaxFile parameter decoders end here.  Keeping the

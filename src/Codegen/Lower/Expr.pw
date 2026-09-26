@@ -31,7 +31,7 @@ pub impl Comp {
         return call
     }
 
-    inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> U64 {
+    inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
         if ctxRef != 0 {
             if ctxRef < self.arena.typeCount() {
                 val ct: TypeRef = self.arena.typeAt(index: ctxRef)
@@ -47,10 +47,10 @@ pub impl Comp {
                                 // literal field (`(a: (x:1,y:2), …)`) its own context (else the
                                 // inner literal lowers context-free and the backend can't build it).
                                 val recName: String = stringFromBytesUnchecked(extractSpan(buf: self.arena.bytes, start: ct.nameStart, len: ct.nameLen))
-                                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false)
+                                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false))
                                 val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
                                 self.arena.exprSpanStart[rid] = span.start
-                                return rid
+                                return <Result.Ok value=rid />
                             }
                             _ => {}
                         }
@@ -63,26 +63,26 @@ pub impl Comp {
                                 if typeArgs.count() == 0 {
                                     val tn: Bind = self.internBytes(s: typeName)
                                     if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
-                                        val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false)
+                                        val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false))
                                         val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
                                         self.arena.exprSpanStart[rid] = span.start
-                                        return rid
+                                        return <Result.Ok value=rid />
                                     }
                                 }
                             }
                         }
                         ExprAst.DictLit(val keys, val vals, val span) => {
-                            return self.lowerDictLit(keys: keys, vals: vals, ctxRef: ctxRef, span: span)
+                            return <Result.Ok value=(try self.lowerDictLit(keys: keys, vals: vals, ctxRef: ctxRef, span: span)) />
                         }
                         _ => {}
                     }
                 }
             }
         }
-        return self.lowerExpr(e: e)
+        return <Result.Ok value=(try self.lowerExpr(e: e)) />
     }
 
-    inout fn lowerExpr(e: ExprAst) -> U64 {
+    inout fn lowerExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
         mut val result: U64 = 0
         match e {
             ExprAst.IntLit(val value, val isBool, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
@@ -140,18 +140,18 @@ pub impl Comp {
                     }
                 }
                 if !(folded) {
-                    val o: U64 = self.lowerExpr(e: operand)
+                    val o: U64 = (try self.lowerExpr(e: operand))
                     result = self.pushExpr(e: <Expr.Unary op=op operand=o />)
                 }
             }
             ExprAst.Binary(val op, val lhs, val rhs, val span) => {
-                val l: U64 = self.lowerExpr(e: lhs)
-                val r: U64 = self.lowerExpr(e: rhs)
+                val l: U64 = (try self.lowerExpr(e: lhs))
+                val r: U64 = (try self.lowerExpr(e: rhs))
                 result = self.pushExpr(e: <Expr.Binary op=op lhs=l rhs=r />)
             }
             ExprAst.Call(val name, nameSpan: _, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
-                val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
+                val a: Array[Arg] = (try self.lowerArgs(args: args, fnName: name))
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
             }
             ExprAst.Field(val base, val name, val nameSpan, val span) => {
@@ -159,7 +159,7 @@ pub impl Comp {
                 // the name (resolution compares by content), and a typo'd field then
                 // errors at its own token — an interned span mapped to a garbage line.
                 // Same policy as the destructure desugar's synthesized Fields.
-                val b: U64 = self.lowerExpr(e: base)
+                val b: U64 = (try self.lowerExpr(e: base))
                 result = self.pushExpr(e: <Expr.Field base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
@@ -177,12 +177,12 @@ pub impl Comp {
                     _ => {}
                 }
                 if isNsCall {
-                    val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
+                    val a: Array[Arg] = (try self.lowerArgs(args: args, fnName: name))
                     self.markImport(segStart: nameSpan.start, segLen: name.bytes().count(), nameStart: nameSpan.start, nameLen: name.bytes().count())
                     result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
                 } else {
-                    val r: U64 = self.lowerExpr(e: recv)
-                    val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
+                    val r: U64 = (try self.lowerExpr(e: recv))
+                    val a: Array[Arg] = (try self.lowerMethodArgs(args: args, methodName: name))
                     // the name's SOURCE span, not an interned copy: resolution compares
                     // byte content (equivalent either way), and diagnostics anchored at
                     // nameStart (method visibility) need a real file:line.
@@ -193,25 +193,25 @@ pub impl Comp {
                 // `recv->name(args)`: a pointee method call. Lower the receiver, wrap it in a
                 // `Deref` (the pointee place), and dispatch `name` on it like a normal `Method`
                 // — the backend resolves `Deref`'s struct/type and self-place from the cell.
-                val r: U64 = self.lowerExpr(e: recv)
+                val r: U64 = (try self.lowerExpr(e: recv))
                 val d: U64 = self.pushExpr(e: <Expr.Deref base=r />)
-                val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
+                val a: Array[Arg] = (try self.lowerMethodArgs(args: args, methodName: name))
                 result = self.pushExpr(e: <Expr.Method recv=d nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
             }
             ExprAst.ExtMethod(val recv, val src, srcSpan: _, val name, nameSpan: _, val args, val span) => {
-                val r: U64 = self.lowerExpr(e: recv)
-                val a: Array[Arg] = self.lowerArgs(args: args, fnName: "")
+                val r: U64 = (try self.lowerExpr(e: recv))
+                val a: Array[Arg] = (try self.lowerArgs(args: args, fnName: ""))
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) nameStart=nm.nameStart nameLen=nm.nameLen args=self.pushArgs(args: a) />)
             }
             ExprAst.ExtView(val recv, val src, srcSpan: _, val strip, val span) => {
-                val r: U64 = self.lowerExpr(e: recv)
+                val r: U64 = (try self.lowerExpr(e: recv))
                 result = self.pushExpr(e: <Expr.ExtView recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) strip=strip />)
                 self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: r), expressionCount: self.arena.exprs.count())
             }
             ExprAst.Index(val base, val index, val span) => {
-                val b: U64 = self.lowerExpr(e: base)
-                val idx: U64 = self.lowerExpr(e: index)
+                val b: U64 = (try self.lowerExpr(e: base))
+                val idx: U64 = (try self.lowerExpr(e: index))
                 result = self.lowerIndexRead(recv: b, key: idx)
             }
             ExprAst.Make(val typeName, val typeNameSpan, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
@@ -230,14 +230,14 @@ pub impl Comp {
                     vStart = vb.nameStart
                     vLen = vb.nameLen
                 }
-                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: variant, isEnum: isEnum)
+                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: variant, isEnum: isEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.ArrayLit(val elems, val span) => {
                 mut val es: Array[U64] = []
                 mut val i: U64 = 0
                 while i < elems.count() {
-                    es.append(self.lowerExpr(e: elems[i]))
+                    es.append((try self.lowerExpr(e: elems[i])))
                     i += 1
                 }
                 result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: es) />)
@@ -245,7 +245,7 @@ pub impl Comp {
             ExprAst.DictLit(val keys, val vals, val span) => {
                 // a bare dictionary literal with no binding/return context: K/V can't be
                 // inferred (lowerDictLit reports the error).
-                result = self.lowerDictLit(keys: keys, vals: vals, ctxRef: 0, span: span)
+                result = (try self.lowerDictLit(keys: keys, vals: vals, ctxRef: 0, span: span))
             }
             ExprAst.RecordLit(val fields, val span) => {
                 // a record literal reached without a context type (no annotation / return
@@ -253,39 +253,39 @@ pub impl Comp {
                 // types at codegen (the synthetic record struct keyed by those types). ty=0
                 // / no type name: the backend resolves the record struct from the values
                 // (or st.expectedTy if a construction site set one).
-                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: "", variant: "", isEnum: false)
+                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: "", variant: "", isEnum: false))
                 result = self.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.Cast(val operand, val ty, val span) => {
-                val o: U64 = self.lowerExpr(e: operand)
+                val o: U64 = (try self.lowerExpr(e: operand))
                 val pt: PType = self.lowerType(t: ty)
                 result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
             }
             ExprAst.MatchExpr(val scrut, val arms, val span) => {
                 if matchHasEnumOrStruct(arms: arms) {
                     if matchHasCapture(arms: arms) {
-                        result = self.lowerEnumMatchCaptureExpr(scrut: scrut, arms: arms, span: span)
+                        result = (try self.lowerEnumMatchCaptureExpr(scrut: scrut, arms: arms, span: span))
                     } else {
-                        val s: U64 = self.lowerExpr(e: scrut)
-                        val ma: MatchArmRange = self.lowerMatchArms(arms: arms, isExpr: true)
+                        val s: U64 = (try self.lowerExpr(e: scrut))
+                        val ma: MatchArmRange = (try self.lowerMatchArms(arms: arms, isExpr: true))
                         result = self.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
                     }
                 } else {
-                    result = self.lowerScalarMatchExpr(scrut: scrut, arms: arms, span: span)
+                    result = (try self.lowerScalarMatchExpr(scrut: scrut, arms: arms, span: span))
                 }
             }
             ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
-                val cnd: U64 = self.lowerExpr(e: cond)
-                val tb: U64 = self.lowerBlock(b: thenBlk)
-                val eb: U64 = self.lowerBlock(b: elseBlk)
+                val cnd: U64 = (try self.lowerExpr(e: cond))
+                val tb: U64 = (try self.lowerBlock(b: thenBlk))
+                val eb: U64 = (try self.lowerBlock(b: elseBlk))
                 result = self.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
             }
             ExprAst.OptChain(val base, val cont, val memberSpan, val span) => {
                 // the trailing chain `cont` is lowered with its ChainHole root intact; the
                 // mono desugar substitutes the match-bound value for the hole. Anchor the
                 // OptChain node at the `?.member` source token (diagnostics).
-                val b: U64 = self.lowerExpr(e: base)
-                val c: U64 = self.lowerExpr(e: cont)
+                val b: U64 = (try self.lowerExpr(e: base))
+                val c: U64 = (try self.lowerExpr(e: cont))
                 result = self.pushExpr(e: <Expr.OptChain base=b cont=c />)
                 self.arena.exprSpanStart[result] = memberSpan.start
             }
@@ -294,16 +294,16 @@ pub impl Comp {
                 self.arena.exprSpanStart[result] = span.start
             }
             ExprAst.Try(val operand, val span) => {
-                val o: U64 = self.lowerExpr(e: operand)
+                val o: U64 = (try self.lowerExpr(e: operand))
                 result = self.pushExpr(e: <Expr.Try expr=o />)
             }
             ExprAst.Arrow(val base, val name, val nameSpan, val span) => {
                 // SOURCE span for the pointee field name (see ExprAst.Field above).
-                val b: U64 = self.lowerExpr(e: base)
+                val b: U64 = (try self.lowerExpr(e: base))
                 result = self.pushExpr(e: <Expr.Arrow base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Closure(val params, val hasRet, val ret, val body, val span) => {
-                val ps: Array[Param] = self.lowerParams(params: params)
+                val ps: Array[Param] = (try self.lowerParams(params: params))
                 mut val rStart: U64 = 0
                 mut val rLen: U64 = 0
                 mut val rIsArray: Bool = false
@@ -317,16 +317,16 @@ pub impl Comp {
                 }
                 val savedRet: U64 = self.cur.lowerRetTy
                 self.cur.lowerRetTy = rTy
-                val bd: U64 = self.lowerBlock(b: body)
+                val bd: U64 = (try self.lowerBlock(b: body))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
             }
             ExprAst.Move(val operand, val isBorrow, val span) => {
-                val o: U64 = self.lowerExpr(e: operand)
+                val o: U64 = (try self.lowerExpr(e: operand))
                 result = self.pushExpr(e: <Expr.Move operand=o isBorrow=isBorrow />)
             }
             ExprAst.Await(val operand, val span) => {
-                val o: U64 = self.lowerExpr(e: operand)
+                val o: U64 = (try self.lowerExpr(e: operand))
                 result = self.pushExpr(e: <Expr.Await operand=o />)
             }
         }
@@ -336,7 +336,7 @@ pub impl Comp {
             self.arena.exprSpanStart[result] = exprAstSpan(e: e).start
             self.arena.exprSpanEnd[result] = exprAstSpan(e: e).end
         }
-        return result
+        return <Result.Ok value=result />
     }
 
     // Range syntax is fixed sugar for ordinary aggregate construction. Keep
@@ -366,16 +366,16 @@ pub impl Comp {
         return result
     }
 
-    inout fn lowerSyntaxRange(expr: SyntaxExpr, ctxRef: U64 = 0U64) -> U64 {
-        val low: U64 = self.lowerSyntaxExpr(id: expr.child0)
-        val high: U64 = self.lowerSyntaxExpr(id: expr.child1)
-        return self.lowerRangeConstruction(low: low, high: high, inclusive: expr.flag0, span: expr.span, ctxRef: ctxRef)
+    inout fn lowerSyntaxRange(expr: SyntaxExpr, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        val low: U64 = (try self.lowerSyntaxExpr(id: expr.child0))
+        val high: U64 = (try self.lowerSyntaxExpr(id: expr.child1))
+        return <Result.Ok value=self.lowerRangeConstruction(low: low, high: high, inclusive: expr.flag0, span: expr.span, ctxRef: ctxRef) />
     }
 
     // Context-aware SyntaxFile lowering. This mirrors lowerExprWithCtx without
     // reconstituting value AST nodes: context is semantic data, while every
     // child remains a stable immutable syntax ID.
-    inout fn lowerSyntaxExprWithCtx(id: ExprId, ctxRef: U64) -> U64 {
+    inout fn lowerSyntaxExprWithCtx(id: ExprId, ctxRef: U64) -> Result[U64, CompileDiagnostic] {
         if ctxRef != 0U64 {
             if ctxRef < self.arena.typeCount() {
                 val ct: TypeRef = self.arena.typeAt(index: ctxRef)
@@ -384,11 +384,11 @@ pub impl Comp {
                     if self.arena.bytes[ct.nameStart] == '(' {
                         match e.kind {
                             SyntaxExprKind.RecordLit => {
-                                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false)
+                                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false))
                                 val result: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
                                 self.arena.exprSpanStart[result] = e.span.start
                                 self.arena.exprSpanEnd[result] = e.span.end
-                                return result
+                                return <Result.Ok value=result />
                             }
                             _ => {}
                         }
@@ -397,37 +397,37 @@ pub impl Comp {
                 if ct.args.count() > 0U64 {
                     match e.kind {
                         SyntaxExprKind.Range => {
-                            return self.lowerSyntaxRange(expr: e, ctxRef: ctxRef)
+                            return <Result.Ok value=(try self.lowerSyntaxRange(expr: e, ctxRef: ctxRef)) />
                         }
                         SyntaxExprKind.Make => {
                             if !(e.flag0) {
                                 if syntaxExprTypeArgCount(file: self.syntax, expr: e) == 0U64 {
                                     if intern(c: inout self, start: e.name.start, len: e.name.end - e.name.start) == ct.nameId {
-                                        val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false)
+                                        val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false))
                                         val result: U64 = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
                                         self.arena.exprSpanStart[result] = e.span.start
                                         self.arena.exprSpanEnd[result] = e.span.end
-                                        return result
+                                        return <Result.Ok value=result />
                                     }
                                 }
                             }
                         }
                         SyntaxExprKind.DictLit => {
-                            return self.lowerSyntaxDictLit(expr: e, ctxRef: ctxRef)
+                            return <Result.Ok value=(try self.lowerSyntaxDictLit(expr: e, ctxRef: ctxRef)) />
                         }
                         _ => {}
                     }
                 }
             }
         }
-        return self.lowerSyntaxExpr(id: id)
+        return <Result.Ok value=(try self.lowerSyntaxExpr(id: id)) />
     }
 
     // SyntaxFile counterpart of expression lowering.  This path deliberately
     // reads scalar node views and child IDs only: it never materializes an
     // ExprAst/String tree from the immutable syntax arena.  More expression
     // categories are added before the normal loader is switched to SyntaxFile.
-    inout fn lowerSyntaxExpr(id: ExprId) -> U64 {
+    inout fn lowerSyntaxExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
         val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
         mut val result: U64 = 0U64
         match e.kind {
@@ -458,48 +458,48 @@ pub impl Comp {
                     }
                 }
                 if !(folded) {
-                    result = self.pushExpr(e: <Expr.Unary op=e.op operand=self.lowerSyntaxExpr(id: e.child0) />)
+                    result = self.pushExpr(e: <Expr.Unary op=e.op operand=(try self.lowerSyntaxExpr(id: e.child0)) />)
                 }
             }
             SyntaxExprKind.Binary => {
-                val lhs: U64 = self.lowerSyntaxExpr(id: e.child0)
-                val rhs: U64 = self.lowerSyntaxExpr(id: e.child1)
+                val lhs: U64 = (try self.lowerSyntaxExpr(id: e.child0))
+                val rhs: U64 = (try self.lowerSyntaxExpr(id: e.child1))
                 result = self.pushExpr(e: <Expr.Binary op=e.op lhs=lhs rhs=rhs />)
             }
             SyntaxExprKind.Call => {
-                val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: e.name)
+                val args: Array[Arg] = (try self.lowerSyntaxArgs(expr: e, fnName: e.name))
                 result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.Field => {
-                result = self.pushExpr(e: <Expr.Field base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+                result = self.pushExpr(e: <Expr.Field base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
             }
             SyntaxExprKind.Method => {
                 if self.isNamespaceNameSpan(name: syntaxExpr(file: self.syntax, id: e.child0).name) {
-                    val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: e.name)
+                    val args: Array[Arg] = (try self.lowerSyntaxArgs(expr: e, fnName: e.name))
                     self.markImport(segStart: e.name.start, segLen: e.name.end - e.name.start, nameStart: e.name.start, nameLen: e.name.end - e.name.start)
                     result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
                 } else {
-                    val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
-                    val args: Array[Arg] = self.lowerSyntaxMethodArgs(expr: e, methodName: e.name)
+                    val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
+                    val args: Array[Arg] = (try self.lowerSyntaxMethodArgs(expr: e, methodName: e.name))
                     result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
                 }
             }
             SyntaxExprKind.ArrowMethod => {
-                val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
+                val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val deref: U64 = self.pushExpr(e: <Expr.Deref base=recv />)
-                val args: Array[Arg] = self.lowerSyntaxMethodArgs(expr: e, methodName: e.name)
+                val args: Array[Arg] = (try self.lowerSyntaxMethodArgs(expr: e, methodName: e.name))
                 result = self.pushExpr(e: <Expr.Method recv=deref nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.ExtMethod => {
-                val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
-                val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: <Span start=0U64 end=0U64 />)
+                val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
+                val args: Array[Arg] = (try self.lowerSyntaxArgs(expr: e, fnName: <Span start=0U64 end=0U64 />))
                 result = self.pushExpr(e: <Expr.ExtMethod recv=recv source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.Arrow => {
-                result = self.pushExpr(e: <Expr.Arrow base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+                result = self.pushExpr(e: <Expr.Arrow base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
             }
             SyntaxExprKind.Index => {
-                result = self.lowerIndexRead(recv: self.lowerSyntaxExpr(id: e.child0), key: self.lowerSyntaxExpr(id: e.child1))
+                result = self.lowerIndexRead(recv: (try self.lowerSyntaxExpr(id: e.child0)), key: (try self.lowerSyntaxExpr(id: e.child1)))
             }
             SyntaxExprKind.Make => {
                 mut val typeArgs: Array[U64] = []
@@ -514,60 +514,60 @@ pub impl Comp {
                 if e.flag0 {
                     variantId = intern(c: inout self, start: e.nameSpan.start, len: e.nameSpan.end - e.nameSpan.start)
                 }
-                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: e.flag0)
+                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: e.flag0))
                 result = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=e.nameSpan.start variantLen=e.nameSpan.end - e.nameSpan.start isEnum=e.flag0 ty=tyRef fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Range => {
-                result = self.lowerSyntaxRange(expr: e)
+                result = (try self.lowerSyntaxRange(expr: e))
             }
             SyntaxExprKind.ArrayLit => {
                 mut val elems: Array[U64] = []
                 mut val i: U64 = 0U64
                 while i < syntaxExprElemCount(file: self.syntax, expr: e) {
-                    elems.append(self.lowerSyntaxExpr(id: syntaxExprElem(file: self.syntax, expr: e, index: i)))
+                    elems.append((try self.lowerSyntaxExpr(id: syntaxExprElem(file: self.syntax, expr: e, index: i))))
                     i += 1U64
                 }
                 result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: elems) />)
             }
             SyntaxExprKind.DictLit => {
-                result = self.lowerSyntaxDictLit(expr: e, ctxRef: 0U64)
+                result = (try self.lowerSyntaxDictLit(expr: e, ctxRef: 0U64))
             }
             SyntaxExprKind.RecordLit => {
-                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: 0U64, variantId: 0U64, isEnum: false)
+                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: 0U64, variantId: 0U64, isEnum: false))
                 result = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=0U64 fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Cast => {
                 val ty: PType = self.lowerSyntaxType(id: e.type0)
-                result = self.pushExpr(e: <Expr.Cast operand=self.lowerSyntaxExpr(id: e.child0) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
+                result = self.pushExpr(e: <Expr.Cast operand=(try self.lowerSyntaxExpr(id: e.child0)) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
             SyntaxExprKind.IfExpr => {
-                result = self.pushExpr(e: <Expr.IfExpr cond=self.lowerSyntaxExpr(id: e.child0) thenBlk=self.lowerSyntaxBlock(id: e.block0) elseBlk=self.lowerSyntaxBlock(id: e.block1) />)
+                result = self.pushExpr(e: <Expr.IfExpr cond=(try self.lowerSyntaxExpr(id: e.child0)) thenBlk=(try self.lowerSyntaxBlock(id: e.block0)) elseBlk=(try self.lowerSyntaxBlock(id: e.block1)) />)
             }
             SyntaxExprKind.MatchExpr => {
-                result = self.lowerSyntaxMatchExprInto(expr: e)
+                result = (try self.lowerSyntaxMatchExprInto(expr: e))
             }
             SyntaxExprKind.OptChain => {
-                result = self.pushExpr(e: <Expr.OptChain base=self.lowerSyntaxExpr(id: e.child0) cont=self.lowerSyntaxExpr(id: e.child1) />)
+                result = self.pushExpr(e: <Expr.OptChain base=(try self.lowerSyntaxExpr(id: e.child0)) cont=(try self.lowerSyntaxExpr(id: e.child1)) />)
             }
             SyntaxExprKind.ChainHole => {
                 result = self.pushExpr(e: <Expr.ChainHole />)
             }
             SyntaxExprKind.Try => {
-                result = self.pushExpr(e: <Expr.Try expr=self.lowerSyntaxExpr(id: e.child0) />)
+                result = self.pushExpr(e: <Expr.Try expr=(try self.lowerSyntaxExpr(id: e.child0)) />)
             }
             SyntaxExprKind.Move => {
-                result = self.pushExpr(e: <Expr.Move operand=self.lowerSyntaxExpr(id: e.child0) isBorrow=e.flag0 />)
+                result = self.pushExpr(e: <Expr.Move operand=(try self.lowerSyntaxExpr(id: e.child0)) isBorrow=e.flag0 />)
             }
             SyntaxExprKind.Await => {
-                result = self.pushExpr(e: <Expr.Await operand=self.lowerSyntaxExpr(id: e.child0) />)
+                result = self.pushExpr(e: <Expr.Await operand=(try self.lowerSyntaxExpr(id: e.child0)) />)
             }
             SyntaxExprKind.ExtView => {
-                val receiver = self.lowerSyntaxExpr(id: e.child0)
+                val receiver = (try self.lowerSyntaxExpr(id: e.child0))
                 result = self.pushExpr(e: <Expr.ExtView recv=receiver source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)
                 self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: receiver), expressionCount: self.arena.exprs.count())
             }
             SyntaxExprKind.Closure => {
-                val params: Array[Param] = self.lowerSyntaxExprParams(expr: e)
+                val params: Array[Param] = (try self.lowerSyntaxExprParams(expr: e))
                 mut val retStart: U64 = 0U64
                 mut val retLen: U64 = 0U64
                 mut val retIsArray: Bool = false
@@ -581,7 +581,7 @@ pub impl Comp {
                 }
                 val savedRet: U64 = self.cur.lowerRetTy
                 self.cur.lowerRetTy = retTy
-                val body: U64 = self.lowerSyntaxBlock(id: e.block0)
+                val body: U64 = (try self.lowerSyntaxBlock(id: e.block0))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
             }
@@ -593,6 +593,6 @@ pub impl Comp {
             self.arena.exprSpanStart[result] = e.span.start
             self.arena.exprSpanEnd[result] = e.span.end
         }
-        return result
+        return <Result.Ok value=result />
     }
 }

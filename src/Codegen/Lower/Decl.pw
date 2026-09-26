@@ -242,7 +242,7 @@ pub impl Comp {
         return out
     }
 
-    inout fn lowerFieldDef(f: FieldAst) -> FieldDef {
+    inout fn lowerFieldDef(f: FieldAst) -> Result[FieldDef, CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: f.name)
         mut val tyStart: U64 = 0
         mut val tyLen: U64 = 0
@@ -258,10 +258,10 @@ pub impl Comp {
         mut val hasDefault: Bool = false
         mut val defaultVal: U64 = 0
         if f.hasDefault {
-            defaultVal = self.lowerExprWithCtx(e: f.defaultVal, ctxRef: tyRef)
+            defaultVal = (try self.lowerExprWithCtx(e: f.defaultVal, ctxRef: tyRef))
             hasDefault = true
         }
-        return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />
+        return <Result.Ok value=<FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis /> />
     }
 
     inout fn lowerSyntaxDeclTypeParams(d: SyntaxDecl) -> Array[Bind] {
@@ -276,11 +276,11 @@ pub impl Comp {
         return self.lowerTypeParamSpans(spans: names, anchor: d.span.start, sendableFlags: flags)
     }
 
-    inout fn lowerSyntaxFieldDef(f: SyntaxField) -> FieldDef {
+    inout fn lowerSyntaxFieldDef(f: SyntaxField) -> Result[FieldDef, CompileDiagnostic] {
         val pt: PType = self.lowerSyntaxType(id: f.ty)
         mut val defaultVal: U64 = 0U64
-        if f.hasDefault { defaultVal = self.lowerSyntaxExprWithCtx(id: f.defaultVal, ctxRef: pt.ref) }
-        return <FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis />
+        if f.hasDefault { defaultVal = (try self.lowerSyntaxExprWithCtx(id: f.defaultVal, ctxRef: pt.ref)) }
+        return <Result.Ok value=<FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis /> />
     }
 
     // The declaration's own receiver preserves its lexical binder identities.
@@ -303,13 +303,13 @@ pub impl Comp {
         mut val fields: Array[FieldDef] = []
         mut val i: U64 = 0U64
         while i < syntaxDeclFieldCount(file: self.syntax, decl: d) {
-            fields.append(self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxDeclField(file: self.syntax, decl: d, index: i))))
+            fields.append((try self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxDeclField(file: self.syntax, decl: d, index: i)))))
             i += 1U64
         }
         if d.hasDeinit {
             val deinitName: Bind = self.internBytes(s: "deinit")
             val noParams: Array[Param] = []
-            val body: U64 = self.lowerSyntaxBlock(id: d.deinitBody)
+            val body: U64 = (try self.lowerSyntaxBlock(id: d.deinitBody))
             val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) recvTy=self.lowerDeclaredReceiver(nameStart: d.name.start, nameLen: d.name.end - d.name.start, parameters: typeParams, siteOffset: d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />))
             self.decls.deinits.append(destructor)
         }
@@ -319,7 +319,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) {
+    inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
@@ -330,7 +330,7 @@ pub impl Comp {
             mut val fields: Array[FieldDef] = []
             mut val j: U64 = 0U64
             while j < syntaxVariantFieldCount(file: self.syntax, variant: v) {
-                fields.append(self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxVariantField(file: self.syntax, variant: v, index: j))))
+                fields.append((try self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxVariantField(file: self.syntax, variant: v, index: j)))))
                 j += 1U64
             }
             variants.append(<Variant nameStart=v.name.start nameLen=v.name.end - v.name.start nameId=intern(c: inout self, start: v.name.start, len: v.name.end - v.name.start) fields=fields />)
@@ -339,21 +339,22 @@ pub impl Comp {
         self.arena.registerEnum(<EnumDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
+        return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxDeclParams(d: SyntaxDecl) -> Array[Param] {
+    inout fn lowerSyntaxDeclParams(d: SyntaxDecl) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0U64
         while i < syntaxDeclParamCount(file: self.syntax, decl: d) {
             val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxDeclParam(file: self.syntax, decl: d, index: i))
             val ty: PType = self.lowerSyntaxType(id: p.ty)
             mut val defaultExpr: U64 = 0U64
-            if p.hasDefault { defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal) }
+            if p.hasDefault { defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal)) }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
             out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
             i += 1U64
         }
-        return out
+        return <Result.Ok value=out />
     }
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
@@ -372,7 +373,7 @@ pub impl Comp {
         }
         self.lowerWhereSyntaxTypes = whereTypes
         self.lowerWhereSyntaxTraits = whereTraits
-        val params: Array[Param] = self.lowerSyntaxDeclParams(d: d)
+        val params: Array[Param] = (try self.lowerSyntaxDeclParams(d: d))
         mut val retStart: U64 = 0U64
         mut val retLen: U64 = 0U64
         mut val retIsArray: Bool = false
@@ -386,7 +387,7 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
-        val body: U64 = self.lowerSyntaxBlock(id: d.body)
+        val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=d.name.start />))
         self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
@@ -407,7 +408,7 @@ pub impl Comp {
         mut val fields: Array[FieldDef] = []
         mut val i: U64 = 0
         while i < d.fields.count() {
-            fields.append(self.lowerFieldDef(f: d.fields[i]))
+            fields.append((try self.lowerFieldDef(f: d.fields[i])))
             i += 1
         }
         // a `deinit { body }` lowers to a synthetic method `Type_deinit(Type self)`
@@ -416,7 +417,7 @@ pub impl Comp {
         // this struct's processing), so the function stream order is preserved.
         if d.hasDeinit {
             val deinitN: Bind = self.internBytes(s: "deinit")
-            val body: U64 = self.lowerBlock(b: d.deinitBody)
+            val body: U64 = (try self.lowerBlock(b: d.deinitBody))
             val noParams: Array[Param] = []
             val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) recvTy=self.lowerDeclaredReceiver(nameStart: nm.nameStart, nameLen: nm.nameLen, parameters: typeParams, siteOffset: d.nameSpan.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />))
             self.decls.deinits.append(destructor)
@@ -427,7 +428,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerEnumDecl(d: DeclAst) {
+    inout fn lowerEnumDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val nm: Bind = self.internBytes(s: d.name)
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
         // variant payload types may reference `[T]` — see lowerStructDecl.
@@ -441,7 +442,7 @@ pub impl Comp {
             mut val vfields: Array[FieldDef] = []
             mut val j: U64 = 0
             while j < v.fields.count() {
-                vfields.append(self.lowerFieldDef(f: v.fields[j]))
+                vfields.append((try self.lowerFieldDef(f: v.fields[j])))
                 j += 1
             }
             variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen nameId=intern(c: inout self, start: vn.nameStart, len: vn.nameLen) fields=vfields />)
@@ -450,6 +451,7 @@ pub impl Comp {
         self.arena.registerEnum(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
+        return <Result.Ok value=() />
     }
 
     inout fn lowerFuncDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
@@ -465,7 +467,7 @@ pub impl Comp {
         self.lowerWhereTypes = d.whereTypes
         self.lowerWhereTraits = d.whereTraits
         val normParams: Array[ParamAst] = self.normalizeParams(params: d.params, whereTypes: d.whereTypes, whereTraits: d.whereTraits)
-        val params: Array[Param] = self.lowerParams(params: normParams)
+        val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
@@ -479,7 +481,7 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
-        val body: U64 = self.lowerBlock(b: d.body)
+        val body: U64 = (try self.lowerBlock(b: d.body))
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />))
         // A `where T: P` is part of this function's declaration, not a later
