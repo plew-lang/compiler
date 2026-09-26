@@ -1,5 +1,7 @@
 import /Frontend with { Comp }
 import /Ir with { Expr }
+import /Diag with { emitDiagnostic }
+import @Std/Io with { print }
 fn main() {
     mut val compiler: Comp = <Comp />
     compiler.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
@@ -7,5 +9,9 @@ fn main() {
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 100U64)
     val key = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64)
     // A nearby finalized slot must not satisfy a missing dependency.
-    compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key)
+    match compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key) {
+        Result.Ok(value: _) => { panic("unfinalized dependency was accepted") }
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) }
+    }
+    print("returned")
 }

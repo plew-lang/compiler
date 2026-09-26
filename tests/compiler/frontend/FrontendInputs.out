@@ -6,4 +6,6 @@ Second.pw
 internal error: ownership field has no collected shape
 internal error: synthetic call origin registered twice
 internal error: lexical Self binding conflicts with selected receiver
+internal error (compiler bug): record ownership requires a registered layout matching its semantic field types
+internal error: implicit protocol call dependency was not finalized
 invariant diagnostics returned

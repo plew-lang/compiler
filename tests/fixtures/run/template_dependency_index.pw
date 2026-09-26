@@ -16,7 +16,7 @@ fn main() {
     slot = 0U64
     while slot < 257U64 {
         val key = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: slot)
-        if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key) != slot + 100U64 { panic "wrong implicit slot after growth" }
+        if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key).unwrap() != slot + 100U64 { panic "wrong implicit slot after growth" }
         slot += 1U64
     }
     // The hash normalizes each component modulo this prime; equality must
@@ -25,19 +25,19 @@ fn main() {
     val collidingKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: collidingSlot)
     if compiler.finalCalleeHash(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeHash(bodyId: 1U64, siteKey: collidingKey) { panic "fixture must collide" }
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: collidingSlot, recvTypeRef: 0U64, resultTypeRef: 700U64)
-    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: collidingKey) != 700U64 { panic "hash collision confused slots" }
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: collidingKey).unwrap() != 700U64 { panic "hash collision confused slots" }
     // An expression call and an implicit protocol call never share identity.
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: false, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 900U64)
     val expressionKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: false, slot: 0U64)
-    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: expressionKey) != 900U64 { panic "origin namespace aliased" }
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: expressionKey).unwrap() != 900U64 { panic "origin namespace aliased" }
     // The same lexical site in another instance has an independent result.
     compiler.cur.bodyId = 2U64
     if compiler.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "body identity lost" }
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 800U64)
-    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey) != 800U64 { panic "miss stayed cached" }
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey).unwrap() != 800U64 { panic "miss stayed cached" }
     compiler.cur.bodyId = 1U64
-    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey) != 100U64 { panic "other instance overwrote result" }
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey).unwrap() != 100U64 { panic "other instance overwrote result" }
     // A saved semantic dependency survives a different navigation anchor.
-    if compiler.bodyCalleeResultForTemplateDependency(exprId: 1U64, siteKey: firstKey) != 100U64 { panic "navigation anchor became semantic identity" }
+    if compiler.bodyCalleeResultForTemplateDependency(exprId: 1U64, siteKey: firstKey).unwrap() != 100U64 { panic "navigation anchor became semantic identity" }
     write(s: "template-dependency-index-ok\n")
 }

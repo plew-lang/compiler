@@ -22,7 +22,7 @@ pub impl Comp {
         self.arena.loweringDiscriminantType = 0U64
         val name = self.internBytes(s: "I64")
         val term = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-        match self.arcClassOfRef(ref: term) {
+        match (try self.arcClassOfRef(ref: term)) {
             ArcClass.Scalar => {
                 try self.enqueueFinalDestruction(typeRef: term)
                 self.arena.loweringDiscriminantType = term
@@ -241,7 +241,7 @@ pub impl Comp {
         self.arena.finalDestructionNominalNext.append(nominalNext)
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
-        val ownershipClass = self.arcClassOfRef(ref: typeRef)
+        val ownershipClass = (try self.arcClassOfRef(ref: typeRef))
         mut val fields: Array[U64] = []
         mut val boxed: Array[Bool] = []
         mut val variantStarts: Array[U64] = []

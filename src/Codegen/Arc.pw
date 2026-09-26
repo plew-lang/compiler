@@ -15,34 +15,33 @@
 
 pub impl Comp {
 
-    inout fn arcClassOfRef(ref: U64) -> ArcClass {
+    inout fn arcClassOfRef(ref: U64) -> Result[ArcClass, CompileDiagnostic] {
         if ref == 0U64 {
-            return <ArcClass.Scalar />
+            return <Result.Ok value=<ArcClass.Scalar /> />
         }
         if ref >= self.arena.typeCount() {
-            return <ArcClass.Scalar />
+            return <Result.Ok value=<ArcClass.Scalar /> />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.isRecord {
             val layout: U64 = self.recordStructIndex(ref: ref)
             if layout < self.arena.structCount() {
-                return <ArcClass.StructVal sidx=layout />
+                return <Result.Ok value=<ArcClass.StructVal sidx=layout /> />
             }
-            self.errorAt(offset: t.nameStart, msg: "internal error (compiler bug): record ownership requires a registered layout matching its semantic field types")
-            return <ArcClass.Scalar />
+            return <Result.Err error=self.diagnosticAt(offset: t.nameStart, msg: "internal error (compiler bug): record ownership requires a registered layout matching its semantic field types") />
         }
         // an existential `any P` (spec/08): the ref carries the TRAIT's name, so it
         // must classify here — before every name-based class below (falling through
         // would land on Scalar and silently skip the box's release).
         if t.isAny {
-            return <ArcClass.AnyBox />
+            return <Result.Ok value=<ArcClass.AnyBox /> />
         }
         // a function type (`fn(...) -> R`): a closure value whose env cell is rc'd.
         if self.isFnType(ref: ref) {
-            return <ArcClass.ClosureVal />
+            return <Result.Ok value=<ArcClass.ClosureVal /> />
         }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
-            return <ArcClass.StringLike />
+            return <Result.Ok value=<ArcClass.StringLike /> />
         }
         // Buffer/reference cells are blessed EXTERN structs (single opaque pointer), so
         // they must classify BEFORE the registered-struct lookup (which skips externs)
@@ -50,22 +49,22 @@ pub impl Comp {
         // user generic instance).
         if t.args.count() == 1U64 {
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
-                return <ArcClass.BufferLike elem=t.args[0] />
+                return <Result.Ok value=<ArcClass.BufferLike elem=t.args[0] /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
-                return <ArcClass.RefCell inst=ref />
+                return <Result.Ok value=<ArcClass.RefCell inst=ref /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef") {
-                return <ArcClass.RefCell inst=ref />
+                return <Result.Ok value=<ArcClass.RefCell inst=ref /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef") {
-                return <ArcClass.WeakCell inst=ref />
+                return <Result.Ok value=<ArcClass.WeakCell inst=ref /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakMutableRef") {
-                return <ArcClass.WeakCell inst=ref />
+                return <Result.Ok value=<ArcClass.WeakCell inst=ref /> />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
-                return <ArcClass.PromiseCell inst=ref />
+                return <Result.Ok value=<ArcClass.PromiseCell inst=ref /> />
             }
         }
         // a newtype shares its underlying type's representation AND ownership class
@@ -73,7 +72,7 @@ pub impl Comp {
         val ntu: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
         if ntu != 0U64 {
             if ntu != ref {
-                return self.arcClassOfRef(ref: ntu)
+                return <Result.Ok value=(try self.arcClassOfRef(ref: ntu)) />
             }
         }
         // a registered struct (any arity: `Point`, `Array[I64]`, any grounded generic
@@ -81,15 +80,15 @@ pub impl Comp {
         val sidx: U64 = self.structIndexForType(ref: ref)
         if sidx < self.arena.structCount() {
             if self.arena.structAt(index: sidx).isExtern {
-                return <ArcClass.Scalar />
+                return <Result.Ok value=<ArcClass.Scalar /> />
             }
-            return <ArcClass.StructVal sidx=sidx />
+            return <Result.Ok value=<ArcClass.StructVal sidx=sidx /> />
         }
         val eidx: U64 = self.enumIndexForType(ref: ref)
         if eidx < self.arena.enumCount() {
-            return <ArcClass.EnumVal eidx=eidx />
+            return <Result.Ok value=<ArcClass.EnumVal eidx=eidx /> />
         }
-        return <ArcClass.Scalar />
+        return <Result.Ok value=<ArcClass.Scalar /> />
     }
 
     // A struct/variant FIELD's type ref grounded under the ACTIVE instance env, for
@@ -146,7 +145,7 @@ pub impl Comp {
     // deinit). A genuine same-instance cycle is either infinite-size (rejected) or
     // boxed (terminated by `fieldIsBoxed` before recursing), so ref-keying still halts.
     inout fn arcRefNeedsRelease(ref: U64, visited: inout Array[U64]) -> Result[Bool, CompileDiagnostic] {
-        match self.arcClassOfRef(ref: ref) {
+        match (try self.arcClassOfRef(ref: ref)) {
             ArcClass.Scalar => { return <Result.Ok value=false />}
             ArcClass.StringLike => { return <Result.Ok value=true />}
             ArcClass.BufferLike(elem: _) => { return <Result.Ok value=true />}

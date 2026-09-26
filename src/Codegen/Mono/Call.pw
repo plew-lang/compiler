@@ -590,7 +590,7 @@ pub impl Comp {
                         return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
                     }
                     CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
-                        return <Result.Ok value=self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency) />
+                        return <Result.Ok value=(try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)) />
                     }
                     CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
                         val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
@@ -600,7 +600,7 @@ pub impl Comp {
                         return <Result.Ok value=result />
                     }
                     CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val dependency, views: val views) => {
-                        return <Result.Ok value=self.typeRefWithAddedViewSources(ref: self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency), additions: self.callTemplateViews(range: views)) />
+                        return <Result.Ok value=self.typeRefWithAddedViewSources(ref: (try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)), additions: self.callTemplateViews(range: views)) />
                     }
                     CallTemplateReceiver.PriorProtocolResultWithViews(slot: val priorSlot, views: val views) => {
                         val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
@@ -633,13 +633,13 @@ pub impl Comp {
                 return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
             }
             CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
-                return <Result.Ok value=self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey) />
+                return <Result.Ok value=(try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)) />
             }
             CallTemplateReceiver.PriorProtocolResult(slot: val slot) => {
                 return <Result.Ok value=self.bodyCalleeResultRef(exprId: self.cur.bodyFnIdx, siteIsStmt: true, slot: slot) />
             }
             CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val siteKey, views: val views) => {
-                val base: U64 = self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
+                val base: U64 = (try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey))
                 return <Result.Ok value=self.typeRefWithAddedViewSources(ref: base, additions: self.callTemplateViews(range: views)) />
             }
             CallTemplateReceiver.PriorProtocolResultWithViews(slot: val slot, views: val views) => {
@@ -653,16 +653,15 @@ pub impl Comp {
     // already published for this BodyInstance. `exprId` is not a semantic key:
     // the stored CallSiteKey guards against accidentally reading a different
     // shared generic body occurrence with the same arena navigation anchor.
-    inout fn bodyCalleeResultForTemplateDependency(exprId: U64, siteKey: CallSiteKey) -> U64 {
+    inout fn bodyCalleeResultForTemplateDependency(exprId: U64, siteKey: CallSiteKey) -> Result[U64, CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         // Dependency identity is the finalized body plus semantic call site.
         // ExprId is only a diagnostic anchor, just as for other indexed readers.
         val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
         if index < self.finalCalleeCount() {
-            return self.arena.finalCallees[index].resultTypeRef
+            return <Result.Ok value=self.arena.finalCallees[index].resultTypeRef />
         }
-        self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized")
-        return 0U64
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized") />
     }
 
     // Instance collection discovers layouts before Record has produced the
@@ -1551,7 +1550,7 @@ pub impl Comp {
                 return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
             }
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
-                return <Result.Ok value=self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey) />
+                return <Result.Ok value=(try self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)) />
             }
             CallArgumentSource.Legacy(exprId: val exprId, val info) => {
                 // Literal context can be checked after the template captured
@@ -2441,66 +2440,7 @@ pub impl Comp {
         return self.arena.functionCount()
     }
 
-    // The Mono-owned final-callee table is the only call-resolution input that
-    // reaches code generation.  A missing entry is an internal pipeline error:
-    // backend must never paper it over by re-running overload/source lookup.
-    inout fn bodyCallee(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
-        val found: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if found < self.finalCalleeCount() {
-            return self.arena.finalCallees[found].callee
-        }
-        // No AST-global fallback here.  A final callable is the boundary
-        // between semantic resolution and LLVM; accepting a cache hit after a
-        // descriptor-key miss reintroduces a second resolver and is observably
-        // wrong for shared provided bodies.  Missing entries are reported below
-        // so the Mono walk is completed at the true source of the omission.
-        val currentBodyId: U64 = self.currentBodyInstanceId()
-        mut val i: U64 = 0U64
-        mut val mismatchedReceiver: Bool = false
-        mut val mismatchedArgs: Bool = false
-        mut val missingBodyArgs: Bool = false
-        while i < self.finalCalleeCount() {
-            val e: CallResolution = self.arena.finalCallees[i]
-            if e.bodyId != currentBodyId && e.siteIsStmt == siteIsStmt && e.slot == slot && e.exprId == exprId {
-                val priorBody: BodyInstance = self.arena.bodyInstanceAt(index: e.bodyId - 1U64)
-                if !(self.sameBodyReceiver(a: priorBody.environment.receiverRef, b: self.cur.bodyEnvironment.receiverRef)) {
-                    mismatchedReceiver = true
-                } else {
-                    mismatchedArgs = true
-                    if priorBody.environment.params.count() > 0U64 && self.cur.bodyEnvironment.params.count() == 0U64 {
-                        missingBodyArgs = true
-                    }
-                }
-            }
-            i += 1U64
-        }
-        if mismatchedReceiver || mismatchedArgs {
-            if siteIsStmt {
-                if mismatchedReceiver {
-                    self.errorAt(offset: 0U64, msg: "internal diagnostic: final callable receiver key differs between Mono and backend")
-                } else if missingBodyArgs {
-                    self.errorAt(offset: 0U64, msg: "internal diagnostic: backend opened a generic body without final type arguments")
-                } else {
-                    self.errorAt(offset: 0U64, msg: "internal diagnostic: final callable type-argument key differs between Mono and backend")
-                }
-            } else {
-                if mismatchedReceiver {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: final callable receiver key differs between Mono and backend")
-                } else if missingBodyArgs {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: backend opened a generic body without final type arguments")
-                } else {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: final callable type-argument key differs between Mono and backend")
-                }
-            }
-            return self.arena.functionCount()
-        }
-        if siteIsStmt {
-            self.errorAt(offset: 0U64, msg: "internal error: final callable was not recorded for this control-flow call site")
-        } else {
-            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final callable was not recorded for this body instance")
-        }
-        return self.arena.functionCount()
-    }
+
 
     // The receiver identity selected with a final callable.  This is a table
     // read, never a backend type-recovery query.
@@ -2510,30 +2450,7 @@ pub impl Comp {
         return 0U64
     }
 
-    // Backend value lowering consumes the same frozen descriptor as ABI/type
-    // lowering. This adapter creates the legacy transient ArgRange only from
-    // that immutable evaluation plan; it must not reopen a CallTemplate or an
-    // authored AST argument range after finalization.
-    inout fn bodyCalleeArgumentRange(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> ArgRange {
-        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i >= self.finalCalleeCount() {
-            if siteIsStmt {
-                self.errorAt(offset: 0U64, msg: "internal error: final callable has no recorded evaluation plan")
-            } else {
-                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final callable has no recorded evaluation plan")
-            }
-            return self.pushArgs(args: [])
-        }
-        val frozen: CallResolution = self.arena.finalCallees[i]
-        mut val values: Array[Arg] = []
-        mut val argIndex: U64 = 0U64
-        while argIndex < frozen.arguments.len {
-            val argument: CallEvaluationArgument = self.finalCalleeArgumentAt(arguments: frozen.arguments, index: argIndex)
-            values.append(<Arg expr=argument.exprId isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
-            argIndex += 1U64
-        }
-        return self.pushArgs(args: values)
-    }
+
 
     inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)

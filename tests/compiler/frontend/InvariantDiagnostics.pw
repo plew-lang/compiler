@@ -2,7 +2,7 @@
 // Each failed Comp is discarded; this does not test recovery inside a request.
 import ../../../src/Frontend with { Comp }
 import ../../../src/Diag with { CompileDiagnostic }
-import ../../../src/Ir with { Bind, Expr, Func, InstanceEnvironment, SyntheticCallSite, TraitDef }
+import ../../../src/Ir with { Bind, Expr, Func, InstanceEnvironment, SyntheticCallSite, TraitDef, TypeRef }
 import @Std/Io with { print }
 
 fn expectDiagnostic[T](result: Result[T, CompileDiagnostic]) {
@@ -53,9 +53,28 @@ fn conflictingSelf() {
     expectDiagnostic(result: c.withLexicalSelfBinding(f: function, environment: environment))
 }
 
+fn missingRecordLayout() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "Record")
+    val record = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true />)
+    expectDiagnostic(result: c.arcClassOfRef(ref: record))
+}
+
+fn missingProtocolDependency() {
+    mut val c: Comp = <Comp />
+    c.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    c.cur.bodyId = 1U64
+    c.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 100U64)
+    val key = c.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64)
+    expectDiagnostic(result: c.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key))
+}
+
 export fn checkInvariantDiagnostics() {
     missingShape()
     duplicateOrigin()
     conflictingSelf()
+    missingRecordLayout()
+    missingProtocolDependency()
     print("invariant diagnostics returned")
 }
