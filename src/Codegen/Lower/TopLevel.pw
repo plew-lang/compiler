@@ -329,7 +329,7 @@ pub impl Comp {
         self.cur.typeParams = []
         match item {
             TopItemAst.Decl(val d) => { try self.lowerDecl(d: d) }
-            TopItemAst.Impl(val im) => { try self.lowerImpl(im: im) }
+            TopItemAst.Impl(val im) => { try self.lowerImpl(rawImpl: im) }
             TopItemAst.Trait(val t) => { try self.lowerTrait(t: t) }
             TopItemAst.Extern(val e) => { try self.lowerExtern(e: e) }
             TopItemAst.Import(val imp) => { self.lowerImport(imp: imp) }
@@ -394,7 +394,7 @@ pub impl Comp {
         self.cur.typeParams = []
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Decl => { try self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Impl => { try self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Impl => { try self.lowerSyntaxImpl(rawImpl: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }

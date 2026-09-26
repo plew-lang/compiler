@@ -353,6 +353,18 @@ pub impl Comp {
         }
     }
 
+    inout fn normalizeSyntaxImplTrait(im: SyntaxImpl) -> Result[SyntaxImpl, CompileDiagnostic] {
+        if im.traitPath.count == 0U64 { return <Result.Ok value=im /> }
+        val ty = (try self.resolveSyntaxTypePath(t: <SyntaxType name=im.traitName namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan extView=<Span start=0 end=0 /> viewNames=<SyntaxSlice start=0 count=0 /> projectionTrait=<Span start=0 end=0 /> projectionTraitArgs=<SyntaxSlice start=0 count=0 /> projectionTraitArgLabels=<SyntaxSlice start=0 count=0 /> projectionAssoc=<Span start=0 end=0 /> isAny=false argLabels=<SyntaxSlice start=0 count=0 /> isSendable=false isRecord=false />))
+        return <Result.Ok value=<SyntaxImpl recvType=im.recvType implParams=im.implParams implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.name traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName /> />
+    }
+
+    inout fn normalizeImplAstTrait(im: ImplAst) -> Result[ImplAst, CompileDiagnostic] {
+        if im.traitPath.count() == 0U64 { return <Result.Ok value=im /> }
+        val ty = (try self.normalizeProjectionTypeActive(t: <TypeAst name=im.traitName nameSpan=im.traitNameSpan namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan />))
+        return <Result.Ok value=<ImplAst recvType=im.recvType implParams=im.implParams implParamSpans=im.implParamSpans implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.nameSpan traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName extNameSpan=im.extNameSpan /> />
+    }
+
     // An `as` trait is a type-level use.  Resolve its import alias from the
     // original occurrence, rather than re-interning alias text after its
     // module identity has been lost.
@@ -471,7 +483,7 @@ pub impl Comp {
     inout fn appendSyntaxMemberBounds(fnIdx: U64, member: SyntaxMember) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < syntaxMemberWhereCount(file: self.syntax, member: member) {
-            try self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxMemberWhereParamSpan(file: self.syntax, member: member, index: i), trait: syntaxMemberWhereTraitSpan(file: self.syntax, member: member, index: i), ty: syntaxMemberWhereType(file: self.syntax, member: member, index: i), traitTy: syntaxMemberWhereTraitType(file: self.syntax, member: member, index: i))
+            try self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxMemberWhereParamSpan(file: self.syntax, member: member, index: i), rawTrait: syntaxMemberWhereTraitSpan(file: self.syntax, member: member, index: i), ty: syntaxMemberWhereType(file: self.syntax, member: member, index: i), traitTy: syntaxMemberWhereTraitType(file: self.syntax, member: member, index: i))
             i += 1U64
         }
         return <Result.Ok value=() />
@@ -480,7 +492,7 @@ pub impl Comp {
     inout fn appendSyntaxImplBounds(fnIdx: U64, im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
         while i < syntaxImplWhereCount(file: self.syntax, impl: im) {
-            try self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxImplWhereParamSpan(file: self.syntax, impl: im, index: i), trait: syntaxImplWhereTraitSpan(file: self.syntax, impl: im, index: i), ty: syntaxImplWhereType(file: self.syntax, impl: im, index: i), traitTy: syntaxImplWhereTraitType(file: self.syntax, impl: im, index: i))
+            try self.appendSyntaxBound(fnIdx: fnIdx, param: syntaxImplWhereParamSpan(file: self.syntax, impl: im, index: i), rawTrait: syntaxImplWhereTraitSpan(file: self.syntax, impl: im, index: i), ty: syntaxImplWhereType(file: self.syntax, impl: im, index: i), traitTy: syntaxImplWhereTraitType(file: self.syntax, impl: im, index: i))
             i += 1U64
         }
         return <Result.Ok value=() />
@@ -768,7 +780,8 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerImpl(im: ImplAst) -> Result[(), CompileDiagnostic] {
+    inout fn lowerImpl(rawImpl: ImplAst) -> Result[(), CompileDiagnostic] {
+        val im = (try self.normalizeImplAstTrait(im: rawImpl))
         val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable))
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
@@ -893,7 +906,8 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxImpl(im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
+    inout fn lowerSyntaxImpl(rawImpl: SyntaxImpl) -> Result[(), CompileDiagnostic] {
+        val im = (try self.normalizeSyntaxImplTrait(im: rawImpl))
         mut val implSpans: Array[Span] = []
         mut val implFlags: Array[Bool] = []
         mut val i: U64 = 0U64
