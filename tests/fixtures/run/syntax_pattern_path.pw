@@ -1,0 +1,22 @@
+import @Plew/Syntax with { ExprAst, parseExprFrom }
+import @Std/Io with { print }
+fn main() {
+    match parseExprFrom(source: "match value { Models.Choice.Some(val item) => item }", start: 0U64) {
+        ExprAst.MatchExpr(scrut: _, arms: val arms, span: _) => {
+            val pattern = arms[0U64].pattern
+            print(pattern.typePath.count())
+            print(pattern.typePath[1U64].name)
+            print(pattern.typePath[2U64].name)
+        }
+        _ => { print(99U64) }
+    }
+    match parseExprFrom(source: "match value { Models.Item { value: val item } => item }", start: 0U64) {
+        ExprAst.MatchExpr(scrut: _, arms: val arms, span: _) => {
+            val pattern = arms[0U64].pattern
+            print(pattern.isStruct)
+            print(pattern.typePath.count())
+            print(pattern.typePath[1U64].name)
+        }
+        _ => { print(99U64) }
+    }
+}
