@@ -262,7 +262,7 @@ pub impl Comp {
                 field += 1U64
             }
         } else {
-            underlying = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
+            underlying = self.newtypeUnderlying(ref: typeRef)
             if underlying == typeRef { underlying = 0U64 }
             if underlying != 0U64 {
                 try self.collectFinalDestruction(typeRef: underlying)

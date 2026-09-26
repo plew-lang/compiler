@@ -69,7 +69,7 @@ pub impl Comp {
         }
         // a newtype shares its underlying type's representation AND ownership class
         // (spec/10) — classify the underlying.
-        val ntu: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
+        val ntu: U64 = self.newtypeUnderlying(ref: ref)
         if ntu != 0U64 {
             if ntu != ref {
                 return <Result.Ok value=(try self.arcClassOfRef(ref: ntu)) />

@@ -1425,7 +1425,7 @@ pub impl Comp {
                     // selection so it can publish a Direct template first.
                     if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                         val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
-                        val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
+                        val underlying: U64 = self.newtypeUnderlying(ref: receiverTerm)
                         if underlying != 0U64 && underlying < self.arena.typeCount() {
                             val under: TypeRef = self.arena.typeAt(index: underlying)
                             methodCallee = (try self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId)))

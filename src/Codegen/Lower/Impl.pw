@@ -774,7 +774,7 @@ pub impl Comp {
         self.cur.typeParams = implParamBinds
         val receiverType = (try self.normalizeProjectionTypeActive(t: im.recvType))
         val rawRecvN: Bind = self.lowerTypeName(name: receiverType.name, span: receiverType.nameSpan)
-        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: receiverType.span.start, len: rawRecvN.nameLen, arity: receiverType.args.count())
+        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: rawRecvN.nameStart, len: rawRecvN.nameLen, arity: receiverType.args.count())
         mut val recvN: Bind = rawRecvN
         if recvTraitOwner != 0U64 {
             recvN = <Bind nameStart=recvTraitOwner nameLen=rawRecvN.nameLen nameId=intern(c: inout self, start: recvTraitOwner, len: rawRecvN.nameLen) fieldStart=recvTraitOwner fieldLen=rawRecvN.nameLen />

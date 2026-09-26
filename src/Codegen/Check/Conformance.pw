@@ -49,7 +49,7 @@ pub impl Comp {
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv || f.isAssoc {
-                if self.newtypeUnderRef(start: f.recvStart, len: f.recvLen) != 0U64 {
+                if self.newtypeUnderlying(ref: f.recvTy) != 0U64 {
                     return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)") />
                 }
             }

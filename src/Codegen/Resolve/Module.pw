@@ -701,7 +701,7 @@ pub impl Comp {
         // query so every caller applies the same rule.
         mut val resolvedRef: U64 = surfaceRef
         val original: TypeRef = self.arena.typeAt(index: surfaceRef)
-        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
+        val underlying: U64 = self.newtypeUnderlying(ref: surfaceRef)
         if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
@@ -728,7 +728,7 @@ pub impl Comp {
         }
         mut val resolvedRef: U64 = surfaceRef
         val original: TypeRef = self.arena.typeAt(index: surfaceRef)
-        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
+        val underlying: U64 = self.newtypeUnderlying(ref: surfaceRef)
         if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
