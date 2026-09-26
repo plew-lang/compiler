@@ -1,0 +1,5 @@
+pub struct Item { pub val value: I64 }
+pub impl Item {
+    factory
+    fn read() -> I64 { return self.value }
+}

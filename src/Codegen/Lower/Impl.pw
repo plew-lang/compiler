@@ -414,18 +414,14 @@ pub impl Comp {
         return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
     }
 
-    inout fn appendTraitAssocTypes(scope: inout Array[Bind], nameId: U64) {
-        mut val ti: U64 = 0
-        while ti < self.decls.traitCount() {
-            val td: TraitDef = self.decls.traitAt(index: ti)
-            if td.nameId == nameId {
-                mut val ai: U64 = 0
-                while ai < td.assocTypes.count() {
-                    scope.append(self.traitBindAt(binds: td.assocTypes, index: ai))
-                    ai += 1
-                }
-            }
-            ti += 1
+    inout fn appendTraitAssocTypes(scope: inout Array[Bind], owner: U64) {
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index >= self.decls.traitOwnerCount() { return }
+        val declaration = self.decls.traitOwnerAt(index: index)
+        mut val i = 0U64
+        while i < declaration.assocTypes.count() {
+            scope.append(declaration.assocTypes[i])
+            i += 1U64
         }
     }
 
@@ -816,10 +812,10 @@ pub impl Comp {
         if recvTraitOwner != 0U64 {
             self.appendTraitSelfBinder(scope: inout implScope, owner: recvTraitOwner)
         }
-        self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
+        self.appendTraitAssocTypes(scope: inout implScope, owner: recvTraitOwner)
         if normalizedImpl.isTraitImpl {
             val trN: Bind = self.resolvedImplTraitBind(im: normalizedImpl)
-            self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: trN.nameStart, len: trN.nameLen))
+            self.appendTraitAssocTypes(scope: inout implScope, owner: trN.nameStart)
         }
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeAst] = self.lowerWhereTypes
@@ -831,7 +827,7 @@ pub impl Comp {
         // Preserve the latter's complete pattern (including generic arguments)
         // for callable-surface matching instead of collapsing to recvId.
         mut val recvTy: U64 = 0U64
-        if !(self.isTraitName(start: recvN.nameStart, len: recvN.nameLen)) {
+        if recvTraitOwner == 0U64 {
             recvTy = (try self.lowerType(t: receiverType)).ref
         }
         mut val subjectArgs: Array[U64] = []
@@ -939,10 +935,10 @@ pub impl Comp {
             i += 1U64
         }
         if recvTraitOwner != 0U64 { self.appendTraitSelfBinder(scope: inout implScope, owner: recvTraitOwner) }
-        self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
+        self.appendTraitAssocTypes(scope: inout implScope, owner: recvTraitOwner)
         if normalizedImpl.isTraitImpl {
             val trN: Bind = self.resolvedSyntaxImplTraitBind(im: normalizedImpl)
-            self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: trN.nameStart, len: trN.nameLen))
+            self.appendTraitAssocTypes(scope: inout implScope, owner: trN.nameStart)
         }
         val savedTP: Array[Bind] = self.cur.typeParams
         val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
@@ -959,7 +955,7 @@ pub impl Comp {
         self.lowerWhereSyntaxTypes = whereTypes
         self.lowerWhereSyntaxTraits = whereTraits
         mut val recvTy: U64 = 0U64
-        if !(self.isTraitName(start: recvN.nameStart, len: recvN.nameLen)) { recvTy = (try self.lowerSyntaxType(id: normalizedImpl.recvType)).ref }
+        if recvTraitOwner == 0U64 { recvTy = (try self.lowerSyntaxType(id: normalizedImpl.recvType)).ref }
         mut val subjectArgs: Array[U64] = []
         i = 0U64
         while i < recvArity {

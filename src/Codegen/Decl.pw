@@ -22,11 +22,6 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
     }
 
-    inout fn isTraitName(start: U64, len: U64) -> Bool {
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        return self.decls.hasTraitName(nameId: qId)
-    }
-
     inout fn methodRecvIsTrait(f: Func) -> Bool {
         if !f.hasRecv { return false }
         // Lowering records the selected trait declaration span on its

@@ -1,0 +1,4 @@
+import ./Traits
+import ./Models
+import @Std/Io with { print }
+fn main() { val item = <Models.Item value=42I64 /> print(item.read()) }
