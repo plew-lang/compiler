@@ -285,6 +285,7 @@ pub struct CaptureEntry {
 }
 
 pub struct Local {
+    pub val isGlobal: Bool = false
     pub val globalTypePending: Bool = false
     pub val nameStart: U64
     pub val nameLen: U64

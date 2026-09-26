@@ -246,14 +246,8 @@ pub impl Comp {
     }
 
     inout fn localTypeRefByName(nameStart: U64, nameLen: U64) -> U64 {
-        val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = self.cur.locals.count()
-        while i > 0U64 {
-            i -= 1
-            if self.cur.locals[i].nameId == q {
-                return self.cur.locals[i].ty
-            }
-        }
+        val index = self.localIndexByName(start: nameStart, len: nameLen)
+        if index < self.cur.locals.count() { return self.cur.locals[index].ty }
         return 0U64
     }
 

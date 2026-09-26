@@ -1,0 +1,3 @@
+import ./Models
+import @Std/Io with { print }
+fn main() { print(Models.value) print(value) }

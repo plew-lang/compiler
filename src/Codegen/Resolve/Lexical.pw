@@ -83,7 +83,13 @@ pub impl Comp {
                 }
                 self.resolveLexicalModuleArgs(args: args, names: inout names)
             }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val moduleId = self.namespaceExprModule(id: base, names: names)
+                if moduleId != 4000000000U64 {
+                    self.recordNamespaceUse(name: <Span start=nameStart end=nameStart + nameLen />, moduleId: moduleId)
+                    self.arena.exprs[id] = <Expr.Ident start=nameStart len=nameLen />
+                } else { self.resolveLexicalModuleExpr(id: base, names: inout names) }
+            }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
             Expr.Deref(val base) => { self.resolveLexicalModuleExpr(id: base, names: inout names) }
             Expr.Unary(op: _, val operand) => { self.resolveLexicalModuleExpr(id: operand, names: inout names) }

@@ -28,6 +28,21 @@ pub impl Comp {
         }
     }
 
+    inout fn globalIndexAtUse(start: U64, len: U64) -> U64 {
+        match self.moduleBindingAt(nameStart: start, nameLen: len) {
+            ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
+                mut val index = 0U64
+                while index < self.arena.globals.count() {
+                    val global = self.arena.globals[index]
+                    if self.moduleOf(offset: global.nameStart) == moduleId && spansEqual(c: inout self, aStart: global.nameStart, aLen: global.nameLen, bStart: nameStart, bLen: nameLen) { return index }
+                    index += 1U64
+                }
+            }
+            _ => {}
+        }
+        return self.arena.globals.count()
+    }
+
     // Name lookup installs declarations without evaluating their type queries.
     // Only a value-type consumer forces an unannotated global's initializer.
     inout fn typedLocal(index: U64) -> Result[Local, CompileDiagnostic] {
@@ -52,7 +67,7 @@ pub impl Comp {
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 val inferred = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
-                result = <Local nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
+                result = <Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
             }
             _ => {}
         }
@@ -175,23 +190,8 @@ pub impl Comp {
         }
         match self.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                // The identifier's module (a real source offset — identifier uses keep their
-                // original offset). Only globals visible from here are true dependencies;
-                // matching by name-text alone would forge cross-module edges between distinct
-                // same-named globals and report a false initialization cycle (spec/15).
-                val useMod: U64 = self.moduleOf(offset: start)
-                mut val gi: U64 = 0
-                while gi < self.arena.globals.count() {
-                    if spansEqual(c: inout self, aStart: self.arena.globals[gi].nameStart, aLen: self.arena.globals[gi].nameLen, bStart: start, bLen: len) {
-                        val gMod: U64 = self.moduleOf(offset: self.exprOffset(id: self.globalInitExpr(g: self.arena.globals[gi])))
-                        if self.globalVisibleFrom(useMod: useMod, gMod: gMod, nameStart: self.arena.globals[gi].nameStart, nameLen: self.arena.globals[gi].nameLen) {
-                            if !(u64ArrayHas(a: into, v: gi)) {
-                                into.append(gi)
-                            }
-                        }
-                    }
-                    gi += 1
-                }
+                val index = self.globalIndexAtUse(start: start, len: len)
+                if index < self.arena.globals.count() && !u64ArrayHas(a: into, v: index) { into.append(index) }
             }
             Expr.Unary(op: _, val operand) => { self.collectGlobalDeps(id: operand, into: inout into) }
             Expr.Binary(op: _, val lhs, val rhs) => {

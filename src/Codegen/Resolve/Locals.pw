@@ -6,8 +6,8 @@ pub impl Comp {
         self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0)
     }
 
-    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64) {
-        self.cur.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64, isGlobal: Bool = false) {
+        self.cur.locals.append(<Local isGlobal=isGlobal nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
     }
 
     // A let binding owns one semantic TypeTerm.  For an annotation that is the
@@ -87,10 +87,10 @@ pub impl Comp {
                     }
                     if visible {
                         if self.genMode && tyLen == 0U64 && !tyIsArray {
-                            self.cur.locals.append(<Local globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=false ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
+                            self.cur.locals.append(<Local isGlobal=true globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=false ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
                         } else {
                             val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
-                            self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                            self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false, cnum: 0U64, isGlobal: true)
                         }
                     }
                 }
@@ -132,17 +132,10 @@ pub impl Comp {
                 return self.isBoxedCaptureOf(closureId: self.cur.closureId, start: start, len: len)
             }
         }
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.cur.locals.count()
-        while i > 0 {
-            i -= 1
-            val lo: Local = self.cur.locals[i]
-            if lo.nameId == qId {
-                if lo.isMut {
-                    return true
-                }
-                return lo.isInout
-            }
+        val index = self.localIndexByName(start: start, len: len)
+        if index < self.cur.locals.count() {
+            val local = self.cur.locals[index]
+            return local.isMut || local.isInout
         }
         return true
     }
@@ -195,16 +188,34 @@ pub impl Comp {
     }
 
     inout fn localIndexByName(start: U64, len: U64) -> U64 {
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.cur.locals.count()
-        while i > 0 {
-            i -= 1
-            val lo: Local = self.cur.locals[i]
-            if lo.nameId == qId {
-                return i
+        val qualified = self.modules.qualifiedUseIndex(offset: start) < self.modules.qualifiedUseCount()
+        val qId = intern(c: inout self, start: start, len: len)
+        mut val index = self.cur.locals.count()
+        if !qualified {
+            while index > 0U64 {
+                index -= 1U64
+                val local = self.cur.locals[index]
+                if !local.isGlobal && local.nameId == qId { return index }
             }
         }
-        return self.cur.locals.count()
+        val globalIndex = self.globalIndexAtUse(start: start, len: len)
+        if globalIndex >= self.arena.globals.count() { return self.cur.locals.count() }
+        val global = self.arena.globals[globalIndex]
+        index = 0U64
+        while index < self.cur.locals.count() {
+            val local = self.cur.locals[index]
+            if local.isGlobal && local.nameStart == global.nameStart { return index }
+            index += 1U64
+        }
+        // A declaration slot is not a new lexical binding. A later bare name
+        // still resolves through its own module/import provenance.
+        match self.arena.stmts[global.letStmt] {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, init: _) => {
+                self.cur.locals.append(<Local isGlobal=true globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=tyIsArray ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
+            }
+            _ => {}
+        }
+        return index
     }
 
     // Shadowing cliff (spec/03): a new binding's initializer is checked in the old

@@ -940,12 +940,10 @@ pub impl Comp {
         if sources.count() == 0U64 {
             match self.arena.exprs[recv] {
                 Expr.Ident(start: val localStart, len: val localLen) => {
-                    val localId: U64 = intern(c: inout self, start: localStart, len: localLen)
-                    mut val li: U64 = self.cur.locals.count()
-                    while li > 0U64 && sources.count() == 0U64 {
-                        li -= 1U64
-                        val lo: Local = self.cur.locals[li]
-                        if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
+                    val li = self.localIndexByName(start: localStart, len: localLen)
+                    if li < self.cur.locals.count() {
+                        val lo = (try self.typedLocal(index: li))
+                        if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
                             val localTy: TypeRef = self.arena.typeAt(index: lo.ty)
                             val localSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: lo.ty)
                             mut val vi: U64 = 0U64

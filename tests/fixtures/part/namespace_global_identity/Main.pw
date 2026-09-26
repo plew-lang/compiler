@@ -1,0 +1,5 @@
+import ./Models
+import ./Other
+import @Std/Io with { print }
+val value: I64 = 9I64
+fn main() { val value = 9I64 print(Models.value) print(Other.value) print(value) }
