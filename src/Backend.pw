@@ -821,7 +821,10 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     st.declareAsyncFns(c: inout c)
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
-    st.collectClosures(c: inout c)
+    match st.collectClosures(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:declarations:done")
 
     // module-level variables (spec/15): emit `plew_init_globals` (one body that runs

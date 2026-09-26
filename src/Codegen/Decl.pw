@@ -2,18 +2,17 @@
 
 pub impl Comp {
 
-    inout fn lexicalFunction(f: Func) -> Func {
-        if f.lexicalOwnerFnId == 0U64 { return f }
+    inout fn lexicalFunction(f: Func) -> Result[Func, CompileDiagnostic] {
+        if f.lexicalOwnerFnId == 0U64 { return <Result.Ok value=f />}
         val owner: U64 = f.lexicalOwnerFnId - 1U64
         if owner >= self.arena.functionCount() {
-            self.errorAt(offset: f.defOffset, msg: "internal error: lexical function owner is missing")
-            return f
+            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: lexical function owner is missing") />
         }
         val declaration: Func = self.arena.functionAt(index: owner)
         if declaration.lexicalOwnerFnId != 0U64 {
-            self.errorAt(offset: f.defOffset, msg: "internal error: lexical function owner is not canonical")
+            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: lexical function owner is not canonical") />
         }
-        return declaration
+        return <Result.Ok value=declaration />
     }
 
     inout fn nameIsMain(f: Func) -> Bool {

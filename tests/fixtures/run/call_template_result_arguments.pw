@@ -22,7 +22,7 @@ fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBind
 }
 
 fn savedArgument(c: inout Comp, expression: U64) -> U64 {
-    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: expression).kind {
+    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: expression).unwrap().kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
             val args = c.callTemplateTypeArgs(range: range)
             if args.count() == 1U64 { return args[0U64] }
@@ -61,16 +61,16 @@ fn main() {
     c.cur.recordCallTemplates = true
     val args = c.pushArgs(args: [])
     val expression = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
-    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
-    c.recordCallTemplateExpectedResult(exprId: expression, expectedTerm: expectedTerm)
+    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
+    c.recordCallTemplateExpectedResult(exprId: expression, expectedTerm: expectedTerm).unwrap()
     if savedArgument(c: inout c, expression: expression) == callerTerm { write(s: "caller-symbolic-binder\n") }
-    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
     if savedArgument(c: inout c, expression: expression) == callerTerm { write(s: "record-order-stable\n") }
     val second = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
-    c.recordCallTemplateExpectedResult(exprId: second, expectedTerm: concreteTerm)
-    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    c.recordCallTemplateExpectedResult(exprId: second, expectedTerm: concreteTerm).unwrap()
+    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
     if savedArgument(c: inout c, expression: second) == integerTerm { write(s: "context-before-selection\n") }
-    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [callerTerm])
+    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [callerTerm]).unwrap()
     if savedArgument(c: inout c, expression: second) == callerTerm { write(s: "explicit-binding-preserved\n") }
     val other = c.internTmpName(prefix: "Other", n: 0U64)
     val otherTerm = c.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[callerTerm] />)
@@ -86,7 +86,7 @@ fn main() {
     if inferredArgument(c: inout c, pattern: recordPattern, expected: recordExpected, params: params) == callerTerm { write(s: "structural-record-children\n") }
     val relabelled = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[2U64] recordFieldTerms=[callerTerm] />)
     if inferredArgument(c: inout c, pattern: recordPattern, expected: relabelled, params: params) == 0U64 { write(s: "structural-record-labels\n") }
-    val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression))
+    val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap())
     val before = c.arena.exprs.count()
     if !c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.arena.exprs.count() == before { write(s: "unprepared-no-publication\n") }
     val plainCallee = c.arena.functionCount()
@@ -108,7 +108,7 @@ fn main() {
                 match completed[0U64].source {
                     CallArgumentSource.PriorCallResult(exprId: val generated, siteKey: val site) => {
                         if site.ownerFnIdx == 0U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: generated), b: expectedTerm) { write(s: "caller-parametric-default-result\n") }
-                        val generatorTemplate = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: generated)
+                        val generatorTemplate = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: generated).unwrap()
                         match generatorTemplate.kind {
                             CallTemplateKind.Direct(callee: val generator, receiver: _, args: val argumentRange, calleeTypeArgs: val typeRange, proofId: _) => {
                                 val generatorArgs = c.callTemplateArguments(range: argumentRange)
@@ -127,32 +127,32 @@ fn main() {
     val completedCount = c.decls.callTemplates.count()
     if c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.decls.callTemplates.count() == completedCount && args.len == 0U64 { write(s: "completed-plan-idempotent\n") }
     c.cur.bodyFnIdx = 0U64
-    if c.callArgumentRangeForCurrentBody(exprId: expression, authored: args).len == 0U64 { write(s: "pre-record-authored-navigation\n") }
+    if c.callArgumentRangeForCurrentBody(exprId: expression, authored: args).unwrap().len == 0U64 { write(s: "pre-record-authored-navigation\n") }
     // The consumer sees a closed snapshot; later producer checks keep their
     // independent, still-open compiler state. Never reopen a published body.
     mut val consumer = c
-    consumer.closeCallTemplatesForBody(fnIdx: 0U64)
-    val navigation = consumer.callArgumentRangeForCurrentBody(exprId: expression, authored: args)
-    if navigation.len == 1U64 && consumer.callTemplatesClosedForBody(fnIdx: 0U64) && !consumer.callTemplatesClosedForBody(fnIdx: 1U64) && !c.callTemplatesClosedForBody(fnIdx: 0U64) {
+    consumer.closeCallTemplatesForBody(fnIdx: 0U64).unwrap()
+    val navigation = consumer.callArgumentRangeForCurrentBody(exprId: expression, authored: args).unwrap()
+    if navigation.len == 1U64 && consumer.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() && !consumer.callTemplatesClosedForBody(fnIdx: 1U64).unwrap() && !c.callTemplatesClosedForBody(fnIdx: 0U64).unwrap() {
         val generated = consumer.argAt(args: navigation, index: 0U64).expr
         if generated != defaultExpr && c.typeRefEq(a: c.semanticExprTerm(exprId: generated), b: expectedTerm) { write(s: "consumer-default-navigation\n") }
     }
     c.cur.checkFn = 0U64
     c.cur.recordCallTemplates = true
     val unresolved = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
-    c.recordCallTemplate(exprId: unresolved, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
-    val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved))
+    c.recordCallTemplate(exprId: unresolved, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
+    val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved).unwrap())
     val unresolvedCount = c.decls.callTemplates.count()
     if !c.completeRecordedDirectDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64).unwrap() && c.decls.callTemplates.count() == unresolvedCount { write(s: "unresolved-no-publication\n") }
     val method = c.pushExpr(e: <Expr.Method recv=expression nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordSemanticExprCall(exprId: method, callee: 1U64,
-        receiver: <CallTemplateReceiver.PriorCallResult exprId=expression siteKey=c.templateCallSiteKey(fnIdx: 0U64, exprId: expression) />,
+        receiver: <CallTemplateReceiver.PriorCallResult exprId=expression siteKey=c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap() />,
         args: args, calleeTypeArgs: [callerTerm], resultTerm: expectedTerm, receiverTypeTerm: expectedTerm).unwrap()
-    c.recordCallTemplateExpectedResult(exprId: method, expectedTerm: expectedTerm)
-    if c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).receiverTypeTerm == expectedTerm { write(s: "receiver-context-preserved\n") }
+    c.recordCallTemplateExpectedResult(exprId: method, expectedTerm: expectedTerm).unwrap()
+    if c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).unwrap().receiverTypeTerm == expectedTerm { write(s: "receiver-context-preserved\n") }
     c.cur.recordCallTemplates = false
     if c.completeRecordedDefaultCalls().unwrap() == 1U64 { write(s: "frontier-reports-incomplete\n") }
-    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).kind {
+    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: method).unwrap().kind {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val range, calleeTypeArgs: _, proofId: _) => {
             val completed = c.callTemplateArguments(range: range)
             if completed.count() == 1U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: c.callArgumentExprId(source: completed[0U64].source)), b: expectedTerm) { write(s: "frontier-completes-method-default\n") }
@@ -161,7 +161,7 @@ fn main() {
     }
     c.cur.recordCallTemplates = true
     val plainCall = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
-    c.recordCallTemplate(exprId: plainCall, callee: plainCallee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
-    val plainIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall))
+    c.recordCallTemplate(exprId: plainCall, callee: plainCallee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: []).unwrap()
+    val plainIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall).unwrap())
     if c.completeRecordedDirectDefaults(templateIndex: plainIndex, receiverTerm: 0U64).unwrap() { write(s: "zero-type-arguments-complete\n") }
 }

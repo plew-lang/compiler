@@ -1,3 +1,4 @@
+import ../../../src/Mid/Build with { buildParametricMidBody, MidBuildError }
 // Invalid semantic state is rejected without exiting the embedding process.
 // Each failed Comp is discarded; this does not test recovery inside a request.
 import ../../../src/Frontend with { Comp }
@@ -65,9 +66,29 @@ fn missingProtocolDependency() {
     mut val c: Comp = <Comp />
     c.pushExpr(e: <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
     c.cur.bodyId = 1U64
-    c.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 100U64)
-    val key = c.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64)
+    c.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 100U64).unwrap()
+    val key = c.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 1U64).unwrap()
     expectDiagnostic(result: c.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: key))
+}
+
+fn invalidOwnerFunction() -> Func {
+    return <Func nameStart=0U64 nameLen=0U64 lexicalOwnerFnId=2U64 isProvided=true
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />
+}
+fn missingLexicalOwner() {
+    mut val c: Comp = <Comp />
+    expectDiagnostic(result: c.lexicalFunction(f: invalidOwnerFunction()))
+}
+fn missingMidOwner() {
+    mut val c: Comp = <Comp />
+    c.arena.registerFunction(invalidOwnerFunction())
+    val built = buildParametricMidBody(c: inout c, fnIdx: 0U64)
+    match built.error {
+        MidBuildError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
+        _ => { panic("Mid did not return the frontend ownership diagnostic") }
+    }
 }
 
 export fn checkInvariantDiagnostics() {
@@ -76,5 +97,7 @@ export fn checkInvariantDiagnostics() {
     conflictingSelf()
     missingRecordLayout()
     missingProtocolDependency()
+    missingLexicalOwner()
+    missingMidOwner()
     print("invariant diagnostics returned")
 }

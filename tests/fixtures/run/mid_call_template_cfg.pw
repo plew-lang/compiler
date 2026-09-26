@@ -15,7 +15,7 @@ fn main() {
     c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.arena.semanticExprTypes.append(<SemanticExprType term=valueTerm />)
     c.arena.exprs.append(<Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=0U64 /> />)
-    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
+    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).unwrap().siteKey
     c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: []) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
     c.arena.stmts.append(<Stmt.ExprStmt expr=0U64 />)
     c.arena.blockStmtPool.append(0U64)
@@ -49,7 +49,7 @@ fn main() {
     c.typeCache.identBind.append(identValueCode())
     c.typeCache.identTarget.append(90U64)
     c.arena.exprs.set(i: 0U64, value: <Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=1U64 /> />)
-    val moveKey = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
+    val moveKey = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).unwrap().siteKey
     c.decls.callTemplates = []
     c.decls.callTemplateIndexSlots = []
     c.appendCallTemplate(template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=valueTerm /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)

@@ -26,8 +26,8 @@ fn main() {
     val generator = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val first = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
         calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count()).unwrap()
-    val firstKey = c.templateCallSiteKey(fnIdx: 0U64, exprId: first)
-    val template = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: first)
+    val firstKey = c.templateCallSiteKey(fnIdx: 0U64, exprId: first).unwrap()
+    val template = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: first).unwrap()
     match template.kind {
         CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val argumentRange, calleeTypeArgs: val typeRange, proofId: _) => {
             val args = c.callTemplateArguments(range: argumentRange)
@@ -43,7 +43,7 @@ fn main() {
         _ => {}
     }
     if c.semanticExprTerm(exprId: first) == term { write(s: "caller-result-term\n") }
-    match c.callArgumentSource(exprId: first) {
+    match c.callArgumentSource(exprId: first).unwrap() {
         CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
             if exprId == first && c.sameCallSiteKey(a: firstKey, b: siteKey) { write(s: "ordinary-result-dependency\n") }
         }
@@ -54,7 +54,7 @@ fn main() {
     if repeated == first && c.decls.callTemplates.count() == 1U64 { write(s: "record-idempotent\n") }
     val second = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
         calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count()).unwrap()
-    if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second)) { write(s: "distinct-evaluations\n") }
+    if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second).unwrap()) { write(s: "distinct-evaluations\n") }
     if c.decls.callableCount() == 0U64 { write(s: "no-source-lookup\n") }
     val empty: Array[CallTemplateArgument] = []
     match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,

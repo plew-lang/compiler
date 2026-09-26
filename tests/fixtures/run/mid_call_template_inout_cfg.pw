@@ -18,7 +18,7 @@ fn main() {
     c.arena.argPool.append(<Arg labelStart=0U64 labelLen=0U64 expr=0U64 isInout=true hasLabel=false />)
     c.typeCache.identBind.append(identValueCode())
     c.typeCache.identTarget.append(90U64)
-    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 1U64).siteKey
+    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 1U64).unwrap().siteKey
     c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=c.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=valueTerm /> isInout=true labelStart=0U64 labelLen=0U64 hasLabel=false />]) calleeTypeArgs=c.publishCallTemplateTypeArgs(args: []) proofId=c.freezeStaticConformanceProof(proof: <StaticConformanceProof.Missing />) /> />)
     c.arena.stmts.append(<Stmt.ExprStmt expr=1U64 />)
     c.arena.blockStmtPool.append(0U64)

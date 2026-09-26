@@ -318,42 +318,44 @@ pub impl Comp {
 
     // Readiness belongs to the lexical owner, not to a specialization or to
     // a global phase toggle. Provided copies consume their source's templates.
-    inout fn callTemplatesClosedForBody(fnIdx: U64) -> Bool {
+    inout fn callTemplatesClosedForBody(fnIdx: U64) -> Result[Bool, CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() {
-            if self.globalCallTemplatesClosed { return true }
+            if self.globalCallTemplatesClosed { return <Result.Ok value=true />}
             if self.cur.inClosure && fnIdx == self.closureBodyKey(closureId: self.cur.closureId) {
-                return self.cur.closureCallTemplatesClosed
+                return <Result.Ok value=self.cur.closureCallTemplatesClosed />
             }
             match self.cur.globalInitializerTarget {
-                Optional.Some(v: val target) => { return self.globalInitializerPrepared(target: target) }
-                Optional.None => { return false }
+                Optional.Some(v: val target) => { return <Result.Ok value=self.globalInitializerPrepared(target: target) />}
+                Optional.None => { return <Result.Ok value=false />}
             }
         }
-        val owner = self.semanticBodyOwner(fnIdx: fnIdx)
-        return owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner]
+        val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
+        return <Result.Ok value=owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] />
     }
 
-    inout fn closeCallTemplatesForBody(fnIdx: U64) {
+    inout fn closeCallTemplatesForBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         if fnIdx >= self.arena.functionCount() {
             self.globalCallTemplatesClosed = true
-            return
+            return <Result.Ok value=() />
         }
-        val owner = self.semanticBodyOwner(fnIdx: fnIdx)
+        val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
         while self.closedCallTemplateBodies.count() <= owner {
             self.closedCallTemplateBodies.append(false)
         }
         self.closedCallTemplateBodies.set(i: owner, value: true)
+        return <Result.Ok value=() />
     }
 
     // Ordinary compilation completes the entire source frontier before Mono.
     // There is deliberately no operation that reopens a completed owner.
-    inout fn closeProgramCallTemplates() {
+    inout fn closeProgramCallTemplates() -> Result[(), CompileDiagnostic] {
         mut val index: U64 = 0U64
         while index < self.arena.functionCount() {
-            self.closeCallTemplatesForBody(fnIdx: index)
+            try self.closeCallTemplatesForBody(fnIdx: index)
             index += 1U64
         }
         self.globalCallTemplatesClosed = true
+        return <Result.Ok value=() />
     }
 
     // A source declaration body is the stable owner of a parametric call
@@ -404,35 +406,33 @@ pub impl Comp {
     // matching names or scanning for a coincidentally equal body is unnecessary.
     // Default generators have independent executable bodies and retain their
     // own fact identity even though they share a lexical binder environment.
-    inout fn semanticBodyOwner(fnIdx: U64) -> U64 {
-        if fnIdx >= self.arena.functionCount() { return self.callTemplateOwner(fnIdx: fnIdx) }
+    inout fn semanticBodyOwner(fnIdx: U64) -> Result[U64, CompileDiagnostic] {
+        if fnIdx >= self.arena.functionCount() { return <Result.Ok value=self.callTemplateOwner(fnIdx: fnIdx) />}
         val selected: Func = self.arena.functionAt(index: fnIdx)
-        if !(selected.isProvided) { return fnIdx }
+        if !(selected.isProvided) { return <Result.Ok value=fnIdx />}
         if selected.lexicalOwnerFnId == 0U64 || selected.lexicalOwnerFnId > self.arena.functionCount() {
-            self.errorAt(offset: selected.defOffset, msg: "internal error: provided body has no source owner")
-            return fnIdx
+            return <Result.Err error=self.diagnosticAt(offset: selected.defOffset, msg: "internal error: provided body has no source owner") />
         }
         val owner: U64 = selected.lexicalOwnerFnId - 1U64
         val declaration: Func = self.arena.functionAt(index: owner)
         if declaration.lexicalOwnerFnId != 0U64 || declaration.body != selected.body {
-            self.errorAt(offset: selected.defOffset, msg: "internal error: provided source owner does not own its body")
-            return fnIdx
+            return <Result.Err error=self.diagnosticAt(offset: selected.defOffset, msg: "internal error: provided source owner does not own its body") />
         }
-        return owner
+        return <Result.Ok value=owner />
     }
 
     // Source calls are identified by the declaration body plus their complete
     // parsed span.  The arena index remains an implementation-navigation aid
     // only; using it as semantic identity made generated/shared bodies alias.
-    inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
+    inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64) -> Result[CallSiteKey, CompileDiagnostic] {
+        val owner: U64 = self.callTemplateOwner(fnIdx: (try self.semanticBodyOwner(fnIdx: fnIdx)))
         mut val start: U64 = 0U64
         mut val end: U64 = 0U64
         mut val serial: U64 = 0U64
         if exprId < self.arena.exprSpanStart.count() { start = self.arena.exprSpanStart[exprId] }
         if exprId < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[exprId] }
         if exprId < self.arena.exprOriginSerial.count() { serial = self.arena.exprOriginSerial[exprId] }
-        return <CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=start originEnd=end originSerial=serial />
+        return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=start originEnd=end originSerial=serial /> />
     }
 
     // Synthetic calls are created by several lowering rules, but their origin
@@ -468,20 +468,20 @@ pub impl Comp {
     // made one body own two unrelated keys, so a finalized generic body could
     // not find the template that created its call.  `exprId` remains only the
     // navigation anchor for locating the producer-assigned serial.
-    inout fn templateCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
+    inout fn templateCallSiteKey(fnIdx: U64, exprId: U64) -> Result[CallSiteKey, CompileDiagnostic] {
+        val owner: U64 = self.callTemplateOwner(fnIdx: (try self.semanticBodyOwner(fnIdx: fnIdx)))
         val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
         if index < self.decls.syntheticCallSites.count() {
             val synthetic: SyntheticCallSite = self.decls.syntheticCallSites[index]
-            return <CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=synthetic.originSerial />
+            return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=synthetic.originSerial /> />
         }
-        return self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId)
+        return <Result.Ok value=(try self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId)) />
     }
 
     // `for` protocol calls have no Expr node. Their template key must match
     // Mono's statement-site final descriptor key exactly.
-    inout fn templateProtocolSiteKey(fnIdx: U64, stmtId: U64, slot: U64) -> CallSiteKey {
-        val owner: U64 = self.callTemplateOwner(fnIdx: self.semanticBodyOwner(fnIdx: fnIdx))
+    inout fn templateProtocolSiteKey(fnIdx: U64, stmtId: U64, slot: U64) -> Result[CallSiteKey, CompileDiagnostic] {
+        val owner: U64 = self.callTemplateOwner(fnIdx: (try self.semanticBodyOwner(fnIdx: fnIdx)))
         mut val start: U64 = 0U64
         mut val end: U64 = 0U64
         if stmtId < self.arena.stmts.count() {
@@ -493,7 +493,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        return <CallSiteKey ownerFnIdx=owner originKind=3U64 originStart=start originEnd=end originSerial=stmtId + 1U64 slot=slot />
+        return <Result.Ok value=<CallSiteKey ownerFnIdx=owner originKind=3U64 originStart=start originEnd=end originSerial=stmtId + 1U64 slot=slot /> />
     }
 
     fn sameCallSiteKey(a: CallSiteKey, b: CallSiteKey) -> Bool {
@@ -580,15 +580,15 @@ pub impl Comp {
     // syntax is copied once at Record time; Mono later grounds this immutable
     // template and must not inspect a shared Expr to rediscover labels, inout,
     // or an argument's parametric type.
-    inout fn directCallTemplateArgs(args: ArgRange) -> CallTemplateArgumentRange {
+    inout fn directCallTemplateArgs(args: ArgRange) -> Result[CallTemplateArgumentRange, CompileDiagnostic] {
         val start: U64 = self.decls.callTemplateArgumentPool.count()
         mut val i: U64 = 0U64
         while i < args.len {
             val arg: Arg = self.argAt(args: args, index: i)
-            self.decls.callTemplateArgumentPool.append(<CallTemplateArgument source=self.callArgumentSource(exprId: arg.expr) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
+            self.decls.callTemplateArgumentPool.append(<CallTemplateArgument source=(try self.callArgumentSource(exprId: arg.expr)) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
             i += 1U64
         }
-        return <CallTemplateArgumentRange start=start len=self.decls.callTemplateArgumentPool.count() - start />
+        return <Result.Ok value=<CallTemplateArgumentRange start=start len=self.decls.callTemplateArgumentPool.count() - start /> />
     }
 
     inout fn publishCallTemplateArguments(args: Array[CallTemplateArgument]) -> CallTemplateArgumentRange {
@@ -664,14 +664,14 @@ pub impl Comp {
         return out
     }
 
-    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) {
-        if !(self.cur.recordCallTemplates) { return }
+    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         mut val receiverTerm = receiverTypeTerm
         if receiverTerm == 0U64 {
             match receiver { CallTemplateReceiver.Term(term: val term) => { receiverTerm = term } _ => {} }
         }
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
+        val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val templateTypeArgs: CallTemplateTypeArgumentRange = self.publishCallTemplateTypeArgs(args: calleeTypeArgs)
         val proofId: U64 = self.freezeStaticConformanceProof(proof: proof)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
@@ -679,9 +679,10 @@ pub impl Comp {
             val prior: CallTemplate = self.decls.callTemplates[index]
             val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm)
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
-            return
+            return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId /> receiverTypeTerm=receiverTerm />)
+        return <Result.Ok value=() />
     }
 
     // A dynamic call is selected at Record too.  It carries the same receiver
@@ -712,8 +713,8 @@ pub impl Comp {
                 index += 1U64
             }
         }
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
+        val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
@@ -724,79 +725,81 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) {
+    inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
         // Parent chains and match payloads read the expression term during
         // both Record walks, before call-template publication is enabled.
         self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
-        if !(self.cur.recordCallTemplates) { return }
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
-        val templateArgs: CallTemplateArgumentRange = self.directCallTemplateArgs(args: args)
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
+        val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
-            return
+            return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> />)
+        return <Result.Ok value=() />
     }
 
-    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) {
-        if !(self.cur.recordCallTemplates) { return }
-        val key: CallSiteKey = self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)
+    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) -> Result[(), CompileDiagnostic] {
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        val key: CallSiteKey = (try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot))
         val index: U64 = self.callTemplateIndex(siteKey: key)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Protocol receiver=receiver /> expectedResultTerm=prior.expectedResultTerm />)
-            return
+            return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Protocol receiver=receiver /> />)
+        return <Result.Ok value=() />
     }
 
     // A written call argument is an explicit semantic source. Calls keep a
     // dependency on their completed descriptor; an untyped literal retains its
     // Record-time adapter rather than inviting Mono to inspect the Expr.
-    inout fn callArgumentSource(exprId: U64) -> CallArgumentSource {
+    inout fn callArgumentSource(exprId: U64) -> Result[CallArgumentSource, CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Ident(start: val start, len: val len) => {
                 val localIndex: U64 = self.localIndexByName(start: start, len: len)
                 if localIndex < self.cur.locals.count() {
-                    return <CallArgumentSource.Local exprId=exprId localIndex=localIndex term=self.parametricExprTerm(exprId: exprId) />
+                    return <Result.Ok value=<CallArgumentSource.Local exprId=exprId localIndex=localIndex term=self.parametricExprTerm(exprId: exprId) /> />
                 }
             }
             Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=(try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)) /> />
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=(try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)) /> />
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=(try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)) /> />
             }
             // Operators publish CallResolution entries too. A surrounding
             // direct call must depend on that finalized result exactly as it
             // depends on a written call: `print(!false)` cannot infer Print's
             // generic argument from the unary Expr's legacy TypeInfo.
             Expr.Unary(op: _, operand: _) => {
-                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=(try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)) /> />
             }
             Expr.Binary(op: val op, lhs: _, rhs: _) => {
                 // Logical connectors are control flow, not trait calls. Their
                 // Bool term is complete; Mid materializes their short-circuit
                 // CFG through the ordinary value source path below.
                 if op != opAnd() && op != opOr() {
-                    return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                    return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=(try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)) /> />
                 }
             }
             _ => {}
         }
         val term: U64 = self.parametricExprTerm(exprId: exprId)
-        if term != 0U64 { return <CallArgumentSource.Term exprId=exprId term=term /> }
+        if term != 0U64 { return <Result.Ok value=<CallArgumentSource.Term exprId=exprId term=term /> />}
         // Record's post-order fallback has already captured every remaining
         // context-sensitive shape in SemanticExprType.  Do not reopen the AST
         // here: a missing TypeTerm is specifically the intentional legacy
         // adapter case (notably an unsuffixed integer), not a request for a
         // second declaration-time type recovery.
-        return <CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) />
+        return <Result.Ok value=<CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) /> />
     }
 
     inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> Result[StaticMemberResolution, CompileDiagnostic] {
@@ -838,7 +841,7 @@ pub impl Comp {
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
-            operands.append(self.callArgumentSource(exprId: operandExprs[i]))
+            operands.append((try self.callArgumentSource(exprId: operandExprs[i])))
             i += 1U64
         }
         mut val receiverTerm: U64 = 0U64
@@ -848,7 +851,7 @@ pub impl Comp {
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
@@ -859,9 +862,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
-        if !(self.cur.recordCallTemplates) { return }
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+    inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         // Context can be known before declaration-time call selection. This
         // is normal for a type-qualified generic associated factory in a
@@ -869,11 +872,12 @@ pub impl Comp {
         // its source expected result is already a complete template input.
         if index >= self.decls.callTemplates.count() {
             self.appendCallTemplate(template: <CallTemplate siteKey=siteKey expectedResultTerm=expectedTerm />)
-            return
+            return <Result.Ok value=() />
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
         val kind = self.completeCallTemplateResult(kind: prior.kind, expectedTerm: expectedTerm)
         self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=prior.receiverTypeTerm />)
+        return <Result.Ok value=() />
     }
 
     // Bidirectional completion belongs to Record, before default evaluation
@@ -930,10 +934,10 @@ pub impl Comp {
         return true
     }
 
-    inout fn callTemplateForCurrentBody(exprId: U64) -> CallTemplate {
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+    inout fn callTemplateForCurrentBody(exprId: U64) -> Result[CallTemplate, CompileDiagnostic] {
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
-        if index < self.decls.callTemplates.count() { return self.decls.callTemplates[index] }
+        if index < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[index] />}
         // See sameCallSiteOrigin: a callee-owned default expression is
         // materialized under its caller BodyInstance.  Reusing its immutable
         // declaration-time template is not a second lookup; it is the one
@@ -945,13 +949,13 @@ pub impl Comp {
         while i < self.decls.callTemplates.count() {
             val candidate: CallTemplate = self.decls.callTemplates[i]
             if self.sameCallSiteOrigin(a: candidate.siteKey, b: siteKey) {
-                if found < self.decls.callTemplates.count() { return <CallTemplate siteKey=siteKey /> }
+                if found < self.decls.callTemplates.count() { return <Result.Ok value=<CallTemplate siteKey=siteKey /> />}
                 found = i
             }
             i += 1U64
         }
-        if found < self.decls.callTemplates.count() { return self.decls.callTemplates[found] }
-        return <CallTemplate siteKey=siteKey />
+        if found < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[found] />}
+        return <Result.Ok value=<CallTemplate siteKey=siteKey /> />
     }
 
     // Read the immutable Record result for one lexical source body without
@@ -1022,11 +1026,11 @@ pub impl Comp {
         return (term.isRecord && term.recordFieldTerms.count() == 0U64) || (term.nameLen == 0U64 && term.args.count() == 0U64 && term.paramId == 0U64 && term.assocNameId == 0U64 && !term.isAny)
     }
 
-    inout fn callTemplateForSourceBody(fnIdx: U64, exprId: U64) -> CallTemplate {
-        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId)
+    inout fn callTemplateForSourceBody(fnIdx: U64, exprId: U64) -> Result[CallTemplate, CompileDiagnostic] {
+        val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId))
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
-        if index < self.decls.callTemplates.count() { return self.decls.callTemplates[index] }
-        return <CallTemplate siteKey=siteKey />
+        if index < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[index] />}
+        return <Result.Ok value=<CallTemplate siteKey=siteKey /> />
     }
 
     // The declaration-time semantic term of an expression. Most expressions
@@ -1166,15 +1170,15 @@ pub impl Comp {
                 }
             }
         }
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
+        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
         return <Result.Ok value=() />
     }
 
     // Select bidirectional construction context without recording its children.
     // Callers can establish the instance before visiting declaration defaults;
     // a written nominal specialization still owns its type arguments.
-    inout fn makeAcceptsExpectedTerm(exprId: U64, writtenTerm: U64, isEnum: Bool, fields: MakeFieldRange, expectedTerm: U64) -> Bool {
-        if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return false }
+    inout fn makeAcceptsExpectedTerm(exprId: U64, writtenTerm: U64, isEnum: Bool, fields: MakeFieldRange, expectedTerm: U64) -> Result[Bool, CompileDiagnostic] {
+        if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=false />}
         val expected = self.arena.typeTerms[expectedTerm]
         mut val acceptsContext: Bool = false
         // Structural record literals are bidirectional constructions.
@@ -1198,7 +1202,7 @@ pub impl Comp {
                 // An enum constructor without written arguments has
                 // no AST TypeRef. Its selected aggregate declaration
                 // supplies identity; do not recover it by head spelling.
-                val aggregateIndex = self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId)
+                val aggregateIndex = (try self.semanticAggregateIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId))
                 if aggregateIndex < self.decls.semanticAggregates.count() {
                     match self.decls.semanticAggregates[aggregateIndex].kind {
                         SemanticAggregateKind.Enum(enumIdx: val enumIndex, variantIndex: _) => {
@@ -1212,7 +1216,7 @@ pub impl Comp {
                 }
             }
         }
-        return acceptsContext
+        return <Result.Ok value=acceptsContext />
     }
 
     // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -1264,7 +1268,7 @@ pub impl Comp {
         if expectedTerm == 0U64 || expectedTerm >= self.arena.typeCount() { return <Result.Ok value=() /> }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+        try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
         // Array construction is a bidirectional value form: at its explicit
         // expected-result boundary the Array[E] term is the semantic result,
         // not merely a hint for an empty literal. Record also refreshes its
@@ -1299,7 +1303,7 @@ pub impl Comp {
             }
 
             Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val writtenTerm, fields: val fields) => {
-                val acceptsContext: Bool = self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm)
+                val acceptsContext: Bool = (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: writtenTerm, isEnum: isEnum, fields: fields, expectedTerm: expectedTerm))
                 if acceptsContext {
                         self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                         mut val fieldIndex: U64 = 0U64
@@ -1392,7 +1396,7 @@ pub impl Comp {
     // The explicit body-context read for the expected-result side of a call
     // template.  Zero means the source supplied no bidirectional context.
     inout fn groundSemanticCallExpectedResult(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
-        val expected: U64 = self.callTemplateForCurrentBody(exprId: exprId).expectedResultTerm
+        val expected: U64 = (try self.callTemplateForCurrentBody(exprId: exprId)).expectedResultTerm
         if expected == 0U64 { return <Result.Ok value=0U64 />}
         return <Result.Ok value=(try self.groundTermForBody(ref: expected, environment: environment, selfRef: selfRef, itemRef: itemRef)) />
     }
@@ -1404,7 +1408,7 @@ pub impl Comp {
     inout fn groundSemanticCallTypeArgs(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         mut val args: Array[U64] = []
-        match self.callTemplateForCurrentBody(exprId: exprId).kind {
+        match (try self.callTemplateForCurrentBody(exprId: exprId)).kind {
             CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored, proofId: _) => { args = self.callTemplateTypeArgs(range: stored) }
             _ => {}
         }
@@ -1466,9 +1470,9 @@ pub impl Comp {
             Expr.Field(val base, val nameStart, val nameLen) => {
                 mut val baseRef: U64 = 0U64
                 match self.arena.exprs[base] {
-                    Expr.Call(nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
-                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
-                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
+                    Expr.Call(nameStart: _, nameLen: _, args: _) => { baseRef = (try self.bodyCalleeResultRef(exprId: base)) }
+                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { baseRef = (try self.bodyCalleeResultRef(exprId: base)) }
+                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { baseRef = (try self.bodyCalleeResultRef(exprId: base)) }
                     _ => {}
                 }
                 if baseRef == 0U64 { baseRef = (try self.groundedTypeOf(id: base)) }

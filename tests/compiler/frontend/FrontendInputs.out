@@ -8,4 +8,6 @@ internal error: synthetic call origin registered twice
 internal error: lexical Self binding conflicts with selected receiver
 internal error (compiler bug): record ownership requires a registered layout matching its semantic field types
 internal error: implicit protocol call dependency was not finalized
+internal error: lexical function owner is missing
+internal error: provided body has no source owner
 invariant diagnostics returned

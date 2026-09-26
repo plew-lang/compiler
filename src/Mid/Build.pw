@@ -1,3 +1,4 @@
+import ../Diag with { CompileDiagnostic }
 import ../StringLiteral with { decodeStringLiteral }
 // Mid builder state. Source bindings are mapped once to Mid local identities;
 // later passes consume the frontend resolver's declaration identity rather than
@@ -86,6 +87,7 @@ export enum MidUnsupportedAssign {
 }
 
 export enum MidBuildError {
+    Frontend(diagnostic: CompileDiagnostic)
     StringLiteral(offset: U64, message: String)
     None
     InvalidStatement
@@ -121,6 +123,10 @@ struct MidOperandBuild {
     pub val error: MidBuildError = <MidBuildError.None />
 }
 pub impl MidOperandBuild { factory }
+
+fn midFrontendOperandFailure(diagnostic: CompileDiagnostic) -> MidOperandBuild {
+    return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.Frontend diagnostic=diagnostic /> />
+}
 
 struct MidReceiverBuild {
     pub val receiver: MidCallReceiver = <MidCallReceiver.None />
@@ -670,7 +676,7 @@ fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U6
     val term: U64 = c.semanticExprTerm(exprId: exprId)
     // A generic callable may only publish its result through a recipe.
     // Preserve that same dependency for the condition's outer-scope home.
-    val recipe = if term == 0U64 { give c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId).resultTypeRecipe } else { give 0U64 }
+    val recipe = if term == 0U64 { give (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } }).resultTypeRecipe } else { give 0U64 }
     val parentCalls: Array[MidCallValue] = state.callValues
     val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
     state.callValues = []
@@ -895,7 +901,7 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         if state.locals[prior.place.local].isUnique { return <MidOperandBuild operand=<MidOperand.Move place=prior.place /> /> }
         return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> />
     }
-    val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+    val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
     if !(c.sameCallSiteKey(a: template.siteKey, b: siteKey)) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
     }
@@ -931,21 +937,21 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
 
 // Fetch only the frozen Record-time carrier for this lexical body. ExprId is
 // not a semantic key here: it selects one already-verified construction fact.
-fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> MidAggregateLookup {
-    val index: U64 = c.semanticAggregateIndex(ownerFnIdx: sourceFunction, exprId: exprId)
+fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> Result[MidAggregateLookup, CompileDiagnostic] {
+    val index: U64 = (try c.semanticAggregateIndex(ownerFnIdx: sourceFunction, exprId: exprId))
     if index < c.decls.semanticAggregates.count() {
-        return <MidAggregateLookup found=true aggregate=c.decls.semanticAggregates[index] />
+        return <Result.Ok value=<MidAggregateLookup found=true aggregate=c.decls.semanticAggregates[index] /> />
     }
-    return <MidAggregateLookup />
+    return <Result.Ok value=<MidAggregateLookup /> />
 }
 
 // Closure meaning is keyed by its lexical body and literal ExprId, exactly as
 // a semantic aggregate is. The lookup exposes only Mono's frozen descriptor;
 // no nested-body scan or source-name recovery is permitted below this point.
-fn midSemanticClosureForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> MidClosureLookup {
-    val index: U64 = c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: exprId)
-    if index < c.decls.semanticClosures.count() { return <MidClosureLookup found=true closure=c.decls.semanticClosures[index] /> }
-    return <MidClosureLookup />
+fn midSemanticClosureForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> Result[MidClosureLookup, CompileDiagnostic] {
+    val index: U64 = (try c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: exprId))
+    if index < c.decls.semanticClosures.count() { return <Result.Ok value=<MidClosureLookup found=true closure=c.decls.semanticClosures[index] /> /> }
+    return <Result.Ok value=<MidClosureLookup /> />
 }
 
 // `bindingTarget` is the frontend's lexical identity of the storage, so it is
@@ -1118,12 +1124,12 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
     mut val i: U64 = 0U64
     while i < aggregate.elements.count() {
         val element: SemanticAggregateElement = aggregate.elements[i]
-        val nested: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: element.exprId)
+        val nested: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
         mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=element.term /> /> />
         if nested.found {
             operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: nested.aggregate)
         } else if midExprIsCall(c: c, exprId: element.exprId) {
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: element.exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: element.exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             operand = materializeMidCallValue(c: inout c, state: inout state, exprId: element.exprId, siteKey: template.siteKey)
         } else {
             operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: element.exprId, typeTerm: element.term, allowAccessMarker: false)
@@ -1318,14 +1324,14 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
     if candidate < c.decls.accessCandidateCount() {
         if allowAccessMarker { return midPrepareAccess(c: inout c, state: inout state, candidate: candidate) }
         val readExpr: U64 = c.decls.accessCandidateAt(index: candidate).readExpr
-        val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr)
+        val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
         return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
     }
-    val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId)
+    val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
     if aggregate.found {
         return materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
     }
-    val closure: MidClosureLookup = midSemanticClosureForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId)
+    val closure: MidClosureLookup = (match midSemanticClosureForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
     if closure.found {
         return materializeMidClosureValue(c: inout c, state: inout state, closure: closure.closure, expectedType: typeTerm)
     }
@@ -1344,26 +1350,26 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return midOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
         }
         Expr.Call(nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.Unary(op: _, operand: _) => {
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => {
             if op == opAnd() || op == opOr() {
                 return materializeMidShortCircuit(c: inout c, state: inout state, lhs: lhs, rhs: rhs, typeTerm: typeTerm, isAnd: op == opAnd())
             }
-            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) } })
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
         Expr.ExtView(recv: val sourceExpr, source: _, strip: _) => {
@@ -1902,7 +1908,7 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
 }
 
 fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
-    val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+    val template: CallTemplate = (match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
     if !midTemplateIsCallable(template: template) {
         match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
     }
@@ -1992,7 +1998,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             // The named destination belongs to the enclosing lexical scope;
             // only its initializer dependencies belong to this full expression.
             val evaluation: U64 = midOpenScope(state: inout state)
-            val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
+            val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
             mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> />
             if aggregate.found {
                 operandResult = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
@@ -2301,7 +2307,7 @@ fn buildMidConsumingEnumArm(c: inout Comp, state: inout MidBuildState, semantic:
 }
 
 fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: MatchSource, scrut: U64, sourceArms: MatchArmRange, hasGiveDestination: Bool, giveDestination: MidPlace, traceId: U64) -> MidBuildError {
-            val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource)
+            val semanticIndex: U64 = (match c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, matchSource: matchSource) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBuildError.Frontend diagnostic=diagnostic /> } })
             if semanticIndex >= c.decls.semanticMatches.count() {
                 traceMidUnsupportedMatch(c: c, state: state, stmtId: traceId, reason: "missing-semantic-match")
                 return <MidBuildError.UnsupportedMatch />
@@ -2673,7 +2679,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     // Func.recvTy selects the declaration/dispatch namespace and can differ
     // from the type of self inside that body. Provided copies share the
     // original body's fact; BodyInstance supplies their substitutions later.
-    val receiverTerm: U64 = c.semanticBodyReceiverTerm(fnIdx: fnIdx)
+    val receiverTerm: U64 = (match c.semanticBodyReceiverTerm(fnIdx: fnIdx) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
     // All receivers, including synthetic methods, require a frontend-resolved
     // TypeTerm. The zero sentinel is never a scalar or a spelling-based type.
     if f.hasRecv && receiverTerm == 0U64 {
@@ -2856,7 +2862,7 @@ export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
                 val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
                 // Apply the same frozen storage conversion as a local Let,
                 // then transfer the converted owner to process-lifetime storage.
-                val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
+                val aggregate: MidAggregateLookup = (match midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val value) => { give value } Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> } })
                 mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=sourceTerm /> /> />
                 if aggregate.found { operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate) }
                 else { operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: sourceTerm, allowAccessMarker: false) }

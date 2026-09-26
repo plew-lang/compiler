@@ -138,7 +138,7 @@ pub impl Comp {
                     if index < previous.count() {
                         match previous[index].source {
                             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
-                                val template: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: exprId)
+                                val template: CallTemplate = (try self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: exprId))
                                 if self.sameCallSiteKey(a: template.siteKey, b: siteKey) {
                                     match template.kind {
                                         CallTemplateKind.Direct(callee: val priorCallee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
@@ -153,7 +153,7 @@ pub impl Comp {
                     }
                     val call: U64 = (try self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof, receiverTypeTerm: receiverTypeTerm))
                     val parameter: Param = self.funcParamAt(params: parameters, index: index)
-                    completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: call) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
+                    completed.append(<CallTemplateArgument source=(try self.callArgumentSource(exprId: call)) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
                 }
             }
             index += 1U64
@@ -181,7 +181,7 @@ pub impl Comp {
         mut val call: U64 = existingExpr
         val noArgs: ArgRange = self.pushArgs(args: [])
         if call < self.arena.exprs.count() {
-            val previous: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: call)
+            val previous: CallTemplate = (try self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: call))
             mut val matches: Bool = false
             match previous.kind {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => {
@@ -368,7 +368,7 @@ pub impl Comp {
         mut val owner: U64 = 0U64
         while owner < declarationLimit {
             val source: Func = self.arena.functionAt(index: owner)
-            val lexicalOwner: U64 = self.semanticBodyOwner(fnIdx: owner)
+            val lexicalOwner: U64 = (try self.semanticBodyOwner(fnIdx: owner))
             owners.append(lexicalOwner)
             val start: U64 = self.decls.defaultGeneratorFunctions.count()
             mut val parameterIndex: U64 = 0U64

@@ -1055,7 +1055,7 @@ pub impl Comp {
                 // syntax resolver again would erase that substitution and turn
                 // the same call into a bare lookup.  The descriptor key includes
                 // the current body instance, so this is safe for every phase.
-                val finalResult: U64 = self.bodyCalleeResultRef(exprId: id)
+                val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: id))
                 val finalRecv: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
                 if finalResult != 0U64 && finalResult < self.arena.typeCount() && finalRecv != 0U64 && finalRecv < self.arena.typeCount() {
                     val finalRecvTy: TypeRef = self.arena.typeAt(index: finalRecv)

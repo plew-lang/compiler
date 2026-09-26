@@ -66,6 +66,7 @@ fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
 
 fn midInstantiateCoverageDetail(reason: MidInstantiateError) -> U64 {
     match reason {
+        MidInstantiateError.Frontend(diagnostic: _) => { return 19U64 }
         MidInstantiateError.None => { return 0U64 }
         MidInstantiateError.InvalidBodyInstance => { return 1U64 }
         MidInstantiateError.MissingCallResolution => { return 2U64 }
@@ -115,6 +116,7 @@ export fn reportMidBuildError(c: inout Comp, fnIdx: U64, error: MidBuildError) {
     match error {
         MidBuildError.None => {}
         MidBuildError.StringLiteral(offset: _, message: _) => {}
+        MidBuildError.Frontend(diagnostic: _) => {}
         MidBuildError.InvalidStatement => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 1U64) }
         MidBuildError.InvalidBlock => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 2U64) }
         MidBuildError.InvalidFunction => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 3U64) }
@@ -151,6 +153,10 @@ fn traceMidInstantiationFailure(c: inout Comp, fnIdx: U64, reason: MidInstantiat
 export fn midPreparationDiagnostic(c: inout Comp, fnIdx: U64, failure: MidPreparationError) -> Optional[CompileDiagnostic] {
     match failure {
         MidPreparationError.InstantiationFailed(error: val error) => {
+            match error {
+                MidInstantiateError.Frontend(diagnostic: val diagnostic) => { return <Optional.Some v=diagnostic /> }
+                _ => {}
+            }
             traceMidInstantiationFailure(c: inout c, fnIdx: fnIdx, reason: error)
         }
         MidPreparationError.AccessFailed(error: val error) => {

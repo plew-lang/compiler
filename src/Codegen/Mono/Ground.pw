@@ -1173,7 +1173,7 @@ pub impl Comp {
     // pure query beside ConformanceProof consumption so every frontend and
     // Mono caller obtains the same output without borrowing Cursor state.
     inout fn bodyProvidedItemTerm(f: Func, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
-        val declaration: Func = self.lexicalFunction(f: f)
+        val declaration: Func = (try self.lexicalFunction(f: f))
         if !(declaration.isProvided) && !(self.methodRecvIsTrait(f: declaration)) { return <Result.Ok value=0U64 />}
         val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
         val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)

@@ -106,9 +106,9 @@ pub impl Comp {
                 mut val ti: TypeInfo = (try self.exprType(id: init))
                 mut val resolved: U64 = 0U64
                 match self.arena.exprs[init] {
-                    Expr.Call(nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
-                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
-                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
+                    Expr.Call(nameStart: _, nameLen: _, args: _) => { resolved = (try self.bodyCalleeResultRef(exprId: init)) }
+                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { resolved = (try self.bodyCalleeResultRef(exprId: init)) }
+                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { resolved = (try self.bodyCalleeResultRef(exprId: init)) }
                     _ => {}
                 }
                 if resolved != 0U64 && resolved < self.arena.typeCount() {

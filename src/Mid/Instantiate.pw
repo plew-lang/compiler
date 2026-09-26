@@ -7,12 +7,13 @@
 import ../Frontend with { Comp }
 import ./Types with { midViewTypesMatch }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, SemanticMatchKind, SemanticClosure, SemanticClosureCaptureMode }
-import ../Diag with { eprintU64 }
+import ../Diag with { eprintU64, CompileDiagnostic }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
 import ./Ir with { MidEnumDestinationNode, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidLocalDecl, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
 
 export enum MidInstantiateError {
+    Frontend(diagnostic: CompileDiagnostic)
     None
     InvalidBodyInstance
     MissingCallResolution
@@ -518,7 +519,13 @@ fn instantiateCanonicalMakeClosure(c: inout Comp, bodyId: U64, rvalueId: U64, en
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidSemanticClosure /> }
         return 0U64
     }
-    val closureIndex: U64 = c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: source.exprId)
+    val closureIndex: U64 = (match c.semanticClosureIndex(ownerFnIdx: sourceFunction, exprId: source.exprId) {
+        Result.Ok(value: val index) => { give index }
+        Result.Err(error: val diagnostic) => {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.Frontend diagnostic=diagnostic /> }
+            return 0U64
+        }
+    })
     if closureIndex >= c.decls.semanticClosures.count() {
         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingSemanticClosure /> }
         return 0U64

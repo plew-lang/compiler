@@ -25,7 +25,7 @@ fn main() {
         isAssoc=false isAsync=false isExtern=false isProvided=true lexicalOwnerFnId=1U64 provTraitOwner=31U64 />)
     c.decls.funcBounds.append(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
     c.decls.funcBounds.append(<FuncBound fnIdx=1U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
-    if c.semanticBodyOwner(fnIdx: 1U64) == 0U64 { write(s: "source-owner\n") }
+    if c.semanticBodyOwner(fnIdx: 1U64).unwrap() == 0U64 { write(s: "source-owner\n") }
     c.prepareDefaultArgumentGenerators().unwrap()
     val original = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val placed = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)

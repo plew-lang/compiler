@@ -1080,7 +1080,7 @@ pub impl Comp {
             try self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
             val noArgs: Array[U64] = []
             self.cur.locals = []
-            try self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+            try self.seedGlobalLocals(useMod: (try self.globalSeedModeFor(f: f)))
             self.cur.hasRecv = f.hasRecv
             self.cur.recvStart = f.recvStart
             self.cur.recvLen = f.recvLen

@@ -52,6 +52,7 @@ export fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationE
             match failure {
                 MidProgramError.Build(bodyId: val bodyId, error: val error) => {
                     match error {
+                        MidBuildError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
                         MidBuildError.StringLiteral(val offset, val message) => { return c.diagnosticAt(offset: offset, msg: message) }
                         _ => {}
                     }

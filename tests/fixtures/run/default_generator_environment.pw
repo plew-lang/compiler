@@ -36,8 +36,8 @@ fn main() {
     c.prepareDefaultArgumentGenerators().unwrap()
     val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
-    if c.globalSeedModeFor(f: c.arena.functionAt(index: 0U64)) == 7U64 { write(s: "source-module\n") }
-    val generatorModule = c.globalSeedModeFor(f: c.arena.functionAt(index: free))
+    if c.globalSeedModeFor(f: c.arena.functionAt(index: 0U64)).unwrap() == 7U64 { write(s: "source-module\n") }
+    val generatorModule = c.globalSeedModeFor(f: c.arena.functionAt(index: free)).unwrap()
     if generatorModule == 7U64 { write(s: "generator-module\n") }
     if c.globalVisibleFrom(useMod: generatorModule, gMod: 7U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "private-global-visible\n") }
     if !c.globalVisibleFrom(useMod: generatorModule, gMod: 8U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "foreign-private-hidden\n") }
