@@ -973,77 +973,41 @@ pub impl Comp {
 // construction-field literal (`<Box m=[:] />`, `<Shape.Point at=(x:1,y:2) />`) its
 // context type so an otherwise un-inferable dict / record / unit literal resolves.
 pub impl Comp {
-    inout fn makeFieldType(typeName: String, variant: String, isEnum: Bool, fieldName: String) -> U64 {
-        val tn: Bind = self.internBytes(s: typeName)
-        val tid: U64 = intern(c: inout self, start: tn.nameStart, len: tn.nameLen)
-        val fn2: Bind = self.internBytes(s: fieldName)
-        val fid: U64 = intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen)
-        mut val vid: U64 = 0U64
-        if isEnum {
-            val vn: Bind = self.internBytes(s: variant)
-            vid = intern(c: inout self, start: vn.nameStart, len: vn.nameLen)
-        }
-        return self.makeFieldTypeByNameIds(typeId: tid, variantId: vid, isEnum: isEnum, fieldId: fid)
-    }
-
-    inout fn makeFieldTypeSpans(typeName: Span, variant: Span, isEnum: Bool, fieldName: Span) -> U64 {
-        if typeName.end <= typeName.start || fieldName.end <= fieldName.start { return 0U64 }
-        mut val variantId: U64 = 0U64
-        if isEnum {
-            variantId = intern(c: inout self, start: variant.start, len: variant.end - variant.start)
-        }
-        return self.makeFieldTypeByNameIds(typeId: intern(c: inout self, start: typeName.start, len: typeName.end - typeName.start), variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: fieldName.start, len: fieldName.end - fieldName.start))
-    }
-
-    // The sole declaration lookup for a construction field's context type.
-    inout fn makeFieldTypeByNameIds(typeId: U64, variantId: U64, isEnum: Bool, fieldId: U64) -> U64 {
-        mut val tid: U64 = typeId
-        // a newtype inherits the underlying struct's factory/fields (spec/10): resolve the
-        // construction type name to the underlying struct so `<Brand code=255 />` finds the
-        // `code` field's type for the literal's context (Brand = Rgb).
-        mut val ntI: U64 = 0
-        while ntI < self.arena.newtypeCount() {
-            if self.arena.newtypeAt(index: ntI).nameId == tid {
-                tid = intern(c: inout self, start: self.arena.newtypeAt(index: ntI).underStart, len: self.arena.newtypeAt(index: ntI).underLen)
-                ntI = self.arena.newtypeCount()
-            } else {
-                ntI += 1
-            }
+    // Field context follows the already resolved construction owner, never a
+    // process-wide spelling lookup. Newtypes inherit their underlying fields.
+    inout fn makeFieldTypeForType(typeRef: U64, variantId: U64, isEnum: Bool, fieldId: U64) -> U64 {
+        mut val owner = typeRef
+        mut val remaining = self.arena.newtypeCount()
+        while remaining != 0U64 {
+            val underlying = self.newtypeUnderlying(ref: owner)
+            if underlying == 0U64 { break }
+            owner = underlying
+            remaining -= 1U64
         }
         if isEnum {
-            mut val ei: U64 = 0
-            while ei < self.arena.enumCount() {
-                if self.arena.enumAt(index: ei).nameId == tid {
-                    mut val vi: U64 = 0
-                    while vi < self.arena.enumAt(index: ei).variants.count() {
-                        if intern(c: inout self, start: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameStart, len: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameLen) == variantId {
-                            mut val fj: U64 = 0
-                            while fj < self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields.count() {
-                                if intern(c: inout self, start: self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).nameStart, len: self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).nameLen) == fieldId {
-                                    return self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fj).ty
-                                }
-                                fj += 1
-                            }
-                        }
-                        vi += 1
+            val ei = self.enumIndexForType(ref: owner)
+            if ei >= self.arena.enumCount() { return 0U64 }
+            mut val vi = 0U64
+            while vi < self.arena.enumAt(index: ei).variants.count() {
+                if self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).nameId == variantId {
+                    mut val fi = 0U64
+                    while fi < self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields.count() {
+                        val field = self.arena.enumFieldAt(enumIndex: ei, variantIndex: vi, fieldIndex: fi)
+                        if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldId { return field.ty }
+                        fi += 1U64
                     }
                 }
-                ei += 1
+                vi += 1U64
             }
             return 0U64
         }
-        mut val si: U64 = self.arena.firstStructNamed(nameId: tid)
-        while si < self.arena.structCount() {
-            if self.arena.structAt(index: si).nameId == tid {
-                mut val fk: U64 = 0
-                while fk < self.arena.structAt(index: si).fields.count() {
-                    if intern(c: inout self, start: self.arena.structFieldAt(structIndex: si, fieldIndex: fk).nameStart, len: self.arena.structFieldAt(structIndex: si, fieldIndex: fk).nameLen) == fieldId {
-                        return self.arena.structFieldAt(structIndex: si, fieldIndex: fk).ty
-                    }
-                    fk += 1
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
+        val si = self.structIndexForType(ref: owner)
+        if si >= self.arena.structCount() { return 0U64 }
+        mut val fi = 0U64
+        while fi < self.arena.structAt(index: si).fields.count() {
+            val field = self.arena.structFieldAt(structIndex: si, fieldIndex: fi)
+            if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldId { return field.ty }
+            fi += 1U64
         }
         return 0U64
     }
@@ -1112,7 +1076,7 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
+    inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeRef: U64, variant: String, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0
         while i < fields.count() {
@@ -1120,7 +1084,9 @@ pub impl Comp {
             // flow the field's declared type to its value so a context-typed literal in a
             // construction field infers (a dict / record / `()` whose type is only known
             // from the field). Defensive: 0 falls back to context-free lowering.
-            val fctx: U64 = self.makeFieldType(typeName: typeName, variant: variant, isEnum: isEnum, fieldName: f.name)
+            val fieldName = self.internBytes(s: f.name)
+            val variantName = self.internBytes(s: variant)
+            val fctx = self.makeFieldTypeForType(typeRef: typeRef, variantId: intern(c: inout self, start: variantName.nameStart, len: variantName.nameLen), isEnum: isEnum, fieldId: intern(c: inout self, start: fieldName.nameStart, len: fieldName.nameLen))
             mut val v: U64 = 0
             if fctx != 0U64 {
                 v = (try self.lowerExprWithCtx(e: f.value, ctxRef: fctx))
@@ -1135,14 +1101,13 @@ pub impl Comp {
     }
 
     // SyntaxFile counterpart of lowerMakeFields. The declaration lookup is by
-    // canonical name IDs so this also serves anonymous-record contexts, whose
-    // synthesized record name has no source spelling to reconstruct.
-    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeId: U64, variantId: U64, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
+    // resolved TypeRef, including synthesized anonymous-record contexts.
+    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeRef: U64, variantId: U64, isEnum: Bool) -> Result[Array[MakeField], CompileDiagnostic] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0U64
         while i < syntaxExprMakeFieldCount(file: self.syntax, expr: expr) {
             val f: SyntaxMakeField = syntaxMakeField(file: self.syntax, id: syntaxExprMakeField(file: self.syntax, expr: expr, index: i))
-            val fctx: U64 = self.makeFieldTypeByNameIds(typeId: typeId, variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start))
+            val fctx: U64 = self.makeFieldTypeForType(typeRef: typeRef, variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start))
             mut val value: U64 = 0U64
             if fctx != 0U64 {
                 value = (try self.lowerSyntaxExprWithCtx(id: f.value, ctxRef: fctx))

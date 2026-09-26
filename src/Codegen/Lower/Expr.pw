@@ -42,12 +42,11 @@ pub impl Comp {
                     if self.arena.bytes[ct.nameStart] == '(' {
                         match e {
                             ExprAst.RecordLit(val fields, val span) => {
-                                // pass the record struct's canonical name so makeFieldType can
+                                // pass the resolved record type so field lowering can
                                 // resolve each field's declared type — gives a NESTED record/dict
                                 // literal field (`(a: (x:1,y:2), …)`) its own context (else the
                                 // inner literal lowers context-free and the backend can't build it).
-                                val recName: String = stringFromBytesUnchecked(extractSpan(buf: self.arena.bytes, start: ct.nameStart, len: ct.nameLen))
-                                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false))
+                                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeRef: ctxRef, variant: "", isEnum: false))
                                 val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
                                 self.arena.exprSpanStart[rid] = span.start
                                 return <Result.Ok value=rid />
@@ -219,7 +218,7 @@ pub impl Comp {
                     vStart = vb.nameStart
                     vLen = vb.nameLen
                 }
-                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: typeName, variant: constructorVariant, isEnum: constructionEnum))
+                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeRef: tyRef, variant: constructorVariant, isEnum: constructionEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.ArrayLit(val elems, val span) => {
@@ -242,7 +241,7 @@ pub impl Comp {
                 // types at codegen (the synthetic record struct keyed by those types). ty=0
                 // / no type name: the backend resolves the record struct from the values
                 // (or st.expectedTy if a construction site set one).
-                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeName: "", variant: "", isEnum: false))
+                val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields, typeRef: 0U64, variant: "", isEnum: false))
                 result = self.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.Cast(val operand, val ty, val span) => {
@@ -373,7 +372,7 @@ pub impl Comp {
                     if self.arena.bytes[ct.nameStart] == '(' {
                         match e.kind {
                             SyntaxExprKind.RecordLit => {
-                                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false))
+                                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeRef: ctxRef, variantId: 0U64, isEnum: false))
                                 val result: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
                                 self.arena.exprSpanStart[result] = e.span.start
                                 self.arena.exprSpanEnd[result] = e.span.end
@@ -508,12 +507,11 @@ pub impl Comp {
                     }
                 }
                 val tyRef = self.contextualConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start, ctxRef: ctxRef, isVariant: constructionEnum)
-                val typeId: U64 = intern(c: inout self, start: typeName.start, len: typeName.end - typeName.start)
                 mut val variantId: U64 = 0U64
                 if constructionEnum {
                     variantId = intern(c: inout self, start: variantName.start, len: variantName.end - variantName.start)
                 }
-                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: constructionEnum))
+                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeRef: tyRef, variantId: variantId, isEnum: constructionEnum))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Range => {
@@ -532,7 +530,7 @@ pub impl Comp {
                 result = (try self.lowerSyntaxDictLit(expr: e, ctxRef: 0U64))
             }
             SyntaxExprKind.RecordLit => {
-                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeId: 0U64, variantId: 0U64, isEnum: false))
+                val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e, typeRef: 0U64, variantId: 0U64, isEnum: false))
                 result = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=0U64 fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Cast => {

@@ -1,0 +1,9 @@
+import ./Alpha
+import ./Beta
+import @Std/Io with { print }
+fn main() {
+    val first = <Alpha.Item value=(number: 41I64) />
+    val second = <Beta.Item value=(text: "ok") />
+    print(first.value.number)
+    print(second.value.text)
+}

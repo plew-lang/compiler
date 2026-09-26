@@ -243,7 +243,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < dir.reqs.count() {
             val r: DeriveReqAst = dir.reqs[i]
-            val args: Array[MakeField] = (try self.lowerMakeFields(fields: r.args, typeName: "", variant: "", isEnum: false))
+            val args: Array[MakeField] = (try self.lowerMakeFields(fields: r.args, typeRef: 0U64, variant: "", isEnum: false))
             self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
             i += 1
         }
@@ -285,15 +285,9 @@ pub impl Comp {
                 }
             }
             TopItemAst.Decl(val d) => {
-                val sB: U64 = self.arena.structCount()
-                val eB: U64 = self.arena.enumCount()
-                val fB: U64 = self.arena.functionCount()
                 try self.lowerDecl(d: d)
-                match d.kind {
-                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: sB).nameStart, nameLen: self.arena.structAt(index: sB).nameLen, moduleOffset: self.arena.structAt(index: sB).defOffset) }
-                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: eB).nameStart, nameLen: self.arena.enumAt(index: eB).nameLen, moduleOffset: self.arena.enumAt(index: eB).defOffset) }
-                    DeclKind.Func => { self.recordExport(nameStart: self.arena.functionAt(index: fB).nameStart, nameLen: self.arena.functionAt(index: fB).nameLen) }
-                }
+                val name = self.lowerTypeName(name: d.name, span: d.nameSpan)
+                self.recordExportFrom(nameStart: name.nameStart, nameLen: name.nameLen, moduleOffset: d.span.start)
             }
             TopItemAst.Trait(val t) => {
                 val tB: U64 = self.decls.traitCount()
@@ -360,15 +354,8 @@ pub impl Comp {
             }
             SyntaxTopItemKind.Decl => {
                 val d: SyntaxDecl = syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-                val structBefore: U64 = self.arena.structCount()
-                val enumBefore: U64 = self.arena.enumCount()
-                val funcBefore: U64 = self.arena.functionCount()
                 try self.lowerSyntaxDecl(d: d)
-                match d.kind {
-                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structAt(index: structBefore).nameStart, nameLen: self.arena.structAt(index: structBefore).nameLen, moduleOffset: self.arena.structAt(index: structBefore).defOffset) }
-                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enumAt(index: enumBefore).nameStart, nameLen: self.arena.enumAt(index: enumBefore).nameLen, moduleOffset: self.arena.enumAt(index: enumBefore).defOffset) }
-                    DeclKind.Func => { self.recordExport(nameStart: self.arena.functionAt(index: funcBefore).nameStart, nameLen: self.arena.functionAt(index: funcBefore).nameLen) }
-                }
+                self.recordExportFrom(nameStart: d.name.start, nameLen: d.name.end - d.name.start, moduleOffset: d.span.start)
             }
             SyntaxTopItemKind.Trait => {
                 val before: U64 = self.decls.traitCount()

@@ -1,0 +1,2 @@
+pub struct Item { pub val value: (text: String) }
+pub impl Item { factory }
