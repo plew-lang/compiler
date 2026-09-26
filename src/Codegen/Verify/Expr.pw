@@ -294,7 +294,7 @@ pub impl Comp {
                     }
                 }
                 // field gate (spec/05): a non-`pub` field cannot be set from another module.
-                self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
+                try self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
                 mut val i: U64 = 0
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
@@ -368,7 +368,7 @@ pub impl Comp {
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     try self.verifySelectedFieldExists(exprId: id, receiverTerm: inst.args[0], nameStart: nameStart, nameLen: nameLen, message: "no such field on this Ref's pointee type (check the field name)")
                     if pt.kind == 2 {
-                        self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                        try self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                     }
                 }
             }

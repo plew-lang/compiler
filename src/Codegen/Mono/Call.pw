@@ -1036,10 +1036,10 @@ pub impl Comp {
     // separate from FnInst: FnInst is a code-generation/mangling detail, while
     // this list is the semantic reachability closure whose bodies must have all
     // final call selections recorded.
-    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> U64 {
-        if fnIdx >= self.arena.functionCount() { return 0U64 }
+    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[U64, CompileDiagnostic] {
+        if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: fnIdx)
-        if f.isExtern || f.body == 0U64 { return 0U64 }
+        if f.isExtern || f.body == 0U64 { return <Result.Ok value=0U64 />}
         // A concrete `where` clause is a property of the grounded body
         // instance, not of the old source-walk discovery queue. In particular,
         // a result-position call such as `val x: Token[Bad] = marker()` learns
@@ -1048,34 +1048,34 @@ pub impl Comp {
         val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof)
         val declaration: Func = self.lexicalFunction(f: f)
         if declaration.hasRecv && environment.receiverRef != 0U64 {
-            self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: environment.receiverRef)
+            try self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: environment.receiverRef)
         } else if f.typeParams.count() > 0U64 && args.count() == f.typeParams.count() && self.fnArgsAllGround(args: args) {
-            self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
+            try self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
         }
         // A provided copy has no standalone semantic body: its `Self`,
         // associated outputs and nested requirements are defined by the
         // conformance that selected it.  Never materialize one with Missing
         // evidence; abstract checking records its template, while a concrete
         // call re-enters here with a reified proof.
-        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return 0U64 }
+        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return <Result.Ok value=0U64 />}
         mut val adapterTarget: U64 = 0U64
         val underlying: U64 = self.newtypeUnderlyingTypeRef(ref: environment.receiverRef)
         if underlying != 0U64 {
-            adapterTarget = self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying)
+            adapterTarget = (try self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying))
             if adapterTarget == 0U64 {
-                self.errorAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target")
-                return 0U64
+                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target") />
+                return <Result.Ok value=0U64 />
             }
         }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {
-            if self.monoWork.bodyInstances[i] == bodyId { return bodyId }
+            if self.monoWork.bodyInstances[i] == bodyId { return <Result.Ok value=bodyId />}
             i += 1U64
         }
         self.monoWork.bodyInstances.append(bodyId)
-        return bodyId
+        return <Result.Ok value=bodyId />
     }
 
     // A copied trait-provided callable inherits the conformance subject's
@@ -1340,7 +1340,7 @@ pub impl Comp {
             if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.typeCount() {
                 val recvArgs: Array[U64] = self.arena.typeAt(index: recvInst).args
                 if recvArgs.count() == f.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
-                    val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst, selectedProof: calleeProof)
+                    val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst, selectedProof: calleeProof))
                     try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
                     return <Result.Ok value=() />
                 }
@@ -1455,7 +1455,7 @@ pub impl Comp {
                 return <Result.Ok value=() />
             }
         }
-        val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof)
+        val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof))
         try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
@@ -2829,7 +2829,7 @@ pub impl Comp {
                             args.append(witness.binds[bindIndex].term)
                             parameter += 1U64
                         }
-                        bodyId = self.enqueueFinalBody(fnIdx: functionIndex, args: args, recvInstRef: sourceRef, selectedProof: proof)
+                        bodyId = (try self.enqueueFinalBody(fnIdx: functionIndex, args: args, recvInstRef: sourceRef, selectedProof: proof))
                         if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
                     }
                     mut val member = <FinalExistentialMember />
@@ -2878,17 +2878,17 @@ pub impl Comp {
                     requirement += 1U64
                 }
                 self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof members=members />)
-                self.enqueueFinalDestruction(typeRef: sourceRef)
-                self.enqueueFinalDestruction(typeRef: targetRef)
+                try self.enqueueFinalDestruction(typeRef: sourceRef)
+                try self.enqueueFinalDestruction(typeRef: targetRef)
             }
             ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
-                self.enqueueFinalDestruction(typeRef: sourceRef)
-                self.enqueueFinalDestruction(typeRef: targetRef)
+                try self.enqueueFinalDestruction(typeRef: sourceRef)
+                try self.enqueueFinalDestruction(typeRef: targetRef)
                 try self.finalizeConversionDependencies(conversion: element)
             }
             ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: _, payloads: val payloads) => {
-                self.enqueueFinalDestruction(typeRef: sourceRef)
-                self.enqueueFinalDestruction(typeRef: targetRef)
+                try self.enqueueFinalDestruction(typeRef: sourceRef)
+                try self.enqueueFinalDestruction(typeRef: targetRef)
                 mut val index: U64 = 0U64
                 while index < payloads.count() {
                     try self.finalizeConversionDependencies(conversion: payloads[index].conversion)
@@ -3246,18 +3246,18 @@ pub impl Comp {
         self.arena.finalAwaitIndexSlots.set(i: slot, value: self.arena.finalAwaits.count())
     }
 
-    inout fn finalizeCurrentBodyAwait(exprId: U64, operandExprId: U64) {
+    inout fn finalizeCurrentBodyAwait(exprId: U64, operandExprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
-        if bodyId == 0U64 { return }
+        if bodyId == 0U64 { return <Result.Ok value=() /> }
         val promise = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: operandExprId, term: self.semanticExprTerm(exprId: operandExprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        if promise == 0U64 { return }
+        if promise == 0U64 { return <Result.Ok value=() /> }
         // The completed operand type carries the instantiated Promise payload;
         // a parametric await expression may still refer to its source binder.
         val promiseType = self.arena.typeAt(index: promise)
         mut val result = self.groundAndRecordBodyType(ref: self.semanticExprTerm(exprId: exprId), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         if promiseType.args.count() == 1U64 { result = promiseType.args[0U64] }
-        self.enqueueFinalDestruction(typeRef: promise)
-        self.enqueueFinalDestruction(typeRef: result)
+        try self.enqueueFinalDestruction(typeRef: promise)
+        try self.enqueueFinalDestruction(typeRef: result)
         self.putFinalAwait(fact: <FinalAwaitResolution bodyId=bodyId exprId=exprId operandExprId=operandExprId promiseTypeRef=promise resultTypeRef=result />)
         if self.traceCodegen {
             eprint(text: "[trace-codegen] final-await body=")
@@ -3270,6 +3270,7 @@ pub impl Comp {
             self.traceMonoTypeHead(ref: result)
             eprint(text: "\n")
         }
+        return <Result.Ok value=() />
     }
 
     inout fn rebuildFinalTryIndex(capacity: U64) {
@@ -5009,7 +5010,7 @@ pub impl Comp {
         self.arena.finalTryIndexSlots = []
         self.arena.finalFors = []
         self.arena.finalForIndexSlots = []
-        self.finalizeDiscriminantType()
+        try self.finalizeDiscriminantType()
         self.monoWork.bodyInstances = []
         // `collectFnInsts` is provisional layout discovery. Its source-shaped
         // instances are not executable identities and must not cross this
@@ -5059,7 +5060,7 @@ pub impl Comp {
                     isEntry = false
                 }
                 if isEntry {
-                    self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64)
+                    (try self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64))
                 }
             }
             fi += 1U64
@@ -5085,11 +5086,11 @@ pub impl Comp {
                 val signature = self.arena.bodySignature(bodyId: bodyId)
                 // The selected body's receiver can carry a different view
                 // from the caller's value and is not an explicit parameter.
-                self.enqueueFinalDestruction(typeRef: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef)
-                self.enqueueFinalDestruction(typeRef: signature.resultType)
+                try self.enqueueFinalDestruction(typeRef: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef)
+                try self.enqueueFinalDestruction(typeRef: signature.resultType)
                 mut val parameter = 0U64
                 while parameter < signature.parameterTypes.count() {
-                    self.enqueueFinalDestruction(typeRef: signature.parameterTypes[parameter])
+                    try self.enqueueFinalDestruction(typeRef: signature.parameterTypes[parameter])
                     parameter += 1U64
                 }
                 bodyI += 1U64
@@ -5106,24 +5107,24 @@ pub impl Comp {
             // Destructors can call ordinary functions and construct further
             // values. Both queues must close together, before the freeze.
             while aggregateI < self.arena.finalAggregates.count() {
-                self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef)
+                try self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef)
                 aggregateI += 1U64
             }
             while callI < self.finalCalleeCount() {
                 val call = self.arena.finalCallees[callI]
-                self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
-                self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
+                try self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
+                try self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
                 mut val parameter = 0U64
                 while parameter < call.parameterTypeRefs.len {
-                    self.enqueueFinalDestruction(typeRef: self.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter))
+                    try self.enqueueFinalDestruction(typeRef: self.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter))
                     parameter += 1U64
                 }
                 callI += 1U64
             }
             while storageI < self.arena.finalStorages.count() {
                 val storage = self.arena.finalStorages[storageI]
-                self.enqueueFinalDestruction(typeRef: storage.sourceTypeRef)
-                self.enqueueFinalDestruction(typeRef: storage.targetTypeRef)
+                try self.enqueueFinalDestruction(typeRef: storage.sourceTypeRef)
+                try self.enqueueFinalDestruction(typeRef: storage.targetTypeRef)
                 storageI += 1U64
             }
         }
@@ -5727,11 +5728,12 @@ pub impl Comp {
         return true
     }
 
-    inout fn collectRecordedValueLayout(exprId: U64) {
+    inout fn collectRecordedValueLayout(exprId: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
-        if bodyId == 0U64 { return }
+        if bodyId == 0U64 { return <Result.Ok value=() /> }
         val type = self.groundRecordedValueTypeForBody(bodyId: bodyId, exprId: exprId, term: self.semanticExprTerm(exprId: exprId), selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        self.enqueueFinalDestruction(typeRef: type)
+        try self.enqueueFinalDestruction(typeRef: type)
+        return <Result.Ok value=() />
     }
 
     // Capturing is a use of a lexical binding, including a write-only place.
@@ -5763,10 +5765,10 @@ pub impl Comp {
             Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {
                 // A literal used directly as a condition or operand need not
                 // cross a call or storage boundary that would root its type.
-                self.collectRecordedValueLayout(exprId: exprId)
+                try self.collectRecordedValueLayout(exprId: exprId)
             }
-            Expr.Str(start: _, len: _) => { self.collectRecordedValueLayout(exprId: exprId) }
-            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { self.collectRecordedValueLayout(exprId: exprId) }
+            Expr.Str(start: _, len: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Ident(val start, val len) => { try self.scanBindingInsts(exprId: exprId, start: start, len: len) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 // a closure literal lexically inside another closure body: the inner
@@ -5863,7 +5865,7 @@ pub impl Comp {
                 try self.scanExprInsts(exprId: recv)
                 // Every intermediate view is a typed value, even when only
                 // the outermost view reaches a call or storage boundary.
-                self.collectRecordedValueLayout(exprId: exprId)
+                try self.collectRecordedValueLayout(exprId: exprId)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.scanExprInsts(exprId: recv)
@@ -5998,7 +6000,7 @@ pub impl Comp {
             // an unrecorded call solely because it crossed the async lowering seam.
             Expr.Await(val operand) => {
                 try self.scanExprInsts(exprId: operand)
-                self.finalizeCurrentBodyAwait(exprId: exprId, operandExprId: operand)
+                try self.finalizeCurrentBodyAwait(exprId: exprId, operandExprId: operand)
             }
             _ => {}
         }

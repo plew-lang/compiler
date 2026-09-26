@@ -375,31 +375,33 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkFieldReadVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+    inout fn checkFieldReadVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                self.errorAt(offset: offset, msg: "field is private (visible only in its type's anonymous impl)")
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (visible only in its type's anonymous impl)") />
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkFieldWriteVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+    inout fn checkFieldWriteVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                self.errorAt(offset: offset, msg: "field is private (writable only in its type's anonymous impl)")
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (writable only in its type's anonymous impl)") />
             }
         } else {
             if v == 1U64 {
                 if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                    self.errorAt(offset: offset, msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl") />
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
+    inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) -> Result[(), CompileDiagnostic] {
         if !(mf.isPub) {
             // A non-public extension member is private to the module that
             // contributes it to the named bundle, not to an anonymous impl of
@@ -408,13 +410,13 @@ pub impl Comp {
             if mf.extId != 0U64 && mf.body != 0U64 {
                 if self.blockStmtCount(blkId: mf.body) > 0U64 {
                     if self.moduleOf(offset: offset) == self.moduleOf(offset: self.stmtPrincipalOffset(sid: self.blockStmtAt(blkId: mf.body, index: 0U64))) {
-                        return
+                        return <Result.Ok value=() />
                     }
                 }
             }
             if mf.isProvided && mf.providedOwnerMod != 4000000000U64 {
                 if self.moduleOf(offset: offset) == mf.providedOwnerMod {
-                    return
+                    return <Result.Ok value=() />
                 }
             }
             // A trait-provided member is authored in the trait's own module
@@ -425,36 +427,37 @@ pub impl Comp {
             // and makes lexical cache completeness change visibility.
             if mf.provTraitOwner != 0U64 {
                 if self.moduleOf(offset: offset) == self.traitModuleByOwner(owner: mf.provTraitOwner) {
-                    return
+                    return <Result.Ok value=() />
                 }
             }
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                self.errorAt(offset: offset, msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)") />
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) {
+    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) -> Result[(), CompileDiagnostic] {
         if isEnum {
-            return
+            return <Result.Ok value=() />
         }
         if typeLen == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         // a record's canonical name begins '(' — its fields are structurally publiself.
         if self.arena.bytes[typeStart] == '(' {
-            return
+            return <Result.Ok value=() />
         }
         mut val sidx: U64 = self.structIndexByName(start: typeStart, len: typeLen)
         if sidx >= self.arena.structCount() {
             sidx = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
         }
         if sidx >= self.arena.structCount() {
-            return
+            return <Result.Ok value=() />
         }
         val sd: StructDef = self.arena.structAt(index: sidx)
         if sd.isExtern {
-            return
+            return <Result.Ok value=() />
         }
         val inOwnerImpl: Bool = self.inAnonImplOf(ownerStart: typeStart, ownerLen: typeLen)
         mut val i: U64 = 0
@@ -467,9 +470,9 @@ pub impl Comp {
                     // Declaration defaults retain their source offset for diagnostics.
                     if field.isWritten() {
                         if v == 0U64 {
-                            self.errorAt(offset: field.offset, msg: "cannot set a private field when constructing outside its type's anonymous impl")
+                            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "cannot set a private field when constructing outside its type's anonymous impl") />
                         } else {
-                            self.errorAt(offset: field.offset, msg: "cannot set a `pub(get)` field when constructing outside its type's anonymous impl (it is read-only outside the type)")
+                            return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "cannot set a `pub(get)` field when constructing outside its type's anonymous impl (it is read-only outside the type)") />
                         }
                     }
                 }
@@ -485,15 +488,16 @@ pub impl Comp {
                 while ci < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: ci)
                     if field.requiresFactoryAccess() {
-                        self.errorAt(offset: field.offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
+                        return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)") />
                     }
                     ci += 1U64
                 }
                 if fields.len == 0U64 {
-                    self.errorAt(offset: offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)") />
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn structHasPubFactory(nameId: U64) -> Bool {

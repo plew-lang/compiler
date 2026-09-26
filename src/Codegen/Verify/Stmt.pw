@@ -342,7 +342,7 @@ pub impl Comp {
                 // field-write visibility on the base's owner type.
                 val bt: TypeInfo = self.typeOf(id: fbase)
                 if bt.kind == 2 {
-                    self.checkFieldWriteVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                    try self.checkFieldWriteVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                 }
                 try self.verifyExpr(id: fbase)
             }
@@ -388,7 +388,7 @@ pub impl Comp {
                     val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
-                        self.checkFieldWriteVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                        try self.checkFieldWriteVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                     }
                 }
                 try self.verifyExpr(id: base)

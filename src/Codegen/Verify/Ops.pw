@@ -394,11 +394,11 @@ pub impl Comp {
                 }
             }
             try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
-            self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+            try self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
                 val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-                self.checkFieldReadVis(ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                try self.checkFieldReadVis(ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             }
         }
         return <Result.Ok value=() />
@@ -406,7 +406,7 @@ pub impl Comp {
 
     inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if mf < self.arena.functionCount() {
-                self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.functionAt(index: mf), offset: nameStart)
+                try self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.functionAt(index: mf), offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
                 // value that is immediately discarded — spec/03).

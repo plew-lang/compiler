@@ -18,17 +18,18 @@ pub impl Comp {
 
     // Synthetic control-flow values need the same finalized ownership facts
     // as authored values, before Mid starts constructing bodies.
-    inout fn finalizeDiscriminantType() {
+    inout fn finalizeDiscriminantType() -> Result[(), CompileDiagnostic] {
         self.arena.loweringDiscriminantType = 0U64
         val name = self.internBytes(s: "I64")
         val term = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
         match self.arcClassOfRef(ref: term) {
             ArcClass.Scalar => {
-                self.enqueueFinalDestruction(typeRef: term)
+                try self.enqueueFinalDestruction(typeRef: term)
                 self.arena.loweringDiscriminantType = term
             }
-            _ => { self.errorAt(offset: name.nameStart, msg: "internal error: discriminant requires a primitive scalar type") }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: name.nameStart, msg: "internal error: discriminant requires a primitive scalar type") /> }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn finalDestructorCallIsValid(call: FinalDestructorCall) -> Bool {
@@ -120,11 +121,11 @@ pub impl Comp {
 
     // Collect shape first; no unfinished recursive node is interpreted as
     // release-free. Propagate positive effects over reverse dependency edges.
-    inout fn enqueueFinalDestruction(typeRef: U64) {
-        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
-        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
+    inout fn enqueueFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
         val start = self.arena.finalDestructions.count()
-        self.collectFinalDestruction(typeRef: typeRef)
+        try self.collectFinalDestruction(typeRef: typeRef)
         val count = self.arena.finalDestructions.count() - start
         mut val needs: Array[Bool] = []
         mut val heads: Array[U64] = []
@@ -190,6 +191,7 @@ pub impl Comp {
             self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn recordFinalReleaseDependency(typeRef: U64, owner: U64, start: U64, needs: inout Array[Bool], heads: inout Array[U64], edges: inout Array[U64]) {
@@ -221,9 +223,9 @@ pub impl Comp {
         return needs[identity - 1U64 - start]
     }
 
-    inout fn collectFinalDestruction(typeRef: U64) {
-        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
-        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return }
+    inout fn collectFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
         val type = self.arena.typeAt(index: typeRef)
         val term = self.arena.typeTerms[typeRef]
         mut val bucket = term.nameId
@@ -253,8 +255,8 @@ pub impl Comp {
             self.collectRecordLayout(ref: typeRef)
             val layout = self.recordStructIndex(ref: typeRef)
             if layout >= self.arena.structCount() {
-                self.errorAt(offset: type.nameStart, msg: "internal error: finalized record has no physical layout")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: finalized record has no physical layout") />
+                return <Result.Ok value=() />
             }
             structLayout = layout + 1U64
             fields = type.recordFieldTerms
@@ -267,7 +269,7 @@ pub impl Comp {
             underlying = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
             if underlying == typeRef { underlying = 0U64 }
             if underlying != 0U64 {
-                self.collectFinalDestruction(typeRef: underlying)
+                try self.collectFinalDestruction(typeRef: underlying)
             } else {
                 // Structural layout is independent of the specialized ARC
                 // action (String/Buffer/Ref/Promise). Freeze declared fields
@@ -280,7 +282,7 @@ pub impl Comp {
                     if declaration.isUnique {
                         val function = self.structOwnDeinitFi(sidx: structure)
                         if function < self.arena.functionCount() {
-                            destructor = self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef)
+                            destructor = (try self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef))
                         }
                     }
                     mut val field = 0U64
@@ -307,9 +309,9 @@ pub impl Comp {
                             variant += 1U64
                         }
                     }
-                    ArcClass.BufferLike(elem: val element) => { self.collectFinalDestruction(typeRef: element) }
-                    ArcClass.RefCell(inst: val instance) => { self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
-                    ArcClass.PromiseCell(inst: val instance) => { self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.BufferLike(elem: val element) => { try self.collectFinalDestruction(typeRef: element) }
+                    ArcClass.RefCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.PromiseCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
                     // Weak references do not own their pointee. Erased values
                     // close their concrete owners at construction instead.
                     ArcClass.WeakCell(inst: _) => {}
@@ -322,9 +324,10 @@ pub impl Comp {
         }
         mut val field = 0U64
         while field < fields.count() {
-            self.collectFinalDestruction(typeRef: fields[field])
+            try self.collectFinalDestruction(typeRef: fields[field])
             field += 1U64
         }
         self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef isUnique=self.typeTermIsUnique(ref: typeRef) ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        return <Result.Ok value=() />
     }
 }

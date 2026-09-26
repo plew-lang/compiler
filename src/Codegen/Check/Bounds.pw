@@ -1258,7 +1258,7 @@ pub impl Comp {
     // invokes this before the instance enters the semantic worklist, so every
     // emitted generic body is checked by the same path regardless of whether
     // its substitutions came from arguments, a receiver, or an expected result.
-    inout fn checkOneFnInstBounds(fin: FnInst) {
+    inout fn checkOneFnInstBounds(fin: FnInst) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fin.fnIdx)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
@@ -1270,7 +1270,7 @@ pub impl Comp {
                     if lhs < self.arena.typeCount() {
                         val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
                         if !ok {
-                            self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
+                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
                         }
                     }
                     bi += 1
@@ -1288,7 +1288,7 @@ pub impl Comp {
                             // location — no deferral to a deeper monomorphization level).
                             val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: fin.args[pi], constraint: constraint)
                             if !ok {
-                                self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
+                                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
                             }
                         }
                     }
@@ -1300,6 +1300,7 @@ pub impl Comp {
                 bi += 1
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Shared declaration-receiver matcher. It is also the source of truth for
@@ -1319,10 +1320,10 @@ pub impl Comp {
     // substitution by the same directional pattern match used for conformance
     // proofs, but run it for the one BodyInstance that finalization enqueues
     // rather than sweeping every discovered generic layout up front.
-    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64) {
-        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.typeCount() { return }
+    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64) -> Result[(), CompileDiagnostic] {
+        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
-        if receiverEnv.conformIdx == 0U64 { return }
+        if receiverEnv.conformIdx == 0U64 { return <Result.Ok value=() /> }
         // Start with method-owned substitutions carried by the final callable,
         // then replace only binders proven by the receiver pattern. This keeps
         // `impl[T] Box[Array[T]]` structural while still checking a method's
@@ -1358,12 +1359,13 @@ pub impl Comp {
                 }
                 if lhs != 0U64 && lhs < self.arena.typeCount() {
                     if !(self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)) {
-                        self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                        return <Result.Err error=self.diagnosticAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`") />
                     }
                 }
             }
             bi += 1U64
         }
+        return <Result.Ok value=() />
     }
 
 }
