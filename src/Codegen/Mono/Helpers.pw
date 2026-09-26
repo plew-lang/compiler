@@ -364,11 +364,11 @@ pub impl Comp {
     // Look up a declared field of a concrete struct (isEnum=false) or enum variant
     // (isEnum=true) by name. Returns noField() (nameLen == 0) when not found. Used at
     // construction/access sites to recover a field's boxed flag and declared type.
-    inout fn findFieldDef(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> FieldDef {
+    inout fn findFieldDef(typeRef: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> FieldDef {
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         if isEnum {
             val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
-            val ei: U64 = self.concreteEnumIndex(nStart: typeStart, nLen: typeLen)
+            val ei: U64 = self.enumIndexForType(ref: typeRef)
             if ei >= self.arena.enumCount() {
                 return noField()
             }
@@ -390,7 +390,7 @@ pub impl Comp {
             }
             return noField()
         }
-        val si: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+        val si: U64 = self.structIndexForType(ref: typeRef)
         if si >= self.arena.structCount() {
             return noField()
         }

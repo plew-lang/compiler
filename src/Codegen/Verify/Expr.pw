@@ -203,10 +203,7 @@ pub impl Comp {
                 // silently constructed with garbage (spec/05). (Struct construction is
                 // covered by the backend missing-field check plus field defaults.)
                 if isEnum {
-                    mut val cei: U64 = self.enumIdxByName(start: typeStart, len: typeLen)
-                    if cei >= self.arena.enumCount() {
-                        cei = self.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
-                    }
+                    val cei: U64 = self.enumIndexForType(ref: ty)
                     if cei < self.arena.enumCount() {
                         // a construction naming a variant the enum does not declare
                         // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
@@ -264,11 +261,11 @@ pub impl Comp {
                         // filters typeParams>0 and would miss it — the same hole that let
                         // `Foo[I32]` through for a non-generic `Foo` (spec/06).
                         mut val tpCount: U64 = self.arena.structCount() + self.arena.enumCount() + 1U64
-                        val gsi: U64 = self.anyStructIndex(nameStart: typeStart, nameLen: typeLen)
+                        val gsi: U64 = self.structIndexForType(ref: ty)
                         if gsi < self.arena.structCount() {
                             tpCount = self.arena.structAt(index: gsi).typeParams.count()
                         } else {
-                            val gei: U64 = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
+                            val gei: U64 = self.enumIndexForType(ref: ty)
                             if gei < self.arena.enumCount() {
                                 tpCount = self.arena.enumAt(index: gei).typeParams.count()
                             }
@@ -296,7 +293,7 @@ pub impl Comp {
                 mut val nonGenSidx: U64 = self.arena.structCount()
                 if !(isEnum) {
                     if ty == 0U64 || self.arena.typeAt(index: ty).args.count() == 0U64 {
-                        val sidxC: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+                        val sidxC: U64 = self.structIndexForType(ref: ty)
                         if sidxC < self.arena.structCount() {
                             if self.arena.structAt(index: sidxC).typeParams.count() == 0U64 && !self.arena.structAt(index: sidxC).isExtern {
                                 nonGenSidx = sidxC
