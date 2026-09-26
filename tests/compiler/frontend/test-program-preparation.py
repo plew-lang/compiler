@@ -54,4 +54,12 @@ assert result.returncode==0,(result.returncode,result.stderr)
 assert result.stdout==Path(__file__).with_name('DiagnosticValues.out').read_bytes(),result.stdout
 assert result.stderr==Path(__file__).with_name('DiagnosticValues.err').read_bytes(),result.stderr
 print('PASS returning diagnostic rendering',flush=True)
+# Literal decoding reports semantic failures without terminating its caller.
+subprocess.run([*watch,str(carrier),'--emit-object',str(out/'literal.o'),str(Path(__file__).with_name('StringLiteralValues.pw'))],cwd=c,check=True)
+subprocess.run([*watch,'/usr/bin/clang','-O2',str(out/'literal.o'),str(out/'runtime.c'),'-o',str(out/'literal')],check=True)
+result=subprocess.run([*watch,str(out/'literal')],capture_output=True)
+assert result.returncode==0,(result.returncode,result.stderr)
+assert result.stdout==Path(__file__).with_name('StringLiteralValues.out').read_bytes(),result.stdout
+assert result.stderr==b'',result.stderr
+print('PASS returning string literal decoding',flush=True)
 (out/'results.json').write_text(json.dumps({'status':'passed','cases':results,'dependencies':deps},indent=2))

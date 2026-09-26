@@ -1,0 +1,7 @@
+`\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)
+`\u{...}` escape is a UTF-16 surrogate (U+D800..U+DFFF), not a valid Unicode scalar (spec/02)
+240
+144
+128
+128
+0

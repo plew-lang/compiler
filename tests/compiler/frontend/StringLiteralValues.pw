@@ -1,0 +1,20 @@
+// Lexically valid source spans can fail semantically without terminating the host.
+import ../../../src/StringLiteral with { decodeStringLiteral }
+import @Std/Io with { print }
+
+fn inspect(source: Array[U8]) {
+    match decodeStringLiteral(source: source, start: 0U64, len: source.count()) {
+        Result.Ok(val value) => {
+            for byte in value { print(byte) }
+        }
+        Result.Err(val error) => { print(error) }
+    }
+}
+
+fn main() {
+    // "\u{110000}" and "\u{D800}" expressed as source bytes.
+    inspect(source: [34U8, 92U8, 117U8, 123U8, 49U8, 49U8, 48U8, 48U8, 48U8, 48U8, 125U8, 34U8])
+    inspect(source: [34U8, 92U8, 117U8, 123U8, 68U8, 56U8, 48U8, 48U8, 125U8, 34U8])
+    // A later valid U+10000 must still produce F0 90 80 80 and the trailing NUL.
+    inspect(source: [34U8, 92U8, 117U8, 123U8, 49U8, 48U8, 48U8, 48U8, 48U8, 125U8, 34U8])
+}
