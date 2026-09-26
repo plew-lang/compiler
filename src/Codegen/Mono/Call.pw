@@ -3474,7 +3474,28 @@ pub impl Comp {
                 }
             }
         }
-        self.putFinalReturn(fact: <FinalReturnResolution bodyId=bodyId exprId=exprId targetTypeRef=targetRef conversion=(try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef)) />)
+        val conversion = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef))
+        if self.traceCodegen {
+            match conversion {
+                ValueConversionProof.Missing => {
+                    eprint(text: "[trace-codegen] missing return conversion body=")
+                    eprintU64(n: bodyId)
+                    eprint(text: " expr=")
+                    eprintU64(n: exprId)
+                    eprint(text: " source=")
+                    eprintU64(n: sourceRef)
+                    eprint(text: ":")
+                    self.traceMonoTypeHead(ref: sourceRef)
+                    eprint(text: " target=")
+                    eprintU64(n: targetRef)
+                    eprint(text: ":")
+                    self.traceMonoTypeHead(ref: targetRef)
+                    eprint(text: "\n")
+                }
+                _ => {}
+            }
+        }
+        self.putFinalReturn(fact: <FinalReturnResolution bodyId=bodyId exprId=exprId targetTypeRef=targetRef conversion=conversion />)
         return <Result.Ok value=() />
     }
 

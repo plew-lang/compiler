@@ -22,19 +22,10 @@ pub impl Comp {
                 return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
             }
             val base: TypeInfo = self.typeInfoOfName(start: t.nameStart, len: t.nameLen, isArray: false)
-            // A lexical type parameter is a semantic term, not merely a spelling.
-            // Keep its ref even though its scalar TypeInfo has no runtime shape:
-            // otherwise `Buffer[E][i]` reconstructs a fresh name-only `E`, losing
-            // ParamId before the enclosing generic body can substitute it.
-            if t.paramId != 0U64 {
-                return <TypeInfo kind=base.kind nameStart=base.nameStart nameLen=base.nameLen ref=ref viewExtId=t.viewExtId />
-            }
-            // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
-            // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
-            if t.viewExtId != 0U64 || t.viewIds.count() > 0U64 {
-                return <TypeInfo kind=base.kind nameStart=base.nameStart nameLen=base.nameLen ref=base.ref viewExtId=t.viewExtId />
-            }
-            return base
+            // TypeInfo is a legacy shape adapter, not a new authority for
+            // nominal identity. Keep the supplied term even without type
+            // arguments; reconstructing it from a name loses module identity.
+            return <TypeInfo kind=base.kind nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
         }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             // kind 3 (element by name) as everywhere, but CARRY the structured
