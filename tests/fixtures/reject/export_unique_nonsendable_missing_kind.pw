@@ -1,4 +1,4 @@
-export unique nonsendable Foo {
+pub unique nonsendable Foo {
 }
 
 fn main() {}

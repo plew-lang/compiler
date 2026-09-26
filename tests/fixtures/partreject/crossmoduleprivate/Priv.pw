@@ -3,6 +3,6 @@
 fn shared(code: I64) -> I64 {
     return code * 100
 }
-export fn touch() -> I64 {
+pub fn touch() -> I64 {
     return shared(code: 1I64)
 }

@@ -1,4 +1,4 @@
-export trait Convert[From] {
+pub trait Convert[From] {
     type Output
     fn source() -> String
 }

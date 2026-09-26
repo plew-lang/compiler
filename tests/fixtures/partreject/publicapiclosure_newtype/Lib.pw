@@ -2,4 +2,4 @@ struct Hidden {
     pub val n: I64
 }
 
-export newtype Token = Hidden
+pub newtype Token = Hidden

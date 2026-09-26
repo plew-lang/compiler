@@ -5,7 +5,7 @@ fn check(origin: ImportOrigin, module: U64, target: U64) {
     if origin.localModule != module || origin.targetModule != target { panic "module provenance changed" }
 }
 fn main() {
-    mut val modules: Modules = <Modules />
+    mut val modules: Modules = <Modules.empty />
     modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=0U64 sourceStart=10U64 sourceLength=7U64 targetModule=9U64 />, nameId: 7U64, reExport: false)
     mut val copy = modules
     modules.registerImportOrigin(<ImportOrigin localStart=30U64 localLength=5U64 localModule=8U64 sourceStart=10U64 sourceLength=7U64 targetModule=4U64 />, nameId: 7U64, reExport: true)

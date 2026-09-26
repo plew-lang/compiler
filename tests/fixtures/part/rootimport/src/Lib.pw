@@ -1,1 +1,1 @@
-export fn twice(n: I64) -> I64 { return n * 2 }
+pub fn twice(n: I64) -> I64 { return n * 2 }

@@ -12,7 +12,7 @@ require() {
     fi
 }
 
-require 'export struct SemanticClosureParameter' src/Ir.pw
+require 'pub struct SemanticClosureParameter' src/Ir.pw
 require 'pub val bindingTarget: U64 = 0U64' src/Ir.pw
 require 'pub val bodyBlock: U64 = 0U64' src/Ir.pw
 require 'pub val parameters: Array[SemanticClosureParameter] = []' src/Ir.pw
@@ -46,7 +46,7 @@ require 'typeTerm=state.returnTypeTerm' src/Mid/Build.pw
 # Closure construction registers exactly one parametric body in the canonical
 # arena. LLVM will later instantiate that registered body; it must not create
 # an ad-hoc body by walking the AST.
-require 'export struct MidClosureBody' src/Mid/Ir.pw
+require 'pub struct MidClosureBody' src/Mid/Ir.pw
 require 'pub mut val closureBodies: Array[MidClosureBody] = []' src/Mid/Ir.pw
 require 'ensureParametricMidClosureBody' src/Mid/Build.pw
 require 'ensureParametricMidClosureBody(c: inout c, closure: closure)' src/Mid/Build.pw

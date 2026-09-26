@@ -1,0 +1,3 @@
+// Module-scoped visibility permits this use; construction and later access are independent.
+pub fn helper() {}
+fn main() { helper() }

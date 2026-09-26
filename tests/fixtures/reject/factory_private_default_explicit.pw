@@ -1,3 +1,0 @@
-struct Cache { val value: I64 = 7I64 }
-pub impl Cache { factory }
-fn main() { val cache = <Cache value=9I64 /> }

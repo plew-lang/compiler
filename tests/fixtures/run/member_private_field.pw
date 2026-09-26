@@ -1,5 +1,5 @@
-// Reading an unmarked (private) field from outside the type's anonymous impl is
-// a visibility error (spec/05): private members are anonymous-impl-only.
+// Module-scoped visibility permits this use; construction and later access are independent.
+import @Std/Io with { print }
 struct Box { val secret: I64 }
 pub impl Box {
     factory initial(secret: I64) { return <Box secret=secret /> }
@@ -7,4 +7,5 @@ pub impl Box {
 fn main() {
     val b = <Box.initial secret=5 />
     val x: I64 = b.secret
+    print(x)
 }

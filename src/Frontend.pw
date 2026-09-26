@@ -160,7 +160,7 @@ pub struct Comp {
     // by codegen.
     pub mut val monoWork: MonoWork = <MonoWork />
     // module identity + cross-module visibility tables (spec/15): see `Modules`.
-    pub mut val modules: Modules = <Modules />
+    pub mut val modules: Modules = <Modules.empty />
 }
 
 // The effective declared type of a `val`/`mut val` binding: the written

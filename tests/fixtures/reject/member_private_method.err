@@ -1,1 +1,0 @@
-method is private (callable only in its type's anonymous impl; put it in a `pub impl`)

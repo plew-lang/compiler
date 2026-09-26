@@ -111,7 +111,7 @@ fn missingAmbientDestruction() {
     }
 }
 
-export fn checkInvariantDiagnostics() {
+pub fn checkInvariantDiagnostics() {
     missingShape()
     duplicateOrigin()
     conflictingSelf()

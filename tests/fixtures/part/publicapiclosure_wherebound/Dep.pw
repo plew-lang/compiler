@@ -1,1 +1,1 @@
-export trait Marker {}
+pub trait Marker {}

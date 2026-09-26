@@ -5,7 +5,7 @@ import re
 root = Path(__file__).resolve().parents[3]
 frontend = (root / 'src/Frontend.pw').read_text()
 driver = (root / 'src/FrontendDriver.pw').read_text()
-analysis = frontend.split('export fn analyzeFrontend(', 1)[1]
+analysis = frontend.split('pub fn analyzeFrontend(', 1)[1]
 assert not re.search(r'\b(?:argCount|readStdin|computeStdRoot)\(', analysis)
 assert 'argAt(entryArgIdx)' not in analysis
 assert 'FrontendInput.File(path:' in analysis

@@ -1,11 +1,11 @@
 import ./A with { A }
-export ./A with { A }
+pub import ./A with { A }
 
-export trait B {
+pub trait B {
     fn b() -> I64
 }
 
-export struct S {
+pub struct S {
     pub val value: I64
 }
 

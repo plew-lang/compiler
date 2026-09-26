@@ -6,10 +6,10 @@
 // clean front-end reject — root③(iv): undefined-identifier detection no longer
 // depends on emission / reachability.
 
-export fn used() -> I64 {
+pub fn used() -> I64 {
     return 1
 }
 
-export fn unused() -> I64 {
+pub fn unused() -> I64 {
     return mysteryValue
 }

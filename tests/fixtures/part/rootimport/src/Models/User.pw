@@ -1,1 +1,1 @@
-export fn userId() -> I64 { return 777 }
+pub fn userId() -> I64 { return 777 }

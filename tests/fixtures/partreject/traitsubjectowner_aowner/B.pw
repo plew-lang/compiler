@@ -1,6 +1,6 @@
-export trait B {}
+pub trait B {}
 
-export struct S {}
+pub struct S {}
 
 pub impl S {
     factory

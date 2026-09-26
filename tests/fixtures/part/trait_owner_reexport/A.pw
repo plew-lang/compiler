@@ -1,4 +1,4 @@
-export trait Leaked {}
+pub trait Leaked {}
 
 pub impl Leaked {
     fn source() -> I64 { return 10I64 }

@@ -1,4 +1,4 @@
-export trait Stepper {
+pub trait Stepper {
     fn step() -> I64
 }
 
@@ -8,7 +8,7 @@ impl Stepper {
     }
 }
 
-export struct Counter {
+pub struct Counter {
     pub val n: I64
 }
 

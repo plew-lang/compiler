@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Ir with { Modules }
 fn main() {
-    mut val modules: Modules = <Modules />
+    mut val modules: Modules = <Modules.empty />
     if modules.isSyntaxRoot(moduleId: 0U64) { panic "empty module table" }
     modules.registerSourceFile(start: 0U64, length: 2U64, moduleId: 0U64, path: "/a/src/_.pw")
     if modules.isSyntaxRoot(moduleId: 0U64) { panic "non-Syntax root" }

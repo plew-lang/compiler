@@ -5,7 +5,7 @@ fn message() -> String {
     return "decl" + "aration"
 }
 
-export fn choose(value: String = message()) -> String { return value }
+pub fn choose(value: String = message()) -> String { return value }
 
 val secret: String = "declaration-global"
-export fn chooseGlobal(value: String = secret) -> String { return value }
+pub fn chooseGlobal(value: String = secret) -> String { return value }

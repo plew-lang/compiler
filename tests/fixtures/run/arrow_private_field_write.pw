@@ -1,5 +1,4 @@
-// Write counterpart of arrow_private_field_read: `r->n = v` on a private pointee field must
-// be rejected (spec/05). `->` write visibility follows the pointee type, like `c.n = v`.
+// Module-scoped visibility permits this use; construction and later access are independent.
 import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 struct C { mut val n: I32 }
@@ -9,4 +8,5 @@ pub impl C {
 fn main() {
     val r: MutableRef[C] = <MutableRef[C] value=<C.initial n=5 /> />
     r->n = 9I32
+    print(r->n)
 }

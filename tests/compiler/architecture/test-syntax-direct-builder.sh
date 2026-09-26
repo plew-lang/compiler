@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../../.."
 
 source='../syntax/src/_.pw'
 body=$(awk '
-    /^export fn parseProgramSyntaxInto\(/ { inside = 1 }
+    /^pub fn parseProgramSyntaxInto\(/ { inside = 1 }
     inside { print }
     inside && /^}$/ { exit }
 ' "$source")

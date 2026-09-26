@@ -1,1 +1,1 @@
-constructing this type outside its anonymous impl requires it to declare a public factory
+construction outside the defining module requires a public factory

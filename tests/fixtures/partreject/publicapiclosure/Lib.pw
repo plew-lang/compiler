@@ -3,12 +3,12 @@ struct Hidden {
 }
 pub impl Hidden { factory }
 
-export struct Box {
+pub struct Box {
     pub val h: Hidden
 }
 
 pub impl Box { factory }
 
-export fn make() -> Hidden {
+pub fn make() -> Hidden {
     return <Hidden n=1I64 />
 }

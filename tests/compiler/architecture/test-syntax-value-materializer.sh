@@ -35,9 +35,9 @@ check_adapter() {
     fi
 }
 
-check_adapter parseItem '^export fn parseItem\\('
-check_adapter parseProgramAst '^export fn parseProgramAst\\('
-check_adapter parseExprAst '^export fn parseExprAst\\('
-check_adapter parseBlockAst '^export fn parseBlockAst\\('
+check_adapter parseItem '^pub fn parseItem\\('
+check_adapter parseProgramAst '^pub fn parseProgramAst\\('
+check_adapter parseExprAst '^pub fn parseExprAst\\('
+check_adapter parseBlockAst '^pub fn parseBlockAst\\('
 
 echo "PASS syntax-value-materializer" >&2

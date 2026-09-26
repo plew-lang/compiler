@@ -3066,7 +3066,7 @@ pub struct Modules {
     pub mut val randomModule: U64 = 4000000000U64
     pub mut val asyncModule: U64 = 4000000000U64
 }
-pub impl Modules { factory }
+pub impl Modules { factory empty() { return <Modules /> } }
 
 // Monomorphization work lists + derived tables, collected after parsing and
 // consumed by codegen. `genInsts`: concrete generic instantiations to emit

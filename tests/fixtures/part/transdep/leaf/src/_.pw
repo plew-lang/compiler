@@ -1,1 +1,1 @@
-export fn leafVal() -> I64 { return 100I64 }
+pub fn leafVal() -> I64 { return 100I64 }

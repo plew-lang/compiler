@@ -156,7 +156,7 @@ assert 'Array[Optional[MidExecutableBody]]' in program
 assert 'buildParametricMidGlobalInit(' in program
 assert 'ensureParametricMidClosureBody(' in program
 assert 'buildMidBodyForInstance(' in program
-entry = Path('src/Backend.pw').read_text().split('export fn emitLlvm(', 1)[1]
+entry = Path('src/Backend.pw').read_text().split('pub fn emitLlvm(', 1)[1]
 assert entry.index('PreparedProgram.prepare(') < entry.index('LLVMContextCreate()')
 analysis = Path('src/PreparedProgram.pw').read_text()
 assert analysis.index('MidExecutableProgram.prepare(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
@@ -176,7 +176,7 @@ PYPREPARE
 python3 - <<'PYVERIFY'
 from pathlib import Path
 source = Path('src/Mid/Verify.pw').read_text()
-body = source.split('export fn verifyExecutableCanonicalMidBody(', 1)[1].split('export fn verifyCanonicalMidBody(', 1)[0]
+body = source.split('pub fn verifyExecutableCanonicalMidBody(', 1)[1].split('pub fn verifyCanonicalMidBody(', 1)[0]
 assert 'verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: true)' in body
 assert 'executable: false' in source
 assert 'MissingOwnershipContract' in source

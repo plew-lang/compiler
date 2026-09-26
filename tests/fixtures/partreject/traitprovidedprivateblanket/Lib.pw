@@ -1,8 +1,8 @@
-export trait Named {
+pub trait Named {
     fn nm() -> I64
 }
 
-export trait Show {
+pub trait Show {
     fn show() -> I64
 }
 
@@ -18,7 +18,7 @@ pub impl Named as Show {
     }
 }
 
-export struct A {
+pub struct A {
     pub val n: I64
 }
 

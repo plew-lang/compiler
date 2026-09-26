@@ -1,4 +1,4 @@
-export struct Secret { val value: I64 }
+pub struct Secret { val value: I64 }
 pub impl Secret {
     factory known() { return <Secret value=2I64 /> }
 }

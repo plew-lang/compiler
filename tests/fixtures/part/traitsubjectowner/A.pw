@@ -1,3 +1,3 @@
-export trait A {
+pub trait A {
     fn a() -> I64
 }

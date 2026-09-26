@@ -10,8 +10,8 @@ from pathlib import Path
 
 ir = Path("src/Ir.pw").read_text()
 for required in [
-    "export struct CallResolutionArgumentRange",
-    "export struct CallEvaluationArgument",
+    "pub struct CallResolutionArgumentRange",
+    "pub struct CallEvaluationArgument",
     "pub val sourceTypeRef: U64",
     "pub val adaptsReceiverView: Bool",
     "pub val arguments: CallResolutionArgumentRange",

@@ -1,4 +1,4 @@
-export struct Secret {
+pub struct Secret {
     val value: I64
     pub(get) mut val observed: I64 = 2I64
 }

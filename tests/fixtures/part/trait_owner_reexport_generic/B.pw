@@ -1,1 +1,1 @@
-export ./A with { Convert }
+pub import ./A with { Convert }

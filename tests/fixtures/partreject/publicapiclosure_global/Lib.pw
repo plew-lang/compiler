@@ -3,4 +3,4 @@ struct Hidden {
 }
 pub impl Hidden { factory }
 
-export val item: Hidden = <Hidden n=1I64 />
+pub val item: Hidden = <Hidden n=1I64 />

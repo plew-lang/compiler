@@ -1,4 +1,4 @@
-export trait Stepper {
+pub trait Stepper {
     fn step() -> I64
 }
 

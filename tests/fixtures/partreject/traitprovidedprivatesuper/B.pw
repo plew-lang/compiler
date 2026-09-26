@@ -1,10 +1,10 @@
 import ./A with { Super }
-export ./A with { Super }
+pub import ./A with { Super }
 
-export trait Sub: Super {
+pub trait Sub: Super {
 }
 
-export fn useSub[T](value: T) -> I64 where T: Sub {
+pub fn useSub[T](value: T) -> I64 where T: Sub {
     return value.privateSuper()
 }
 

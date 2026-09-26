@@ -1,0 +1,7 @@
+// Module-scoped visibility permits this use; construction and later access are independent.
+import @Std/Io with { print }
+struct Box { pub val n: I64 }
+fn main() {
+    val b = <Box n=1 />
+    print(b.n)
+}

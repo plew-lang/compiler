@@ -13,7 +13,7 @@ unique nonsendable enum Token {
     Ready(value: I64)
 }
 
-export unique nonsendable struct ExportedOwner {
+pub unique nonsendable struct ExportedOwner {
     pub val value: I64
 }
 pub impl ExportedOwner { factory }

@@ -1,6 +1,6 @@
-export trait Sub {}
-export trait Sub[Rhs] {}
-export trait Marker {}
+pub trait Sub {}
+pub trait Sub[Rhs] {}
+pub trait Marker {}
 
 struct S {}
 pub impl S { factory }

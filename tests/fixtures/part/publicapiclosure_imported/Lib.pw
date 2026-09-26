@@ -1,5 +1,5 @@
 import ./Dep with { External }
 
-export fn leak() -> External {
+pub fn leak() -> External {
     return <External n=1I64 />
 }

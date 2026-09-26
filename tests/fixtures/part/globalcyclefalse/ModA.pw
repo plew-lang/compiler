@@ -4,4 +4,4 @@
 // false initialization cycle (spec/15).
 val a: I64 = b + 1I64
 val b: I64 = 5I64
-export fn sumA() -> I64 { return a + b }
+pub fn sumA() -> I64 { return a + b }

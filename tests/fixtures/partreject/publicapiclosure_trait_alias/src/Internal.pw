@@ -1,1 +1,1 @@
-export trait PrivateMarker {}
+pub trait PrivateMarker {}

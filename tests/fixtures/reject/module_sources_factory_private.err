@@ -1,1 +1,1 @@
-cannot set a private field when constructing outside its type's anonymous impl
+construction outside the defining module requires a public factory

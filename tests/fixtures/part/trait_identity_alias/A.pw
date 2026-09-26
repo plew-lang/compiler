@@ -1,4 +1,4 @@
-export trait P {}
+pub trait P {}
 
 pub impl P {
     fn value() -> I64 { return 10I64 }

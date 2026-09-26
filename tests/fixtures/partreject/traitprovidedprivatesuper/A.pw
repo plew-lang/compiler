@@ -1,4 +1,4 @@
-export trait Super {
+pub trait Super {
     fn base() -> I64
 }
 
