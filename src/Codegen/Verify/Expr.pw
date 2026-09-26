@@ -493,9 +493,9 @@ pub impl Comp {
                 while ai < arms.len {
                     val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val armMark: U64 = self.scopeMark()
-                    self.checkDestructureComplete(a: arm, scrut: scrut)
-                    self.verifyAddArmBinds(a: arm, scrut: scrut)
-                    self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
+                    try self.checkDestructureComplete(a: arm, scrut: scrut)
+                    try self.verifyAddArmBinds(a: arm, scrut: scrut)
+                    try self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
                     try self.verifyBlock(blockId: arm.body)
                     self.popLocals(mark: armMark)
                     ai += 1
@@ -503,8 +503,8 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.verifyExpr(id: cond)
-                self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
-                self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
+                try self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
+                try self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
                 try self.verifyBlock(blockId: thenBlk)
                 try self.verifyBlock(blockId: elseBlk)
             }
@@ -653,19 +653,20 @@ pub impl Comp {
     // owning statement's verify arm, where the locals env is live, keyed by the
     // lowered init/iter expr id. An unknown/non-record init type is left to the
     // regular per-field machinery (the synthesized Field reads still check).
-    inout fn checkDestructureSite(initId: U64, isElem: Bool) {
+    inout fn checkDestructureSite(initId: U64, isElem: Bool) -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < self.decls.destructureSites.count() {
             val site: DestructureSite = self.decls.destructureSites[si]
             if site.initId == initId && site.isElem == isElem {
-                self.checkDestructureSiteBinds(site: site)
-                return
+                try self.checkDestructureSiteBinds(site: site)
+                return <Result.Ok value=() />
             }
             si += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkDestructureSiteBinds(site: DestructureSite) {
+    inout fn checkDestructureSiteBinds(site: DestructureSite) -> Result[(), CompileDiagnostic] {
         val ti: TypeInfo = self.typeOf(id: site.initId)
         mut val tnStart: U64 = ti.nameStart
         mut val tnLen: U64 = ti.nameLen
@@ -689,16 +690,16 @@ pub impl Comp {
         if site.typeLen > 0U64 {
             if !(spansEqual(c: inout self, aStart: site.typeStart, aLen: site.typeLen, bStart: tnStart, bLen: tnLen)) {
                 if site.isElem {
-                    self.errorAt(offset: site.offset, msg: "for-loop destructure pattern type does not match the element type")
+                    return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "for-loop destructure pattern type does not match the element type") />
                 } else {
-                    self.errorAt(offset: site.offset, msg: "the struct destructure's type name does not match the initializer's type (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "the struct destructure's type name does not match the initializer's type (spec/03)") />
                 }
-                return
+                return <Result.Ok value=() />
             }
         }
         val sidx: U64 = self.structIndexByName(start: tnStart, len: tnLen)
         if sidx >= self.arena.structCount() {
-            return
+            return <Result.Ok value=() />
         }
         val sd: StructDef = self.arena.structAt(index: sidx)
         mut val bi: U64 = 0
@@ -707,14 +708,14 @@ pub impl Comp {
             // each named field must exist on the record (also covers a typo'd
             // `nope: _` discard, which synthesizes no Field read)…
             if !(self.structFieldsContain(fields: sd.fields, fieldStart: bind.fieldStart, fieldLen: bind.fieldLen)) {
-                self.errorAt(offset: bind.offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
+                return <Result.Err error=self.diagnosticAt(offset: bind.offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)") />
             }
             // …and only once.
             mut val bj: U64 = bi + 1U64
             while bj < site.binds.len {
                 val other: Bind = self.bindAt(binds: site.binds, index: bj)
                 if spansEqual(c: inout self, aStart: bind.fieldStart, aLen: bind.fieldLen, bStart: other.fieldStart, bLen: other.fieldLen) {
-                    self.errorAt(offset: other.offset, msg: "this field is destructured more than once — a record destructure names each field exactly once (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: other.offset, msg: "this field is destructured more than once — a record destructure names each field exactly once (spec/03)") />
                 }
                 bj += 1
             }
@@ -723,10 +724,11 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
             if !(self.bindsCoverField(binds: site.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
-                self.errorAt(offset: site.offset, msg: "a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)")
+                return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)") />
             }
             fi += 1
         }
+        return <Result.Ok value=() />
     }
 
     // A struct-destructure pattern `S { … }` must bind OR discard (`field: _`) EVERY
@@ -734,7 +736,7 @@ pub impl Comp {
     // before; now a missing field is a loud error, so adding a field to a struct makes
     // existing patterns fail (catching silent take-misses). Generic-struct patterns
     // (`Box[I32] { … }`) resolve fields via the generic def.
-    inout fn checkDestructureComplete(a: MatchArm, scrut: U64) {
+    inout fn checkDestructureComplete(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
         // a pattern names each field at most once — a duplicate bind would read the
         // same field into two locals while completeness lets another field slip.
         mut val di: U64 = 0
@@ -744,7 +746,7 @@ pub impl Comp {
             while dj < a.binds.len {
                 val other: Bind = self.bindAt(binds: a.binds, index: dj)
                 if spansEqual(c: inout self, aStart: bind.fieldStart, aLen: bind.fieldLen, bStart: other.fieldStart, bLen: other.fieldLen) {
-                    self.errorAt(offset: other.offset, msg: "this field is destructured more than once — a pattern names each field exactly once (spec/05,11)")
+                    return <Result.Err error=self.diagnosticAt(offset: other.offset, msg: "this field is destructured more than once — a pattern names each field exactly once (spec/05,11)") />
                 }
                 dj += 1
             }
@@ -760,18 +762,18 @@ pub impl Comp {
                 mut val fi: U64 = 0
                 while fi < sd.fields.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
-                        self.errorAt(offset: a.enumStart, msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+                        return <Result.Err error=self.diagnosticAt(offset: a.enumStart, msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)") />
                     }
                     fi += 1
                 }
             }
-            return
+            return <Result.Ok value=() />
         }
         // an enum payload destructure `E.V(val a, b: _)`: when the arm binds ANY payload
         // field it must cover EVERY field of the variant (bind or discard) — spec/05,11. A
         // bare tag match `E.V =>` (no binds) matches only the tag and is left alone.
         if a.binds.len == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         val subject: TypeInfo = self.typeOf(id: scrut)
         val ei: U64 = self.enumIndexForType(ref: self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: subject)))
@@ -782,12 +784,13 @@ pub impl Comp {
                 mut val fi: U64 = 0
                 while fi < fs.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
-                        self.errorAt(offset: self.bindAt(binds: a.binds, index: 0U64).offset, msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+                        return <Result.Err error=self.diagnosticAt(offset: self.bindAt(binds: a.binds, index: 0U64).offset, msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`") />
                     }
                     fi += 1
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // A value-position `if`/`match` branch must yield a value. A block yields via `give`
@@ -795,18 +798,19 @@ pub impl Comp {
     // consuming it where a value is expected silently produced 0 / a confusing "literal
     // has no type from context". Reject it with a clear message. A branch that always
     // diverges (return/panic/…) needs no give.
-    inout fn checkBranchYieldsValue(blkId: U64, offset: U64) {
+    inout fn checkBranchYieldsValue(blkId: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if self.blockDiverges(blkId: blkId) {
-            return
+            return <Result.Ok value=() />
         }
         if self.blockGiveExpr(blkId: blkId) >= self.arena.exprs.count() {
-            self.errorAt(offset: offset, msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)") />
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn verifyAddArmBinds(a: MatchArm, scrut: U64) {
+    inout fn verifyAddArmBinds(a: MatchArm, scrut: U64) -> Result[(), CompileDiagnostic] {
         if a.isWildcard {
-            return
+            return <Result.Ok value=() />
         }
         if a.isStruct {
             // a struct destructure requires a scrutinee OF that struct type (spec/11). A
@@ -815,11 +819,12 @@ pub impl Comp {
             val st: TypeInfo = self.typeOf(id: scrut)
             if st.nameLen > 0U64 {
                 if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
-                    self.errorAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type")
+                    return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
             }
         }
         self.addArmBinds(a: a, scrut: scrut)
+        return <Result.Ok value=() />
     }
 
     // Bring an arm's payload binds into scope (no diagnostics) — the bind-registration
