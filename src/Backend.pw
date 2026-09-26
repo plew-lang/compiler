@@ -22,7 +22,7 @@ import ./Mid with { MidParametricBody, MidExecutableBody, MidPreparationError, M
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Diag with { CompileDiagnostic, compileErrorAt, digitStrU }
+import ./Diag with { CompileDiagnostic, DiagnosticLocation, compileErrorAt, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // The initial backend subset is deliberately fail-closed. Keep the reason as
@@ -926,7 +926,7 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     }
     tracePhase(c: inout c, label: "backend:drain:done")
     if !(foundMain) {
-        compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
+        return <LlvmLoweringResult.Failure diagnostic=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="LLVM backend: no `main` function found" /> />
     }
 
     // `--asan`: a normal `.ll` carries no `sanitize_address`
@@ -956,7 +956,7 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
             coverage += 1U64
         }
         if c.requireMid && st.midCoverageBodyIds.count() != 0U64 {
-            exit(code: 1)
+            return <LlvmLoweringResult.Failure diagnostic=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="LLVM backend: required Mid coverage is incomplete" /> />
         }
     }
     return <LlvmLoweringResult.Success module=move module />

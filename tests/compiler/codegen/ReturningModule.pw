@@ -24,8 +24,19 @@ fn lowerInput(path: String, shouldFail: Bool) {
         }
     }
 }
+fn lowerMissingEntry() {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.Text text="fn helper() {}" path="NoEntry.pw" />,
+        sources: <SourceAccess />).unwrap()
+    match lowerLlvm(c: inout compiler) {
+        LlvmLoweringResult.Success(module: val module) => { panic("module without main was accepted") }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message) }
+    }
+}
 fn main() {
     lowerInput(path: argAt(1I64), shouldFail: false)
     lowerInput(path: argAt(2I64), shouldFail: true)
+    lowerMissingEntry()
     lowerInput(path: argAt(1I64), shouldFail: false)
 }
