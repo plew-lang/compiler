@@ -95,7 +95,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkBindsInFields(binds: BindRange, fields: Array[FieldDef]) -> Result[(), CompileDiagnostic] {
+    inout fn checkBindsInFields(binds: BindRange, fields: Array[FieldDef], ownerModule: U64 = 4000000000U64) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < binds.len {
             val bd: Bind = self.bindAt(binds: binds, index: i)
@@ -105,6 +105,9 @@ pub impl Comp {
             while fj < fields.count() {
                 if fields[fj].nameId == qBd {
                     found = true
+                    if ownerModule != 4000000000U64 && fields[fj].vis == 0U64 && self.moduleOf(offset: bd.offset) != ownerModule {
+                        return <Result.Err error=self.diagnosticAt(offset: bd.offset, msg: "field is private (visible only in its defining module)") />
+                    }
                 }
                 fj += 1
             }

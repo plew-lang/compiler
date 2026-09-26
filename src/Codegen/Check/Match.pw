@@ -10,14 +10,16 @@ pub impl Comp {
         if a.isWildcard {
             return <Result.Ok value=() />
         }
+        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: a.enumStart), start: a.enumStart, len: a.enumLen)
+        if identity.nameLen == 0U64 { return <Result.Ok value=() /> }
         if a.isStruct {
-            val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
+            val si: U64 = self.arena.structIndexByOffset(offset: identity.nameStart)
             if si < self.arena.structCount() {
-                try self.checkBindsInFields(binds: a.binds, fields: self.arena.structAt(index: si).fields)
+                try self.checkBindsInFields(binds: a.binds, fields: self.arena.structAt(index: si).fields, ownerModule: self.moduleOf(offset: identity.nameStart))
             }
             return <Result.Ok value=() />
         }
-        val ei: U64 = self.enumIndexByName(start: a.enumStart, len: a.enumLen)
+        val ei: U64 = self.arena.enumIndexByOffset(offset: identity.nameStart)
         if ei >= self.arena.enumCount() {
             return <Result.Ok value=() />
         }

@@ -1,0 +1,2 @@
+import ./Models
+fn main() { match 41I64 { Models.Choice.Some(value: val item) => {} } }

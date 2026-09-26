@@ -1,0 +1,6 @@
+import ./Alpha
+import ./Beta
+import @Std/Io with { print }
+fn alpha(value: Alpha.Choice) -> I64 { match value { Alpha.Choice.Some(value: val item) => { return item } } return 0I64 }
+fn beta(value: Beta.Choice) -> String { match value { Beta.Choice.Some(text: val item) => { return item } } return "" }
+fn main() { print(alpha(value: <Alpha.Choice.Some value=41I64 />)) print(beta(value: <Beta.Choice.Some text="ok" />)) }
