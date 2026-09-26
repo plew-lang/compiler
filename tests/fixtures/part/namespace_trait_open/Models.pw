@@ -1,0 +1,1 @@
+pub trait Read[T] { fn read() -> T }

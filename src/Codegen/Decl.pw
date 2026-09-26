@@ -236,17 +236,19 @@ pub impl Comp {
     // declaration, then the import surface (which may be a barrel), then its
     // declaration owner.  Traits are not ambient; absence of such a binding is
     // intentionally unresolved.
-    inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64) -> U64 {
+    inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64, openArgs: Bool = false) -> U64 {
         val qualified = self.modules.qualifiedUseIndex(offset: start)
         if qualified < self.modules.qualifiedUseCount() {
             match self.moduleBindingAt(nameStart: start, nameLen: len, requirePublic: false) {
                 ModuleBinding.Declaration(moduleId: val owner, nameStart: val nameStart, nameLen: val nameLen) => {
+                    if openArgs { return self.traitOwnerInModuleForSelector(mod: owner, start: nameStart, len: nameLen) }
                     return self.traitOwnerInModule(mod: owner, start: nameStart, len: nameLen, arity: arity)
                 }
                 _ => { return 0U64 }
             }
         }
         val useMod: U64 = self.moduleOf(offset: start)
+        if openArgs { return self.traitOwnerInScopeOpenById(mod: useMod, nameId: intern(c: inout self, start: start, len: len)) }
         return self.traitOwnerInScopeById(mod: useMod, nameId: intern(c: inout self, start: start, len: len), arity: arity)
     }
 

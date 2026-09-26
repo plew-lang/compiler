@@ -580,9 +580,9 @@ pub impl Comp {
                 traitUseStart = traitType.nameSpan.start
                 traitUseLen = traitType.nameSpan.end - traitType.nameSpan.start
             }
-            val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count())
+            val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64)
             mut val resolvedOwner: U64 = owner
-            if resolvedOwner == 0U64 && fnIdx < self.arena.functionCount() {
+            if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() {
                 resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId, arity: boundArgs.count())
             }
             // A bound with no written positional arguments is open, not
@@ -590,7 +590,7 @@ pub impl Comp {
             // unspecified `Add[Rhs]`).  Resolve its lexical declaration only
             // when that surface is unique; a same-spelled ambiguity remains a
             // source error rather than silently picking an arity.
-            if resolvedOwner == 0U64 && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
+            if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
                 resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
             }
             mut val predicates: Array[TraitAssocPredicate] = []
@@ -641,9 +641,9 @@ pub impl Comp {
             ai += 1U64
         }
         val traitId: U64 = intern(c: inout self, start: trait.start, len: trait.end - trait.start)
-        mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count())
-        if owner == 0U64 && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId, arity: args.count()) }
-        if owner == 0U64 && args.count() == 0U64 && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId) }
+        mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count(), openArgs: args.count() == 0U64)
+        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId, arity: args.count()) }
+        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && args.count() == 0U64 && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId) }
         mut val predicates: Array[TraitAssocPredicate] = []
         ai = 0U64
         while ai < assocNames.count() && ai < assocValues.count() {
