@@ -143,7 +143,7 @@ pub impl LlvmCtx {
         val term = c.mid.terminators[terminatorId - 1U64]
         if !self.ambientProgram.enabled {
             try self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
-            return <Result.Ok value=(try self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId)) />
+            return self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId)
         }
         val priorPermit = self.ambientPermit
         val allocation = self.ambientScopes.getOr(key: term.accessScope, fallback: <LlvmAmbientScope />)

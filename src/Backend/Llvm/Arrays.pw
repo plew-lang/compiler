@@ -58,11 +58,11 @@ pub impl LlvmCtx {
     }
 
     inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_count", distance: 2U64)) />
+        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_count", distance: 2U64)
     }
 
     inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_capacity", distance: 3U64)) />
+        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_capacity", distance: 3U64)
     }
 
     // Declare/cache `plew_rawbuf_set_count(ptr, i64)` — store the buffer's live-element
@@ -154,7 +154,7 @@ pub impl LlvmCtx {
     }
     // The live element count of an array/string VALUE (read from the heap header; 0 for null).
     inout fn arrValCount(c: inout Comp, arr: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.rawbufCount(c: inout c, data: self.arrValData(c: inout c, arr: arr))) />
+        return self.rawbufCount(c: inout c, data: self.arrValData(c: inout c, arr: arr))
     }
     // Wrap a bare data pointer into the `{ptr}` array/string VALUE aggregate WITHOUT touching
     // the heap header (the count is already correct — e.g. a baked string literal whose count
@@ -177,7 +177,7 @@ pub impl LlvmCtx {
     }
     // Load the live count from an array STORAGE SLOT (the slot's data pointer's header count).
     inout fn arrSlotCount(c: inout Comp, slot: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.rawbufCount(c: inout c, data: self.arrSlotData(c: inout c, slot: slot))) />
+        return self.rawbufCount(c: inout c, data: self.arrSlotData(c: inout c, slot: slot))
     }
     // Store a data pointer into an array STORAGE SLOT.
     inout fn arrSlotSetData(c: inout Comp, slot: LLVMValueRef, data: LLVMValueRef) {

@@ -327,7 +327,7 @@ pub impl LlvmCtx {
         val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
         if declaration.isDropFlag { return <Result.Ok value=self.i1ty /> }
         if declaration.typeTerm == 0U64 || declaration.typeTerm >= c.arena.typeCount() { return <Result.Ok value=self.i64ty /> }
-        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)) />
+        return self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)
     }
 
     // Global storage is addressed through its frozen frontend declaration
@@ -354,10 +354,10 @@ pub impl LlvmCtx {
     inout fn midCanonicalPlaceTy(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> Result[LLVMTypeRef, CompileDiagnostic] {
         if place.projections.len == 0U64 {
             if place.rootTag == 2U64 { return <Result.Ok value=self.midCanonicalGlobalTy(c: inout c, place: place) /> }
-            return <Result.Ok value=(try self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)) />
+            return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
         }
-        if place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() { return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: place.typeTerm)) /> }
-        return <Result.Ok value=(try self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)) />
+        if place.typeTerm != 0U64 && place.typeTerm < c.arena.typeCount() { return self.llvmTypeOfRef(c: inout c, ref: place.typeTerm) }
+        return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
     }
 
     inout fn midCanonicalPlacePtrUnchecked(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> Result[LLVMValueRef, CompileDiagnostic] {
@@ -410,7 +410,7 @@ pub impl LlvmCtx {
 
     inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, forWrite: Bool = false) -> Result[LLVMValueRef, CompileDiagnostic] {
         try self.midAmbientCheck(c: inout c, body: body, place: place, writes: forWrite)
-        return <Result.Ok value=(try self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: place, forWrite: forWrite)) />
+        return self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: place, forWrite: forWrite)
     }
 
     inout fn midCanonicalReadPlace(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> Result[LLVMValueRef, CompileDiagnostic] {
@@ -430,7 +430,7 @@ pub impl LlvmCtx {
             return <Result.Ok value=value />
         }
         if operand.tag == 5U64 {
-            return <Result.Ok value=(try self.midIntegerConstant(c: inout c, value: operand.integerValue, negative: operand.integerNegative, isBool: operand.integerBool, typeTerm: operand.typeTerm)) />
+            return self.midIntegerConstant(c: inout c, value: operand.integerValue, negative: operand.integerNegative, isBool: operand.integerBool, typeTerm: operand.typeTerm)
         }
         if operand.tag == 6U64 {
             return <Result.Ok value=self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen, type: (try self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm))) />
@@ -466,7 +466,7 @@ pub impl LlvmCtx {
             // a value through an absent proof.
             return <Result.Ok value=node.staticProof != 0U64 && node.staticProof <= c.arena.staticProofs.count() && c.arena.staticProofs[node.staticProof - 1U64].tag != 0U64 />
         }
-        if node.tag == 3U64 || node.tag == 4U64 { return <Result.Ok value=(try self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId)) /> }
+        if node.tag == 3U64 || node.tag == 4U64 { return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: node.sourceRef, targetRef: node.targetRef, proofId: proofId) }
         return <Result.Ok value=false />
     }
 
@@ -483,7 +483,7 @@ pub impl LlvmCtx {
             val source: TypeRef = c.arena.typeAt(index: sourceRef)
             val target: TypeRef = c.arena.typeAt(index: targetRef)
             if source.args.count() != 1U64 || target.args.count() != 1U64 || node.element == 0U64 { return <Result.Ok value=false /> }
-            return <Result.Ok value=(try self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: source.args[0U64], targetRef: target.args[0U64], proofId: node.element)) />
+            return self.midCanonicalBorrowedConversionSupported(c: inout c, sourceRef: source.args[0U64], targetRef: target.args[0U64], proofId: node.element)
         }
         if node.tag == 4U64 {
             if !c.typeRefEq(a: sourceRef, b: node.sourceRef) || !c.typeRefEq(a: targetRef, b: node.targetRef) || node.enumIdx >= c.arena.enumCount() { return <Result.Ok value=false /> }
@@ -516,21 +516,21 @@ pub impl LlvmCtx {
         if !(try self.midCanonicalConversionProofSupported(c: inout c, proofId: proofId)) || operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
         val node: ConversionProofNode = c.arena.conversionProofs[proofId - 1U64]
-        if node.tag == 0U64 { return <Result.Ok value=(try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)) /> }
+        if node.tag == 0U64 { return self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId) }
         if node.tag == 2U64 {
             if operand.tag != 1U64 && operand.tag != 2U64 { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
             if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
             val structIdx: U64 = (try self.structIdxOfRef(c: inout c, ref: node.sourceRef))
             if structIdx >= c.arena.structCount() { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
-            return <Result.Ok value=(try self.boxIntoAny(c: inout c, sourceRef: node.sourceRef, v: (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)) />
+            return self.boxIntoAny(c: inout c, sourceRef: node.sourceRef, v: (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)), sidx: structIdx, anyRef: node.targetRef, traitIdx: node.traitIdx)
         }
         if node.tag == 3U64 {
             if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
-            return <Result.Ok value=(try self.midCanonicalEmitArrayRepack(c: inout c, source: (try self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])), sourceRef: node.sourceRef, targetRef: node.targetRef, elementProof: node.element)) />
+            return self.midCanonicalEmitArrayRepack(c: inout c, source: (try self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])), sourceRef: node.sourceRef, targetRef: node.targetRef, elementProof: node.element)
         }
         if node.tag == 4U64 {
             if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() || !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: operandId), b: node.sourceRef) { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
-            return <Result.Ok value=(try self.midCanonicalEmitEnumRepack(c: inout c, source: (try self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])), sourceRef: node.sourceRef, targetRef: node.targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount)) />
+            return self.midCanonicalEmitEnumRepack(c: inout c, source: (try self.midCanonicalReadPlace(c: inout c, body: body, place: c.mid.places[operand.place - 1U64])), sourceRef: node.sourceRef, targetRef: node.targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount)
         }
         return <Result.Ok value=LLVMConstNull(self.ptrty) />
     }
@@ -549,10 +549,10 @@ pub impl LlvmCtx {
             val structIdx: U64 = (try self.structIdxOfRef(c: inout c, ref: sourceRef))
             if structIdx >= c.arena.structCount() { return <Result.Ok value=LLVMConstNull(self.anyTy) /> }
             try self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
-            return <Result.Ok value=(try self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)) />
+            return self.boxIntoAny(c: inout c, sourceRef: sourceRef, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: node.traitIdx)
         }
-        if node.tag == 3U64 { return <Result.Ok value=(try self.midCanonicalEmitArrayRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, elementProof: node.element)) /> }
-        if node.tag == 4U64 { return <Result.Ok value=(try self.midCanonicalEmitEnumRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount)) /> }
+        if node.tag == 3U64 { return self.midCanonicalEmitArrayRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, elementProof: node.element) }
+        if node.tag == 4U64 { return self.midCanonicalEmitEnumRepack(c: inout c, source: value, sourceRef: sourceRef, targetRef: targetRef, enumIdx: node.enumIdx, payloadStart: node.payloads, payloadCount: node.payloadCount) }
         return <Result.Ok value=LLVMConstNull(self.ptrty) />
     }
 
@@ -588,7 +588,7 @@ pub impl LlvmCtx {
         llvmStore(self.b, LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), indexSlot)
         LLVMBuildBr(self.b, condition)
         LLVMPositionBuilderAtEnd(self.b, done)
-        return <Result.Ok value=(try self.arrValMake(c: inout c, data: targetData, count: count, aggTy: (try self.llvmTypeOfRef(c: inout c, ref: targetRef)))) />
+        return self.arrValMake(c: inout c, data: targetData, count: count, aggTy: (try self.llvmTypeOfRef(c: inout c, ref: targetRef)))
     }
 
     // Rebuild an enum from its physical payload proof range.  The range is in
@@ -685,7 +685,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalOperandLlvmSupported(c: inout Comp, body: MidBodyNode, operandId: U64) -> Result[Bool, CompileDiagnostic] {
         if operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Ok value=false /> }
         val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-        if operand.tag >= 1U64 && operand.tag <= 4U64 { return <Result.Ok value=(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place)) /> }
+        if operand.tag >= 1U64 && operand.tag <= 4U64 { return self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) }
         if operand.tag == 5U64 { return <Result.Ok value=operand.typeTerm == 0U64 || operand.typeTerm < c.arena.typeCount() /> }
         if operand.tag == 6U64 { return <Result.Ok value=operand.stringStart <= c.arena.bytes.count() && operand.stringLen <= c.arena.bytes.count() - operand.stringStart /> }
         if operand.tag == 7U64 {
@@ -762,8 +762,8 @@ pub impl LlvmCtx {
     inout fn midCanonicalInitialRvalueSupported(c: inout Comp, body: MidBodyNode, rvalueId: U64) -> Result[Bool, CompileDiagnostic] {
         if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <Result.Ok value=false /> }
         val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
-        if value.tag == 19U64 { return <Result.Ok value=(try self.midCanonicalMakeClosureSupported(c: inout c, body: body, value: value)) /> }
-        if value.tag == 1U64 { return <Result.Ok value=(try self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand)) /> }
+        if value.tag == 19U64 { return self.midCanonicalMakeClosureSupported(c: inout c, body: body, value: value) }
+        if value.tag == 1U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
         if value.tag == 2U64 { return <Result.Ok value=value.targetTerm != 0U64 && value.targetTerm < c.arena.typeCount() && (try self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand)) && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm) /> }
         if value.tag >= 3U64 && value.tag <= 5U64 {
             if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.fieldCount != value.elements.len { return <Result.Ok value=false /> }
@@ -942,7 +942,7 @@ pub impl LlvmCtx {
             CallReceiverPassing.None => { return <Result.Ok value=receiver.tag == 1U64 /> }
             CallReceiverPassing.Borrow => {
                 if receiver.tag != 2U64 { return <Result.Ok value=false /> }
-                return <Result.Ok value=(try self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: receiver.operand)) />
+                return self.midCanonicalReadOperandSupported(c: inout c, body: body, operandId: receiver.operand)
             }
             CallReceiverPassing.Inout => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return <Result.Ok value=false /> }
@@ -952,7 +952,7 @@ pub impl LlvmCtx {
                 // Keep the backend preflight in that same closed vocabulary;
                 // accepting a made-up "tag 3, capability 2" combination would
                 // make a correctly elaborated access fall back to source LLVM.
-                return <Result.Ok value=(try self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand)) />
+                return self.midCanonicalInoutOperandSupported(c: inout c, body: body, operand: operand)
             }
             CallReceiverPassing.Move => {
                 if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > c.mid.operands.count() { return <Result.Ok value=false /> }
@@ -2009,7 +2009,7 @@ pub impl LlvmCtx {
                         match coreStringFfi {
                             MidCallPreflight.Target => {
                                 val numeric: MidCallPreflight = (try self.midCanonicalRuntimeNumericPreflight(c: inout c, body: body, terminatorId: terminatorId))
-                                match numeric { MidCallPreflight.Target => { return <Result.Ok value=(try self.midCanonicalRuntimeBufferPreflight(c: inout c, body: body, terminatorId: terminatorId)) /> } _ => { return <Result.Ok value=numeric /> } }
+                                match numeric { MidCallPreflight.Target => { return self.midCanonicalRuntimeBufferPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return <Result.Ok value=numeric /> } }
                             }
                             _ => { return <Result.Ok value=coreStringFfi /> }
                         }
@@ -2022,30 +2022,30 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalEmitCallUnchecked(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Result[Bool, CompileDiagnostic] {
-        match (try self.midCanonicalCellControlPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitCellControl(c: inout c, body: body, terminatorId: terminatorId)) /> } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
-        match (try self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitStrongCell(c: inout c, body: body, terminatorId: terminatorId)) /> } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
+        match (try self.midCanonicalCellControlPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return self.midCanonicalEmitCellControl(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
+        match (try self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return self.midCanonicalEmitStrongCell(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
         match (try self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-            MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitClosureCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+            MidCallPreflight.None => { return self.midCanonicalEmitClosureCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {}
             _ => { return <Result.Ok value=false /> }
         }
         match (try self.midCanonicalExistentialCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-            MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitExistentialCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+            MidCallPreflight.None => { return self.midCanonicalEmitExistentialCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {}
             _ => { return <Result.Ok value=false /> }
         }
         match (try self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-            MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+            MidCallPreflight.None => { return self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId) }
             MidCallPreflight.Target => {
                 match (try self.midCanonicalRuntimeSystemPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-                    MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitRuntimeSystemCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+                    MidCallPreflight.None => { return self.midCanonicalEmitRuntimeSystemCall(c: inout c, body: body, terminatorId: terminatorId) }
                     MidCallPreflight.Target => {
                         match (try self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-                            MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+                            MidCallPreflight.None => { return self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId) }
                             MidCallPreflight.Target => {
                                 match (try self.midCanonicalRuntimeNumericPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
-                                    MidCallPreflight.None => { return <Result.Ok value=(try self.midCanonicalEmitRuntimeNumericCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
-                                    MidCallPreflight.Target => { return <Result.Ok value=(try self.midCanonicalEmitRuntimeBufferCall(c: inout c, body: body, terminatorId: terminatorId)) /> }
+                                    MidCallPreflight.None => { return self.midCanonicalEmitRuntimeNumericCall(c: inout c, body: body, terminatorId: terminatorId) }
+                                    MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeBufferCall(c: inout c, body: body, terminatorId: terminatorId) }
                                     _ => { return <Result.Ok value=false /> }
                                 }
                             }
@@ -2183,7 +2183,7 @@ pub impl LlvmCtx {
         // lowering.  The direct aggregate path admits the identity boundary
         // first and remains fail-closed for the rest.
         if !c.conversionProofIsIdentity(id: element.conversion) {
-            return <Result.Ok value=(try self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: element.operand, proofId: element.conversion)) />
+            return self.midCanonicalEmitValueConversion(c: inout c, body: body, operandId: element.operand, proofId: element.conversion)
         }
         val value: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: element.operand))
         if element.operand != 0U64 && element.operand <= c.mid.operands.count() {
@@ -2223,7 +2223,7 @@ pub impl LlvmCtx {
                 elements.append((try self.midCanonicalEmitAggregateElement(c: inout c, body: body, element: c.mid.aggregateElements[value.elements.start + elementI])))
                 elementI = elementI + 1U64
             }
-            return <Result.Ok value=(try self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, type: (try self.llvmTypeOfRef(c: inout c, ref: value.resultTerm)))) />
+            return self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, type: (try self.llvmTypeOfRef(c: inout c, ref: value.resultTerm)))
         }
         if value.tag == 4U64 {
             if value.resultTerm == 0U64 || value.resultTerm >= c.arena.typeCount() || value.enumIndex >= c.arena.enumCount() || value.variantIndex >= c.arena.enumAt(index: value.enumIndex).variants.count() { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
@@ -2317,7 +2317,7 @@ pub impl LlvmCtx {
     inout fn midCanonicalEmitStatement(c: inout Comp, body: MidBodyNode, statementId: U64) -> Result[Bool, CompileDiagnostic] {
         if statementId == 0U64 || statementId > c.mid.statements.count() { return <Result.Ok value=false /> }
         val statement: MidStatementNode = c.mid.statements[statementId - 1U64]
-        if statement.tag == 13U64 { return <Result.Ok value=(try self.midCanonicalEmitEnumDestructure(c: inout c, body: body, statement: statement)) /> }
+        if statement.tag == 13U64 { return self.midCanonicalEmitEnumDestructure(c: inout c, body: body, statement: statement) }
         if statement.tag == 1U64 || statement.tag == 9U64 {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return <Result.Ok value=false /> }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -2355,7 +2355,7 @@ pub impl LlvmCtx {
             llvmStore(self.b, (try self.midCanonicalReadPlace(c: inout c, body: body, place: source)), (try self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true)))
             return <Result.Ok value=true />
         }
-        if statement.tag == 3U64 { return <Result.Ok value=(try self.midCanonicalEmitDrop(c: inout c, body: body, placeId: statement.destination)) /> }
+        if statement.tag == 3U64 { return self.midCanonicalEmitDrop(c: inout c, body: body, placeId: statement.destination) }
         if statement.tag == 10U64 {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <Result.Ok value=false /> }
             val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -2363,7 +2363,7 @@ pub impl LlvmCtx {
             try self.emitCellRelease(c: inout c, cell: llvmLoad(self.b, self.ptrty, self.midCanonicalLocalPtr(body: body, local: place.local), anon()), ref: place.typeTerm)
             return <Result.Ok value=true />
         }
-        if statement.tag == 4U64 { return <Result.Ok value=(try self.midCanonicalEmitConditionalDrop(c: inout c, body: body, placeId: statement.destination, flag: statement.flag)) /> }
+        if statement.tag == 4U64 { return self.midCanonicalEmitConditionalDrop(c: inout c, body: body, placeId: statement.destination, flag: statement.flag) }
         if statement.tag == 5U64 {
             if statement.flag >= body.locals.len { return <Result.Ok value=false /> }
             mut val bit: U64 = 0U64
@@ -2436,7 +2436,7 @@ pub impl LlvmCtx {
         }
         if term.tag == 10U64 {
             if !asyncBody || term.resume >= blocks.count() { return <Result.Ok value=false /> }
-            return <Result.Ok value=(try self.midAsyncSuspend(c: inout c, body: body, term: term, target: blocks[term.resume])) />
+            return self.midAsyncSuspend(c: inout c, body: body, term: term, target: blocks[term.resume])
         }
         return <Result.Ok value=false />
     }
@@ -2667,7 +2667,7 @@ impl LlvmCtx {
 
 pub impl LlvmCtx {
     inout fn prepareSyntheticMidBody(c: inout Comp, bodyId: U64, fnIdx: U64, parameterCount: U64) -> Result[MidLlvmPrepared, CompileDiagnostic] {
-        return <Result.Ok value=(try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fnIdx, parameterCount: parameterCount)) />
+        return self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fnIdx, parameterCount: parameterCount)
     }
 
 }

@@ -18,7 +18,7 @@ pub impl LlvmCtx {
     inout fn physicalLayoutContract(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
         val identity = (try c.checkedFinalDestruction(typeRef: typeRef))
         val contract = c.arena.finalDestructions[identity - 1U64]
-        if contract.underlying != 0U64 { return <Result.Ok value=(try self.physicalLayoutContract(c: inout c, typeRef: contract.underlying)) /> }
+        if contract.underlying != 0U64 { return self.physicalLayoutContract(c: inout c, typeRef: contract.underlying) }
         return <Result.Ok value=identity />
     }
 

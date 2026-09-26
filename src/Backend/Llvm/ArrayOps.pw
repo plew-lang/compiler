@@ -4,7 +4,7 @@ pub impl LlvmCtx {
     // Operands and the result layout are already selected by canonical Mid.
     inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, type: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         if values.count() == 0U64 {
-            return <Result.Ok value=(try self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: type)) />
+            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: type)
         }
         val data: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32)))
         mut val i: U64 = 0U64
@@ -12,13 +12,13 @@ pub impl LlvmCtx {
             llvmStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1U64
         }
-        return <Result.Ok value=(try self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: type)) />
+        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: type)
     }
 
     // `Buffer.new()`: a fresh empty buffer (header-only, cap=0 — the first append grows
     // it). The element size is irrelevant at cap=0, so a unit elemSize suffices.
     inout fn genLlvmBufferNew(c: inout Comp) -> Result[LLVMValueRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))) />
+        return self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))
     }
 
     // Buffer byte equality is a physical ABI operation. Both legacy and Mid

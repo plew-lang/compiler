@@ -7,7 +7,7 @@ pub impl LlvmCtx {
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         if ref == 0U64 { return <Result.Ok value=self.i64ty /> }
         val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
-        if contract.underlying != 0U64 { return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: contract.underlying)) /> }
+        if contract.underlying != 0U64 { return self.llvmTypeOfRef(c: inout c, ref: contract.underlying) }
         if contract.isOpaquePointer { return <Result.Ok value=self.ptrty /> }
         if contract.structLayout != 0U64 {
             val slot = (try self.requireStructLayoutSlot(c: inout c, typeRef: contract.typeRef))
@@ -25,7 +25,7 @@ pub impl LlvmCtx {
             _ => {}
         }
         val type = c.arena.typeAt(index: contract.typeRef)
-        return <Result.Ok value=(try self.llvmPrimitiveTy(c: inout c, tyStart: type.nameStart, tyLen: type.nameLen)) />
+        return self.llvmPrimitiveTy(c: inout c, tyStart: type.nameStart, tyLen: type.nameLen)
     }
 
     // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit

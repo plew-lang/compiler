@@ -110,7 +110,7 @@ pub impl LlvmCtx {
             av.append(r)
             return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon()) />
         }
-        return <Result.Ok value=(try self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned)) />
+        return self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
     }
 
     // Checked signed negation (`-x`): a call to `plew_<iN>Neg`, which panics on
@@ -144,7 +144,7 @@ pub impl LlvmCtx {
                         }
                         val v: LLVMValueRef = self.coerceInt(v: values[0U64], target: ty, unsigned: unsigned)
                         match overflow {
-                            NumericOverflow.Checked => { return <Result.Ok value=(try self.buildNegChecked(c: inout c, v: v)) /> }
+                            NumericOverflow.Checked => { return self.buildNegChecked(c: inout c, v: v) }
                             NumericOverflow.Wrapping => { return <Result.Ok value=LLVMBuildNeg(self.b, v, anon()) /> }
                         }
                     }
@@ -163,8 +163,8 @@ pub impl LlvmCtx {
                 val r: LLVMValueRef = self.coerceInt(v: values[1U64], target: ty, unsigned: unsigned)
                 val op: I64 = (try self.integerOperationCode(operation: operation))
                 match overflow {
-                    NumericOverflow.Checked => { return <Result.Ok value=(try self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned)) /> }
-                    NumericOverflow.Wrapping => { return <Result.Ok value=(try self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned)) /> }
+                    NumericOverflow.Checked => { return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned) }
+                    NumericOverflow.Wrapping => { return self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned) }
                 }
             }
             NumericIntrinsic.Float(width: val width, operation: val operation) => {
@@ -325,7 +325,7 @@ pub impl LlvmCtx {
     // The LLVM type of a strong reference-cell pointee T (from the instance's first type arg).
     inout fn refPointeeTy(c: inout Comp, refTy: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         if c.isStrongRefInst(ref: refTy) {
-            return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: refTy).args[0])) />
+            return self.llvmTypeOfRef(c: inout c, ref: c.arena.typeAt(index: refTy).args[0])
         }
         return <Result.Ok value=self.i64ty />
     }

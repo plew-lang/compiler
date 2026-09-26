@@ -34,7 +34,7 @@ pub impl LlvmCtx {
     inout fn typeWords(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
         if typeRef == 0U64 { return <Result.Ok value=0U64 /> }
         val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: typeRef)) - 1U64]
-        if contract.underlying != 0U64 { return <Result.Ok value=(try self.typeWords(c: inout c, typeRef: contract.underlying)) /> }
+        if contract.underlying != 0U64 { return self.typeWords(c: inout c, typeRef: contract.underlying) }
         if contract.structLayout != 0U64 {
             mut val words = 0U64
             mut val field = 0U64
@@ -56,7 +56,7 @@ pub impl LlvmCtx {
     // Payload layout consumes the same concrete field contract as ownership.
     inout fn variantPayloadTy(c: inout Comp, instanceRef: U64, vi: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: instanceRef)) - 1U64]
-        if contract.underlying != 0U64 { return <Result.Ok value=(try self.variantPayloadTy(c: inout c, instanceRef: contract.underlying, vi: vi)) /> }
+        if contract.underlying != 0U64 { return self.variantPayloadTy(c: inout c, instanceRef: contract.underlying, vi: vi) }
         if vi + 1U64 >= contract.variantFieldStarts.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
             return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum payload has an incomplete field contract") />
         }

@@ -12,7 +12,7 @@ pub impl LlvmCtx {
     inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val result = (try self.bodyResultType(c: inout c, bodyId: bodyId))
         if result == 0U64 { return <Result.Ok value=self.voidty /> }
-        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: result)) />
+        return self.llvmTypeOfRef(c: inout c, ref: result)
     }
 
     inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
@@ -25,7 +25,7 @@ pub impl LlvmCtx {
             CallArgumentPassing.Borrow => {}
             CallArgumentPassing.Move => {}
         }
-        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) />
+        return self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])
     }
 
 }

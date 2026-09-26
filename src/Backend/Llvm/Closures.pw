@@ -9,7 +9,7 @@ pub impl LlvmCtx {
     // The captured variable's own VALUE type (ignoring boxing) — the type stored in
     // the shared cell for a boxed capture, or in the env slot for a by-value one.
     inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> Result[LLVMTypeRef, CompileDiagnostic] {
-        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: cap.ty)) />
+        return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
     }
 
     // The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
@@ -18,7 +18,7 @@ pub impl LlvmCtx {
         if cap.boxed {
             return <Result.Ok value=self.ptrty />
         }
-        return <Result.Ok value=(try self.captureValueTy(c: inout c, cap: cap)) />
+        return self.captureValueTy(c: inout c, cap: cap)
     }
 }
 
@@ -206,7 +206,7 @@ pub impl LlvmCtx {
 
     inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> Result[MidLlvmPrepared, CompileDiagnostic] {
         val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
-        return <Result.Ok value=(try self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())) />
+        return self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
     }
 
     // Captures are borrowed from the environment for this activation. Mutable
