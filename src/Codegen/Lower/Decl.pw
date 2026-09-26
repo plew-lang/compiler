@@ -531,7 +531,11 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < params.count() {
             val pn: Bind = self.internBytes(s: params[i])
-            val tn: Bind = self.internBytes(s: traits[i])
+            mut val traitType = <TypeAst name=traits[i] args=[] span=<Span start=0 end=0 /> />
+            if i < traitTypes.count() {
+                traitType = (try self.normalizeProjectionType(t: traitTypes[i], whereTypes: types, whereTraits: traits))
+            }
+            val tn: Bind = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
             mut val pty: U64 = 0
             if i < types.count() {
                 pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref
@@ -543,11 +547,11 @@ pub impl Comp {
             mut val boundAssocValues: Array[U64] = []
             if i < traitTypes.count() {
                 mut val ai: U64 = 0U64
-                while ai < traitTypes[i].args.count() {
-                    val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)))).ref
+                while ai < traitType.args.count() {
+                    val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai], whereTypes: types, whereTraits: traits)))).ref
                     mut val label: U64 = 0U64
-                    if ai < traitTypes[i].argLabels.count() && traitTypes[i].argLabels[ai].bytes().count() > 0U64 {
-                        val labelBind: Bind = self.internBytes(s: traitTypes[i].argLabels[ai])
+                    if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
+                        val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
                         label = labelBind.nameId
                     }
                     if label == 0U64 { boundArgs.append(boundRef) }
@@ -572,9 +576,9 @@ pub impl Comp {
             // source span.  A zero/empty span is not an authored lookup site;
             // keep the caller's spelling in that case rather than resolving
             // offset 0 in the entry module.
-            if i < traitTypes.count() && traitTypes[i].span.end > traitTypes[i].span.start {
-                traitUseStart = traitTypes[i].span.start
-                traitUseLen = traitTypes[i].name.bytes().count()
+            if traitType.nameSpan.end > traitType.nameSpan.start {
+                traitUseStart = traitType.nameSpan.start
+                traitUseLen = traitType.nameSpan.end - traitType.nameSpan.start
             }
             val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count())
             mut val resolvedOwner: U64 = owner
@@ -588,8 +592,6 @@ pub impl Comp {
             // source error rather than silently picking an arity.
             if resolvedOwner == 0U64 && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
                 resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
-            }
-            if resolvedOwner != 0U64 {
             }
             mut val predicates: Array[TraitAssocPredicate] = []
             mut val pi: U64 = 0U64

@@ -1,0 +1,23 @@
+import @Plew/Syntax with { TypeAst, NameSegmentAst, Span }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { ImportOrigin }
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.internBytes(s: "padding")
+    val namespace = compiler.internBytes(s: "Models")
+    val owner = compiler.internBytes(s: "Read")
+    val subject = compiler.internBytes(s: "T")
+    compiler.predeclareTraitIdentity(nameStart: owner.nameStart, nameLen: owner.nameLen, arity: 1U64)
+    compiler.modules.registerImportOrigin(<ImportOrigin localStart=namespace.nameStart localLength=namespace.nameLen localModule=0U64 sourceStart=namespace.nameStart sourceLength=namespace.nameLen targetModule=0U64 isNamespace=true />, nameId: namespace.nameId, reExport: false)
+    val empty = <Span start=0U64 end=0U64 />
+    val qualifier = <Span start=namespace.nameStart end=namespace.nameStart + namespace.nameLen />
+    val traitName = <Span start=owner.nameStart end=owner.nameStart + owner.nameLen />
+    val argument = <TypeAst name="I64" args=[] span=empty />
+    val bound = <TypeAst name="Models" nameSpan=qualifier args=[] span=qualifier namePath=[<NameSegmentAst name="Models" nameSpan=qualifier />, <NameSegmentAst name="Read" nameSpan=traitName args=[argument] />] />
+    compiler.appendFuncBounds(fnIdx: 0U64, params: ["T"], traits: ["Models"], traitTypes: [bound]).unwrap()
+    val constraint = compiler.decls.funcBounds[0U64].constraint
+    print(constraint.key.owner == owner.nameStart)
+    print(constraint.key.positionalArgs.count())
+}
