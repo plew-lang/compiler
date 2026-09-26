@@ -29,6 +29,11 @@ pub impl Comp {
                 }
                 if !symbolic { return <Result.Ok value=false /> }
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
+                // Method binders are distinct from the trait instance's
+                // binders. Infer them from this call before checking arguments;
+                // an unrelated nominal type with the same spelling has no role.
+                val methodParameters = self.copyFuncBinds(binds: requirement.typeParams)
+                val methodArguments = (try self.inferFnArgs(f: requirement, args: args))
                 mut val index = 0U64
                 while index < args.len {
                     val parameterIndex = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
@@ -36,7 +41,8 @@ pub impl Comp {
                         val parameter = self.funcParamAt(params: requirement.params, index: parameterIndex)
                         val argument = self.argAt(args: args, index: index)
                         try self.checkArgInoutMode(p: parameter, arg: argument)
-                        val expected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index)
+                        val traitExpected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index)
+                        val expected = self.groundTermInEnvironment(ref: traitExpected, params: methodParameters, values: methodArguments, selfRef: receiverRef)
                         if expected != 0U64 {
                             val type = self.typeInfoOfRef(ref: expected)
                             try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
