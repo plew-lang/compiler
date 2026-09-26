@@ -83,7 +83,7 @@ pub impl Comp {
                 self.cur.retTy = sRT
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                self.verifyFieldReadVis(exprId: id, base: base, nameStart: nameStart, nameLen: nameLen)
+                try self.verifyFieldReadVis(exprId: id, base: base, nameStart: nameStart, nameLen: nameLen)
                 try self.verifyExpr(id: base)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -118,7 +118,7 @@ pub impl Comp {
                 }
                 val mf: U64 = self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 val rt: TypeInfo = self.typeOf(id: recv)
-                if rt.nameLen != 0U64 { self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
+                if rt.nameLen != 0U64 { try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 try self.checkResolvedMethodArgs(mf: mf, args: args)
             }
@@ -139,7 +139,7 @@ pub impl Comp {
                     try self.verifyArgs(args: args)
                     return <Result.Ok value=() />
                 }
-                self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
+                try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mf < self.arena.functionCount() {
@@ -159,7 +159,7 @@ pub impl Comp {
                 }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 if rt.nameLen != 0U64 {
-                    self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
+                    try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
                     try self.checkResolvedMethodArgs(mf: mf, args: args)
                 }
                 try self.verifyExpr(id: recv)
@@ -175,7 +175,7 @@ pub impl Comp {
                     return <Result.Ok value=() />
                 }
                 val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
-                self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
+                try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = self.typeOf(id: id)
                     try self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: sourceSelector.writtenStart)
@@ -331,7 +331,7 @@ pub impl Comp {
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.verifyExpr(id: lhs)
                 try self.verifyExpr(id: rhs)
-                self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
+                try self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
                 try self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
             }
             Expr.Unary(val op, val operand) => {
@@ -366,7 +366,7 @@ pub impl Comp {
                     // escape hatch.
                     val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
-                    self.verifySelectedFieldExists(exprId: id, receiverTerm: inst.args[0], nameStart: nameStart, nameLen: nameLen, message: "no such field on this Ref's pointee type (check the field name)")
+                    try self.verifySelectedFieldExists(exprId: id, receiverTerm: inst.args[0], nameStart: nameStart, nameLen: nameLen, message: "no such field on this Ref's pointee type (check the field name)")
                     if pt.kind == 2 {
                         self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                     }
@@ -483,7 +483,7 @@ pub impl Comp {
                 }
             }
             Expr.MatchExpr(val scrut, val arms) => {
-                self.checkMatchAccessMode(scrut: scrut, arms: arms)
+                try self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 try self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {

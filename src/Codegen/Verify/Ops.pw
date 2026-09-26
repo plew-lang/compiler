@@ -22,7 +22,7 @@ pub impl Comp {
                 mut val b: U64 = a + 1U64
                 while b < args.len {
                     if self.argAt(args: args, index: b).isInout {
-                        self.checkInoutPair(a: self.argAt(args: args, index: a).expr, b: self.argAt(args: args, index: b).expr)
+                        try self.checkInoutPair(a: self.argAt(args: args, index: a).expr, b: self.argAt(args: args, index: b).expr)
                     }
                     b += 1U64
                 }
@@ -36,10 +36,11 @@ pub impl Comp {
     // certain overlap -> compile error. Runtime-tier pairs (class 2) need nothing
     // here — the backend compares the already-evaluated cell addresses, so no index
     // or subexpression is ever re-evaluated.
-    inout fn checkInoutPair(a: U64, b: U64) {
+    inout fn checkInoutPair(a: U64, b: U64) -> Result[(), CompileDiagnostic] {
         if self.classifyInoutPair(a: a, b: b) == 1U64 {
-            self.errorAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)")
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)") />
         }
+        return <Result.Ok value=() />
     }
 
     // Classify one pair of `inout` places (spec/03, Swift-equivalent granularity):
@@ -324,24 +325,25 @@ pub impl Comp {
         }
     }
 
-    inout fn verifySelectedFieldExists(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, message: String) {
-        if exprId < self.arena.semanticExprTypes.count() && self.arena.semanticExprTypes[exprId].hasFieldProjection { return }
+    inout fn verifySelectedFieldExists(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, message: String) -> Result[(), CompileDiagnostic] {
+        if exprId < self.arena.semanticExprTypes.count() && self.arena.semanticExprTypes[exprId].hasFieldProjection { return <Result.Ok value=() /> }
         val storage = self.fieldStorageTypeRef(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm))
-        if storage == 0U64 { return }
+        if storage == 0U64 { return <Result.Ok value=() /> }
         val storageType = self.arena.typeAt(index: storage)
         mut val fieldCount: U64 = 0U64
         if storageType.isRecord {
             fieldCount = storageType.recordFieldLabels.count()
         } else {
             val structIndex = self.structIndexForType(ref: storage)
-            if structIndex >= self.arena.structCount() { return }
+            if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
             fieldCount = self.arena.structAt(index: structIndex).fields.count()
         }
         // Missing recording is not evidence of an absent field (for example,
         // a Unit field has no nonzero result term). Check the declaration.
         if self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: nameStart, fieldLen: nameLen) >= fieldCount {
-            self.errorAt(offset: self.exprOffset(id: exprId), msg: message)
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: message) />
         }
+        return <Result.Ok value=() />
     }
 
     // Write capability belongs to the nearest dereference, not to every
@@ -358,16 +360,16 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyFieldReadVis(exprId: U64, base: U64, nameStart: U64, nameLen: U64) {
+    inout fn verifyFieldReadVis(exprId: U64, base: U64, nameStart: U64, nameLen: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[base] {
             Expr.Ident(val start, val len) => {
                 if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount()) {
                     if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
-                        self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)")
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)") />
                     } else {
-                        self.errorAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)")
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />
                     }
-                    return
+                    return <Result.Ok value=() />
                 }
             }
             _ => {}
@@ -383,15 +385,15 @@ pub impl Comp {
                 fei = self.genericEnumIndex(nameStart: bt.nameStart, nameLen: bt.nameLen)
             }
             if fei < self.arena.enumCount() {
-                self.errorAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)")
-                return
+                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)") />
+                return <Result.Ok value=() />
             }
             if self.fieldVis(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                    self.errorAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)") />
                 }
             }
-            self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
+            try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
             self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
@@ -399,9 +401,10 @@ pub impl Comp {
                 self.checkFieldReadVis(ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) {
+    inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if mf < self.arena.functionCount() {
                 self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.functionAt(index: mf), offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
@@ -410,13 +413,13 @@ pub impl Comp {
                 if self.arena.functionAt(index: mf).selfInout {
                     val receiverPlace: U64 = self.materializablePlace(id: recv)
                     if self.placeHasReadOnlyReference(id: receiverPlace) {
-                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot use read-only Ref as an inout place; expected MutableRef")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot use read-only Ref as an inout place; expected MutableRef") />
                     }
                     if !(self.exprIsPlace(id: receiverPlace)) {
-                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)") />
                     }
                     if !(self.placeIsMutable(id: receiverPlace)) {
-                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`") />
                     }
                     // overlapping `inout` (spec/03): an `inout fn` self IS an inout
                     // position, so it pairs with every `inout` argument — statically-
@@ -426,33 +429,35 @@ pub impl Comp {
                     mut val k: U64 = 0
                     while k < args.len {
                         if self.argAt(args: args, index: k).isInout {
-                            self.checkInoutPair(a: receiverPlace, b: self.materializablePlace(id: self.argAt(args: args, index: k).expr))
+                            try self.checkInoutPair(a: receiverPlace, b: self.materializablePlace(id: self.argAt(args: args, index: k).expr))
                         }
                         k += 1U64
                     }
                 }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind == 2 {
             // Resolve once, then validate the resolved callable. `#` methods
             // use the same final validation entry point below.
             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-            self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mi, args: args)
+            try self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mi, args: args)
         }
         // a mutating built-in array method (`append`) on an immutable / non-place array.
         if rt.kind == 3 {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
                 if !(self.exprIsPlace(id: recv)) {
-                    self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)") />
                 }
                 if !(self.placeIsMutable(id: recv)) {
-                    self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`") />
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     inout fn exprIsFloat(id: U64) -> Bool {
@@ -474,31 +479,32 @@ pub impl Comp {
         return false
     }
 
-    inout fn verifyBinaryOp(op: I64, lhs: U64, rhs: U64) {
+    inout fn verifyBinaryOp(op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
         // float arithmetic / comparison is accepted directly (the backend emits the IEEE
         // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
         if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
             if op == opRem() {
-                self.errorAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)")
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") />
             }
-            return
+            return <Result.Ok value=() />
         }
         // String `==`/`!=` is no longer a name-special case: String conforms to `Eq`
         // (`impl String as Eq` in Core, riding `bufferEq`), so it is accepted by the
         // general witness path below like any other Eq type (collections.md §3-付録4).
         if self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs) {
-            return
+            return <Result.Ok value=() />
         }
         if self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
-            self.errorAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
+            return <Result.Ok value=() />
         }
         if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
-            return
+            return <Result.Ok value=() />
         }
         if self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
-            self.errorAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type") />
         }
+        return <Result.Ok value=() />
     }
 
     inout fn castOperandIsBool(operand: U64) -> Bool {

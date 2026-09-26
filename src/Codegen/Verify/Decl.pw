@@ -93,7 +93,7 @@ pub impl Comp {
             fi += 1
         }
         if self.tracePhases { eprint(text: "[trace-phase] verify:decl-shapes\n") }
-        self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
+        try self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
         return <Result.Ok value=() />
     }
 
@@ -135,7 +135,7 @@ pub impl Comp {
     // The source-selection proof for both `value#Name` and `Type#Name`.
     // `allowMonomorphicFallback` exists only for expression type recovery:
     // scalar values have no TypeRef, whereas an authored type annotation does.
-    inout fn checkViewSourceValid(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64, offset: U64, allowMonomorphicFallback: Bool) {
+    inout fn checkViewSourceValid(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64, offset: U64, allowMonomorphicFallback: Bool) -> Result[(), CompileDiagnostic] {
         // `#X` names a source, not a syntactic category. A trait and an
         // extension may have the same spelling; accept the view when either
         // source is applicable and let callable lookup select (or loudly reject
@@ -161,17 +161,18 @@ pub impl Comp {
         val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef)
         if traitApplies || extApplies {
             if self.viewSourceCount(typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, srcStart: srcStart, srcLen: srcLen) > 1U64 {
-                self.errorAt(offset: offset, msg: "ambiguous view source: this `#` name denotes multiple declaration sources")
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "ambiguous view source: this `#` name denotes multiple declaration sources") />
             }
-            return
+            return <Result.Ok value=() />
         }
         if traitNamed {
-            self.errorAt(offset: offset, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)") />
         }
         if extNamed {
-            self.errorAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
-        self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
+        return <Result.Ok value=() />
     }
 
     inout fn checkTypeViewSources() -> Result[(), CompileDiagnostic] {
@@ -188,7 +189,7 @@ pub impl Comp {
                 while vi < sources.count() {
                     val sourceSelector: ResolvedViewSource = sources[vi]
                     if sourceSelector.surfaceId != 0U64 && sourceSelector.surfaceId <= self.interner.entries.count() {
-                        self.checkResolvedTypeViewSourceValid(typeRef: i, source: sourceSelector, offset: t.siteOffset)
+                        try self.checkResolvedTypeViewSourceValid(typeRef: i, source: sourceSelector, offset: t.siteOffset)
                         val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
@@ -203,11 +204,11 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
-        if strip { return }
+    inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) -> Result[(), CompileDiagnostic] {
+        if strip { return <Result.Ok value=() /> }
         val rt: TypeInfo = self.exprType(id: recv)
-        if rt.nameLen == 0U64 { return }
-        self.checkViewSourceValid(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen, offset: self.exprOffset(id: recv), allowMonomorphicFallback: rt.ref == 0U64 && self.recvOwnParamCount(rt: rt) == 0U64)
+        if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
+        try self.checkViewSourceValid(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen, offset: self.exprOffset(id: recv), allowMonomorphicFallback: rt.ref == 0U64 && self.recvOwnParamCount(rt: rt) == 0U64)
         // Views are normalized as an unordered extension set plus one optional
         // trait provenance selector.  Enforce the same cardinality rule for
         // value re-views as `checkTypeViewSources` does for `Type#…`: otherwise
@@ -219,21 +220,22 @@ pub impl Comp {
             mut val i: U64 = 0U64
             while i < active.count() {
                 if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
-                    self.errorAt(offset: self.exprOffset(id: recv), msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
                 }
                 i += 1U64
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Value selectors already carry their lexical trait declaration owner.
     // Do not send them through the legacy spelling-based validation above:
     // its canonicalTraitOwner lookup has no re-export provenance and can
     // select a same-spelled trait from another loaded module.
-    inout fn checkResolvedViewValid(recv: U64, source: ResolvedViewSource, strip: Bool) {
-        if strip { return }
+    inout fn checkResolvedViewValid(recv: U64, source: ResolvedViewSource, strip: Bool) -> Result[(), CompileDiagnostic] {
+        if strip { return <Result.Ok value=() /> }
         val rt: TypeInfo = self.exprType(id: recv)
-        if rt.nameLen == 0U64 { return }
+        if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
         val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
         if selected.kind != 0U64 {
             // `#Trait` is a singleton selector in the normalized view state.
@@ -245,39 +247,41 @@ pub impl Comp {
                 mut val i: U64 = 0U64
                 while i < active.count() {
                     if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
-                        self.errorAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
                     }
                     i += 1U64
                 }
             }
-            return
+            return <Result.Ok value=() />
         }
         if source.traitOwner != 0U64 {
-            self.errorAt(offset: source.writtenStart, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)") />
         }
         val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
         if self.isExtName(start: entry.start, len: entry.len) {
-            self.errorAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
-        self.errorAt(offset: source.writtenStart, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
+        return <Result.Ok value=() />
     }
 
     // Type terms carry the same semantic selector child as value views. A
     // trait selector is identified by declaration owner, never by its
     // content-interned spelling.
-    inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) {
-        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return }
+    inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val t: TypeRef = self.arena.typeAt(index: typeRef)
         val selected: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
-        if selected.kind != 0U64 { return }
+        if selected.kind != 0U64 { return <Result.Ok value=() /> }
         if source.traitOwner != 0U64 {
-            self.errorAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)") />
         }
         val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
         if self.isExtName(start: entry.start, len: entry.len) {
-            self.errorAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }
-        self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
+        return <Result.Ok value=() />
     }
 
     // A chain of `Expr.ExtView` nodes represents one normalized view, not a
@@ -296,24 +300,24 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkDeclShapes(sourceFuncLimit: U64) {
+    inout fn checkDeclShapes(sourceFuncLimit: U64) -> Result[(), CompileDiagnostic] {
         // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
         // duplicate derive scaffolding by construction; the actual generated source is
         // decl-shape-checked when the final program is compiled normally (non-gen).
         if self.genMode {
-            return
+            return <Result.Ok value=() />
         }
-        self.checkLangItemRedef()
-        self.checkBlanketHeadless()
-        self.checkNewtypeCycles()
-        self.checkDupTypeNames()
-        self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
+        try self.checkLangItemRedef()
+        try self.checkBlanketHeadless()
+        try self.checkNewtypeCycles()
+        try self.checkDupTypeNames()
+        try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
         mut val si: U64 = 0
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if !(sd.isExtern) {
                 if self.moduleOf(offset: sd.nameStart) == 0U64 {
-                    self.checkDupFields(fs: sd.fields, ctx: "struct")
+                    try self.checkDupFields(fs: sd.fields, ctx: "struct")
                 }
             }
             si += 1
@@ -328,16 +332,17 @@ pub impl Comp {
                     mut val vj: U64 = vi + 1U64
                     while vj < ed.variants.count() {
                         if spansEqual(c: inout self, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
-                            self.errorAt(offset: ed.variants[vj].nameStart, msg: "duplicate enum variant name (each variant must be distinct)")
+                            return <Result.Err error=self.diagnosticAt(offset: ed.variants[vj].nameStart, msg: "duplicate enum variant name (each variant must be distinct)") />
                         }
                         vj += 1
                     }
-                    self.checkDupFields(fs: ed.variants[vi].fields, ctx: "variant")
+                    try self.checkDupFields(fs: ed.variants[vi].fields, ctx: "variant")
                     vi += 1
                 }
             }
             ei += 1
         }
+        return <Result.Ok value=() />
     }
 
     // A newtype whose underlying chain never reaches a concrete type (`newtype A = B` /
@@ -345,7 +350,7 @@ pub impl Comp {
     // underlying-chase) would follow the chain forever, hanging the compiler on first
     // use (audit-5 L5). Reject at declaration: more hops than there are newtypes is a
     // cycle by pigeonhole.
-    inout fn checkNewtypeCycles() {
+    inout fn checkNewtypeCycles() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.newtypeCount() {
             val nt: NewtypeDef = self.arena.newtypeAt(index: i)
@@ -373,7 +378,7 @@ pub impl Comp {
                 if found {
                     hops += 1
                     if hops > self.arena.newtypeCount() {
-                        self.errorAt(offset: nt.defOffset, msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)")
+                        return <Result.Err error=self.diagnosticAt(offset: nt.defOffset, msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)") />
                     }
                 } else {
                     chasing = false
@@ -381,24 +386,26 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkBlanketHeadless() {
+    inout fn checkBlanketHeadless() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) {
                 if self.moduleOf(offset: cf.typeStart) == 0U64 {
                     if self.isBlanketConform(cf: cf) {
-                        self.errorAt(offset: cf.typeStart, msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
+                        return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)") />
                     }
                 }
             }
             i += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkLangItemRedef() {
+    inout fn checkLangItemRedef() -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
@@ -408,7 +415,7 @@ pub impl Comp {
                 if self.offsetIsLoaded(offset: sd.defOffset) {
                     if self.moduleOf(offset: sd.defOffset) == 0U64 {
                         if self.isAmbientInLang(start: sd.nameStart, len: sd.nameLen) {
-                            self.errorAt(offset: sd.defOffset, msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                            return <Result.Err error=self.diagnosticAt(offset: sd.defOffset, msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)") />
                         }
                     }
                 }
@@ -421,15 +428,16 @@ pub impl Comp {
             if self.offsetIsLoaded(offset: ed.defOffset) {
                 if self.moduleOf(offset: ed.defOffset) == 0U64 {
                     if self.isAmbientInLang(start: ed.nameStart, len: ed.nameLen) {
-                        self.errorAt(offset: ed.defOffset, msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                        return <Result.Err error=self.diagnosticAt(offset: ed.defOffset, msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)") />
                     }
                 }
             }
             ei += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkDupTypeNames() {
+    inout fn checkDupTypeNames() -> Result[(), CompileDiagnostic] {
         mut val names: Array[U64] = []
         mut val offs: Array[U64] = []
         mut val mods: Array[U64] = []
@@ -458,18 +466,19 @@ pub impl Comp {
             mut val j: U64 = i + 1U64
             while j < names.count() {
                 if mods[i] == mods[j] && names[i] == names[j] {
-                    self.errorAt(offset: offs[j], msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
+                    return <Result.Err error=self.diagnosticAt(offset: offs[j], msg: "duplicate type name (a struct/enum with this name is already declared in this module)") />
                 }
                 j += 1
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
     // This declaration-only check belongs to the same closed authored frontier
     // as verifyProgram.  It must not observe implementation rows appended while
     // expression verification resolves generic call sites.
-    inout fn checkDupParamLabels(sourceFuncLimit: U64) {
+    inout fn checkDupParamLabels(sourceFuncLimit: U64) -> Result[(), CompileDiagnostic] {
         mut val fi: U64 = 0
         while fi < sourceFuncLimit {
             val f: Func = self.arena.functionAt(index: fi)
@@ -484,7 +493,7 @@ pub impl Comp {
                                 val other: Param = self.funcParamAt(params: f.params, index: j)
                                 if !(other.noLabel) {
                                     if param.nameId == other.nameId {
-                                        self.errorAt(offset: other.nameStart, msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
+                                        return <Result.Err error=self.diagnosticAt(offset: other.nameStart, msg: "duplicate parameter label (each labelled parameter must have a distinct name)") />
                                     }
                                 }
                                 j += 1
@@ -496,6 +505,7 @@ pub impl Comp {
             }
             fi += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn fnHasDefault(f: Func) -> Bool {
@@ -509,26 +519,27 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkDupFields(fs: Array[FieldDef], ctx: String) {
+    inout fn checkDupFields(fs: Array[FieldDef], ctx: String) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < fs.count() {
             mut val j: U64 = i + 1U64
             while j < fs.count() {
                 if spansEqual(c: inout self, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
-                    self.errorAt(offset: fs[j].nameStart, msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
+                    return <Result.Err error=self.diagnosticAt(offset: fs[j].nameStart, msg: "duplicate field name (each field in a struct body / variant payload must be distinct)") />
                 }
                 j += 1
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkGenericArity(ref: U64, offset: U64) {
+    inout fn checkGenericArity(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if ref == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         if ref >= self.arena.typeCount() {
-            return
+            return <Result.Ok value=() />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
         if t.args.count() > 0U64 {
@@ -541,21 +552,22 @@ pub impl Comp {
             val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if si < self.arena.structCount() {
                 if t.args.count() != self.arena.structAt(index: si).typeParams.count() {
-                    self.errorAt(offset: offset, msg: "wrong number of type arguments for this generic type (spec/06)")
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "wrong number of type arguments for this generic type (spec/06)") />
                 }
             } else {
                 val ei: U64 = self.anyEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
                 if ei < self.arena.enumCount() {
                     if t.args.count() != self.arena.enumAt(index: ei).typeParams.count() {
-                        self.errorAt(offset: offset, msg: "wrong number of type arguments for this generic type (spec/06)")
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "wrong number of type arguments for this generic type (spec/06)") />
                     }
                 }
             }
             mut val ai: U64 = 0
             while ai < t.args.count() {
-                self.checkGenericArity(ref: t.args[ai], offset: offset)
+                try self.checkGenericArity(ref: t.args[ai], offset: offset)
                 ai += 1
             }
         }
+        return <Result.Ok value=() />
     }
 }

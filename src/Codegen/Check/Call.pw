@@ -8,9 +8,9 @@
 // (which lower to Expr.Move, not a place) pass. `inoutOk` exempts `inout` args.
 
 pub impl Comp {
-    inout fn checkUniquePlaceCopy(exprId: U64, inoutOk: Bool) {
+    inout fn checkUniquePlaceCopy(exprId: U64, inoutOk: Bool) -> Result[(), CompileDiagnostic] {
         if inoutOk {
-            return
+            return <Result.Ok value=() />
         }
         if self.isPlaceExpr(id: exprId) {
             // (typeOf, cached: read only via kind==2; a width-less int — typeOf's sole
@@ -18,10 +18,11 @@ pub impl Comp {
             val ti: TypeInfo = self.typeOf(id: exprId)
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
-                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`") />
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Ownership belongs to the evaluated value, not to its spelling. Storage
@@ -65,41 +66,43 @@ pub impl Comp {
         }
     }
 
-    inout fn checkMatchAccessMode(scrut: U64, arms: MatchArmRange) {
+    inout fn checkMatchAccessMode(scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         if self.matchScrutIsBorrow(scrut: scrut) {
-            self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)")
-            return
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)") />
+            return <Result.Ok value=() />
         }
         if self.matchScrutIsMove(scrut: scrut) {
             if arms.len > 0U64 {
                 if self.matchArmAt(arms: arms, index: 0U64).isStruct {
-                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)") />
                 }
             }
-            return
+            return <Result.Ok value=() />
         }
         if self.isPlaceExpr(id: scrut) {
             val ti: TypeInfo = self.typeOf(id: scrut)
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
-                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)") />
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkUniqueArgModes(args: ArgRange) {
+    inout fn checkUniqueArgModes(args: ArgRange) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < args.len {
             val arg: Arg = self.argAt(args: args, index: i)
-            self.checkUniquePlaceCopy(exprId: arg.expr, inoutOk: arg.isInout)
+            try self.checkUniquePlaceCopy(exprId: arg.expr, inoutOk: arg.isInout)
             i += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn tcCheckGenericArgConsistency(f: Func, args: ArgRange) {
+    inout fn tcCheckGenericArgConsistency(f: Func, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if f.typeParams.count() == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         mut val tpi: U64 = 0
         while tpi < f.typeParams.count() {
@@ -119,7 +122,7 @@ pub impl Comp {
                                 firstRef = ar
                             } else {
                                 if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
-                                    self.errorAt(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types") />
                                 }
                             }
                         }
@@ -129,9 +132,10 @@ pub impl Comp {
             }
             tpi += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkArgInoutMode(p: Param, arg: Arg) {
+    inout fn checkArgInoutMode(p: Param, arg: Arg) -> Result[(), CompileDiagnostic] {
         if p.isInout {
             if arg.isInout {
                 // `inout` writes through the place, so the argument must (a) BE a place —
@@ -139,27 +143,28 @@ pub impl Comp {
                 // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
                 val place: U64 = self.materializablePlace(id: arg.expr)
                 if !(self.exprIsPlace(id: place)) {
-                    self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)") />
                 }
                 if !(self.placeIsMutable(id: place)) {
-                    self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)") />
                 }
             } else {
-                self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)") />
             }
         } else {
             if arg.isInout {
-                self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)") />
             }
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkFnSigAgainst(ft: TypeRef, params: Array[Param], retTy: U64, offset: U64) {
+    inout fn checkFnSigAgainst(ft: TypeRef, params: Array[Param], retTy: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         // return type: ft.args[0].
         if ft.args.count() >= 1U64 {
             if retTy != 0U64 {
                 if !(self.typesCompatible(expected: ft.args[0], inferred: retTy)) {
-                    self.errorAt(offset: offset, msg: "function value's return type does not match the expected function type (spec/04)")
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "function value's return type does not match the expected function type (spec/04)") />
                 }
             }
         }
@@ -168,25 +173,27 @@ pub impl Comp {
             if k + 1U64 < ft.args.count() {
                 if params[k].ty != 0U64 {
                     if !(self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
-                        self.errorAt(offset: offset, msg: "function value's parameter type does not match the expected function type (spec/04)")
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "function value's parameter type does not match the expected function type (spec/04)") />
                     }
                 }
             }
             k += 1
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn checkFnValueSig(declTy: U64, init: U64) {
+    inout fn checkFnValueSig(declTy: U64, init: U64) -> Result[(), CompileDiagnostic] {
         if !(self.isFnType(ref: declTy)) {
-            return
+            return <Result.Ok value=() />
         }
         val ft: TypeRef = self.arena.typeAt(index: declTy)
         match self.arena.exprs[init] {
             Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-                self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: self.exprOffset(id: init))
+                try self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: self.exprOffset(id: init))
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     inout fn localTypeRefByName(nameStart: U64, nameLen: U64) -> U64 {
@@ -202,7 +209,7 @@ pub impl Comp {
     }
 
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        self.checkUniqueArgModes(args: args)
+        try self.checkUniqueArgModes(args: args)
         val fi: U64 = self.resolvedCallee(id: id)
         if fi == self.arena.functionCount() {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
@@ -230,16 +237,16 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val f: Func = self.arena.functionAt(index: fi)
-        self.tcCheckGenericArgConsistency(f: f, args: args)
+        try self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = self.copyFuncParams(params: f.params)
         mut val i: U64 = 0
         while i < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: i)
             if pi < ps.count() {
                 val p: Param = ps[pi]
-                self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
+                try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
                 try self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                self.checkClosureArgArity(argExpr: self.argAt(args: args, index: i).expr, p: p)
+                try self.checkClosureArgArity(argExpr: self.argAt(args: args, index: i).expr, p: p)
                 // full type-compatibility (not just literal context): a non-literal VALUE
                 // argument whose type disagrees with the parameter (a closure with the wrong
                 // return type for a `fn(...)->R` param, etself.) — checkLitSpan only sees
@@ -254,12 +261,12 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkClosureArgArity(argExpr: U64, p: Param) {
+    inout fn checkClosureArgArity(argExpr: U64, p: Param) -> Result[(), CompileDiagnostic] {
         if p.ty == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         if !(self.isFnType(ref: p.ty)) {
-            return
+            return <Result.Ok value=() />
         }
         match self.arena.exprs[argExpr] {
             Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
@@ -279,14 +286,14 @@ pub impl Comp {
                                 val expLbl: U64 = expLabels[pj + 1U64]
                                 if expLbl != 0U64 {
                                     if params[pj].nameId != expLbl {
-                                        self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
+                                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: argExpr), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)") />
                                     }
                                 }
                             }
                             pj += 1U64
                         }
                     } else {
-                        self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure has the wrong number of parameters for the expected function type")
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: argExpr), msg: "closure has the wrong number of parameters for the expected function type") />
                     }
                     // the closure's declared return type must match the expected function
                     // type's return (`fn(...)->R` args = [R, param0, …]) — else the caller
@@ -297,7 +304,7 @@ pub impl Comp {
                             val expRet: U64 = self.arena.typeAt(index: p.ty).args[0]
                             if expRet != 0U64 {
                                 if !(self.typesCompatible(expected: expRet, inferred: retTy)) {
-                                    self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure return type does not match the expected function type")
+                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: argExpr), msg: "closure return type does not match the expected function type") />
                                 }
                             }
                         }
@@ -306,6 +313,7 @@ pub impl Comp {
             }
             _ => {}
         }
+        return <Result.Ok value=() />
     }
 
     inout fn recvOwnParamCount(rt: TypeInfo) -> U64 {
@@ -321,7 +329,7 @@ pub impl Comp {
     }
 
     inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        self.checkUniqueArgModes(args: args)
+        try self.checkUniqueArgModes(args: args)
         try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
         // int form, so this matches exprType exactly.)
@@ -369,7 +377,7 @@ pub impl Comp {
             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             if mi != self.arena.functionCount() {
                 val mf: Func = self.arena.functionAt(index: mi)
-                self.tcCheckGenericArgConsistency(f: mf, args: args)
+                try self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
@@ -377,7 +385,7 @@ pub impl Comp {
                     val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
                     if pi < ps.count() {
                         val p: Param = ps[pi]
-                        self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
+                        try self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
                         if genericRecv {
                             // a CONCRETE primitive param (`n: I64`) on a generic receiver
                             // needs no grounding — check it directly. (substTypeInfo with the
@@ -502,7 +510,7 @@ pub impl Comp {
                         val pi: U64 = self.paramIndexForArg(params: af.params, args: args, argIdx: k)
                         if pi < aps.count() {
                             val ap: Param = aps[pi]
-                            self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
+                            try self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
                             mut val checkedGround: Bool = false
                             if qualifier != 0U64 && ap.ty != 0U64 {
                                 val parameter = self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: ap.ty)

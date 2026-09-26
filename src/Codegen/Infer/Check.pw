@@ -9,7 +9,7 @@ pub impl Comp {
         // a function VALUE (closure literal / function reference) flowing into a fn-typed
         // position must match the signature, everywhere tcCheckValue runs (binding, return,
         // arg, struct field, array element). isFnType-gated, so a no-op otherwise.
-        self.checkFnValueSig(declTy: expectedRef, init: valueExpr)
+        try self.checkFnValueSig(declTy: expectedRef, init: valueExpr)
         // a void function's result is `()` — using it where a typed value is expected
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
         if self.exprIsVoidCall(id: valueExpr) {

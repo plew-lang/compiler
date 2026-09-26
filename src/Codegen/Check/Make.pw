@@ -71,7 +71,7 @@ pub impl Comp {
             self.checkMakeFieldExists(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, mf: mf)
             // a unique field value must be moved/constructed in, not copied from a
             // place (which would double-deinit: the source and the new owner).
-            self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
+            try self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
             if ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeAt(index: ty).isRecord {
                 ft = self.typeInfoOfRef(ref: self.fieldTypeRefOfReceiver(receiverRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen))

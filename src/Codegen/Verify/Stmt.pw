@@ -12,7 +12,7 @@ pub impl Comp {
                     try self.checkLitCtx(id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
                 // a bare unique place on the rhs is a forbidden copy (`val g = f`).
-                self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
+                try self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
                 try self.verifyExpr(id: init)
                 // a record-destructure statement lowered to this temp Let: check its
                 // bind list against the record's fields (spec/03 — the locals env is
@@ -27,7 +27,7 @@ pub impl Comp {
                 // init reported numeric is never trusted as a mismatch source (that sank the
                 // first attempt — fn_value / dict / a call false-rejected). Skip arrays
                 // (separate machinery) and floats (typeOf wobbles float literal vs local).
-                self.checkGenericArity(ref: ty, offset: nameStart)
+                try self.checkGenericArity(ref: ty, offset: nameStart)
                 // declared an array but initialized with a non-array (`val a: Array[I64] =
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
@@ -276,7 +276,7 @@ pub impl Comp {
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
-                self.checkMatchAccessMode(scrut: scrut, arms: arms)
+                try self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 try self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
@@ -395,7 +395,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        self.checkUniquePlaceCopy(exprId: value, inoutOk: false)
+        try self.checkUniquePlaceCopy(exprId: value, inoutOk: false)
         // determine the RHS literal type from the target place (the same context a `val`
         // initializer gets): a determinable literal types at the target width and is
         // range-checked; an undetermined one is a compile error, not a silent i64 default.

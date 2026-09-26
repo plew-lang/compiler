@@ -60,7 +60,7 @@ pub impl Comp {
             val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)
             if pi < chosen.params.count() {
                 val param: Param = self.funcParamAt(params: chosen.params, index: pi)
-                self.checkArgInoutMode(p: param, arg: self.argAt(args: args, index: ai))
+                try self.checkArgInoutMode(p: param, arg: self.argAt(args: args, index: ai))
                 try self.tcCheckValue(expectedRef: param.ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
@@ -131,7 +131,7 @@ pub impl Comp {
         while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.checkArgInoutMode(p: self.funcParamAt(params: cf.params, index: pIdx), arg: self.argAt(args: args, index: ai))
+                try self.checkArgInoutMode(p: self.funcParamAt(params: cf.params, index: pIdx), arg: self.argAt(args: args, index: ai))
             }
             ai += 1U64
         }
