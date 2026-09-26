@@ -5595,15 +5595,18 @@ pub impl Comp {
     // non-Optional, or lacking the factories — desugar and then fail deep in the backend
     // with an out-of-source line number. The Mono rewrite gate and the Verify survivor
     // check share this predicate so they never disagree on what conforms.
-    inout fn typeConformsToChain(nameStart: U64, nameLen: U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn typeConformsToChain(typeRef: U64) -> Result[Bool, CompileDiagnostic] {
         // `?.` is the `Chain` trait's desugar (spec/12), and Plew traits are NOMINAL:
         // a type is a `Chain` only if it declares `impl … as Chain`. Check that first —
         // else a type that merely happens to expose `chain()`/`fromValue`/`empty` with
         // the right arities would be duck-typed into `?.` (a hidden-meaning accept that
         // contradicts "忖度はしない"). Only `Optional` conforms in std/Core.pw.
-        val recvId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=false /> }
+        val type = self.arena.typeAt(index: typeRef)
+        val nameStart = type.nameStart
+        val nameLen = type.nameLen
         val chainTrait: Bind = self.internBytes(s: "Chain")
-        if !(self.conformExists(typeId: recvId, traitId: chainTrait.nameId)) {
+        if !(self.conformExists(typeRef: typeRef, traitId: chainTrait.nameId)) {
             return <Result.Ok value=false />
         }
         val chN: Bind = self.internBytes(s: "chain")

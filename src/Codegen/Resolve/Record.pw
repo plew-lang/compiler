@@ -1803,7 +1803,7 @@ pub impl Comp {
                 // deliberately does not do this because these terms do not yet
                 // exist there.
                 if baseInfo.kind == 2I64 && baseRef != 0U64 && baseRef < self.arena.typeCount() {
-                    if (try self.typeConformsToChain(nameStart: baseInfo.nameStart, nameLen: baseInfo.nameLen)) {
+                    if (try self.typeConformsToChain(typeRef: baseRef)) {
                         val stageRef: U64 = (try self.chainStageResultRef(baseRef: baseRef, cont: cont))
                         if stageRef != 0U64 {
                             val baseTerm: TypeRef = self.arena.typeAt(index: baseRef)

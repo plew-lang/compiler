@@ -118,15 +118,8 @@ pub impl Comp {
                         // instance query as `where`: a witness for `P[I64]`
                         // does not construct an `any P[String]` box.
                         val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
-                        if inferred != 0U64 {
-                            if !((try self.conformsTraitConstraint(ref: inferred, constraint: constraint))) {
-                                return <Result.Ok value=false />
-                            }
-                        } else {
-                            val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
-                            if constraint.key.positionalArgs.count() != 0U64 || !(self.conformExists(typeId: srcId, traitId: traitId)) {
-                                return <Result.Ok value=false />
-                            }
+                        if !((try self.conformsTraitConstraint(ref: inferred, constraint: constraint))) {
+                            return <Result.Ok value=false />
                         }
                     }
                 }

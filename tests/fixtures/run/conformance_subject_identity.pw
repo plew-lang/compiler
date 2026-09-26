@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Conform, TypeRef, PatternTypeInput, PatternBindInput }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Item")
+    val trait = compiler.internBytes(s: "Readable")
+    val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    compiler.decls.conforms.append(<Conform sourceModule=0U64 typeStart=name.nameStart typeLen=name.nameLen typeId=name.nameId subjectTy=first traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId derived=false />)
+    print(compiler.conformExists(typeRef: first, traitId: trait.nameId))
+    print(compiler.conformExists(typeRef: second, traitId: trait.nameId))
+    print(compiler.conformExistsTraitInstance(typeRef: first, traitId: trait.nameId, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />))
+    print(compiler.conformExistsTraitInstance(typeRef: second, traitId: trait.nameId, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />))
+}

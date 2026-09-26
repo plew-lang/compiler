@@ -408,7 +408,7 @@ pub impl Comp {
                 mut val baseIsChain: Bool = false
                 if bt.kind == 2I64 {
                     if bt.nameLen > 0U64 {
-                        baseIsChain = (try self.typeConformsToChain(nameStart: bt.nameStart, nameLen: bt.nameLen))
+                        baseIsChain = (try self.typeConformsToChain(typeRef: self.typedIrRefOfInfo(ti: bt)))
                     }
                 }
                 if !(baseIsChain) {
