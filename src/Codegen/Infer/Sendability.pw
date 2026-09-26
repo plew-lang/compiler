@@ -57,11 +57,11 @@ pub impl Comp {
         if self.primOrStringIsSendable(t: t) {
             return <Result.Ok value=true />
         }
-        val under: U64 = self.newtypeUnderlying(ref: ref)
+        val under: U64 = self.newtypeUnderlying(ref: rr)
         if under != 0U64 {
             return <Result.Ok value=(try self.typeRefIsSendableDepth(ref: under, depth: depth - 1U64)) />
         }
-        val si: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        val si: U64 = self.structIndexForType(ref: rr)
         if si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if sd.isNonsendable {
