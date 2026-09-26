@@ -8,12 +8,12 @@ import @Std/Io with { fileExists }
 import ./SourceAccess with { SourceAccess, isEmbeddedSourcePath }
 import @Plew/Syntax with { rangeEquals }
 import ./Ir with { Bind, appendBytes }
-export ./Ir with { Bind }
+pub import ./Ir with { Bind }
 
 // Remove `n` trailing directory components from the prefix path[0..baseLen]
 // (baseLen points just past a trailing '/'); returns the new prefix length. Used
 // for `../` (each strips one component from the importer's directory).
-export fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
+pub fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
     mut val end: U64 = baseLen
     mut val c: U64 = 0
     while c < n {
@@ -43,7 +43,7 @@ export fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 // neither exists, returns the `.pw` form so the loader reports the missing file. When
 // `base` already ends with `/` (the bare-`/` root import = `src/`), the directory form
 // is `<base>_.pw` (no doubled slash).
-export fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAccess />) -> Array[U8] {
+pub fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAccess />) -> Array[U8] {
     mut val withPw: Array[U8] = []
     appendBytes(into: inout withPw, from: base)
     appendBytes(into: inout withPw, from: ".pw".bytes())
@@ -71,7 +71,7 @@ export fn finishModulePath(base: Array[U8], sources: SourceAccess = <SourceAcces
 // (`@…` intrinsic/external, or `/…` with no package root). `/Seg` → srcRoot +
 // Seg + ".pw"; `./Name` → importerDir + Name + ".pw"; `../Name` → parent(s) of
 // importerDir + Name + ".pw". The trailing-`/` subpath stays (subdirectories).
-export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64, sources: SourceAccess = <SourceAccess />) -> Array[U8] {
+pub fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[U8], baseLen: U64, srcRoot: Array[U8], srcRootLen: U64, stdRoot: Array[U8], stdRootLen: U64, sources: SourceAccess = <SourceAccess />) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen == 0 {
         return out
@@ -146,7 +146,7 @@ export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[
 
 // Copy a byte span out of `buf` into a fresh array (paths live in a shared
 // buffer; this extracts one for use as a file path).
-export fn extractSpan(buf: Array[U8], start: U64, len: U64) -> Array[U8] {
+pub fn extractSpan(buf: Array[U8], start: U64, len: U64) -> Array[U8] {
     mut val out: Array[U8] = []
     mut val i: U64 = 0
     while i < len {
@@ -158,7 +158,7 @@ export fn extractSpan(buf: Array[U8], start: U64, len: U64) -> Array[U8] {
 
 // Length of the directory prefix of `path` (index just past the last '/'); 0 if
 // the path has no '/'. So a sibling resolves as path[0..pre] + name.
-export fn dirPrefixLen(path: Array[U8]) -> U64 {
+pub fn dirPrefixLen(path: Array[U8]) -> U64 {
     mut val pre: U64 = 0
     mut val k: U64 = 0
     while k < path.count() {
@@ -172,7 +172,7 @@ export fn dirPrefixLen(path: Array[U8]) -> U64 {
 
 // The std library root: the directory of the plewc binary (argv[0]) with `std/`
 // appended. So invoking `compiler/plewc` resolves `@Std/X` to `compiler/std/X.pw`.
-export fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
+pub fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
     val pre: U64 = dirPrefixLen(path: arg0)
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: extractSpan(buf: arg0, start: 0, len: pre))
@@ -185,7 +185,7 @@ export fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
 // (with its trailing `/`). Empty if no manifest is found. Used both for `/…`
 // absolute imports (→ `<pkgDir>src/`) and for parsing `<pkgDir>Plew.toml` to
 // resolve `@dep` imports.
-export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
+pub fn findPkgDir(entry: Array[U8]) -> Array[U8] {
     // Logical resources do not participate in filesystem ancestor discovery.
     // In particular, the consumer's cwd manifest cannot govern embedded Std.
     if isEmbeddedSourcePath(path: entry) { return [] }
@@ -234,7 +234,7 @@ export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
 // The package source root for `/…` absolute imports: `<pkgDir>src/`. Empty if no
 // manifest is found (then `/…` imports are unresolved). spec: sources live under
 // `src/` (manifest may override later); only the manifest's *location* is used.
-export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
+pub fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     val dir: Array[U8] = findPkgDir(entry: entry)
     if dir.count() == 0 {
         return dir
@@ -245,7 +245,7 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     return sr
 }
 
-export fn pathStartsWith(path: Array[U8], prefix: Array[U8]) -> Bool {
+pub fn pathStartsWith(path: Array[U8], prefix: Array[U8]) -> Bool {
     if prefix.count() == 0 {
         return false
     }
@@ -266,7 +266,7 @@ export fn pathStartsWith(path: Array[U8], prefix: Array[U8]) -> Bool {
 // individual `@Std/...` package faces, so their root is the module file itself.
 // Manifest-backed packages use `<pkg>/src/_.pw`. Standalone files return empty;
 // the loader treats those as self-rooted modules.
-export fn packageRootPath(entry: Array[U8], stdRoot: Array[U8]) -> Array[U8] {
+pub fn packageRootPath(entry: Array[U8], stdRoot: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     if pathStartsWith(path: entry, prefix: stdRoot) {
         appendBytes(into: inout out, from: entry)
@@ -283,7 +283,7 @@ export fn packageRootPath(entry: Array[U8], stdRoot: Array[U8]) -> Array[U8] {
 
 // `<path>.pw` -> `<path>.gen.pw` (the auto-parted generated sibling). Empty if
 // `path` does not end in `.pw` (46='.', 112='p', 119='w').
-export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
+pub fn genSiblingPath(path: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     val n: U64 = path.count()
     if n < 3 {
@@ -304,7 +304,7 @@ export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
 // The module id (a loaded Bind's `fieldStart`) for the file `path`, or the sentinel
 // 4_000_000_000 when `path` is not in the loaded set. Lets the loader record an
 // import edge to the specific module a path resolved to.
-export fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U64 {
+pub fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U64 {
     mut val i: U64 = 0
     while i < loaded.count() {
         val b: Bind = loaded[i]
@@ -328,7 +328,7 @@ export fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -
 
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
 // Dedup keeps a module included once and makes import cycles terminate.
-export fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
+pub fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
     mut val i: U64 = 0
     while i < loaded.count() {
         val b: Bind = loaded[i]

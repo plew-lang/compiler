@@ -8,7 +8,7 @@
 // (`plew_cString` / `plew_stringFromCString` in the preamble; `arrayCPtr` lowers
 // inline to the buffer base). All take positional args (FFI is positional).
 
-export extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     // Plew `String` -> a freshly heap-allocated NUL-terminated C string
     // (`const char*` == `CPtr[U8]`) — the RAW floor: the caller owns the buffer
     // and must release it with `cFree`. `CString` (below) is the canonical owned
@@ -33,7 +33,7 @@ export extern(plewIntrinsic) {
 // NUL-terminated UTF-8 copy. Pass `.ptr` to C — valid exactly while this value
 // lives (lexically explicit) — and the deinit frees the buffer at scope exit,
 // so a bound conversion can never leak.
-export unique struct CString {
+pub unique struct CString {
     pub val ptr: CPtr[U8]
     deinit { cFree(self.ptr) }
 }

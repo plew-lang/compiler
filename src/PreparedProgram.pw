@@ -8,13 +8,13 @@ import ./Mid/Ambient with { MidAmbientProgram }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
 
-export enum ProgramPreparationError {
+pub enum ProgramPreparationError {
     Frontend(diagnostic: CompileDiagnostic)
     Mid(error: MidProgramError)
     GlobalAccess(offset: U64)
 }
 
-export struct PreparedProgram {
+pub struct PreparedProgram {
     pub val executable: MidExecutableProgram
     pub val ambient: MidAmbientProgram
 }
@@ -51,7 +51,7 @@ pub impl PreparedProgram {
 
 // Convert a preparation failure without terminating the caller. Trace options
 // retain the existing detailed internal-error output.
-export fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationError) -> CompileDiagnostic {
+pub fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationError) -> CompileDiagnostic {
     match error {
         ProgramPreparationError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
         ProgramPreparationError.GlobalAccess(offset: val offset) => {

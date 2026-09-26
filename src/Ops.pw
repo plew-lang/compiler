@@ -8,32 +8,32 @@
 
 import @Plew/Syntax with { Kind, kindCode }
 
-export fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
-export fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
-export fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
-export fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
-export fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
-export fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
-export fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
-export fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
-export fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
-export fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
-export fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
-export fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
-export fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
-export fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
-export fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
-export fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
-export fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
-export fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
-export fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
-export fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
-export fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
-export fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
-export fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
-export fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
-export fn opDivAssign() -> I64 { return kindCode(k: <Kind.SlashEq />) }
-export fn opRemAssign() -> I64 { return kindCode(k: <Kind.PercentEq />) }
+pub fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
+pub fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }
+pub fn opLt() -> I64 { return kindCode(k: <Kind.Lt />) }
+pub fn opLe() -> I64 { return kindCode(k: <Kind.Le />) }
+pub fn opGt() -> I64 { return kindCode(k: <Kind.Gt />) }
+pub fn opGe() -> I64 { return kindCode(k: <Kind.Ge />) }
+pub fn opAdd() -> I64 { return kindCode(k: <Kind.Plus />) }
+pub fn opSub() -> I64 { return kindCode(k: <Kind.Minus />) }
+pub fn opMul() -> I64 { return kindCode(k: <Kind.Star />) }
+pub fn opDiv() -> I64 { return kindCode(k: <Kind.Slash />) }
+pub fn opRem() -> I64 { return kindCode(k: <Kind.Percent />) }
+pub fn opAnd() -> I64 { return kindCode(k: <Kind.AmpAmp />) }
+pub fn opOr() -> I64 { return kindCode(k: <Kind.PipePipe />) }
+pub fn opNot() -> I64 { return kindCode(k: <Kind.Bang />) }
+pub fn opBitAnd() -> I64 { return kindCode(k: <Kind.Amp />) }
+pub fn opBitOr() -> I64 { return kindCode(k: <Kind.Pipe />) }
+pub fn opBitXor() -> I64 { return kindCode(k: <Kind.Caret />) }
+pub fn opShl() -> I64 { return kindCode(k: <Kind.Shl />) }
+pub fn opShr() -> I64 { return kindCode(k: <Kind.Shr />) }
+pub fn opBitNot() -> I64 { return kindCode(k: <Kind.Tilde />) }
+pub fn opAssign() -> I64 { return kindCode(k: <Kind.Eq />) }
+pub fn opAddAssign() -> I64 { return kindCode(k: <Kind.PlusEq />) }
+pub fn opSubAssign() -> I64 { return kindCode(k: <Kind.MinusEq />) }
+pub fn opMulAssign() -> I64 { return kindCode(k: <Kind.StarEq />) }
+pub fn opDivAssign() -> I64 { return kindCode(k: <Kind.SlashEq />) }
+pub fn opRemAssign() -> I64 { return kindCode(k: <Kind.PercentEq />) }
 fn opBitAndAssign() -> I64 { return kindCode(k: <Kind.AmpEq />) }
 fn opBitOrAssign() -> I64 { return kindCode(k: <Kind.PipeEq />) }
 fn opBitXorAssign() -> I64 { return kindCode(k: <Kind.CaretEq />) }
@@ -43,7 +43,7 @@ fn opShlAssign() -> I64 { return kindCode(k: <Kind.ShlEq />) }
 // so `target OP= value` can desugar to `target = target OP value` and route the
 // `OP` through the operator-trait witness dispatch (spec/12). 0 is never returned
 // for a real compound op (the caller guards `op == opAssign()` first).
-export fn compoundBinOp(op: I64) -> I64 {
+pub fn compoundBinOp(op: I64) -> I64 {
     if op == opAddAssign() { return opAdd() }
     if op == opSubAssign() { return opSub() }
     if op == opMulAssign() { return opMul() }
@@ -59,7 +59,7 @@ export fn compoundBinOp(op: I64) -> I64 {
 // Whether a binary op is a trait-dispatched operator (spec/12): arithmetic
 // (Add/Sub/Mul/Div/Rem) or bitwise/shift (BitAnd/BitOr/BitXor/Shl/Shr). Comparison
 // (Eq/Ord) and `&&`/`||`/`??` are handled separately.
-export fn isBinTraitOp(op: I64) -> Bool {
+pub fn isBinTraitOp(op: I64) -> Bool {
     if op == opAdd() { return true }
     if op == opSub() { return true }
     if op == opMul() { return true }
@@ -74,7 +74,7 @@ export fn isBinTraitOp(op: I64) -> Bool {
 }
 
 // The operator trait name for a binary op (`+` -> "Add", `&` -> "BitAnd").
-export fn binTraitName(op: I64) -> String {
+pub fn binTraitName(op: I64) -> String {
     if op == opAdd() { return "Add" }
     if op == opSub() { return "Sub" }
     if op == opMul() { return "Mul" }
@@ -88,7 +88,7 @@ export fn binTraitName(op: I64) -> String {
 }
 
 // The witness assoc-fn name for a binary op (`+` -> "add", `&` -> "bitand").
-export fn binTraitMethodName(op: I64) -> String {
+pub fn binTraitMethodName(op: I64) -> String {
     if op == opAdd() { return "add" }
     if op == opSub() { return "sub" }
     if op == opMul() { return "mul" }
@@ -102,7 +102,7 @@ export fn binTraitMethodName(op: I64) -> String {
 }
 
 // The witness assoc-fn name for a unary op (`-` -> "neg", `!` -> "not", `~` -> "bitnot").
-export fn unaryMethodName(op: I64) -> String {
+pub fn unaryMethodName(op: I64) -> String {
     if op == opSub() { return "neg" }
     if op == opNot() { return "not" }
     return "bitnot"

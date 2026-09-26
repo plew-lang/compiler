@@ -18,17 +18,17 @@ part ./Ir/BodyInstances
 
 // Read-only matching inputs retain their storage provenance. Pool-backed
 // inputs hold ranges, never snapshots of the entire append-only pool.
-export enum PatternBindInput {
+pub enum PatternBindInput {
     Values(values: Array[Bind])
     Conformance(range: ConformBindRange)
     Function(range: FuncBindRange)
 }
-export enum PatternTypeInput {
+pub enum PatternTypeInput {
     Values(values: Array[U64])
     Conformance(range: ConformTypeRange)
 }
 
-export struct DeclarationName {
+pub struct DeclarationName {
     pub val start: U64
     pub val len: U64
 }
@@ -43,7 +43,7 @@ pub impl DeclarationName { factory }
 
 // A parsed type: for `Array[E]`, (start,len) names the element E and isArray is
 // true; otherwise (start,len) names the type itself (scalar / String / named).
-export struct PType {
+pub struct PType {
     pub val start: U64
     pub val len: U64
     pub val isArray: Bool
@@ -61,7 +61,7 @@ export struct PType {
 // lexical surface module.  A zero traitOwner is the deferred extension-bundle
 // case; surfaceId is then the bundle's canonical name key.  Later phases must
 // consume this node rather than recover an owner from its spelling again.
-export struct ResolvedViewSource {
+pub struct ResolvedViewSource {
     pub val writtenStart: U64 = 0
     pub val writtenLen: U64 = 0
     pub val lexicalSurfaceModule: U64 = 0
@@ -75,7 +75,7 @@ pub impl ResolvedViewSource { factory }
 // reading a TypeTerm during grounding or LLVM lowering must never retain/drop
 // an Array.  The legacy TypeRef mirror remains during migration only; all new
 // high-frequency consumers must use these typed ranges and Comp readers.
-export struct TypeArgumentRange {
+pub struct TypeArgumentRange {
     pub val start: U64
     pub val len: U64
 }
@@ -83,7 +83,7 @@ pub impl TypeArgumentRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeRecordLabelRange {
+pub struct TypeRecordLabelRange {
     pub val start: U64
     pub val len: U64
 }
@@ -91,7 +91,7 @@ pub impl TypeRecordLabelRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeRecordFieldRange {
+pub struct TypeRecordFieldRange {
     pub val start: U64
     pub val len: U64
 }
@@ -99,7 +99,7 @@ pub impl TypeRecordFieldRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeViewIdRange {
+pub struct TypeViewIdRange {
     pub val start: U64
     pub val len: U64
 }
@@ -107,7 +107,7 @@ pub impl TypeViewIdRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeViewSourceRange {
+pub struct TypeViewSourceRange {
     pub val start: U64
     pub val len: U64
 }
@@ -115,7 +115,7 @@ pub impl TypeViewSourceRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeArgumentLabelRange {
+pub struct TypeArgumentLabelRange {
     pub val start: U64
     pub val len: U64
 }
@@ -123,7 +123,7 @@ pub impl TypeArgumentLabelRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeAssocArgumentRange {
+pub struct TypeAssocArgumentRange {
     pub val start: U64
     pub val len: U64
 }
@@ -131,7 +131,7 @@ pub impl TypeAssocArgumentRange {
     factory
     fn count() -> U64 { return self.len }
 }
-export struct TypeAssocArgumentLabelRange {
+pub struct TypeAssocArgumentLabelRange {
     pub val start: U64
     pub val len: U64
 }
@@ -140,7 +140,7 @@ pub impl TypeAssocArgumentLabelRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct TypeTerm {
+pub struct TypeTerm {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0U64
@@ -178,7 +178,7 @@ pub impl TypeTerm { factory }
 // arguments (indices into Comp.arena.types). Non-generic types have an empty args
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
 // {name="Optional", args=[I32]}; a bare `I32` is {name="I32", args=[]}.
-export struct TypeRef {
+pub struct TypeRef {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned head-name id (Phase D): the content-keyed id of (nameStart,nameLen),
@@ -270,7 +270,7 @@ export struct TypeRef {
 // only for now). Flat list keyed by `closureId` (the Closure node's arena
 // index); querying a closure's captures filters by it. The capture becomes a
 // field of `__closure_env<closureId>`, read in the body via `__env`.
-export struct CaptureEntry {
+pub struct CaptureEntry {
     pub val closureId: U64
     pub val nameStart: U64
     pub val nameLen: U64
@@ -284,7 +284,7 @@ export struct CaptureEntry {
     pub val boxed: Bool
 }
 
-export struct Local {
+pub struct Local {
     pub val globalTypePending: Bool = false
     pub val nameStart: U64
     pub val nameLen: U64
@@ -325,7 +325,7 @@ export struct Local {
 // The recovered type of an expression. kind: 0 scalar (long long), 1 String,
 // 2 named struct/enum, 3 array. For named: (nameStart,len) is the type name;
 // for array: the element type name (always backed by a real declaration span).
-export struct TypeInfo {
+pub struct TypeInfo {
     pub val kind: I64
     pub val nameStart: U64
     pub val nameLen: U64
@@ -352,7 +352,7 @@ export struct TypeInfo {
 // Shapes: 0 unknown scalar, 1 scalar, 2 String, 3 nominal, 4 Array,
 // 5 function, 6 existential. Source locations stay on Expr/TypeRef and are
 // deliberately absent from semantic identity.
-export struct SemanticExprType {
+pub struct SemanticExprType {
     pub val term: U64 = 0
     pub val shape: U64 = 0
     pub val legacyKind: I64 = 0
@@ -377,7 +377,7 @@ pub impl SemanticExprType { factory }
 // carry: physical field/variant layout and the language-defined evaluation order of
 // child values. Record freezes it before Mid lowering so neither Mid nor LLVM
 // has to reopen JSX labels, enum spelling, or a collection API.
-export enum SemanticAggregateKind {
+pub enum SemanticAggregateKind {
     Struct
     // Declaration identity as well as variant slot is frozen here.  The
     // backend may consult this identity only for physical layout, never recover
@@ -386,7 +386,7 @@ export enum SemanticAggregateKind {
     Array
 }
 
-export struct SemanticAggregateElement {
+pub struct SemanticAggregateElement {
     // Struct/enum storage uses the frontend-selected physical field slot.
     // Array elements are naturally indexed in source order and use the same
     // value for this field. `elements` follows Record's frozen evaluation order:
@@ -409,7 +409,7 @@ export struct SemanticAggregateElement {
 }
 pub impl SemanticAggregateElement { factory }
 
-export struct SemanticAggregate {
+pub struct SemanticAggregate {
     pub val ownerFnIdx: U64 = 0U64
     pub val exprId: U64 = 0U64
     pub val kind: SemanticAggregateKind = <SemanticAggregateKind.Struct />
@@ -427,12 +427,12 @@ pub impl SemanticAggregate { factory }
 // declaration, not the identifier spelling at a use site.  That makes a
 // shadowed capture unambiguous without asking LLVM to reconstruct a local
 // stack from the AST.
-export enum SemanticClosureCaptureMode {
+pub enum SemanticClosureCaptureMode {
     ValueCopy
     CellBorrow
 }
 
-export struct SemanticClosureCapture {
+pub struct SemanticClosureCapture {
     pub val bindingTarget: U64 = 0U64
     pub val typeTerm: U64 = 0U64
     pub val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
@@ -445,7 +445,7 @@ pub impl SemanticClosureCapture { factory }
 // intentionally distinct from a function's FuncParamRange: a closure has a
 // synthetic BodyInstance key and an environment parameter which is not a
 // source-level parameter.
-export struct SemanticClosureParameter {
+pub struct SemanticClosureParameter {
     pub val bindingTarget: U64 = 0U64
     pub val typeTerm: U64 = 0U64
     pub val isInout: Bool = false
@@ -462,7 +462,7 @@ pub impl SemanticClosureParameter { factory }
 // parameters, and the result contract are navigation/ABI facts owned by the
 // same record: downstream Mid may navigate the block but must not reopen the
 // closure expression to rediscover its signature.
-export struct SemanticClosure {
+pub struct SemanticClosure {
     pub val ownerFnIdx: U64 = 0U64
     pub val exprId: U64 = 0U64
     pub val bodyKey: U64 = 0U64
@@ -479,7 +479,7 @@ pub impl SemanticClosure { factory }
 // matches share every semantic layout fact, but their arena IDs live in
 // different domains; keeping that distinction in the key prevents a later
 // Mid consumer from treating an ExprId as a StmtId (or re-resolving syntax).
-export enum MatchSource {
+pub enum MatchSource {
     Statement(stmtId: U64)
     Expression(exprId: U64)
 }
@@ -488,7 +488,7 @@ export enum MatchSource {
 // declaration identity that Record/Verify gives the arm local; the physical
 // field slot and its parametric TypeTerm are frozen beside it so Mid never
 // maps a field spelling back onto an aggregate declaration.
-export struct SemanticMatchPayload {
+pub struct SemanticMatchPayload {
     // Discards have no binding identity but retain their field/drop obligation.
     pub val isDiscard: Bool = false
     pub val bindTarget: U64 = 0U64
@@ -504,7 +504,7 @@ pub impl SemanticMatchPayload { factory }
 // One arm in a parametric pattern descriptor. Only enum variant arms have
 // hasVariant=true. Struct arms carry field bindings without a variant;
 // wildcard arms have no payloads. Indices are declaration slots, not names.
-export struct SemanticMatchArm {
+pub struct SemanticMatchArm {
     pub val hasVariant: Bool = false
     pub val variantIndex: U64 = 0U64
     pub val payloads: Array[SemanticMatchPayload] = []
@@ -512,7 +512,7 @@ export struct SemanticMatchArm {
 pub impl SemanticMatchArm { factory }
 
 // Pattern shape is selected by the frontend, not rediscovered by Mid.
-export enum SemanticMatchKind {
+pub enum SemanticMatchKind {
     Wildcard
     Enum(enumIndex: U64)
     Struct(layoutTerm: U64)
@@ -521,7 +521,7 @@ export enum SemanticMatchKind {
 // Frozen frontend meaning of a match, keyed by owner and source anchor.
 // Parametric terms are grounded by ordinary Mid place instantiation; enum
 // payload operations also consume a FinalMatchResolution for the BodyInstance.
-export struct SemanticMatch {
+pub struct SemanticMatch {
     pub val isConsuming: Bool = false
     pub val ownerFnIdx: U64 = 0U64
     pub val matchSource: MatchSource
@@ -532,14 +532,14 @@ export struct SemanticMatch {
 pub impl SemanticMatch { factory }
 
 // Provenance survives default expansion; a diagnostic offset is not authority.
-export enum MakeFieldOrigin {
+pub enum MakeFieldOrigin {
     Written
     DeclarationDefault
     Synthesized
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
-export struct MakeField {
+pub struct MakeField {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val value: U64
@@ -554,7 +554,7 @@ export struct MakeField {
 // (`val a`) the two are equal; for rename (`b: val c`) field=b, name=c.
 // (Also reused elsewhere as a plain (name) span pair — array element names,
 // part directives — where the field span is just set equal to the name.)
-export struct Bind {
+pub struct Bind {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase D): set by internBytes for every re-interned name, so
@@ -579,7 +579,7 @@ export struct Bind {
 
 // A call argument: the expression plus whether it was passed `inout` (which
 // lowers to `&(expr)` at the call site, matching a pointer parameter).
-export struct Arg {
+pub struct Arg {
     pub val expr: U64
     pub val isInout: Bool
     // the argument label `name:`. Empty for a label-suppressed positional arg.
@@ -593,7 +593,7 @@ export struct Arg {
 // Immutable slice of call arguments in Arena.argPool. Call-like Expr nodes
 // carry only this scalar descriptor, so inspecting a call never copies an ARC
 // managed Array payload.
-export struct ArgRange {
+pub struct ArgRange {
     pub val start: U64
     pub val len: U64
 }
@@ -602,7 +602,7 @@ pub impl ArgRange { factory }
 // Immutable slice of expression children in Arena.exprChildPool.  Array literal
 // nodes keep only this scalar descriptor: reading Expr.Array therefore does not
 // copy an ARC-managed Array payload on each frontend/backend traversal.
-export struct ExprRange {
+pub struct ExprRange {
     pub val start: U64
     pub val len: U64
 }
@@ -611,7 +611,7 @@ pub impl ExprRange { factory }
 // Immutable slice of construction fields in Arena.makeFieldPool. Make nodes
 // carry only this scalar descriptor, so inspecting a construction cannot copy
 // an ARC-managed field Array during frontend or backend walks.
-export struct MakeFieldRange {
+pub struct MakeFieldRange {
     pub val start: U64
     pub val len: U64
 }
@@ -620,7 +620,7 @@ pub impl MakeFieldRange { factory }
 // Immutable pattern-bind slice. Match arms, destructuring `for` headers, and
 // destructure sites all refer to the same Arena pool: these bindings are AST
 // children with arena lifetime, never independently owned values.
-export struct BindRange {
+pub struct BindRange {
     pub val start: U64
     pub val len: U64
 }
@@ -629,7 +629,7 @@ pub impl BindRange { factory }
 // Immutable match-arm slice. A match node therefore carries scalar payload
 // only; inspecting it cannot retain/drop an Array of arms (or each arm's
 // pattern-bind buffer) during the many frontend/backend walks.
-export struct MatchArmRange {
+pub struct MatchArmRange {
     pub val start: U64
     pub val len: U64
 }
@@ -640,7 +640,7 @@ pub impl MatchArmRange { factory }
 // edge does not retain/drop every generic argument, binder, and witness list.
 // The pools live in Decls (rather than Arena) because these are declaration
 // facts, not source-tree children.
-export struct ConformTypeRange {
+pub struct ConformTypeRange {
     pub val start: U64
     pub val len: U64
 }
@@ -649,7 +649,7 @@ pub impl ConformTypeRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct ConformBindRange {
+pub struct ConformBindRange {
     pub val start: U64
     pub val len: U64
 }
@@ -658,7 +658,7 @@ pub impl ConformBindRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct ConformWitnessRange {
+pub struct ConformWitnessRange {
     pub val start: U64
     pub val len: U64
 }
@@ -667,7 +667,7 @@ pub impl ConformWitnessRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct ConformFuncIdRange {
+pub struct ConformFuncIdRange {
     pub val start: U64
     pub val len: U64
 }
@@ -677,7 +677,7 @@ pub impl ConformFuncIdRange {
 }
 
 
-export enum Expr {
+pub enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
     // so the full unsigned range up to 2^64-1 fits); a leading `-` is a separate
     // `offset` is the source byte for diagnostics. `isBool` marks `true`/`false`
@@ -763,7 +763,7 @@ export enum Expr {
 // One arm of a match: either `_ => block` (wildcard) or `Enum.Variant
 // [{ val f ... }] => block`. The pattern names the enum and variant, so codegen
 // resolves the tag index and field types without any type inference.
-export struct MatchArm {
+pub struct MatchArm {
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64
@@ -785,7 +785,7 @@ export struct MatchArm {
 
 // The pattern part of a match arm (everything before `=>`), shared by statement
 // and expression match parsing. Mirrors MatchArm minus the body.
-export struct PatInfo {
+pub struct PatInfo {
     pub val isWildcard: Bool
     pub val enumStart: U64
     pub val enumLen: U64
@@ -804,12 +804,12 @@ export struct PatInfo {
 // locals. identNoTarget() is used for a type qualifier or an undef. This is the
 // single source both the classification query (classifyIdent/bindIsValue) and the
 // recorder (recordIdent) read, so the resolver never scans a name table twice.
-export struct IdentBinding {
+pub struct IdentBinding {
     pub val code: I64
     pub val target: U64
 }
 
-export enum Stmt {
+pub enum Stmt {
     Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
     // A plain `place = value`. Compound `place OP= v` is desugared to `place = place OP v`
     // in the Lower pass (spec/12, place-once), so the IR has no compound form — the OP rides
@@ -845,12 +845,12 @@ export enum Stmt {
 // and is addressed by this immutable slice. AST walks routinely copy/match blocks;
 // embedding Array[U64] here made every such read retain/drop the child buffer even
 // though arena children never have an independent lifetime.
-export struct Block {
+pub struct Block {
     pub val stmtStart: U64
     pub val stmtLen: U64
 }
 
-export struct Param {
+pub struct Param {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned label/name id (Phase C): set by internAllDecls; 0 sentinel.
@@ -880,7 +880,7 @@ export struct Param {
     pub val defaultExpr: U64
 }
 
-export struct FieldDef {
+pub struct FieldDef {
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set by internAllDecls; 0 until then.
@@ -909,7 +909,7 @@ export struct FieldDef {
     pub val vis: U64 = 0
 }
 
-export struct StructDef {
+pub struct StructDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -947,7 +947,7 @@ export struct StructDef {
     pub val defOffset: U64 = 0
 }
 
-export struct Variant {
+pub struct Variant {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -959,7 +959,7 @@ export struct Variant {
 // requirement's name (reuses Bind as a (start,len) pair); the parser still
 // consumes the full signature but labels/types are recovered later. Field/
 // associated-type/factory requirements are not parsed yet (additive).
-export struct TraitDef {
+pub struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -994,7 +994,7 @@ export struct TraitDef {
 // Trait declarations are read throughout resolution and checking. Keep their
 // identity row scalar, just like Conform: each variable-length semantic child
 // lives once in a typed declaration pool and is read through its owner API.
-export struct TraitBindRange {
+pub struct TraitBindRange {
     pub val start: U64
     pub val len: U64
 }
@@ -1003,7 +1003,7 @@ pub impl TraitBindRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct TraitReqRange {
+pub struct TraitReqRange {
     pub val start: U64
     pub val len: U64
 }
@@ -1014,7 +1014,7 @@ export struct TraitReqRange {
 // declaration fact nor safe to duplicate through the fixed-point compiler.
 // These pools are intentionally distinct from trait/conformance payloads: the
 // owner of a range documents the lexical declaration whose binders it names.
-export struct FuncBindRange {
+pub struct FuncBindRange {
     pub val start: U64
     pub val len: U64
 }
@@ -1023,7 +1023,7 @@ pub impl FuncBindRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct FuncTypeRange {
+pub struct FuncTypeRange {
     pub val start: U64
     pub val len: U64
 }
@@ -1032,14 +1032,14 @@ pub impl FuncTypeRange {
     fn count() -> U64 { return self.len }
 }
 
-export struct FuncParamRange {
+pub struct FuncParamRange {
     pub val start: U64
     pub val len: U64
 }
 // Owner-indexed default generator declarations. Entries are in parameter
 // order; zero means the parameter has no default, otherwise functionId is
 // one-based. This is declaration identity, not a call evaluation cache.
-export struct DefaultGeneratorRange {
+pub struct DefaultGeneratorRange {
     pub val start: U64 = 0U64
     pub val len: U64 = 0U64
 }
@@ -1047,7 +1047,7 @@ pub impl DefaultGeneratorRange { factory }
 // The selected declaration's parameter order, before values/type conversions
 // are recorded. An explicit index refers to the authored ArgRange; a default
 // refers to a declaration, never to a cached evaluation or a caller expression.
-export enum CallParameterBinding {
+pub enum CallParameterBinding {
     Explicit(argumentIndex: U64)
     Default(generator: U64)
 }
@@ -1062,7 +1062,7 @@ pub impl TraitReqRange {
 
 // Parsed declaration identity, deliberately separate from the completed
 // TraitDef table used by semantic checks.
-export struct TraitOwner {
+pub struct TraitOwner {
     pub val sourceModule: U64
     pub val nameStart: U64
     pub val nameLen: U64
@@ -1079,7 +1079,7 @@ pub impl TraitOwner { factory }
 // verify every requirement of `Trait` is met (incomplete conformance = error).
 // A `@[Eq]` / `@[Ord]` derive request recorded on a struct/enum declaration.
 // Resolved after parsing by synthesizing the witness `impl Type as Eq/Ord`.
-export struct DeriveReq {
+pub struct DeriveReq {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val isEnum: Bool
@@ -1103,7 +1103,7 @@ export struct DeriveReq {
 // as Trait { type Item = Concrete }` (spec/08). Records, for the conforming type,
 // which concrete type the trait's associated type resolves to — so a requirement
 // signature's `Item` substitutes to `Concrete` when checking/resolving on Type.
-export struct AssocBinding {
+pub struct AssocBinding {
     pub val recvStart: U64
     pub val recvLen: U64
     pub val recvId: U64 = 0
@@ -1133,7 +1133,7 @@ export struct AssocBinding {
     pub val ty: U64
 }
 
-export struct Conform {
+pub struct Conform {
     pub val sourceModule: U64
     pub val typeStart: U64
     pub val typeLen: U64
@@ -1201,7 +1201,7 @@ export struct Conform {
 // requirement name becomes a bare callable that dispatches to the real member).
 // findMethod, on missing `alias` for `recv`, retries with `real` — so both
 // `x.req()` and `x.real()` resolve to the one real method.
-export struct MethodAlias {
+pub struct MethodAlias {
     pub val recvStart: U64
     pub val recvLen: U64
     pub val recvId: U64 = 0
@@ -1217,7 +1217,7 @@ export struct MethodAlias {
 // declaration offset, never an interned spelling; `positionalArgs` are the
 // instance inputs. Associated outputs deliberately do not belong here: they
 // constrain the witness selected by this key.
-export struct TraitInstanceKey {
+pub struct TraitInstanceKey {
     pub val owner: U64
     pub val positionalArgs: Array[U64]
 }
@@ -1226,7 +1226,7 @@ pub impl TraitInstanceKey { factory }
 // One associated-output predicate on a trait constraint. `span` is retained
 // solely for diagnostics and must never participate in semantic equality,
 // hashing, or a query cache key.
-export struct TraitAssocPredicate {
+pub struct TraitAssocPredicate {
     pub val member: U64
     pub val value: U64
     pub val span: U64 = 0U64
@@ -1235,7 +1235,7 @@ pub impl TraitAssocPredicate { factory }
 
 // `where T: P[Item=X]` / `any P[Item=X]`: select one witness by `key`, then
 // verify these output predicates against that selected witness.
-export struct TraitConstraint {
+pub struct TraitConstraint {
     pub val key: TraitInstanceKey
     // `where T: Add` intentionally leaves Add's positional inputs open.  This
     // cannot be reconstructed from an empty `positionalArgs` array: that same
@@ -1253,7 +1253,7 @@ pub impl TraitConstraint { factory }
 // `where T: A, U: B` expand to one FuncBound per atom. Enforced at instantiation:
 // the concrete type bound to the parameter must conform to that exact trait
 // instance, else a loud error.
-export struct FuncBound {
+pub struct FuncBound {
     pub val fnIdx: U64
     pub val paramStart: U64
     pub val paramLen: U64
@@ -1275,7 +1275,7 @@ export struct FuncBound {
 // type arguments (TypeRef indices) aligned to the function's typeParams.
 // Discovered from call sites (only ground/concrete instantiations); each gets a
 // specialized C function `f_<arg-mangle...>` emitted under the type-param env.
-export struct FnInst {
+pub struct FnInst {
     pub val fnIdx: U64
     pub val args: Array[U64]
     // for a generic *method* instance on a generic receiver (`filterIter.map(f)`):
@@ -1289,7 +1289,7 @@ export struct FnInst {
 // only as a migration-time positional projection for legacy consumers. New
 // semantic substitutions must use `paramId`, so independently written `T`s
 // cannot be confused merely because they occupy the same slot.
-export struct WitnessBind {
+pub struct WitnessBind {
     pub val binder: U64
     pub val paramId: U64 = 0U64
     pub val term: U64
@@ -1298,7 +1298,7 @@ pub impl WitnessBind { factory }
 
 // A direct selected witness. `conformIdx` is one-based (0 means no match), and
 // its bindings map only that witness's impl-binder slots to semantic TypeRefs.
-export struct WitnessMatch {
+pub struct WitnessMatch {
     // Semantic Self of the selected conformance, including newtype inheritance.
     pub val selfRef: U64 = 0U64
     pub val conformIdx: U64 = 0U64
@@ -1311,7 +1311,7 @@ pub impl WitnessMatch { factory }
 // any concrete witness exists; trait-to-trait entailment retains every edge
 // instantiation as a predecessor DAG. Runtime existential evidence is not a
 // member of this enum (it cannot prove a generic static bound).
-export enum StaticConformanceProof {
+pub enum StaticConformanceProof {
     Missing
     ConcreteWitness(witness: WitnessMatch)
     AssumedBound(boundIdx: U64)
@@ -1347,7 +1347,7 @@ export enum StaticConformanceProof {
 // `EnumPayloadConversion` is declared below because it recursively contains a
 // ValueConversionProof; type declarations are collected before their member
 // types are checked, just as this enum can contain itself through Array.
-export enum ValueConversionProof {
+pub enum ValueConversionProof {
     Identity
     Missing
     ExistentialBox(sourceRef: U64, targetRef: U64, traitIdx: U64, proof: StaticConformanceProof)
@@ -1358,7 +1358,7 @@ export enum ValueConversionProof {
     EnumRepack(sourceRef: U64, targetRef: U64, enumIdx: U64, payloads: Array[EnumPayloadConversion])
 }
 
-export struct EnumPayloadConversion {
+pub struct EnumPayloadConversion {
     pub val sourceRef: U64
     pub val targetRef: U64
     pub val conversion: ValueConversionProof
@@ -1369,7 +1369,7 @@ pub impl EnumPayloadConversion { factory }
 // ValueConversionProof.  The source-facing sums above remain a transitional
 // construction vocabulary; semantic tables and Mid IR carry only these IDs.
 // `tag` values are private to the frontend proof publisher, not a language ABI.
-export struct StaticProofNode {
+pub struct StaticProofNode {
     pub val tag: U64
     pub val conformIdx: U64 = 0U64
     pub val witnessBinds: U64 = 0U64
@@ -1384,7 +1384,7 @@ export struct StaticProofNode {
 }
 pub impl StaticProofNode { factory }
 
-export struct FrozenWitnessMatch {
+pub struct FrozenWitnessMatch {
     pub val selfRef: U64 = 0U64
     pub val conformIdx: U64
     pub val binds: U64 = 0U64
@@ -1392,7 +1392,7 @@ export struct FrozenWitnessMatch {
 }
 pub impl FrozenWitnessMatch { factory }
 
-export struct ConversionProofNode {
+pub struct ConversionProofNode {
     pub val tag: U64
     pub val sourceRef: U64 = 0U64
     pub val targetRef: U64 = 0U64
@@ -1405,7 +1405,7 @@ export struct ConversionProofNode {
 }
 pub impl ConversionProofNode { factory }
 
-export struct FrozenEnumPayloadConversion {
+pub struct FrozenEnumPayloadConversion {
     pub val sourceRef: U64
     pub val targetRef: U64
     pub val conversion: U64
@@ -1417,7 +1417,7 @@ pub impl FrozenEnumPayloadConversion { factory }
 // final callable and for associated-output grounding.  Keeping this state in
 // IR avoids parallel owner/args/path arrays and is the migration carrier for
 // the eventual canonical ConformanceProof DAG.
-export struct TraitProofState {
+pub struct TraitProofState {
     pub val traitOwner: U64
     pub val traitId: U64
     pub val traitArgs: Array[U64]
@@ -1432,7 +1432,7 @@ pub impl TraitProofState { factory }
 // binder can coexist without textual shadowing. `receiverRef` is the selected
 // concrete receiver and is part of the same semantic key, never ambient cursor
 // state. TypeRef indices are the current TypeTerm migration carrier.
-export struct InstanceEnvironment {
+pub struct InstanceEnvironment {
     pub val params: Array[Bind] = []
     pub val args: Array[U64] = []
     pub val receiverRef: U64 = 0U64
@@ -1448,14 +1448,14 @@ export struct InstanceEnvironment {
 // is intentionally not named IntegerWidth: a descriptor must not encode a
 // float operation with an integer-only type just because both happen to have
 // a width field.
-export enum NumericWidth {
+pub enum NumericWidth {
     W8
     W16
     W32
     W64
 }
 
-export enum IntegerOperation {
+pub enum IntegerOperation {
     Add
     Sub
     Mul
@@ -1476,7 +1476,7 @@ export enum IntegerOperation {
     Ge
 }
 
-export enum FloatOperation {
+pub enum FloatOperation {
     Add
     Sub
     Mul
@@ -1489,17 +1489,17 @@ export enum FloatOperation {
 // Float widths are deliberately a distinct closed domain: the current LLVM
 // floor supports F32/F64 only, and no descriptor may accidentally request an
 // integer-only width for a floating operation.
-export enum FloatWidth {
+pub enum FloatWidth {
     W32
     W64
 }
 
-export enum BoolOperation {
+pub enum BoolOperation {
     Not
     Eq
 }
 
-export enum NumericOverflow {
+pub enum NumericOverflow {
     Checked
     Wrapping
 }
@@ -1508,7 +1508,7 @@ export enum NumericOverflow {
 // arithmetic operator.  Their source/target ABI is fixed by the selected
 // Core declaration; keeping them in this closed domain prevents backend name
 // dispatch and keeps their single-evaluation rule shared by Mid and legacy.
-export enum NumericConversionIntrinsic {
+pub enum NumericConversionIntrinsic {
     BitCastI64
     BitCastU64
     TruncU8
@@ -1522,7 +1522,7 @@ export enum NumericConversionIntrinsic {
     F64ToU64
 }
 
-export enum NumericIntrinsic {
+pub enum NumericIntrinsic {
     Integer(width: NumericWidth, unsigned: Bool, operation: IntegerOperation, overflow: NumericOverflow)
     Float(width: FloatWidth, operation: FloatOperation)
     Bool(operation: BoolOperation)
@@ -1532,7 +1532,7 @@ export enum NumericIntrinsic {
 // The finite safe Buffer floor.  The element type and inout/value argument
 // convention are frozen by the selected CallResolution; this enum carries the
 // operation identity only, so it cannot duplicate generic substitution state.
-export enum BufferIntrinsic {
+pub enum BufferIntrinsic {
     New
     Count
     Capacity
@@ -1550,7 +1550,7 @@ export enum BufferIntrinsic {
     BytewiseComparable
 }
 
-export enum RuntimeIntrinsic {
+pub enum RuntimeIntrinsic {
     HashSeed
     EntropyU64
     TimerSleep
@@ -1570,12 +1570,12 @@ export enum RuntimeIntrinsic {
 // Core operations that create a String buffer from an owned byte/floating
 // value.  Reference-cell and scalar-conversion floors intentionally remain
 // separate families: they have different ownership and ABI contracts.
-export enum CoreStringIntrinsic {
+pub enum CoreStringIntrinsic {
     FromBytesUnchecked
     FloatToString
 }
 
-export enum ProcessIntrinsic {
+pub enum ProcessIntrinsic {
     ArgCount
     ArgAt
     Exit
@@ -1585,7 +1585,7 @@ export enum ProcessIntrinsic {
 
 // The bundled I/O ABI.  Its declaration owner and selected identity decide
 // this once in the frontend; backend code never infers an operation from text.
-export enum IoIntrinsic {
+pub enum IoIntrinsic {
     Write
     WriteByte
     ReadStdin
@@ -1598,7 +1598,7 @@ export enum IoIntrinsic {
 // The small, explicitly unsafe FFI floor. These are runtime ABI operations,
 // not arbitrary extern(c) calls: their declaration identity fixes the bridge
 // from Plew values to the runtime representation.
-export enum FfiIntrinsic {
+pub enum FfiIntrinsic {
     CString
     CFree
     StringFromCString
@@ -1610,7 +1610,7 @@ export enum FfiIntrinsic {
 // ordinary declaration, not a third runtime operation. Final call resolution
 // consumes this closed declaration fact and never recovers an ABI target from
 // a source spelling.
-export enum RuntimeIntrinsicDeclaration {
+pub enum RuntimeIntrinsicDeclaration {
     None
     Bound(intrinsic: RuntimeIntrinsic)
 }
@@ -1621,7 +1621,7 @@ export enum RuntimeIntrinsicDeclaration {
 // callable type.  `NoCallable` is the selected outcome for primitive syntax
 // whose lowering has no function declaration (for example a floor operator),
 // not a missing resolution.
-export enum CallTarget {
+pub enum CallTarget {
     Direct
     RuntimeIntrinsic(intrinsic: RuntimeIntrinsic)
     NoCallable
@@ -1635,7 +1635,7 @@ export enum CallTarget {
 // backend operator special case: `<` selects Ord.compare but denotes a Bool
 // formed by inspecting its Ordering tag; `!=` selects Eq.eq but denotes the
 // logical complement of its Bool carrier.
-export enum CallResultProjection {
+pub enum CallResultProjection {
     Identity
     OrderingTest(op: I64)
     // Append-only: this IR enum crosses bootstrap compiler generations, so
@@ -1647,14 +1647,14 @@ export enum CallResultProjection {
 // Passing is part of a final call ABI, not an ownership guess made by a
 // downstream emitter. `Copy` remains a Mid operation that creates an owned
 // value; an ordinary ABI parameter/receiver is a guaranteed (+0) Borrow.
-export enum CallReceiverPassing {
+pub enum CallReceiverPassing {
     None
     Borrow
     Inout
     Move
 }
 
-export enum CallArgumentPassing {
+pub enum CallArgumentPassing {
     Borrow
     Inout
     Move
@@ -1667,25 +1667,25 @@ export enum CallArgumentPassing {
 // range types prevent a parameter-type slice from being passed where selected
 // substitution arguments are required merely because both currently contain
 // TypeRef ids.
-export struct CallResolutionTypeArgRange {
+pub struct CallResolutionTypeArgRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallResolutionTypeArgRange { factory fn count() -> U64 { return self.len } }
 
-export struct CallResolutionParameterTypeRange {
+pub struct CallResolutionParameterTypeRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallResolutionParameterTypeRange { factory fn count() -> U64 { return self.len } }
 
-export struct CallResolutionConversionRange {
+pub struct CallResolutionConversionRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallResolutionConversionRange { factory fn count() -> U64 { return self.len } }
 
-export struct CallResolutionArgumentPassingRange {
+pub struct CallResolutionArgumentPassingRange {
     pub val start: U64
     pub val len: U64
 }
@@ -1697,13 +1697,13 @@ pub impl CallResolutionArgumentPassingRange { factory fn count() -> U64 { return
 // parameters, including a default-generator expression inserted by Record.
 // Keeping only the parametric CallTemplate plan made backend correctness depend
 // on reopening a shared declaration-owned table after finalization.
-export struct CallResolutionArgumentRange {
+pub struct CallResolutionArgumentRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallResolutionArgumentRange { factory fn count() -> U64 { return self.len } }
 
-export struct CallEvaluationArgument {
+pub struct CallEvaluationArgument {
     // Explicit outer-view adaptation to the selected witness's lexical type.
     pub val adaptsReceiverView: Bool = false
     // Frozen source type before the selected argument conversion. Literal
@@ -1725,7 +1725,7 @@ pub impl CallEvaluationArgument { factory }
 // instances, so the enclosing function, its substitution arguments, and its
 // receiver instance are also part of the decision context.  Mono owns these
 // records; backend only consumes them.
-export struct CallResolution {
+pub struct CallResolution {
     // 1-based index into Arena.bodyInstances.  A final call belongs to one
     // canonical semantic body instance; duplicating its function/environment
     // here made every lookup re-compare the whole substitution map.
@@ -1789,7 +1789,7 @@ export struct CallResolution {
 // layout; this table is its finalization counterpart, just as CallResolution
 // is the concrete counterpart of CallTemplate. Mid consumes this record and
 // must never select a conformance proof for an aggregate element itself.
-export struct FinalAggregateResolution {
+pub struct FinalAggregateResolution {
     pub val bodyId: U64
     pub val exprId: U64
     pub val resultTypeRef: U64
@@ -1801,7 +1801,7 @@ pub impl FinalAggregateResolution { factory }
 // Concrete counterpart of SemanticMatch for one canonical BodyInstance.
 // Payload types are already grounded here; Mid instantiation and LLVM consume
 // only declaration slots and these final TypeRefs.
-export struct FinalMatchPayloadResolution {
+pub struct FinalMatchPayloadResolution {
     pub val isDiscard: Bool = false
     pub val isBoxed: Bool = false
     pub val bindTarget: U64 = 0U64
@@ -1810,7 +1810,7 @@ export struct FinalMatchPayloadResolution {
 }
 pub impl FinalMatchPayloadResolution { factory }
 
-export struct FinalMatchArmResolution {
+pub struct FinalMatchArmResolution {
     pub val hasVariant: Bool = false
     pub val variantIndex: U64 = 0U64
     // Immutable range in Arena.finalMatchPayloads.  A final semantic record
@@ -1821,7 +1821,7 @@ export struct FinalMatchArmResolution {
 }
 pub impl FinalMatchArmResolution { factory }
 
-export struct FinalMatchResolution {
+pub struct FinalMatchResolution {
     pub val isConsuming: Bool = false
     pub val bodyId: U64 = 0U64
     pub val matchSource: MatchSource
@@ -1840,7 +1840,7 @@ pub impl FinalMatchResolution { factory }
 // backend return-place local.
 // The frontend selects the erased member ABI and the shape of its result
 // boundary. A zero bodyId is a non-dispatchable requirement, not a lookup miss.
-export struct FinalExistentialMember {
+pub struct FinalExistentialMember {
     pub val bodyId: U64 = 0U64
     pub val adapterBodyId: U64 = 0U64
     pub val callResolution: U64 = 0U64
@@ -1855,7 +1855,7 @@ export struct FinalExistentialMember {
 pub impl FinalExistentialMember { factory }
 
 // Concrete existential conversion contract, closed before LLVM emission.
-export struct FinalExistentialResolution {
+pub struct FinalExistentialResolution {
     pub val sourceRef: U64
     pub val targetRef: U64
     pub val traitIdx: U64
@@ -1867,7 +1867,7 @@ pub impl FinalExistentialResolution { factory }
 
 // Storage conversion selected by frontend for one statement in one body.
 // Keep statement identity: one expression may initialize distinct destinations.
-export struct FinalStorageResolution {
+pub struct FinalStorageResolution {
     pub val bodyId: U64
     pub val stmtId: U64
     pub val sourceTypeRef: U64
@@ -1877,7 +1877,7 @@ export struct FinalStorageResolution {
 }
 pub impl FinalStorageResolution { factory }
 
-export struct FinalReturnResolution {
+pub struct FinalReturnResolution {
     pub val bodyId: U64
     pub val exprId: U64
     pub val targetTypeRef: U64
@@ -1887,7 +1887,7 @@ pub impl FinalReturnResolution { factory }
 
 // Grounded types for one await in one executable body. Zero resultTypeRef
 // denotes a value-less completion; absence of a row denotes missing evidence.
-export struct FinalAwaitResolution {
+pub struct FinalAwaitResolution {
     pub val bodyId: U64
     pub val exprId: U64
     pub val operandExprId: U64
@@ -1901,7 +1901,7 @@ pub impl FinalAwaitResolution { factory }
 // layout and the already-selected implicit `From` conversion. `try` is an
 // early Result return, so both the operand and enclosing return Result types
 // remain explicit even though only their Err payload crosses the error edge.
-export struct FinalTryResolution {
+pub struct FinalTryResolution {
     pub val bodyId: U64
     pub val exprId: U64
     pub val operandResultTypeRef: U64
@@ -1923,7 +1923,7 @@ pub impl FinalTryResolution { factory }
 // Frozen non-range iteration layout. Calls remain in the shared final-call
 // table; the control-flow consumer receives their selected identities and the
 // Optional decomposition instead of reopening names or assuming tag numbers.
-export struct FinalForResolution {
+pub struct FinalForResolution {
     pub val bodyId: U64
     pub val stmtId: U64
     pub val iteratorResolution: U64
@@ -1944,7 +1944,7 @@ pub impl FinalForResolution { factory }
 // expected-result provenance for argument-less associated factories; `resultRef`
 // is an already-selected result for a call with no user callable. Dynamic target
 // identity belongs here too: the final builder may copy it but never recover it.
-export struct CallSiteSelection {
+pub struct CallSiteSelection {
     pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
@@ -1980,14 +1980,14 @@ pub impl CallSiteSelection { factory }
 // even for an argless receiver so a shared provided body can substitute Self
 // to the actual conformer.
 // Final ABI types belong to a body, but do not participate in its identity.
-export struct ClosureSignature {
+pub struct ClosureSignature {
     pub val environmentDropBodyId: U64 = 0U64
     pub val functionTypeTerm: U64 = 0U64
     pub val captures: Array[SemanticClosureCapture] = []
 }
 pub impl ClosureSignature { factory }
 
-export struct BodySignature {
+pub struct BodySignature {
     pub val ready: Bool = false
     pub val receiverType: U64 = 0U64
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
@@ -2002,7 +2002,7 @@ pub impl BodySignature { factory }
 
 // Frontend-published concrete results for a body-owned recipe or type term.
 // Scalar rows keep reading a fact independent of recipe/AST ownership.
-export struct BodyTypeResult {
+pub struct BodyTypeResult {
     pub val bodyId: U64 = 0U64
     pub val sourceKind: U64 = 0U64
     pub val sourceId: U64 = 0U64
@@ -2010,9 +2010,9 @@ export struct BodyTypeResult {
 }
 pub impl BodyTypeResult { factory }
 
-export enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
+pub enum BodyOrigin { Callable ExistentialWitness(resolution: U64, member: U64) ClosureEnvironmentDrop(closureBodyId: U64) }
 
-export struct BodyInstance {
+pub struct BodyInstance {
     pub val fnIdx: U64
     pub val environment: InstanceEnvironment
     // A reachable inherited surface owns an adapter, never a reinterpretation
@@ -2021,7 +2021,7 @@ export struct BodyInstance {
     pub val adapterCallResolutionId: U64 = 0U64
 }
 
-export struct EnumDef {
+pub struct EnumDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
@@ -2038,7 +2038,7 @@ export struct EnumDef {
     pub val defOffset: U64 = 0
 }
 
-export struct Func {
+pub struct Func {
     pub val nameStart: U64
     pub val nameLen: U64
     // One-based lexical declaration owner for an implementation-only body.
@@ -2179,7 +2179,7 @@ export struct Func {
 // A callable surface entry. Func is an implementation/body record; this table is
 // the semantic call namespace consumed by every resolver query. sourceKind is
 // 0=bare/inherent, 1=named extension, 2=trait-provided/path surface.
-export struct ViewSource {
+pub struct ViewSource {
     pub val kind: U64 = 0
     pub val id: U64 = 0
     pub val owner: U64 = 0
@@ -2187,7 +2187,7 @@ export struct ViewSource {
 }
 pub impl ViewSource { factory }
 
-export struct Callable {
+pub struct Callable {
     pub val funcIdx: U64
     pub val sourceKind: U64
     // Source spelling is retained only to resolve a written `#X`. It is not the
@@ -2217,7 +2217,7 @@ pub impl Callable { factory }
 // A binding made while asking whether two declared generic signatures have a
 // common finite instantiation. `side` / `refSide` are 0 or 1 and keep binders
 // from the two declarations distinct even when they share a spelling such as T.
-export struct UnifyBind {
+pub struct UnifyBind {
     pub val side: U64
     pub val nameId: U64
     pub val ref: U64
@@ -2228,7 +2228,7 @@ pub impl UnifyBind { factory }
 // A declaration-time trait member selected from static evidence.  It is kept
 // separate from the eventual CallResolution because generic template checking
 // needs a symbolic requirement before a concrete dispatch target exists.
-export enum StaticMemberResolution {
+pub enum StaticMemberResolution {
     Missing
     Requirement(proof: StaticConformanceProof, traitIdx: U64, reqIdx: U64)
     // A trait default body is a declaration-selected static member just like
@@ -2243,20 +2243,20 @@ export enum StaticMemberResolution {
 // declaration-local `scope` (the Conform table index) is part of their identity.
 // This stays in IR rather than overloading `UnifyBind`'s two-side protocol: the
 // validator composes substitutions along an arbitrary graph path.
-export struct TraitCycleTerm {
+pub struct TraitCycleTerm {
     pub val ref: U64
     pub val scope: U64
 }
 pub impl TraitCycleTerm { factory }
 
-export struct TraitCycleNode {
+pub struct TraitCycleNode {
     pub val owner: U64
     pub val args: Array[U64]
     pub val scope: U64
 }
 pub impl TraitCycleNode { factory }
 
-export struct TraitCycleBind {
+pub struct TraitCycleBind {
     pub val scope: U64
     pub val nameId: U64
     pub val ref: U64
@@ -2268,7 +2268,7 @@ pub impl TraitCycleBind { factory }
 // validation.  `binds` is its path-local substitution; predecessor/path data
 // is deliberately not retained here, because cycle detection is reachability
 // back to the seeded instance and canonical-state saturation owns termination.
-export struct TraitCycleSearch {
+pub struct TraitCycleSearch {
     pub val node: TraitCycleNode
     pub val binds: Array[TraitCycleBind]
 }
@@ -2279,7 +2279,7 @@ pub impl TraitCycleSearch { factory }
 // initializer); the backend emits an LLVM global, runs every global's init once in
 // `plew_init_globals` before `main`, and seeds each global as a local at every
 // function-body entry so reads/writes resolve through the normal local machinery.
-export struct Global {
+pub struct Global {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val letStmt: U64
@@ -2289,7 +2289,7 @@ export struct Global {
 // A selected global storage address, not a copy of its current value. The
 // declaration target survives initialization-order changes; no source name or
 // transient position in the global table is part of this semantic identity.
-export struct SemanticGlobalAddress {
+pub struct SemanticGlobalAddress {
     pub val declarationTarget: U64
     pub val typeTerm: U64
     pub val mutable: Bool
@@ -2299,7 +2299,7 @@ pub impl SemanticGlobalAddress { factory }
 // A `newtype Name = Underlying` (spec/10): a distinct type sharing the underlying's
 // representation. `nameId` is the interned newtype name; (underStart, underLen) /
 // underRef name the underlying type (its head span and full TypeRef).
-export struct NewtypeDef {
+pub struct NewtypeDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64
@@ -2327,7 +2327,7 @@ export struct NewtypeDef {
 // index). `types` is the structured TypeRef arena (indexed by nodes' `ty`/`ref`
 // fields). `globals` are module-level vars in lowering (= init) order. `newtypes`
 // are `newtype Name = Underlying` declarations (spec/10).
-export struct Arena {
+pub struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
     // Flat immutable payload pool for Call / Method / ExtMethod arguments.
@@ -2505,7 +2505,7 @@ pub impl Arena { factory }
 // review/06/07/12 leak/UAF families — audit-1 "owningKindOf" blueprint).
 // Boxed (recursive-field box pointers) is a FIELD property, not a type property:
 // field walkers check FieldDef.boxed BEFORE classifying the field type.
-export enum ArcClass {
+pub enum ArcClass {
     // no ARC: primitives, extern/opaque handles, unresolved names (a MISS is
     // deliberately quiet here — gates that need loudness check resolution first)
     Scalar
@@ -2546,7 +2546,7 @@ export enum ArcClass {
 // every reader (chainResultRef) and every fn instance's scan registration
 // (registerChainSiteInsts) grounds them under its own active env. stageRef == 0
 // never occurs on a real site (used as the lookup-miss sentinel).
-export struct ChainSite {
+pub struct ChainSite {
     pub val exprId: U64
     pub val stageRef: U64
     pub val valueRef: U64
@@ -2561,13 +2561,13 @@ pub impl ChainSite { factory }
 // as ChainSite, generalized to non-source implementation calls.
 // The semantic requirement comes from desugaring, not the generated name.
 // An explicit call to a method named index remains an ordinary method call.
-export enum SyntheticCallKind {
+pub enum SyntheticCallKind {
     Ordinary
     IndexRead
     IndexWrite
 }
 
-export struct SyntheticCallSite {
+pub struct SyntheticCallSite {
     pub val exprId: U64
     pub val kind: SyntheticCallKind = <SyntheticCallKind.Ordinary />
     // Allocated at the synthesis point.  Generated nodes have no source span,
@@ -2581,7 +2581,7 @@ pub impl SyntheticCallSite { factory }
 // place which would receive a later get-modify-set writeback. This carrier is
 // separate from CallTemplate: the latter selects a callable, while this
 // records storage/evaluation provenance for later access elaboration.
-export struct AccessCandidate {
+pub struct AccessCandidate {
     pub val readExpr: U64
     // A detached synthetic `IndexSet.indexSet` call with the read result as
     // its type anchor. Record selects this facet while lexical receiver/key
@@ -2598,7 +2598,7 @@ pub impl AccessCandidate { factory }
 // the selected CallTemplate/CallResolution from it. `role` is 1=receiver,
 // 2=explicit argument. `write` is decided only when Record has a selected ABI
 // mode; it is never inferred from spelling in Lower.
-export struct AccessUse {
+pub struct AccessUse {
     pub val candidateIndex: U64
     // The value expression consumed by the parent call. This can be a field
     // projection of the candidate's synthetic Index.index result (for
@@ -2620,7 +2620,7 @@ pub impl AccessUse { factory }
 // Index.index read and its parent call have final CallResolutions. Resolution
 // indices are stable inside Arena's immutable final-callee table; the backend
 // never re-selects either call from a collection name or source expression.
-export struct SemanticAccess {
+pub struct SemanticAccess {
     pub val bodyId: U64
     pub val candidateIndex: U64
     // One-based candidate identity for a nested access used as this access's
@@ -2669,7 +2669,7 @@ pub impl SemanticAccess { factory }
 // 8 PreparedValue names a Build-evaluated key or reference owner. `typeTerm`
 // is already final for the body instance; there is no AST/type query after
 // this freeze boundary.
-export struct SemanticAccessInput {
+pub struct SemanticAccessInput {
     // Stable evaluation identity, resolved to an owned Mid input before Access.
     pub val sourceExpr: U64 = 0U64
     pub val tag: U64
@@ -2696,7 +2696,7 @@ pub impl SemanticAccessInput { factory }
 // is 1=written source, 2=compiler synthesis, 3=implicit protocol.  Source
 // origins use the complete span; synthesized and implicit origins use a
 // producer-allocated serial.  `exprId` deliberately does not appear here.
-export struct CallSiteKey {
+pub struct CallSiteKey {
     pub val ownerFnIdx: U64 = 0U64
     pub val originKind: U64 = 0U64
     pub val originStart: U64 = 0U64
@@ -2713,7 +2713,7 @@ pub impl CallSiteKey { factory }
 // CallSiteKey is semantic identity; ExprId plus `siteIsStmt` are navigation
 // only, because implicit protocol calls are statement-owned rather than
 // expression-owned.
-export struct SemanticTypeRecipe {
+pub struct SemanticTypeRecipe {
     pub val kind: U64 = 0U64
     pub val term: U64 = 0U64
     pub val input: U64 = 0U64
@@ -2731,7 +2731,7 @@ pub impl SemanticTypeRecipe { factory }
 // stable arena navigation keys; the recipe itself carries semantic call
 // identity where one is needed. This is not a Local field because Record and
 // every BodyInstance scan construct independent local scopes.
-export struct ForTypeRecipe {
+pub struct ForTypeRecipe {
     pub val iteratorRecipe: U64 = 0U64
     pub val nextRecipe: U64 = 0U64
     pub val stmtId: U64 = 0U64
@@ -2744,7 +2744,7 @@ pub impl ForTypeRecipe { factory }
 // identity; `exprId` is only the navigation anchor used while looking up that
 // already-published result in the current BodyInstance. Keeping this as a sum
 // type prevents a template from accidentally carrying both sources.
-export enum CallTemplateReceiver {
+pub enum CallTemplateReceiver {
     None
     // The frontend selected an ordinary instance method, but the receiver is
     // compiler-internal and has no language TypeRef (for example `Comp` while
@@ -2770,7 +2770,7 @@ export enum CallTemplateReceiver {
 // TypeTerm or the completed result of an earlier call site. Operators, direct
 // calls, protocol calls, and future Mid `ResolvedCall`s share this one source
 // algebra so no site kind acquires a private AST recovery path.
-export enum CallArgumentSource {
+pub enum CallArgumentSource {
     Term(exprId: U64, term: U64)
     // A lexical local can acquire a more precise concrete type while its body
     // instance is finalized (notably a `for` item from an Iterator proof).
@@ -2786,7 +2786,7 @@ export enum CallArgumentSource {
 // to the selected parameter mapping, while ExprId remains only the backend
 // navigation anchor for value evaluation.  Keeping them beside the semantic
 // type source prevents Mono from reopening an Expr solely to recover them.
-export struct CallTemplateArgument {
+pub struct CallTemplateArgument {
     pub val isDispatchReceiver: Bool = false
     pub val source: CallArgumentSource
     pub val isInout: Bool
@@ -2799,22 +2799,22 @@ pub impl CallTemplateArgument { factory }
 // Call templates are long-lived semantic facts. Their variable-sized children
 // live in Decls-owned append-only pools, so reading one template does not copy
 // an ARC-managed Array or recursive proof payload.
-export struct CallTemplateArgumentRange {
+pub struct CallTemplateArgumentRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallTemplateArgumentRange { factory }
-export struct CallTemplateTypeArgumentRange {
+pub struct CallTemplateTypeArgumentRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallTemplateTypeArgumentRange { factory }
-export struct CallTemplateOperandRange {
+pub struct CallTemplateOperandRange {
     pub val start: U64
     pub val len: U64
 }
 pub impl CallTemplateOperandRange { factory }
-export struct CallTemplateViewRange {
+pub struct CallTemplateViewRange {
     pub val start: U64
     pub val len: U64
 }
@@ -2824,7 +2824,7 @@ pub impl CallTemplateViewRange { factory }
 // but its callable is a value or a witness slot rather than a Func declaration.
 // Keep the symbolic template distinct from CallTarget: its function TypeTerm is
 // still parametric here and becomes the ground CallTarget only per BodyInstance.
-export enum DynamicCallTemplateTarget {
+pub enum DynamicCallTemplateTarget {
     ClosureLocal(bindingDeclStart: U64, fnTypeTerm: U64)
     ClosureField(fieldIndex: U64, fnTypeTerm: U64)
     ExistentialRequirement(traitIdx: U64, slot: U64)
@@ -2833,7 +2833,7 @@ export enum DynamicCallTemplateTarget {
 // The template is a site-kind sum.  These alternatives deliberately cannot
 // mix an ordinary call's declared callee with an operator's symbolic proof or
 // a protocol receiver.  Finalization consumes exactly the selected variant.
-export enum CallTemplateKind {
+pub enum CallTemplateKind {
     Pending
     // Direct means the declaration is already selected.  It may still be a
     // provided trait copy, in which case `proof` is the declaration-time
@@ -2850,7 +2850,7 @@ export enum CallTemplateKind {
 // never by ExprId. Expected-result context is part of this template, while
 // the expression result TypeTerm remains in SemanticExprType for generic type
 // operations that are not calls.
-export struct CallTemplate {
+pub struct CallTemplate {
     pub val siteKey: CallSiteKey = <CallSiteKey />
     // Record publishes the result dependency once. Mid consumes it under the
     // selected BodyInstance rather than grounding a callee binder as a caller term.
@@ -2877,7 +2877,7 @@ pub impl CallTemplate { factory }
 // check its element type, not its own. typeStart/typeLen: the struct form's
 // declared type name (interned; len 0 = the record `(...)` form) — Verify
 // also checks it AGAINST the initializer's actual type.
-export struct DestructureSite {
+pub struct DestructureSite {
     pub val initId: U64
     pub val offset: U64
     pub val isElem: Bool
@@ -2902,7 +2902,7 @@ pub impl DestructureSite { factory }
 // generic body. `destructureSites`: each record/struct destructure's bind list
 // (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
 // deferred item source (see ForTypeRecipe).
-export struct Decls {
+pub struct Decls {
     mut val traits: Array[TraitDef] = []
     mut val traitsByOffset: Dictionary[U64, U64] = [:]
     pub mut val traitBindPool: Array[Bind] = []
@@ -3001,7 +3001,7 @@ pub impl Decls { factory }
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
 // Import spelling and declaration provenance are distinct from generic bindings.
-export struct ImportOrigin {
+pub struct ImportOrigin {
     pub val localStart: U64
     pub val localLength: U64
     pub val localModule: U64
@@ -3011,7 +3011,7 @@ export struct ImportOrigin {
 }
 pub impl ImportOrigin { factory }
 
-export struct Modules {
+pub struct Modules {
     mut val files: SourceFiles = <SourceFiles />
     mut val syntaxRootModules: Set[U64] = Set.new()
     pub mut val exports: Array[Bind] = []
@@ -3081,7 +3081,7 @@ pub impl Modules { factory }
 // type transitively reaches their owning struct/enum (a containment cycle), so
 // stored behind a heap pointer (deref-on-read / repoint-on-write keeps value
 // semantics); keyed by the field decl's nameStart.
-export struct MonoWork {
+pub struct MonoWork {
     pub mut val genInsts: Array[U64] = []
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []
@@ -3108,7 +3108,7 @@ pub impl MonoWork { factory }
 // Zero is a missing contract; a published placeholder closes recursive types.
 // A destructor borrows the complete value and returns Unit with no arguments.
 // Publication waits until the selected body's signature is finalized.
-export struct FinalDestructorCall {
+pub struct FinalDestructorCall {
     pub val bodyId: U64 = 0U64
     pub val receiverType: U64 = 0U64
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
@@ -3116,7 +3116,7 @@ export struct FinalDestructorCall {
 }
 pub impl FinalDestructorCall { factory }
 
-export struct FinalDestruction {
+pub struct FinalDestruction {
     // Nominal copyability is independent of whether releasing does any work.
     pub val isUnique: Bool = false
     pub val needsRelease: Bool = false
@@ -3147,13 +3147,13 @@ pub impl FinalDestruction { factory }
 // the complete semantic expression type, not merely an implementation cache.
 // Persistent absence must survive declaration-arena growth. A transient
 // `funcs.count()` sentinel is never stored as a declaration identity.
-export enum CachedCallee {
+pub enum CachedCallee {
     Uncomputed
     NoStaticCallee
     Selected(callee: U64)
 }
 
-export struct TypeCache {
+pub struct TypeCache {
     pub mut val kind: Array[I64] = []
     pub mut val start: Array[U64] = []
     pub mut val len: Array[U64] = []
@@ -3189,13 +3189,13 @@ pub impl TypeCache { factory }
 
 // Stable payload of a nonzero interner id.  The slice is always into
 // `Arena.bytes`; `intern` validates that invariant at the boundary.
-export struct InternedSpan {
+pub struct InternedSpan {
     pub val start: U64
     pub val len: U64
 }
 pub impl InternedSpan { factory }
 
-export struct Interner {
+pub struct Interner {
     // One entry owns both ends of an interned source slice.  Keeping these as
     // parallel arrays made it possible for an id's start, length, and count to
     // diverge at mutation boundaries.
@@ -3211,7 +3211,7 @@ pub impl Interner { factory }
 // trait spans from parseWhereClause (parallel to its returned param spans).
 // `implBoundParams`/`implBoundTraits`: the impl-level `where T: Trait` bounds of
 // the impl being parsed (each member fn folds these into decls.funcBounds).
-export struct ParseScratch {
+pub struct ParseScratch {
     pub mut val pendingDerives: Array[DeriveReq] = []
     pub mut val witnessed: Array[Func] = []
     pub mut val whereTraits: Array[Bind] = []
@@ -3231,7 +3231,7 @@ pub impl ParseScratch { factory }
 // `asyncFn`/`asyncVarSeq` drive async state-machine lowering; `lowerRetTy` is the
 // lowering-time return type (generic-constructor inference); `checkFn` is the
 // function index the eager generic checker is on.
-export struct Cursor {
+pub struct Cursor {
     pub mut val locals: Array[Local] = []
     pub mut val tmp: U64 = 0
     pub mut val giveTmp: U64 = 0
@@ -3359,19 +3359,19 @@ pub impl NewtypeDef { factory }
 // unrecorded slot; 1..4 are the categories the name-resolution pass assigns to an Ident.
 // Defined here (the shared IR vocabulary) so both Frontend (the resolver that fills them)
 // and Backend (which reads them) can name the codes.
-export fn identUnfilledCode() -> I64 { return 0I64 }
+pub fn identUnfilledCode() -> I64 { return 0I64 }
 // Sentinel `typeCache.identTarget` value marking "no resolved target recorded".
-export fn identNoTarget() -> U64 { return 18446744073709551615U64 }
+pub fn identNoTarget() -> U64 { return 18446744073709551615U64 }
 // `self` is a lexical receiver binding, not an unaddressable value. Give it a
 // dedicated identity so downstream semantic consumers never need to recover it
 // from spelling; this stays distinct from the no-target sentinel used by globals.
-export fn identSelfTarget() -> U64 { return 18446744073709551614U64 }
-export fn identValueCode() -> I64 { return 1I64 }
-export fn identFnCode() -> I64 { return 2I64 }
-export fn identTypeQualCode() -> I64 { return 3I64 }
-export fn identUndefCode() -> I64 { return 4I64 }
+pub fn identSelfTarget() -> U64 { return 18446744073709551614U64 }
+pub fn identValueCode() -> I64 { return 1I64 }
+pub fn identFnCode() -> I64 { return 2I64 }
+pub fn identTypeQualCode() -> I64 { return 3I64 }
+pub fn identUndefCode() -> I64 { return 4I64 }
 
-export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
+pub fn appendBytes(into: inout Array[U8], from: Array[U8]) {
     mut val i: U64 = 0
     while i < from.count() {
         into.append(from[i])

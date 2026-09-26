@@ -12,7 +12,7 @@ import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
 import ./Ir with { MidEnumDestinationNode, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidLocalDecl, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
 
-export enum MidInstantiateError {
+pub enum MidInstantiateError {
     Frontend(diagnostic: CompileDiagnostic)
     None
     InvalidBodyInstance
@@ -42,13 +42,13 @@ export enum MidInstantiateError {
 // from `c.mid` and emits a second scalar-row snapshot there. It intentionally
 // has no MidBody field, preventing callers from thawing back into the draft
 // representation while this path is completed opcode by opcode.
-export struct MidCanonicalInstantiation {
+pub struct MidCanonicalInstantiation {
     pub val body: MidCanonicalBody = <MidCanonicalBody body=0U64 />
     pub val error: MidInstantiateError = <MidInstantiateError.None />
 }
 pub impl MidCanonicalInstantiation { factory }
 
-export struct MidCanonicalCallMaterialization {
+pub struct MidCanonicalCallMaterialization {
     pub val sourceStatementCount: U64 = 0U64
     pub val sourceTerminator: U64 = 0U64
     pub val cleanupStatements: MidRange = <MidRange start=0U64 len=0U64 />
@@ -1105,7 +1105,7 @@ fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U6
 // operation owns ABI validation, argument conversion and conversion cleanup.
 // It appends statements/terminators, but leaves block and local registration
 // to the surrounding rewrite, using nextLocal for conversion temporaries.
-export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, locals: MidRange, bodyId: U64, environment: BodyInstance, continuation: U64, cleanupTarget: U64, nextLocal: inout U64, error: inout MidInstantiateError) -> MidCanonicalCallMaterialization {
+pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, locals: MidRange, bodyId: U64, environment: BodyInstance, continuation: U64, cleanupTarget: U64, nextLocal: inout U64, error: inout MidInstantiateError) -> MidCanonicalCallMaterialization {
     // Same-error `try` propagation has no callable at all. It is still
     // represented by the same parametric TryConversion site so the builder
     // does not inspect a BodyInstance; freeze it here into an ordinary copy
@@ -1326,7 +1326,7 @@ export fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, lo
 // Canonical instantiation is a direct append-only rewrite. Converted borrow
 // arguments receive their own cleanup continuation, while every pre-existing
 // CFG edge is remapped around those inserted blocks.
-export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
+pub fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
     if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
         return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
     }

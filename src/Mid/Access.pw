@@ -8,7 +8,7 @@ import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ./Ir with { MidCanonicalArena, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidRvalueNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidTerminator, MidLocalDecl, MidBody, canonicalMidBorrowPlace, canonicalMidMovePlace }
 
-export enum MidAccessError {
+pub enum MidAccessError {
     None
     MissingOuterSemanticAccess
     AccessRoleMismatch
@@ -22,7 +22,7 @@ export enum MidAccessError {
     UnsupportedSetterReceiver
 }
 
-export struct MidCanonicalAccessElaboration {
+pub struct MidCanonicalAccessElaboration {
     pub val body: MidCanonicalBody = <MidCanonicalBody body=0U64 />
     pub val error: MidAccessError = <MidAccessError.None />
 }
@@ -1008,7 +1008,7 @@ fn canonicalAccessExpandBlock(c: inout Comp, body: MidBodyNode, layout: MidCanon
 // Canonical access elaboration is a single append-only CFG rewrite.  It reads
 // final call identities and frozen input recipes only; neither AST recovery
 // nor a `MidBody` thaw bridge is permitted after this boundary.
-export fn elaborateCanonicalMidAccesses(c: inout Comp, canonical: MidCanonicalBody) -> MidCanonicalAccessElaboration {
+pub fn elaborateCanonicalMidAccesses(c: inout Comp, canonical: MidCanonicalBody) -> MidCanonicalAccessElaboration {
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidCanonicalAccessElaboration error=<MidAccessError.UnresolvedAccessCall /> /> }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
     mut val hasAccess: Bool = false

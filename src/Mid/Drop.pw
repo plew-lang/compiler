@@ -155,7 +155,7 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
 
 // Canonical ownership analysis consumes only scalar rows/ranges. Its nested
 // Arrays are transient fixed-point work state, never a body representation.
-export fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidOwnership]] {
+pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidOwnership]] {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     mut val incoming: Array[Array[MidOwnership]] = []
@@ -330,7 +330,7 @@ fn canonicalMidAccessibilityTransfer(arena: MidCanonicalArena, body: MidBodyNode
     return out
 }
 
-export fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidAccessibility]] {
+pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidAccessibility]] {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     mut val incoming: Array[Array[MidAccessibility]] = []
@@ -792,7 +792,7 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
 // frozen CFG, performs all ownership planning from scalar rows, and emits a
 // new frozen body.  In particular, no branch returns through MidBody or the
 // draft MidStatement/MidTerminator sums.
-export fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalBody body=0U64 /> }
     val source: MidBodyNode = arena.bodies[canonical.body - 1U64]
     val ownership: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)

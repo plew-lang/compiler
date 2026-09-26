@@ -1,6 +1,6 @@
 // One active source-set owns this topology. Edge ids are one-based, with zero
 // terminating adjacency chains; original conformance indices remain unchanged.
-export struct TraitCycleGraph {
+pub struct TraitCycleGraph {
     mut val ownerIndices: Dictionary[U64, U64] = [:]
     mut val owners: Array[U64] = []
     mut val conformIndices: Array[U64] = []

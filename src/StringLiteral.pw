@@ -46,7 +46,7 @@ fn appendUtf8(out: inout Array[U8], cp: U64) {
     out.append(truncU8(n: 128U64 | (cp & 63U64)))
 }
 
-export fn decodeStringLiteral(source: Array[U8], start: U64, len: U64) -> Result[Array[U8], String] {
+pub fn decodeStringLiteral(source: Array[U8], start: U64, len: U64) -> Result[Array[U8], String] {
     mut val out: Array[U8] = []
     mut val j: U64 = start + 1
     val end: U64 = start + len - 1

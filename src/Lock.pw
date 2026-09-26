@@ -8,14 +8,14 @@ import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, bytesEq, app
 import ./Version with { satisfies }
 
 // A byte-string wrapped for use in arrays (avoids Array[Array[U8]]).
-export struct Name {
+pub struct Name {
     pub val s: Array[U8]
 }
 
 // One resolved package: its git URL, the resolved tag (human reference), the
 // pinned commit (the integrity guarantee), and the resolved direct dependency
 // edges (binding names) for provenance / re-resolution checks.
-export struct LockPkg {
+pub struct LockPkg {
     pub val git: Array[U8]
     pub val version: Array[U8]
     pub val commit: Array[U8]
@@ -24,7 +24,7 @@ export struct LockPkg {
 
 // A parsed lock: the resolved packages plus, for a shared lock, the referrers
 // (the Plew.toml paths that point at it — self-healing, spec/17 workspace).
-export struct Lock {
+pub struct Lock {
     pub val pkgs: Array[LockPkg]
     pub val referrers: Array[Name]
 }
@@ -36,7 +36,7 @@ pub impl LockPkg { factory }
 pub impl Lock { factory }
 
 // An empty lock (no packages / referrers) — for the no-Plew.lock case.
-export fn emptyLock() -> Lock {
+pub fn emptyLock() -> Lock {
     mut val ps: Array[LockPkg] = []
     mut val rs: Array[Name] = []
     return <Lock pkgs=ps referrers=rs />
@@ -85,7 +85,7 @@ fn sectionArr(sec: Section, key: Array[U8]) -> Array[Name] {
 }
 
 // Parse a `Plew.lock` byte buffer into its packages + referrers.
-export fn parseLock(bytes: Array[U8]) -> Lock {
+pub fn parseLock(bytes: Array[U8]) -> Lock {
     val doc: TomlDoc = parseToml(bytes: bytes)
     mut val pkgs: Array[LockPkg] = []
     mut val refs: Array[Name] = []
@@ -107,7 +107,7 @@ export fn parseLock(bytes: Array[U8]) -> Lock {
 }
 
 // Look up a package by git URL; returns its commit (empty if not in the lock).
-export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
+pub fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
     while i < lock.pkgs.count() {
         val p: LockPkg = lock.pkgs[i]
@@ -124,7 +124,7 @@ export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
 // hold several entries for one URL (e.g. 1.x and 2.x); this picks the one the
 // importing package asked for (spec/17). Falls back to any entry for the URL when
 // the constraint is empty.
-export fn lockCommitForConstraint(lock: Lock, git: Array[U8], constraint: Array[U8]) -> Array[U8] {
+pub fn lockCommitForConstraint(lock: Lock, git: Array[U8], constraint: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
     while i < lock.pkgs.count() {
         val p: LockPkg = lock.pkgs[i]
@@ -233,7 +233,7 @@ fn emitArr(into: inout Array[U8], key: Array[U8], names: Array[Name]) {
 }
 
 // Serialize a lock to its `Plew.lock` byte form (deterministic, sorted).
-export fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
+pub fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: "version = 1\n".bytes())
     val sorted: Array[LockPkg] = sortPkgs(pkgs: pkgs)

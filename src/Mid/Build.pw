@@ -16,7 +16,7 @@ fn midDiscriminantType(c: Comp) -> U64 {
     return c.arena.loweringDiscriminantType
 }
 
-export struct MidSourceBinding {
+pub struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
     // resolver defines it as the declaration's source offset, so it preserves
     // lexical shadowing even when declarations have the same spelling.  It is
@@ -27,13 +27,13 @@ export struct MidSourceBinding {
 }
 pub impl MidSourceBinding { factory }
 
-export struct MidBindingLookup {
+pub struct MidBindingLookup {
     pub val found: Bool = false
     pub val local: U64 = 0U64
 }
 pub impl MidBindingLookup { factory }
 
-export struct MidPlaceLookup {
+pub struct MidPlaceLookup {
     pub val found: Bool = false
     pub val place: MidPlace = <MidPlace local=0U64 />
 }
@@ -55,7 +55,7 @@ pub impl MidNormalizedCallArgumentBuild { factory }
 // string.  Keep the source form that cannot yet be represented so coverage
 // can select one semantic lowering slice rather than treating unrelated
 // statement and operand work as one bucket.
-export enum MidUnsupportedBuild {
+pub enum MidUnsupportedBuild {
     MakeWithoutAggregate
     FieldPlace
     UniqueAggregate
@@ -76,7 +76,7 @@ export enum MidUnsupportedBuild {
 // named as a Mid place needs a different lowering from one that deliberately
 // contains Index storage: the latter has a selected getter/setter writeback
 // contract and must go through Mid/Access rather than become a raw store.
-export enum MidUnsupportedAssign {
+pub enum MidUnsupportedAssign {
     IdentifierNotLocal
     FieldBaseNotPlace
     IndexBaseNotPlace
@@ -85,7 +85,7 @@ export enum MidUnsupportedAssign {
     ImmutableGlobal
 }
 
-export enum MidBuildError {
+pub enum MidBuildError {
     Frontend(diagnostic: CompileDiagnostic)
     StringLiteral(offset: U64, message: String)
     None
@@ -108,7 +108,7 @@ export enum MidBuildError {
     UnsupportedCallTemplate
 }
 
-export struct MidBodyBuild {
+pub struct MidBodyBuild {
     pub val body: MidBody
     // The canonical snapshot is the authoritative post-build representation.
     // `body` remains only until the downstream passes are migrated one by one.
@@ -139,7 +139,7 @@ struct MidCallValueLookup {
 }
 pub impl MidCallValueLookup { factory }
 
-export struct MidBuildState {
+pub struct MidBuildState {
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []
     pub mut val blocks: Array[MidBlock] = []
@@ -249,7 +249,7 @@ pub impl MidBuildState {
     }
 }
 
-export struct MidCallValue {
+pub struct MidCallValue {
     pub val siteKey: CallSiteKey
     pub val place: MidPlace
 }
@@ -267,13 +267,13 @@ struct MidClosureLookup {
 }
 pub impl MidClosureLookup { factory }
 
-export struct MidAggregateValue {
+pub struct MidAggregateValue {
     pub val exprId: U64
     pub val place: MidPlace
 }
 pub impl MidAggregateValue { factory }
 
-export fn emptyMidBody(sourceFunction: U64) -> MidBody {
+pub fn emptyMidBody(sourceFunction: U64) -> MidBody {
     return <MidBody sourceFunction=sourceFunction scopes=[<MidScope />] blocks=[<MidBlock />] entry=0U64 />
 }
 
@@ -281,7 +281,7 @@ export fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
+pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
     val local: U64 = state.locals.count()
     state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
@@ -301,7 +301,7 @@ fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = f
 // A missing binding is intentionally explicit: globals/self/callables have
 // different Mid lowering forms and must never be misclassified as a lexical
 // local through a spelling fallback.
-export fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBindingLookup {
+pub fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBindingLookup {
     mut val i: U64 = 0U64
     while i < state.bindings.count() {
         val binding: MidSourceBinding = state.bindings[i]
@@ -321,7 +321,7 @@ export fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> Mi
 // locals, and parameters are value bindings. A resolver-recorded global is a
 // separate typed address root, never a synthetic local. No source spelling,
 // scope scan, or AST pattern match is permitted here.
-export fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+pub fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
     if exprId >= c.typeCache.identBind.count() || exprId >= c.typeCache.identTarget.count() {
         return <MidPlaceLookup />
     }
@@ -1980,7 +1980,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
 // Mid local plus an explicit assignment.  It is intentionally narrow, but it
 // is a real frontend consumer: types come from Stmt/Record, identifier operands
 // come from TypeCache, and no legacy type recovery is reachable from this path.
-export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init) => {
@@ -2028,7 +2028,7 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
 // A direct field path is physical storage and keeps its selected field slots
 // in Mid. Index paths deliberately remain SemanticAccess work: treating one
 // as a raw store here would bypass its getter/setter/writeback and CoW proof.
-export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Assign(target: val target, value: val value) => {
@@ -2087,7 +2087,7 @@ fn midReturnOperand(c: inout Comp, operand: MidOperand, typeTerm: U64) -> MidOpe
     return operand
 }
 
-export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
@@ -2200,7 +2200,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, ha
     return result
 }
 
-export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64) -> MidBuildError {
+pub fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64) -> MidBuildError {
     return buildMidBlockInto(c: inout c, state: inout state, blockId: blockId, hasGiveDestination: false, giveDestination: <MidPlace local=0U64 typeTerm=0U64 />)
 }
 
@@ -2467,7 +2467,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
             return <MidBuildError.None />
 }
 
-export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.Match(scrut: val scrut, arms: val arms) => { return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, sourceArms: arms, hasGiveDestination: false, giveDestination: <MidPlace local=0U64 typeTerm=0U64 />, traceId: stmtId) }
@@ -2516,7 +2516,7 @@ fn buildMidIfCfg(c: inout Comp, state: inout MidBuildState, cond: U64, thenBlk: 
 // A statement `if` becomes a normal Switch plus then/else/join blocks. There
 // is no conditional-move special case: a Move emitted by `buildMidLet` in one
 // branch reaches the join through the same CFG used by every other statement.
-export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
@@ -2535,7 +2535,7 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
 //
 // `break` and `continue` use the lexical loop-target stack to emit every
 // intervening ScopeExit before branching.
-export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
         Stmt.While(cond: val cond, body: val body) => {
@@ -2577,7 +2577,7 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
 // The iterator lives across visits; Optional and Item live for one visit.
 // Both false-next and break converge after iteration cleanup, while continue
 // returns to the next call without releasing the iterator itself.
-export fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     match c.arena.stmts[stmtId] {
         Stmt.For(varStart: val varStart, varLen: _, varTyStart: _, varTyLen: _, isRange: val isRange, inclusive: _, iter: val iter, rangeHi: _, body: val body, isStruct: val isStruct, patStart: _, patLen: _, binds: _) => {
             if isRange || isStruct { return <MidBuildError.UnsupportedFor /> }
@@ -2665,7 +2665,7 @@ fn midAggregateHasUniqueValue(c: inout Comp, aggregate: SemanticAggregate) -> Bo
 // Parameters and receiver are represented by the same declaration identities
 // used at identifier sites; only instantiateCanonicalMidBody may subsequently ground
 // their TypeTerms. This function intentionally does not install Cursor state.
-export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
+pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     if fnIdx >= c.arena.functionCount() {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
@@ -2742,7 +2742,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
 // frozen capture range. Consequently this builder creates only the source
 // parameter prefix and capture locals, all from SemanticClosure; it never
 // re-matches Expr.Closure to recover a signature or body.
-export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+pub fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
     if closure.bodyKey == 0U64 || closure.bodyBlock >= c.arena.blocks.count() || closure.functionTypeTerm == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.InvalidFunction /> />
     }
@@ -2811,7 +2811,7 @@ export fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure)
 // canonical parametric Mid body, shared by every closure value using it.
 // Returning an empty draft for a cached entry is intentional: consumers must
 // use its canonical ID and cannot accidentally reopen a mutable body.
-export fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
+pub fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> MidBodyBuild {
     mut val i: U64 = 0U64
     while i < c.mid.closureBodies.count() {
         val prior: MidClosureBody = c.mid.closureBodies[i]
@@ -2839,7 +2839,7 @@ export fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure
 // Each RHS first receives a normal temporary home.  InitializeGlobal then
 // consumes that home exactly once into the process-lifetime root; it must not
 // be confused with either local Assign or destructive Overwrite.
-export fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
+pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
     val globalOwner: U64 = 18446744073709551615U64
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=globalOwner />
     mut val globalI: U64 = 0U64
@@ -2900,7 +2900,7 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 // One preparation owns this table. Function declarations and semantic facts
 // are frozen during that preparation; only immutable parametric snapshots
 // are shared. Grounded adapters and synthetic bodies remain instance-owned.
-export struct MidFunctionTemplates {
+pub struct MidFunctionTemplates {
     val bodies: Array[U64] = []
 }
 pub impl MidFunctionTemplates {
@@ -2921,7 +2921,7 @@ pub impl MidFunctionTemplates {
     }
 }
 
-export fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64, templates: inout MidFunctionTemplates) -> MidBodyBuild {
+pub fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64, templates: inout MidFunctionTemplates) -> MidBodyBuild {
     if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return buildParametricMidBody(c: inout c, fnIdx: fnIdx) }
     match c.arena.bodyOrigin(bodyId: bodyId) {
         BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val closureBodyId) => { return buildMidClosureEnvironmentDrop(c: inout c, bodyId: bodyId, closureBodyId: closureBodyId) }

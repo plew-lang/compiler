@@ -10,18 +10,18 @@ import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, Mi
 import ./Mid/Instantiate with { MidInstantiateError, MidCanonicalInstantiation, instantiateCanonicalMidBody }
 import ./Mid/Access with { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
 
-export ./Mid/Ir with { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidAggregateElementNode, MidSwitchCase, MidOperandNode, MidRvalueNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidCanonicalArena, MidCanonicalBody, MidClosureBody, canonicalMidBodyIsWellFormed, MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
-export ./Mid/Drop with { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
-export ./Mid/Verify with { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
-export ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
-export ./Mid/Instantiate with { MidInstantiateError, MidCanonicalInstantiation, instantiateCanonicalMidBody }
-export ./Mid/Access with { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
+pub import ./Mid/Ir with { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidAggregateElementNode, MidSwitchCase, MidOperandNode, MidRvalueNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidCanonicalArena, MidCanonicalBody, MidClosureBody, canonicalMidBodyIsWellFormed, MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
+pub import ./Mid/Drop with { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
+pub import ./Mid/Verify with { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
+pub import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
+pub import ./Mid/Instantiate with { MidInstantiateError, MidCanonicalInstantiation, instantiateCanonicalMidBody }
+pub import ./Mid/Access with { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
 
 import ./Mid/Optimize with { MidCopyCosts, optimizeCanonicalMidCopies }
-export ./Mid/Optimize with { MidCopyCosts, optimizeCanonicalMidCopies }
+pub import ./Mid/Optimize with { MidCopyCosts, optimizeCanonicalMidCopies }
 
 import ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
-export ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
+pub import ./Mid/Async with { MidAsyncFramePlan, planCanonicalMidAsyncFrame }
 
 import ./Mid/Prepare with { MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError }
-export ./Mid/Prepare with { MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError }
+pub import ./Mid/Prepare with { MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError }

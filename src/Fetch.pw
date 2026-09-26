@@ -29,7 +29,7 @@ fn q(into: inout Array[U8], s: Array[U8]) {
 
 // Ensure a bare mirror for `url` exists under the cache and its tags are current:
 // clone --bare if missing, else fetch --tags. Returns the git exit code.
-export fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
+pub fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []
     appendBytes(into: inout cmd, from: "if [ -d ".bytes())
@@ -46,7 +46,7 @@ export fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
 }
 
 // List the repo's tags (one per line), from its mirror.
-export fn listTags(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
+pub fn listTags(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []
     appendBytes(into: inout cmd, from: "git -C ".bytes())
@@ -56,7 +56,7 @@ export fn listTags(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
 }
 
 // Resolve a tag (or any ref) to its commit SHA.
-export fn resolveCommit(cacheRoot: Array[U8], url: Array[U8], ref: Array[U8]) -> Array[U8] {
+pub fn resolveCommit(cacheRoot: Array[U8], url: Array[U8], ref: Array[U8]) -> Array[U8] {
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val refExpr: Array[U8] = []
     appendBytes(into: inout refExpr, from: ref)
@@ -72,7 +72,7 @@ export fn resolveCommit(cacheRoot: Array[U8], url: Array[U8], ref: Array[U8]) ->
 // Materialize a commit's tree into `<cacheRoot>/src/<url>/<commit>` (git archive |
 // tar — no `.git` left behind). Idempotent: skips if already materialized. Returns
 // the git/tar exit code (0 when already present).
-export fn materialize(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> I64 {
+pub fn materialize(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> I64 {
     val sd: Array[U8] = srcDir(cacheRoot: cacheRoot, url: url, commit: commit)
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []

@@ -209,12 +209,12 @@ part ./Core/Num
 // `it = xs.iterator(); while { match it.next() { Some(v) => …; None => break } }`
 // (the compiler keeps a fast path for the built-in Array/Range iterands). The
 // associated `Item` is the element type; `Iter` is the concrete iterator type.
-export trait Iterator {
+pub trait Iterator {
     type Item
     inout next() -> Optional[Item]
 }
 
-export trait Iterable {
+pub trait Iterable {
     type Item
     type Iter
     fn iterator() -> Iter
@@ -228,7 +228,7 @@ export trait Iterable {
 
 // MapIter applies the mapping closure `f` to each element. `B` is the output
 // element type (may differ from the inner Item); `F = fn(x: Item) -> B`.
-export struct MapIter[I, F, B] {
+pub struct MapIter[I, F, B] {
     pub mut val inner: I
     pub val f: F
 }
@@ -245,7 +245,7 @@ pub impl[I, F, B] MapIter[I, F, B] as Iterator where I: Iterator {
 
 // FilterIter yields only the elements for which the predicate `p` is true. The
 // element type passes through unchanged (`E = Item`); `P = fn(x: Item) -> Bool`.
-export struct FilterIter[I, P, E] {
+pub struct FilterIter[I, P, E] {
     pub mut val inner: I
     pub val p: P
 }
@@ -270,7 +270,7 @@ pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator[Item = E] {
 
 // TakeIter yields at most the first `remaining` elements of the inner iterator, then
 // stops. The element type passes through unchanged (`E = Item`).
-export struct TakeIter[I, E] {
+pub struct TakeIter[I, E] {
     pub mut val inner: I
     pub mut val remaining: U64
 }
@@ -288,7 +288,7 @@ pub impl[I, E] TakeIter[I, E] as Iterator where I: Iterator[Item = E] {
 
 // SkipIter discards the first `pending` elements on the first pull, then yields the
 // rest of the inner iterator unchanged (`E = Item`).
-export struct SkipIter[I, E] {
+pub struct SkipIter[I, E] {
     pub mut val inner: I
     pub mut val pending: U64
 }
@@ -314,7 +314,7 @@ pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator[Item = E] {
 
 // EnumerateIter pairs each element with its 0-based index, yielding the labelled
 // record `(index: U64, value: E)`. `E` is the inner element type.
-export struct EnumerateIter[I, E] {
+pub struct EnumerateIter[I, E] {
     pub mut val inner: I
     // the running index; defaults to 0 so the inline adapter build (which only fills
     // `inner` + call args) starts the count correctly without an explicit field.
@@ -450,7 +450,7 @@ pub impl Iterator {
 // false (spec/11: always on, all builds). Returns (). The condition is
 // label-suppressed (`cond~:`, positional); the diagnostic message is an
 // optional labelled argument with a default.
-export fn assert(cond~: Bool, message: String = "assertion failed") {
+pub fn assert(cond~: Bool, message: String = "assertion failed") {
     if !(cond) {
         panic message
     }
@@ -463,19 +463,19 @@ export fn assert(cond~: Bool, message: String = "assertion failed") {
 // numeric conformances are generated into ./Core/Num (over the intrinsic floor);
 // user types declare their own. `as` desugars binary `+ - * / % & | ^ << >>` and
 // prefix `- ! ~` uniformly — primitives are not special-cased (spec/12, O6).
-export trait Add[Rhs]    { type Output  assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Sub[Rhs]    { type Output  assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Mul[Rhs]    { type Output  assoc fn mul(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Div[Rhs]    { type Output  assoc fn div(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Rem[Rhs]    { type Output  assoc fn rem(lhs~: Self, rhs~: Rhs) -> Output }
-export trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs~: Self, rhs~: Rhs) -> Output }
-export trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs~: Self, rhs~: Rhs) -> Output }
-export trait BitXor[Rhs] { type Output  assoc fn bitxor(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Shl[Rhs]    { type Output  assoc fn shl(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Shr[Rhs]    { type Output  assoc fn shr(lhs~: Self, rhs~: Rhs) -> Output }
-export trait Neg    { type Output  assoc fn neg(value~: Self) -> Output }
-export trait Not    { type Output  assoc fn not(value~: Self) -> Output }
-export trait BitNot { type Output  assoc fn bitnot(value~: Self) -> Output }
+pub trait Add[Rhs]    { type Output  assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Sub[Rhs]    { type Output  assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Mul[Rhs]    { type Output  assoc fn mul(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Div[Rhs]    { type Output  assoc fn div(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Rem[Rhs]    { type Output  assoc fn rem(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait BitXor[Rhs] { type Output  assoc fn bitxor(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Shl[Rhs]    { type Output  assoc fn shl(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Shr[Rhs]    { type Output  assoc fn shr(lhs~: Self, rhs~: Rhs) -> Output }
+pub trait Neg    { type Output  assoc fn neg(value~: Self) -> Output }
+pub trait Not    { type Output  assoc fn not(value~: Self) -> Output }
+pub trait BitNot { type Output  assoc fn bitnot(value~: Self) -> Output }
 
 // Fixed-width integers (spec/02): the classification trait for the bounded, two's-
 // complement integer types. Its members are the operations that only make sense for a
@@ -487,7 +487,7 @@ export trait BitNot { type Output  assoc fn bitnot(value~: Self) -> Output }
 // is NOT a `FixedWidthInteger`, so the name honestly states the fixed-width precondition.
 // The operands are equal peers whose labels fall to the position names `lhs`/`rhs`, so
 // they are suppressed (spec/04); the unary `wrappingNeg` takes the empty-name `value`.
-export trait FixedWidthInteger {
+pub trait FixedWidthInteger {
     assoc fn wrappingAdd(lhs~: Self, rhs~: Self) -> Self
     assoc fn wrappingSub(lhs~: Self, rhs~: Self) -> Self
     assoc fn wrappingMul(lhs~: Self, rhs~: Self) -> Self
@@ -509,7 +509,7 @@ export trait FixedWidthInteger {
 // eager — that is why `?.` is a trait (unlike `??`, whose deferred operand is
 // user-supplied). `chain()`'s empty case carries no value, so error-bearing types
 // (`Result`) are excluded — use `try` (spec/13) for those.
-export trait Chain {
+pub trait Chain {
     type Value
     fn chain() -> Optional[Value]
     factory fromValue(value: Value)
@@ -535,7 +535,7 @@ pub impl[T] Optional[T] as Chain {
 // exponent (a negative exponent on an integer is not representable) and compute by
 // repeated checked multiplication — overflow panics like `*` (spec/02). Float pow
 // (`F64 as Pow[F64]`, via a transcendental intrinsic) is additive and not yet provided.
-export trait Pow[Exp] { type Output  assoc fn pow(base: Self, exp: Exp) -> Output }
+pub trait Pow[Exp] { type Output  assoc fn pow(base: Self, exp: Exp) -> Output }
 
 impl I8 as Pow[U64] {
     type Output = I8
@@ -613,8 +613,8 @@ impl U64 as Pow[U64] {
 // Equality and ordering (spec/12): `==`/`!=` desugar to `Eq.eq`, and `< <= > >=`
 // to a tag test on `Ord.compare`'s three-way `Ordering`. Same-type relations, so
 // no type argument. The primitive conformances are generated into ./Core/Num.
-export trait Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool }
-export trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
+pub trait Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool }
+pub trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
 
 // The three-way result of `Ord.compare` (spec/12). NOT a lang item / not ambient: the
 // `< <= > >=` operators desugar through it but RETURN `Bool` (the `Ordering` reference
@@ -622,7 +622,7 @@ export trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
 // `Ordering` (matching a `compare` result, a custom comparator's return) requires
 // `import @Std/Core with { Ordering }`, the same as Rust's `std::cmp::Ordering`. It
 // lives here next to `Ord`, the trait that produces it.
-export enum Ordering { Less  Equal  Greater }
+pub enum Ordering { Less  Equal  Greater }
 
 // `Ref[T]` / `MutableRef[T]` / `WeakRef[T]` / `WeakMutableRef[T]` — opt-in shared
 // reference cells (spec/03,14). `Ref` is read-only capability; `MutableRef` permits
@@ -644,23 +644,23 @@ extern(plewIntrinsic) {
     struct WeakRefCell[T]
 }
 
-export struct Ref[T] {
+pub struct Ref[T] {
     val cell: StrongRefCell[T]
 }
 
-export struct MutableRef[T] {
+pub struct MutableRef[T] {
     val cell: StrongRefCell[T]
 }
 
-export struct WeakRef[T] {
+pub struct WeakRef[T] {
     val cell: WeakRefCell[T]
 }
 
-export struct WeakMutableRef[T] {
+pub struct WeakMutableRef[T] {
     val cell: WeakRefCell[T]
 }
 
-export extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     struct Buffer[T]
 }
 
@@ -747,7 +747,7 @@ pub impl[T] WeakMutableRef[T] {
 // generic struct field-recursion through `buffer`. The String-specific surface — the `"…"`
 // literal (byte construction), `==` (byte compare), `print` (ptr+count read), `.bytes()`
 // (buffer → Array[U8]) — lowers through intrinsics / trait impls, with no type-name dispatch.
-export struct String {
+pub struct String {
     val buffer: Buffer[U8]
 }
 
@@ -756,7 +756,7 @@ export struct String {
 // The element type T is recovered from the `Buffer[T]` argument / receiver. Like Array's
 // `arrayPush`/etc, these are never emitted — the methods below are intercepted at the
 // call site — so the declarations only have to type-check the wrapper bodies.
-export extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     fn bufferNew[T]() -> Buffer[T]
     fn bufferCount[T](buffer: Buffer[T]) -> U64
     fn bufferCapacity[T](buffer: Buffer[T]) -> U64
@@ -931,8 +931,8 @@ pub impl String as Eq {
 // `a.indexSet(key: k, value: v)`. Container accessors, so the requirement is a
 // method (receiver = the collection), not an assoc fn. Read and write are separate
 // traits (a read-only collection implements only Index).
-export trait Index[Key]    { type Output  fn index(key: Key) -> Output }
-export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value~: Value) }
+pub trait Index[Key]    { type Output  fn index(key: Key) -> Output }
+pub trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value~: Value) }
 
 // Build a String from a byte array WITHOUT validating UTF-8 — the unchecked floor (the
 // bytes must already be valid UTF-8; interned source spans and compiler-generated names
@@ -940,7 +940,7 @@ export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value~: Va
 // (`String as TryFrom[Array[U8]]`, below). Lowered inline to the {ptr,i64} reinterpret.
 // Exported so @Plew/Syntax's parser and the compiler can turn known-valid byte ranges
 // into Strings without paying re-validation; user code should prefer the checked form.
-export extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     fn stringFromBytesUnchecked(b~: Array[U8]) -> String
     // a float -> its decimal text (the backend lowers it to snprintf "%g").
     fn floatToString(value~: F64) -> String
@@ -1028,7 +1028,7 @@ fn digitByteU(d: U64) -> U8 {
 // Textual formatting (spec/02): `{x}` interpolation desugars to x.format(format:).
 // The `format` spec string (e.g. ".2") is accepted but ignored for integers for
 // now (no precision/padding yet — additive).
-export trait Format {
+pub trait Format {
     fn format(format: String) -> String
 }
 
@@ -1156,18 +1156,18 @@ pub impl String as Add[String] {
 
 // The error of a fallible numeric conversion (spec/12 TryFrom): carries the
 // out-of-range source value that could not be represented in the narrower target.
-export struct RangeError {
+pub struct RangeError {
     pub val value: I64
 }
 pub impl RangeError { factory }
 
 // Total conversion used by `as` and `try` error propagation (spec/12,13).
-export trait From[Source] {
+pub trait From[Source] {
     factory(from: Source)
 }
 
 // Failure-possible conversion (spec/12): `checked` yields Result[Self, Error].
-export trait TryFrom[Source] {
+pub trait TryFrom[Source] {
     type Error
     result[Error] factory checked(source: Source)
 }
@@ -1464,7 +1464,7 @@ pub impl U8 as TryFrom[F64] {
 
 // The error of a failed UTF-8 validation (spec/02: a String is UTF-8-valid by
 // construction). `index` is the byte offset of the first ill-formed byte.
-export struct Utf8Error {
+pub struct Utf8Error {
     pub val index: U64
 }
 pub impl Utf8Error { factory }
@@ -1544,7 +1544,7 @@ pub impl String as TryFrom[Array[U8]] {
 
 // The error of a failed string-to-number parse (spec/12 TryFrom): carries the input
 // that could not be parsed (empty, a non-digit, a lone sign, or out of range).
-export struct ParseError {
+pub struct ParseError {
     pub val input: String
 }
 pub impl ParseError { factory }
@@ -1606,7 +1606,7 @@ pub impl I64 as TryFrom[String] {
 
 // Discrete ordered steps (spec/02). Exhaustion is an Optional result rather
 // than arithmetic overflow; every implementation accepts a U64 distance.
-export trait Step: Ord {
+pub trait Step: Ord {
     assoc fn stepsBetween(start: Self, end: Self) -> (lower: U64, exact: Optional[U64])
     assoc fn stepForward(start: Self, count: U64) -> Optional[Self]
     assoc fn stepBackward(start: Self, count: U64) -> Optional[Self]
@@ -1614,7 +1614,7 @@ export trait Step: Ord {
 
 // One cursor representation serves both range shapes. Bounds remain ordinary
 // values; only the cursor records whether the last value has been delivered.
-export struct RangeIter[T] {
+pub struct RangeIter[T] {
     mut val current: T
     val end: T
     val closed: Bool

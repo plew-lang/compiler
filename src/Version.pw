@@ -7,7 +7,7 @@
 
 // Parse a version string into its numeric dot-components. Non-digit, non-`.` bytes
 // are ignored (so a leading `v` is tolerated); each `.` starts a new component.
-export fn parseVer(s: Array[U8]) -> Array[U64] {
+pub fn parseVer(s: Array[U8]) -> Array[U64] {
     mut val comps: Array[U64] = []
     mut val cur: U64 = 0
     mut val i: U64 = 0
@@ -39,7 +39,7 @@ fn compAt(comps: Array[U64], i: U64) -> U64 {
 
 // Compare two version strings numerically component-by-component: -1 if a < b,
 // 0 if equal, 1 if a > b (missing components count as 0).
-export fn compareVer(a: Array[U8], b: Array[U8]) -> I64 {
+pub fn compareVer(a: Array[U8], b: Array[U8]) -> I64 {
     val ca: Array[U64] = parseVer(s: a)
     val cb: Array[U64] = parseVer(s: b)
     mut val n: U64 = ca.count()
@@ -64,7 +64,7 @@ export fn compareVer(a: Array[U8], b: Array[U8]) -> I64 {
 // Whether `candidate` satisfies the digit-model `constraint`: every component the
 // constraint WRITES must equal the candidate's same-position component. An empty
 // constraint matches anything (free version).
-export fn satisfies(constraint: Array[U8], candidate: Array[U8]) -> Bool {
+pub fn satisfies(constraint: Array[U8], candidate: Array[U8]) -> Bool {
     if constraint.count() == 0 {
         return true
     }
@@ -83,7 +83,7 @@ export fn satisfies(constraint: Array[U8], candidate: Array[U8]) -> Bool {
 // The version token of a tag line: strip a `refs/tags/` (or any) leading path so
 // `refs/tags/3.2.1` / `v3.2.1` / `3.2.1` all reduce to the comparable tail. Also
 // drops a trailing `^{}` (git's dereferenced-tag marker) and CR.
-export fn tagName(line: Array[U8]) -> Array[U8] {
+pub fn tagName(line: Array[U8]) -> Array[U8] {
     // take the substring after the last '/'
     mut val start: U64 = 0
     mut val i: U64 = 0
@@ -121,7 +121,7 @@ export fn tagName(line: Array[U8]) -> Array[U8] {
 // output, or one tag per line), pick the LATEST tag whose version satisfies the
 // constraint. Returns the chosen tag's cleaned name (via tagName), or empty if
 // none match.
-export fn pickLatest(constraint: Array[U8], tagsBlob: Array[U8]) -> Array[U8] {
+pub fn pickLatest(constraint: Array[U8], tagsBlob: Array[U8]) -> Array[U8] {
     mut val best: Array[U8] = []
     mut val haveBest: Bool = false
     mut val i: U64 = 0

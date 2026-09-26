@@ -5,14 +5,14 @@ import ../Ir with { InstanceEnvironment }
 import ./Build with { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
 import ./Prepare with { MidParametricBody, MidExecutableBody, MidPreparationError }
 
-export enum MidProgramError {
+pub enum MidProgramError {
     MissingSignature(bodyId: U64)
     MissingClosure(bodyId: U64)
     Build(bodyId: U64, error: MidBuildError)
     Preparation(bodyId: U64, error: MidPreparationError)
 }
 
-export struct MidExecutableProgram {
+pub struct MidExecutableProgram {
     val bodies: Array[Optional[MidExecutableBody]] = []
 }
 

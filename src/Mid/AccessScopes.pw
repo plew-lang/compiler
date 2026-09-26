@@ -61,7 +61,7 @@ fn scopeWritebackValid(arena: MidCanonicalArena, body: MidBodyNode, parent: MidT
     return true
 }
 
-export fn canonicalMidAccessScopesValid(arena: MidCanonicalArena, body: MidBodyNode) -> Bool {
+pub fn canonicalMidAccessScopesValid(arena: MidCanonicalArena, body: MidBodyNode) -> Bool {
     mut val hasScopes = false
     mut val index = 0U64
     while index < body.blocks.len {

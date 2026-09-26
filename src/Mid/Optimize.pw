@@ -8,7 +8,7 @@ import ../Ir with { FinalDestruction }
 // Profitability facts are frozen by the frontend, not inferred from names or
 // LLVM layout. Missing facts only lose a cheap-copy exclusion; they never
 // relax the ownership proof or classify an unknown type as release-free.
-export struct MidCopyCosts {
+pub struct MidCopyCosts {
     pub val destructionIds: Array[U64] = []
     pub val destructions: Array[FinalDestruction] = []
 }
@@ -204,7 +204,7 @@ fn scopeTransferOperand(arena: MidCanonicalArena, costs: MidCopyCosts, body: Mid
 // identity return or an immediately following source ScopeExit. Each candidate
 // uses the same whole-body occurrence analysis. No raw ARC operations are
 // introduced, and ordinary drop elaboration/verifiers remain authoritative.
-export fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: MidCanonicalBody, costs: MidCopyCosts) -> MidCanonicalBody {
+pub fn optimizeCanonicalMidCopies(arena: inout MidCanonicalArena, canonical: MidCanonicalBody, costs: MidCopyCosts) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return canonical }
     val body = arena.bodies[canonical.body - 1U64]
     mut val definitions: Array[U64] = []

@@ -32,7 +32,7 @@ pub impl GlobalAccessGraph { factory }
 
 // Record verified bodies once during the normal typed preparation pipeline.
 // With no mutable globals this tier has no possible obligations.
-export fn registerMidGlobalAccessBody(c: inout Comp, canonical: MidCanonicalBody) {
+pub fn registerMidGlobalAccessBody(c: inout Comp, canonical: MidCanonicalBody) {
     if c.mid.globalAccessState == 0U64 {
         c.mid.globalAccessState = 1U64
         mut val index = 0U64
@@ -122,7 +122,7 @@ pub impl GlobalAccessGraph {
 // Each body is scanned once. New summary entries form a worklist propagated
 // along reverse call edges, including recursive strongly connected bodies.
 // Return the one-based canonical body containing a conflicting call, or zero.
-export fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnostic] {
+pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnostic] {
     if c.mid.globalAccessBodies.count() == 0U64 { return <Result.Ok value=0U64 /> }
     mut val graph = <GlobalAccessGraph />
     mut val bodyMap: Array[U64] = []

@@ -6,7 +6,7 @@ import ../Ir with { ArcClass, CallTarget, RuntimeIntrinsic }
 import ./Ir with { MidTerminatorNode }
 import ./Program with { MidExecutableProgram }
 
-export struct MidAmbientEffects {
+pub struct MidAmbientEffects {
     pub mut val affected: Array[Bool] = []
     mut val heads: Array[U64] = []
     mut val edges: Array[U64] = []

@@ -3,7 +3,7 @@
 // One table follows one append-only source lineage. Copy table and source
 // together before extending them independently; replacing existing source
 // bytes requires a fresh table. Comp owns this lifecycle.
-export struct KeywordSpan {
+pub struct KeywordSpan {
     pub val start: U64 = 0U64
     pub val length: U64 = 0U64
 }
@@ -18,7 +18,7 @@ struct Entry {
     pub val sourceSize: U64 = 0U64
 }
 pub impl Entry { factory }
-export struct KeywordSpans {
+pub struct KeywordSpans {
     mut val keys: Array[U8] = []
     mut val entries: Array[Entry] = []
     mut val slots: Array[U64] = []

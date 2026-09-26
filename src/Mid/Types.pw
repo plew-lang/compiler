@@ -10,7 +10,7 @@ import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, 
 
 // Removing outer facets must not erase views inside generic arguments or
 // change nominal identity. This check is separate from conversion selection.
-export fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
+pub fn midViewTypesMatch(c: inout Comp, sourceTerm: U64, targetTerm: U64) -> Bool {
     if sourceTerm == 0U64 || targetTerm == 0U64 || sourceTerm >= c.arena.typeCount() || targetTerm >= c.arena.typeCount() || !c.typeTermIsClosed(ref: sourceTerm) { return false }
     // Identical closed terms already prove the relation, including all views.
     if sourceTerm == targetTerm { return true }
@@ -184,7 +184,7 @@ fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, d
     return false
 }
 
-export fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, statement: MidStatementNode) -> Bool {
+pub fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, statement: MidStatementNode) -> Bool {
     mut val index = 0U64
     while index < statement.destinationCount() {
         if !midPlaceTypeIsValid(c: inout c, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: index)) { return false }
@@ -202,7 +202,7 @@ export fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, stat
     return true
 }
 
-export fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode) -> Bool {
+pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode) -> Bool {
     if term.destination != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: term.destination) { return false }
     mut val index = 0U64
     while index < c.mid.terminatorOperandCount(term: term) {

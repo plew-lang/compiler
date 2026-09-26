@@ -89,7 +89,7 @@ fn midInstantiateCoverageDetail(reason: MidInstantiateError) -> U64 {
     }
 }
 
-export fn emitMidCoverageVerify(detail: U64) {
+pub fn emitMidCoverageVerify(detail: U64) {
     eprint(text: "verify:")
     match detail {
         0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-target") }
@@ -112,7 +112,7 @@ fn traceMidBuildFailure(c: inout Comp, fnIdx: U64, detail: U64) {
     }
 }
 
-export fn reportMidBuildError(c: inout Comp, fnIdx: U64, error: MidBuildError) {
+pub fn reportMidBuildError(c: inout Comp, fnIdx: U64, error: MidBuildError) {
     match error {
         MidBuildError.None => {}
         MidBuildError.StringLiteral(offset: _, message: _) => {}
@@ -150,7 +150,7 @@ fn traceMidInstantiationFailure(c: inout Comp, fnIdx: U64, reason: MidInstantiat
     }
 }
 
-export fn midPreparationDiagnostic(c: inout Comp, fnIdx: U64, failure: MidPreparationError) -> Optional[CompileDiagnostic] {
+pub fn midPreparationDiagnostic(c: inout Comp, fnIdx: U64, failure: MidPreparationError) -> Optional[CompileDiagnostic] {
     match failure {
         MidPreparationError.InstantiationFailed(error: val error) => {
             match error {

@@ -11,7 +11,7 @@ import ./GlobalAccess with { registerMidGlobalAccessBody }
 import ./Verify with { MidVerifyError, MidVerification, verifyExecutableCanonicalMidBody }
 
 // Admission to the beginning of the pipeline makes no validation claim.
-export struct MidParametricBody {
+pub struct MidParametricBody {
     pub val canonical: MidCanonicalBody
 }
 pub impl MidParametricBody {
@@ -22,20 +22,20 @@ pub impl MidParametricBody {
 
 // No public factories for completed stages. Only the corresponding pass can
 // construct its token; reading the canonical ID does not grant that ability.
-export struct MidInstantiatedBody {
+pub struct MidInstantiatedBody {
     pub val canonical: MidCanonicalBody
 }
-export struct MidAccessResolvedBody {
+pub struct MidAccessResolvedBody {
     pub val canonical: MidCanonicalBody
 }
-export struct MidDropElaboratedBody {
+pub struct MidDropElaboratedBody {
     pub val canonical: MidCanonicalBody
 }
-export struct MidExecutableBody {
+pub struct MidExecutableBody {
     pub val canonical: MidCanonicalBody
 }
 
-export enum MidPreparationError {
+pub enum MidPreparationError {
     InstantiationFailed(error: MidInstantiateError)
     AccessFailed(error: MidAccessError)
     VerificationFailed(body: MidCanonicalBody, verification: MidVerification)

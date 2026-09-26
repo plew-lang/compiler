@@ -8,7 +8,7 @@ import ./Ir with { canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlace
 import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
 import ./Drop with { analyzeCanonicalMidOwnership }
 
-export enum MidVerifyError {
+pub enum MidVerifyError {
     None
     InvalidTarget
     TypeMismatch
@@ -31,7 +31,7 @@ export enum MidVerifyError {
     UninstantiatedCastBoundary
 }
 
-export struct MidVerification {
+pub struct MidVerification {
     pub val error: MidVerifyError = <MidVerifyError.None />
     pub val block: U64 = 0U64
     pub val local: U64 = 0U64
@@ -41,7 +41,7 @@ pub impl MidVerification { factory }
 // Compare storage after access elaboration, not source syntax: an Index
 // getter result is an independent local, while inout's accessPlace names the
 // reserved container. Shared-cell identity needs the separate alias tier.
-export fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
+pub fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
     if leftId == 0U64 || rightId == 0U64 { return false }
     val left = c.mid.places[leftId - 1U64]
     val right = c.mid.places[rightId - 1U64]
@@ -505,11 +505,11 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
 }
 
 // Executable admission and earlier structural verification share one walk.
-export fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
+pub fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
     return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: true)
 }
 
-export fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
+pub fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
     return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: false)
 }
 
@@ -564,7 +564,7 @@ fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool 
 }
 
 // Enumerate reachable blocks once; dead code carries no runtime obligation.
-export fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
+pub fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
     mut val reached: Array[Bool] = []
     mut val index = 0U64
     while index < body.blocks.len { reached.append(false)

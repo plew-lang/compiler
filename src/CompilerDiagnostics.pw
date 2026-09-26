@@ -4,7 +4,7 @@ import ./Frontend with { Comp }
 import ./PreparedProgram with { ProgramPreparationError, programPreparationDiagnostic }
 import ./Diag with { emitDiagnostic }
 
-export fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparationError) {
+pub fn reportProgramPreparationError(c: inout Comp, error: ProgramPreparationError) {
     val diagnostic = programPreparationDiagnostic(c: inout c, error: error)
     emitDiagnostic(diagnostic: diagnostic)
     exit(code: 1)

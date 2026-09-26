@@ -16,14 +16,14 @@
 import @Std/Io with { fileExists, readFileBytes }
 import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
 import ./Lock with { Lock, lockCommitForConstraint, parseLock, emptyLock }
-export ./Lock with { Lock, LockPkg, Name }
+pub import ./Lock with { Lock, LockPkg, Name }
 import ./Cache with { srcDir }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
 // consumer writes after `@` (it may contain `/`). `kind`: 0 = path, 1 = git.
 // `loc` is the path (relative to the package dir) for a path dep, or the git URL
 // for a git dep. `version` is the digit-model constraint string ("" if absent).
-export struct Dep {
+pub struct Dep {
     pub val key: Array[U8]
     pub val kind: U8
     pub val loc: Array[U8]
@@ -32,7 +32,7 @@ export struct Dep {
 pub impl Dep { factory }
 
 // A parsed manifest: the package's own `name` and its declared dependencies.
-export struct Manifest {
+pub struct Manifest {
     pub val name: Array[U8]
     pub val deps: Array[Dep]
 }
@@ -40,7 +40,7 @@ pub impl Manifest { factory }
 
 // Parse a `Plew.toml` byte buffer into a Manifest (name + dependency list) via the
 // shared @Toml reader. Each `[dependencies]` field is `Key = { path | git, version }`.
-export fn parseManifest(bytes: Array[U8]) -> Manifest {
+pub fn parseManifest(bytes: Array[U8]) -> Manifest {
     val doc: TomlDoc = parseToml(bytes: bytes)
     val name: Array[U8] = topStr(doc: doc, key: "name".bytes())
     mut val deps: Array[Dep] = []
@@ -77,7 +77,7 @@ export fn parseManifest(bytes: Array[U8]) -> Manifest {
 // Read and parse `<pkgDir>Plew.toml` into its dependency list (empty when pkgDir
 // is empty or carries no manifest). The loader calls this PER package so each
 // file resolves its `@dep` imports against its own manifest.
-export fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
+pub fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
     mut val deps: Array[Dep] = []
     if pkgDir.count() == 0 {
         return deps
@@ -96,7 +96,7 @@ export fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
 // Whether the import path bytes src[pStart .. pStart+pLen] are an external
 // package import (`@<name>`) other than `@Std/…` — i.e. one that must be backed
 // by a declared dependency. Used to enforce the phantom-dependency rule (spec/17).
-export fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
+pub fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
     if pLen < 2 {
         return false
     }
@@ -125,7 +125,7 @@ export fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
 // leading '@') against the declared dependencies. A PATH dep resolves to
 // `<pkgDir><loc>/src/_.pw` (the dep's lib face). Other kinds (git, not fetched
 // yet) and undeclared names return empty so the loader leaves them unresolved.
-export fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], pkgDir: Array[U8]) -> Array[U8] {
+pub fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], pkgDir: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen < 2 {
         return out
@@ -157,7 +157,7 @@ export fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[D
 // `<cacheRoot>/src/<url>/<commit>/src/_.pw`. Empty when the name is not a git dep
 // or is not yet locked (then the loader reports a phantom / unresolved import — the
 // resolver must run first).
-export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], cacheRoot: Array[U8], lock: Lock) -> Array[U8] {
+pub fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], cacheRoot: Array[U8], lock: Lock) -> Array[U8] {
     mut val out: Array[U8] = []
     if pLen < 2 {
         return out
@@ -189,7 +189,7 @@ export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Arra
 
 // Read and parse `<pkgDir>Plew.lock` (empty lock when absent). The loader reads it
 // per package to back git `@dep` imports with their pinned commits.
-export fn loadLock(pkgDir: Array[U8]) -> Lock {
+pub fn loadLock(pkgDir: Array[U8]) -> Lock {
     if pkgDir.count() > 0 {
         mut val lockPath: Array[U8] = []
         appendBytes(into: inout lockPath, from: pkgDir)

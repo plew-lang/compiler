@@ -10,7 +10,7 @@ import @Std/Core with { stringFromBytesUnchecked }
 import ./Toml with { appendBytes }
 
 // Trim trailing spaces / CR / LF from a byte buffer.
-export fn trimEnd(b: Array[U8]) -> Array[U8] {
+pub fn trimEnd(b: Array[U8]) -> Array[U8] {
     mut val n: U64 = b.count()
     mut val go: Bool = true
     while go {
@@ -45,7 +45,7 @@ export fn trimEnd(b: Array[U8]) -> Array[U8] {
 // The global cache root: `$PLEW_CACHE`, else `$HOME/.plew/cache`. Resolved at
 // runtime via the shell (no env intrinsic needed). Both the resolver (fetching
 // into it) and the compiler's loader (reading from it) compute it the same way.
-export fn cacheRoot() -> Array[U8] {
+pub fn cacheRoot() -> Array[U8] {
     val out: String = execOut(cmd: "printf %s \"${PLEW_CACHE:-$HOME/.plew/cache}\"")
     return trimEnd(b: out.bytes())
 }
@@ -54,7 +54,7 @@ export fn cacheRoot() -> Array[U8] {
 // not [A-Za-z0-9._-] becomes '_'. So `https://github.com/foo/http.git` →
 // `https___github.com_foo_http.git` (collisions are not a correctness concern — the
 // commit subdir disambiguates, and the URL is recorded verbatim in the lock).
-export fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
+pub fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     mut val i: U64 = 0
     while i < url.count() {
@@ -96,7 +96,7 @@ export fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
 
 // The bare mirror clone directory for a repo: `<cacheRoot>/repos/<sanitized-url>`.
 // The resolver clones/fetches here once; tags + commits are read from it.
-export fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
+pub fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: cacheRoot)
     appendBytes(into: inout out, from: "/repos/".bytes())
@@ -107,7 +107,7 @@ export fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
 // The materialized source directory for a resolved commit:
 // `<cacheRoot>/src/<sanitized-url>/<commit>`. The package source (its `src/…`)
 // lives directly under here; read-only after the resolver writes it.
-export fn srcDir(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> Array[U8] {
+pub fn srcDir(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: cacheRoot)
     appendBytes(into: inout out, from: "/src/".bytes())

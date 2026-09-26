@@ -5,14 +5,14 @@
 
 // The entropy source is the one runtime intrinsic: a fresh 64-bit value from the OS
 // (`/dev/urandom`). Everything else is pure Plew on top of it.
-export extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     // A fresh 64-bit value from the operating system's entropy source.
     fn entropyU64() -> U64
 }
 
 // A xorshift64 generator. The state is never zero (xorshift cannot leave the zero
 // state), so the constructors replace a zero seed with a fixed nonzero constant.
-export struct Random {
+pub struct Random {
     pub mut val state: U64
 }
 

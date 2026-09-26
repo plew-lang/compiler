@@ -10,7 +10,7 @@ extern(c) {
     fn plew_llvm_initialize_worker(trace~: I32)
 }
 
-export fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
+pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     if argCount() > firstArgument {
         if argAt(firstArgument) == "--emit-object" {
             if argCount() <= firstArgument + 2I64 { exit(code: 1I64) }
@@ -65,7 +65,7 @@ fn compileSource(sources: SourceAccess, firstArgument: I64) -> CompilationResult
 
 // Object mode keeps lowering and native optimization in one process. A failed
 // native output returns normally so the owned LLVM context is still reclaimed.
-export fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
+pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
     match compileSource(sources: sources, firstArgument: firstArgument) {
         CompilationResult.Success(compilation: val value) => {
             mut val compilation = move value

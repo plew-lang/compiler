@@ -3,7 +3,7 @@
 import ../Frontend with { Comp }
 import ./Ir with { MidBodyNode, MidCanonicalBody, MidTerminatorNode }
 
-export struct MidAsyncFramePlan {
+pub struct MidAsyncFramePlan {
     pub val valid: Bool = false
     pub val storedLocals: Array[Bool] = []
     // Body-relative block index; non-suspension blocks have an empty row.
@@ -182,7 +182,7 @@ fn includeBorrowedOwners(locals: inout Array[Bool], owners: Array[Array[Bool]]) 
     }
 }
 
-export fn planCanonicalMidAsyncFrame(c: Comp, canonical: MidCanonicalBody) -> MidAsyncFramePlan {
+pub fn planCanonicalMidAsyncFrame(c: Comp, canonical: MidCanonicalBody) -> MidAsyncFramePlan {
     if !c.mid.isWellFormed(body: canonical) { return <MidAsyncFramePlan /> }
     val body = c.mid.bodies[canonical.body - 1U64]
     if body.entry >= body.blocks.len { return <MidAsyncFramePlan /> }

@@ -8,7 +8,7 @@ import ./Ir with { MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
 import ./Program with { MidExecutableProgram }
 import ./AmbientEffects with { MidAmbientEffects }
 
-export struct MidAmbientStorage {
+pub struct MidAmbientStorage {
     pub val kind: U64 = 0U64 // 1 shared cell, 2 mutable global, 3 capture box
     pub val rootLength: U64 = 0U64
     pub val path: MidRange = <MidRange start=0U64 len=0U64 />
@@ -17,7 +17,7 @@ pub impl MidAmbientStorage { factory }
 
 // Read each earlier reference slot before dereferencing it. The final entry
 // describes the requested access; preceding entries are short read accesses.
-export fn midAmbientStoragePath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
+pub fn midAmbientStoragePath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
     mut val result: Array[MidAmbientStorage] = []
     mut val kind = 0U64
     if place.rootTag == 2U64 && place.globalMutable { kind = 2U64 }
@@ -58,7 +58,7 @@ fn ambientPlaceKey(place: MidPlaceNode) -> U64 {
 fn sameAmbientPlace(first: MidPlaceNode, second: MidPlaceNode) -> Bool {
     return first.rootTag == second.rootTag && first.local == second.local && first.globalTarget == second.globalTarget && first.globalMutable == second.globalMutable && first.projections.start == second.projections.start && first.projections.len == second.projections.len
 }
-export struct MidAmbientBodyPlan {
+pub struct MidAmbientBodyPlan {
     mut val heads: Dictionary[U64, U64] = [:]
     mut val entries: Array[MidAmbientPlaceEntry] = []
 }
@@ -95,7 +95,7 @@ pub impl MidAmbientBodyPlan {
     }
 }
 
-export struct MidAmbientProgram {
+pub struct MidAmbientProgram {
     pub val enabled: Bool = false
     val bodies: Dictionary[U64, MidAmbientBodyPlan] = [:]
     val effects: MidAmbientEffects = <MidAmbientEffects bodyCount=0U64 />

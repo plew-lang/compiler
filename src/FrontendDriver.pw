@@ -6,7 +6,7 @@ import ./Diag with { emitDiagnostic }
 import ./SourceAccess with { SourceAccess }
 import ./Path with { computeStdRoot }
 
-export fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
+pub fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false

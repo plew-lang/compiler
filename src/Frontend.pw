@@ -36,8 +36,8 @@ import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, Synt
 import ./Ir with { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 import ./Mid/Ir with { MidCanonicalArena }
 import ./Ir with { CallParameterBinding, DefaultGeneratorRange, CachedCallee }
-export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+pub import @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
+pub import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Toml with { bytesEq }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
@@ -46,7 +46,7 @@ import ./Cache with { cacheRoot }
 import ./Diag with { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticLocation, emitDiagnostic, eprintInt, digitByte, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
-export struct Comp {
+pub struct Comp {
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
     pub mut val decodedStringLiterals: Dictionary[U64, Array[U8]] = [:]
@@ -168,7 +168,7 @@ export struct Comp {
 // (start,len,arr) is the head/array view; ty the structured TypeRef. Produced by
 // `Comp.inferLetType` — the ONE un-annotated-let inference the scan, record, and
 // verify passes share, so they all see the same local type.
-export struct LetEff {
+pub struct LetEff {
     pub val start: U64
     pub val len: U64
     pub val arr: Bool
@@ -179,7 +179,7 @@ pub impl LetEff { factory }
 // A folded constant integer: non-negative magnitude `value` (U64) plus a `neg`
 // sign, mirroring the literal model (Expr.Int is a magnitude; `-` is a Unary).
 // (Used by Check/Literal's integer-bounds folding; a Frontend-internal helper.)
-export struct ConstInt {
+pub struct ConstInt {
     pub val isConst: Bool
     pub val neg: Bool
     pub val value: U64
@@ -188,7 +188,7 @@ pub impl ConstInt { factory }
 
 // An integer type's bit width + signedness, known only when a span names an integer
 // type. (Used by Check/Literal's bounds checking; a Frontend-internal helper.)
-export struct IntTy {
+pub struct IntTy {
     pub val known: Bool
     pub val bits: U64
     pub val sgn: Bool
@@ -197,7 +197,7 @@ pub impl IntTy { factory }
 
 // One scalar-match arm's `if` condition. A wildcard has none (it is the terminal
 // `else`). (Used by Lower/Match's scalar-match lowering; a Frontend-internal helper.)
-export struct ScalarCond {
+pub struct ScalarCond {
     pub val hasCond: Bool
     pub val cond: U64
 }
@@ -789,7 +789,7 @@ pub impl Comp {
 // are exported; `internHash`/`internGrow` are interner-internal.
 
 // Compare two name spans for byte equality against the shared source buffer.
-export fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+pub fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
     // Every interner key is a slice of the shared source buffer.  Keep this
     // boundary total: a malformed stored span used to turn the byte loop below
     // into an effectively unbounded read, which presented as a compiler hang.
@@ -854,7 +854,7 @@ fn internGrow(c: inout Comp) {
 
 // Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
 // never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
-export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
+pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     if c.interner.buckets.count() == 0 {
         internGrow(c: inout c)
     } else {
@@ -984,7 +984,7 @@ fn importCycleSentinel() -> U64 { return 4000000000U64 }
 // existing Frontend dependency rather than duplicating the CLI flag or
 // inventing an unstructured debug print. Labels are stable phase identities;
 // they are not source-level diagnostics and do not affect generated LLVM.
-export fn tracePhase(c: inout Comp, label: String) {
+pub fn tracePhase(c: inout Comp, label: String) {
     if c.tracePhases {
         eprint(text: "[trace-phase] ")
         eprint(text: label)
@@ -999,7 +999,7 @@ fn traceU64(n: U64) {
     eprint(text: digitStrU(d: n % 10U64))
 }
 
-export fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
+pub fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     if c.tracePhases {
         eprint(text: "[trace-phase] ")
         eprint(text: label)
@@ -1013,7 +1013,7 @@ export fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
 // the compiler's own thousands of declarations: log every `stride` completed
 // units, not every visit.  A phase that fails to advance to its next boundary
 // is then refined with a smaller structural unit before it is run again.
-export fn tracePhaseProgress(c: inout Comp, label: String, count: U64, stride: U64) {
+pub fn tracePhaseProgress(c: inout Comp, label: String, count: U64, stride: U64) {
     if c.tracePhases && count % stride == 0U64 {
         tracePhaseCount(c: inout c, label: label, count: count)
     }
@@ -1058,12 +1058,12 @@ fn recordSemanticExpressionTypes(c: inout Comp) -> Result[(), CompileDiagnostic]
 // monomorphization, and final-callable closure.  The state is intentionally not
 // returned by value: `CallResolution` is semantic analysis output consumed by LLVM,
 // so it must retain one owner across the frontend/backend boundary.
-export enum FrontendInput {
+pub enum FrontendInput {
     File(path: String)
     Text(text: String, path: String)
 }
 
-export struct FrontendOptions {
+pub struct FrontendOptions {
     pub val genMode: Bool = false
     pub val tcLog: Bool = false
     pub val asan: Bool = false
@@ -1075,7 +1075,7 @@ export struct FrontendOptions {
 pub impl FrontendOptions { factory }
 
 // Source roots are explicit: analysis never consults argv or reads stdin.
-export fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                          options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
     val genMode = options.genMode
     val tcLog = options.tcLog

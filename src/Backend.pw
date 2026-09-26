@@ -19,9 +19,9 @@ import ./Frontend with { Comp, intern, spansEqual, tracePhase, tracePhaseCount, 
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
 // frontend `part` or from reaching LLVM through ambient AST recovery.
 import ./Mid with { MidParametricBody, MidExecutableBody, MidPreparationError, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidInstantiateError, MidAccessError, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
-export ./Frontend with { Comp }
-export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
+pub import ./Frontend with { Comp }
+pub import @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
+pub import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
@@ -32,7 +32,7 @@ import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opD
 // A call needs a second closed layer: `Call` is a boundary between Mid and an
 // ABI, not one implementation feature.  Conflating its independent admission
 // facts made coverage incapable of selecting the next lowering slice.
-export enum MidCallPreflight {
+pub enum MidCallPreflight {
     None
     Resolution
     Target
@@ -48,7 +48,7 @@ export enum MidCallPreflight {
     Argument
 }
 
-export enum MidLlvmPreflight {
+pub enum MidLlvmPreflight {
     Ready
     AbiLocals
     AssignmentProjection
@@ -74,7 +74,7 @@ enum MidLlvmPrepared {
 // preflight failure.  A body can report more than one reason; coverage uses
 // that fact set to prioritize the next representation slice without guessing
 // from function spelling.
-export enum MidEligibilityReason {
+pub enum MidEligibilityReason {
     Async
     Extern
     InoutReceiver
@@ -674,7 +674,7 @@ fn llvmIntUgt() -> U32 { return 34U32 }
 
 fn llvmIntUge() -> U32 { return 35U32 }
 
-export fn nativeCpu() -> String {
+pub fn nativeCpu() -> String {
     val name = LLVMGetHostCPUName()
     val cpu = stringFromCString(name)
     LLVMDisposeMessage(name)
@@ -683,7 +683,7 @@ export fn nativeCpu() -> String {
 
 // One owner keeps the context alive until its module has been consumed. Native
 // output may mutate the module, but never takes ownership of either handle.
-export unique struct LlvmModule {
+pub unique struct LlvmModule {
     val context: LLVMContextRef
     val module: LLVMModuleRef
     deinit {
@@ -719,12 +719,12 @@ pub impl LlvmModule {
 
 // Unique native resources cannot be generic arguments in Plew. This result
 // owns the module directly, with the same exclusive lifetime as LlvmModule.
-export unique enum LlvmLoweringResult {
+pub unique enum LlvmLoweringResult {
     Success(module: LlvmModule)
     Failure(diagnostic: CompileDiagnostic)
 }
 
-export fn emitLlvm(c: inout Comp) -> Result[(), CompileDiagnostic] {
+pub fn emitLlvm(c: inout Comp) -> Result[(), CompileDiagnostic] {
     match lowerLlvm(c: inout c) {
         LlvmLoweringResult.Success(module: val module) => {
             module.writeText(c: inout c)
@@ -734,7 +734,7 @@ export fn emitLlvm(c: inout Comp) -> Result[(), CompileDiagnostic] {
     }
 }
 
-export fn lowerLlvm(c: inout Comp) -> LlvmLoweringResult {
+pub fn lowerLlvm(c: inout Comp) -> LlvmLoweringResult {
     tracePhase(c: inout c, label: "backend:emit:start")
     val prepared = match PreparedProgram.prepare(c: inout c) {
         Result.Ok(value: val program) => { give program }
@@ -754,7 +754,7 @@ impl LlvmBuilder {
     factory owned(handle: LLVMBuilderRef) { return <LlvmBuilder handle=handle /> }
 }
 
-export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweringResult {
+pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweringResult {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val module = <LlvmModule.owned context=ctx module=m />
@@ -1164,7 +1164,7 @@ fn emitLlvmIntChecked() {
     wLlvmChecked(p: "u64", ct: "uint64_t", mn: "", sgn: false)
 }
 
-export fn emitLlvmRuntime() {
+pub fn emitLlvmRuntime() {
     write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n#include <sys/wait.h>\n")
     write(s: "void plew_exit(long long code){ exit((int)code); }\n")
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")

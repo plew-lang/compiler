@@ -1,13 +1,13 @@
 // Loaded files occupy disjoint, ordered spans in the append-only source buffer.
 // Keep scalar ranges separate from paths so a position query has no String owner.
-export struct SourceFileRange {
+pub struct SourceFileRange {
     pub val start: U64
     pub val length: U64
     pub val moduleId: U64
 }
 pub impl SourceFileRange { factory }
 
-export struct SourceFiles {
+pub struct SourceFiles {
     mut val ranges: Array[SourceFileRange] = []
     mut val paths: Array[String] = []
 }
