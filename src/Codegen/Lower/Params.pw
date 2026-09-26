@@ -89,19 +89,41 @@ pub impl Comp {
     }
 
     // Lower a pattern into the arena MatchArm fields (minus the body).
-    inout fn lowerPatternInfo(p: PatternAst) -> PatInfo {
+    inout fn patternTypePathHead(names: Array[Span], isStruct: Bool) -> Result[U64, CompileDiagnostic] {
+        val head = (try self.typePathHead(names: names))
+        mut val expected = head + 1U64
+        if !isStruct { expected += 1U64 }
+        if expected != names.count() {
+            return <Result.Err error=self.diagnosticAt(offset: names[0U64].start, msg: "invalid qualified pattern path") />
+        }
+        return <Result.Ok value=head />
+    }
+
+    inout fn lowerPatternInfo(p: PatternAst) -> Result[PatInfo, CompileDiagnostic] {
         if p.isWildcard {
-            return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
+            return <Result.Ok value=<PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=<BindRange start=0U64 len=0U64 /> isStruct=false /> />
         }
-        val en: Bind = self.internBytes(s: p.typeName)
-        mut val vStart: U64 = 0
-        mut val vLen: U64 = 0
-        if p.variant.bytes().count() > 0 {
-            val vb: Bind = self.internBytes(s: p.variant)
-            vStart = vb.nameStart
-            vLen = vb.nameLen
+        mut val names: Array[Span] = []
+        if p.typePath.count() != 0U64 {
+            mut val i = 0U64
+            while i < p.typePath.count() {
+                val segment = p.typePath[i]
+                val name = self.lowerTypeName(name: segment.name, span: segment.nameSpan)
+                names.append(<Span start=name.nameStart end=name.nameStart + name.nameLen />)
+                i += 1U64
+            }
+        } else {
+            val name = self.lowerTypeName(name: p.typeName, span: p.typeNameSpan)
+            names.append(<Span start=name.nameStart end=name.nameStart + name.nameLen />)
+            if !p.isStruct {
+                val variant = self.lowerTypeName(name: p.variant, span: p.variantSpan)
+                names.append(<Span start=variant.nameStart end=variant.nameStart + variant.nameLen />)
+            }
         }
-        val binds: BindRange = self.lowerBinds(binds: p.binds)
-        return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
+        val head = (try self.patternTypePathHead(names: names, isStruct: p.isStruct))
+        val name = names[head]
+        mut val variant = <Span start=0U64 end=0U64 />
+        if !p.isStruct { variant = names[head + 1U64] }
+        return <Result.Ok value=<PatInfo isWildcard=false enumStart=name.start enumLen=name.end - name.start variantStart=variant.start variantLen=variant.end - variant.start binds=self.lowerBinds(binds: p.binds) isStruct=p.isStruct /> />
     }
 }
