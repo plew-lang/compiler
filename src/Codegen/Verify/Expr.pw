@@ -90,32 +90,13 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.verifyRecv(recv: recv)
                 try self.verifyArgs(args: args)
-                // Do not recover the receiver through `typeOf` here: during
-                // abstract checking that cache can already carry a concrete
-                // instantiation from another phase.  The installed local
-                // declaration is the authority for whether this is `T` in the
-                // current generic body.
-                mut val boundStart: U64 = 0U64
-                mut val boundLen: U64 = 0U64
-                match self.arena.exprs[recv] {
-                    Expr.Ident(start: val localStart, len: val localLen) => {
-                        val localId: U64 = intern(c: inout self, start: localStart, len: localLen)
-                        mut val li: U64 = self.cur.locals.count()
-                        while li > 0U64 && boundLen == 0U64 {
-                            li -= 1U64
-                            val local: Local = self.cur.locals[li]
-                            if local.nameId == localId && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: local.tyStart, len: local.tyLen) {
-                                boundStart = local.tyStart
-                                boundLen = local.tyLen
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                if boundLen != 0U64 {
-                    if (try self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, tpStart: boundStart, tpLen: boundLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                        return <Result.Ok value=() />
-                    }
+                // Bounds apply to semantic receiver terms, including concrete
+                // subjects such as `where Parser: Convert[T]`. Reuse the proof
+                // query rather than searching requirement names independently.
+                mut val receiverTerm = self.parametricExprTerm(exprId: recv)
+                if receiverTerm == 0U64 { receiverTerm = (try self.inferType(id: recv)) }
+                if (try self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)) {
+                    return <Result.Ok value=() />
                 }
                 val mf: U64 = (try self.resolveWrittenMethod(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
                 val rt: TypeInfo = (try self.typeOf(id: recv))

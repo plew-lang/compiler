@@ -18,54 +18,37 @@ pub impl Comp {
     // the latter belongs to Mono after T is instantiated.  Keeping the two
     // phases distinct prevents unrelated concrete conformance paths from
     // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
-    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        val methodId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val found: Bool = false
-        mut val chosenTrait: U64 = self.decls.traitCount()
-        mut val chosenReq: U64 = 0U64
-        mut val bi: U64 = 0U64
-        while bi < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[bi]
-            if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                val owner: U64 = bound.constraint.key.owner
-                val traitId: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
-                mut val ti: U64 = 0U64
-                while ti < self.decls.traitCount() {
-                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                    if traitDef.nameId == traitId {
-                        mut val ri: U64 = 0U64
-                        while ri < traitDef.reqs.count() {
-                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
-                            if req.nameId == methodId && self.paramsLabelsOk(params: req.params, args: args) {
-                                if found {
-                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous method in generic bounds; select one trait source with `x#Trait.method()`") />
-                                }
-                                found = true
-                                chosenTrait = ti
-                                chosenReq = ri
-                            }
-                            ri += 1U64
-                        }
-                    }
-                    ti += 1U64
+    inout fn verifyBoundMethodCall(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
+        if receiverRef == 0U64 || fnIdx >= self.arena.functionCount() { return <Result.Ok value=false /> }
+        val resolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args))
+        match resolution {
+            StaticMemberResolution.Requirement(val proof, val traitIdx, val reqIdx) => {
+                // Only symbolic proofs own declaration-time argument types.
+                // Concrete witnesses retain the ordinary callable checks.
+                mut val symbolic = false
+                match proof {
+                    StaticConformanceProof.AssumedBound(boundIdx: _) => { symbolic = true }
+                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: _, traits: _) => { symbolic = true }
+                    StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { symbolic = true }
+                    _ => {}
                 }
+                if !symbolic { return <Result.Ok value=false /> }
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
+                mut val index = 0U64
+                while index < args.len {
+                    val parameterIndex = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
+                    if parameterIndex < requirement.params.count() {
+                        val parameter = self.funcParamAt(params: requirement.params, index: parameterIndex)
+                        val argument = self.argAt(args: args, index: index)
+                        try self.checkArgInoutMode(p: parameter, arg: argument)
+                        try self.tcCheckValue(expectedRef: self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index), valueExpr: argument.expr, pos: "arg")
+                    }
+                    index += 1U64
+                }
+                return <Result.Ok value=true />
             }
-            bi += 1U64
+            _ => { return <Result.Ok value=false /> }
         }
-        if !found { return <Result.Ok value=false /> }
-        val chosen: Func = self.traitReqAt(reqs: self.decls.traitAt(index: chosenTrait).reqs, index: chosenReq)
-        mut val ai: U64 = 0U64
-        while ai < args.len {
-            val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)
-            if pi < chosen.params.count() {
-                val param: Param = self.funcParamAt(params: chosen.params, index: pi)
-                try self.checkArgInoutMode(p: param, arg: self.argAt(args: args, index: ai))
-                try self.tcCheckValue(expectedRef: param.ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
-            }
-            ai += 1U64
-        }
-        return <Result.Ok value=true />
     }
 
     inout fn knownNamedTypeId(start: U64, len: U64) -> U64 {
