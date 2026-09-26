@@ -1,0 +1,13 @@
+import @Plew/Syntax with { TopItemAst, parseItem }
+import @Std/Io with { print }
+fn main() {
+    val source = "impl Local as Facade.Models.Read[I64] {}"
+    match parseItem(source: source, start: 0U64, end: source.bytes().count()) {
+        TopItemAst.Impl(im: val im) => {
+            print(im.traitPath.count())
+            print(im.traitPath[2U64].name)
+            print(im.traitPath[2U64].args[0U64].name)
+        }
+        _ => { print(99U64) }
+    }
+}
