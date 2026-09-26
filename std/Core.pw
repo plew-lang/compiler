@@ -16,7 +16,7 @@
 // `impl T as TryFrom[S]` per source into Core.gen.pw (auto-parted). (I64 as a TARGET has no
 // fallible sub-64-bit source — all widen into it — and the wide/float sources are
 // hand-written below, next to where TryFrom lives.)
-extern(plewIntrinsic) {
+pub extern(plewIntrinsic) {
     @[IntTryFrom(sources: ["I16", "I32", "U8", "U16", "U32"])]
     struct I8
     @[IntTryFrom(sources: ["I32", "U16", "U32"])]

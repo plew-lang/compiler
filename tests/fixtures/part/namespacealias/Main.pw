@@ -1,0 +1,5 @@
+import ./Left
+import ./Right with { other as answer }
+import ./Facade
+import @Std/Io with { print }
+fn main() { print(Left.answer()) print(answer()) Facade.out(s: "ok\n") }

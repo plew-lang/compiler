@@ -2894,7 +2894,7 @@ pub impl DestructureSite { factory }
 // Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
 // type carries the resolved nominal identity. `assocBindings`: `type Item = Concrete` lines from
 // conformances. `pubFactories`: interned ids of types with a `pub factory`.
-// `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
+// `importAliases`: `import …
 // with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
 // recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
 // registration ground it under their own env — storing a grounded result would
@@ -2942,7 +2942,6 @@ pub struct Decls {
     pub mut val deinits: Array[U64] = []
     pub mut val assocBindings: Array[AssocBinding] = []
     pub mut val pubFactories: Array[U64] = []
-    pub mut val namespaces: Array[Bind] = []
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
     pub mut val syntheticCallSites: Array[SyntheticCallSite] = []
@@ -3001,6 +3000,14 @@ pub impl Decls { factory }
 // importing module id (a cross-module use is visible only if imported there, and
 // exported by its own module). Aliases / namespace imports are additive.
 // Import spelling and declaration provenance are distinct from generic bindings.
+// Module lookup yields either a declaration group or a namespace. Re-export
+// chains retain the defining module and original spelling, including overloads.
+pub enum ModuleBinding {
+    Missing
+    Namespace(moduleId: U64)
+    Declaration(moduleId: U64, nameStart: U64, nameLen: U64)
+}
+
 pub struct ImportOrigin {
     pub val localStart: U64
     pub val localLength: U64
@@ -3008,6 +3015,7 @@ pub struct ImportOrigin {
     pub val sourceStart: U64
     pub val sourceLength: U64
     pub val targetModule: U64
+    pub val isNamespace: Bool = false
 }
 pub impl ImportOrigin { factory }
 
@@ -3037,6 +3045,8 @@ pub struct Modules {
     pub mut val packageRoots: Array[Bind] = []
     // Local import/re-export spelling -> original spelling + target module. This
     // is provenance for declaration-identity resolution, not a visibility table.
+    mut val qualifiedUses: Array[ImportOrigin] = []
+    mut val qualifiedUseOffsets: Dictionary[U64, U64] = [:]
     mut val importOrigins: Array[ImportOrigin] = []
     mut val reExportOrigins: Array[ImportOrigin] = []
     mut val importOriginNames: Dictionary[U64, Dictionary[U64, U64]] = [:]

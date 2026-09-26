@@ -163,22 +163,16 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Field base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
-                // a namespace call `Io.print(args)` (spec/15): the receiver is a namespace
-                // bound by a `with`-less import. Lower to a bare free-function call using the
-                // method name's ORIGINAL offset (feeds moduleOf) and record the import (so
-                // the same export/visibility checks as `import … with { print }` apply).
-                mut val isNsCall: Bool = false
+                // Namespace calls keep a written-use origin for the resolver;
+                // they never introduce the member as a flat local import.
+                mut val namespaceModule = 4000000000U64
                 match recv {
-                    ExprAst.Ident(name: val rname, span: _) => {
-                        if self.isNamespaceName(name: rname) {
-                            isNsCall = true
-                        }
-                    }
+                    ExprAst.Ident(name: _, val span) => { namespaceModule = self.namespaceModuleAt(name: span) }
                     _ => {}
                 }
-                if isNsCall {
+                if namespaceModule != 4000000000U64 {
                     val a: Array[Arg] = (try self.lowerArgs(args: args, fnName: name))
-                    self.markImport(segStart: nameSpan.start, segLen: name.bytes().count(), nameStart: nameSpan.start, nameLen: name.bytes().count())
+                    self.recordNamespaceUse(name: nameSpan, moduleId: namespaceModule)
                     result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
                 } else {
                     val r: U64 = (try self.lowerExpr(e: recv))
@@ -474,9 +468,15 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Field base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
             }
             SyntaxExprKind.Method => {
-                if self.isNamespaceNameSpan(name: syntaxExpr(file: self.syntax, id: e.child0).name) {
+                val receiver = syntaxExpr(file: self.syntax, id: e.child0)
+                mut val namespaceModule = 4000000000U64
+                match receiver.kind {
+                    SyntaxExprKind.Ident => { namespaceModule = self.namespaceModuleAt(name: receiver.name) }
+                    _ => {}
+                }
+                if namespaceModule != 4000000000U64 {
                     val args: Array[Arg] = (try self.lowerSyntaxArgs(expr: e, fnName: e.name))
-                    self.markImport(segStart: e.name.start, segLen: e.name.end - e.name.start, nameStart: e.name.start, nameLen: e.name.end - e.name.start)
+                    self.recordNamespaceUse(name: e.name, moduleId: namespaceModule)
                     result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
                 } else {
                     val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))

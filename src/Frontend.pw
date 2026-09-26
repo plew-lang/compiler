@@ -17,7 +17,7 @@ import ./KeywordSpans with { KeywordSpans }
 
 import @Std/Io with { print, write, writeByte, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { exit }
-import ./Ir with { SemanticGlobalAddress, ImportOrigin, PatternBindInput, PatternTypeInput }
+import ./Ir with { SemanticGlobalAddress, ModuleBinding, ImportOrigin, PatternBindInput, PatternTypeInput }
 import ./Ir with { FinalDestruction, FinalDestructorCall }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
@@ -750,6 +750,11 @@ pub impl Comp {
     }
 
     inout fn recordImportOrigins(imp: ImportAst, localModule: U64, targetMod: U64, reExport: Bool) {
+        if imp.names.count() == 0U64 {
+            mut val local = imp.segSpan
+            if imp.aliasSpan.end > imp.aliasSpan.start { local = imp.aliasSpan }
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=local.start sourceLength=local.end - local.start targetModule=targetMod isNamespace=true />, nameId: intern(c: inout self, start: local.start, len: local.end - local.start), reExport: reExport)
+        }
         mut val i: U64 = 0
         while i < imp.names.count() {
             val real: Span = imp.nameSpans[i]
@@ -769,6 +774,11 @@ pub impl Comp {
     // remain separate from the legacy value-AST method until lowering itself is
     // migrated, rather than materializing an ImportAst adapter.
     inout fn recordSyntaxImportOrigins(imp: SyntaxImport, localModule: U64, targetMod: U64, reExport: Bool) {
+        if syntaxImportNameCount(file: self.syntax, imp: imp) == 0U64 {
+            mut val local = imp.segment
+            if imp.alias.end > imp.alias.start { local = imp.alias }
+            self.modules.registerImportOrigin(<ImportOrigin localStart=local.start localLength=local.end - local.start localModule=localModule sourceStart=local.start sourceLength=local.end - local.start targetModule=targetMod isNamespace=true />, nameId: intern(c: inout self, start: local.start, len: local.end - local.start), reExport: reExport)
+        }
         mut val i: U64 = 0U64
         while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
             val real: Span = syntaxImportNameSpan(file: self.syntax, imp: imp, index: i)

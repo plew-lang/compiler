@@ -160,22 +160,9 @@ pub impl Comp {
     }
 
     inout fn lowerImport(imp: ImportAst) {
-        if imp.isPublic { self.lowerReExport(imp: imp) }
-        // a `with`-less import (`import @Std/Io`) binds the last path segment as a
-        // namespace; `Io.print(args)` then resolves to `print` from that module. A path
-        // alias `import @Std/Io as IO` binds `IO` instead (spec/15).
-        if imp.isImport {
-            if imp.names.count() == 0 {
-                mut val nsStart: U64 = imp.segSpan.start
-                mut val nsEnd: U64 = imp.segSpan.end
-                if imp.aliasSpan.end > imp.aliasSpan.start {
-                    nsStart = imp.aliasSpan.start
-                    nsEnd = imp.aliasSpan.end
-                }
-                if nsEnd > nsStart {
-                    self.decls.namespaces.append(<Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
-                }
-            }
+        if imp.isPublic {
+            self.lowerReExport(imp: imp)
+            if imp.names.count() == 0U64 { self.appendLoweredReExportName(name: imp.segSpan, alias: imp.aliasSpan) }
         }
         mut val i: U64 = 0
         while i < imp.names.count() {
@@ -188,17 +175,9 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxImport(imp: SyntaxImport) {
-        if imp.isPublic { self.lowerSyntaxReExport(imp: imp) }
-        if imp.isImport && syntaxImportNameCount(file: self.syntax, imp: imp) == 0U64 {
-            mut val nsStart: U64 = imp.segment.start
-            mut val nsEnd: U64 = imp.segment.end
-            if imp.alias.end > imp.alias.start {
-                nsStart = imp.alias.start
-                nsEnd = imp.alias.end
-            }
-            if nsEnd > nsStart {
-                self.decls.namespaces.append(<Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
-            }
+        if imp.isPublic {
+            self.lowerSyntaxReExport(imp: imp)
+            if syntaxImportNameCount(file: self.syntax, imp: imp) == 0U64 { self.appendLoweredReExportName(name: imp.segment, alias: imp.alias) }
         }
         mut val i: U64 = 0U64
         while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
@@ -245,30 +224,19 @@ pub impl Comp {
         self.recordExport(nameStart: exportName.start, nameLen: exportName.end - exportName.start)
     }
 
-    inout fn isNamespaceName(name: String) -> Bool {
-        val nb: Bind = self.internBytes(s: name)
-        mut val i: U64 = 0
-        while i < self.decls.namespaces.count() {
-            if spansEqual(c: inout self, aStart: self.decls.namespaces[i].nameStart, aLen: self.decls.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
-                return true
-            }
-            i += 1
+    // Import provenance is collected for the whole DAG before bodies lower.
+    // Publication is checked after declarations are registered, not guessed from
+    // load order while classifying a namespace receiver.
+    inout fn namespaceModuleAt(name: Span) -> U64 {
+        if name.end <= name.start { return 4000000000U64 }
+        match self.moduleBindingAt(nameStart: name.start, nameLen: name.end - name.start, requirePublic: false) {
+            ModuleBinding.Namespace(val moduleId) => { return moduleId }
+            _ => { return 4000000000U64 }
         }
-        return false
     }
 
-    // Keep namespace-call recognition in the same semantic namespace table as
-    // the value-AST path.  SyntaxFile retains source spans rather than names,
-    // so intern only the queried spelling instead of materializing a String.
-    inout fn isNamespaceNameSpan(name: Span) -> Bool {
-        mut val i: U64 = 0U64
-        while i < self.decls.namespaces.count() {
-            if spansEqual(c: inout self, aStart: self.decls.namespaces[i].nameStart, aLen: self.decls.namespaces[i].nameLen, bStart: name.start, bLen: name.end - name.start) {
-                return true
-            }
-            i += 1U64
-        }
-        return false
+    inout fn recordNamespaceUse(name: Span, moduleId: U64) {
+        self.modules.registerQualifiedUse(<ImportOrigin localStart=name.start localLength=name.end - name.start localModule=self.moduleOf(offset: name.start) sourceStart=name.start sourceLength=name.end - name.start targetModule=moduleId />)
     }
 
     inout fn lowerDirective(dir: DirectiveAst) -> Result[(), CompileDiagnostic] {

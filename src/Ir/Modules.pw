@@ -2,6 +2,18 @@
 // The loader supplies resolved package roles; physical directory names do not
 // confer a Syntax compatibility role on arbitrary source files.
 pub impl Modules {
+    inout fn registerQualifiedUse(origin~: ImportOrigin) {
+        self.qualifiedUseOffsets[origin.localStart] = self.qualifiedUses.count() + 1U64
+        self.qualifiedUses.append(origin)
+    }
+    fn qualifiedUseIndex(offset: U64) -> U64 {
+        val entry = self.qualifiedUseOffsets.getOr(key: offset, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.qualifiedUses.count()
+    }
+    fn qualifiedUseCount() -> U64 { return self.qualifiedUses.count() }
+    fn qualifiedUseAt(index: U64) -> ImportOrigin { return self.qualifiedUses[index] }
+
     inout fn registerImportOrigin(origin~: ImportOrigin, nameId: U64, reExport: Bool) {
         val empty: Dictionary[U64, U64] = [:]
         if reExport {

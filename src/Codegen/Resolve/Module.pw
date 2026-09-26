@@ -241,49 +241,25 @@ pub impl Comp {
         return false
     }
 
-    inout fn nameVisibleFrom(useMod: U64, candStart: U64, candLen: U64) -> Bool {
-        val candMod: U64 = self.moduleOf(offset: candStart)
-        if candMod == useMod {
-            return true
-        }
-        // cross-module: the candidate's own module must export the name, and the use site must
-        // bring the name into scope with a `with { }` import (not a bare namespace import) that
-        // reaches the candidate's module either directly or through a re-exporting barrel.
-        if self.isExportedFromModule(mod: candMod, nameStart: candStart, nameLen: candLen) {
-            if self.isImportedInto(mod: useMod, nameStart: candStart, nameLen: candLen) {
-                if self.hasImportEdge(useMod: useMod, targetMod: candMod) {
-                    return true
-                }
-                if self.importsBarrelForwarding(useMod: useMod, srcMod: candMod) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
     inout fn findFunc(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        // Among candidates whose labels match, prefer the one whose parameter types
-        // match the argument types (type-based overload). Fall back to the first label
-        // match when none type-matches (or there is a single candidate). Resolution is
-        // SCOPED (spec/15): only candidates visible from the call's module are considered
-        // (`nameVisibleFrom` = same module, or imported+exported) — an out-of-scope
-        // same-named free fn in another module is not a candidate at all. Same-module
-        // candidates are additionally preferred so a module's own private fn wins over an
-        // imported one of the same name.
-        val useMod: U64 = self.moduleOf(offset: nameStart)
-        mut val firstLabel: U64 = self.arena.functionCount()
-        mut val typeMatch: U64 = self.arena.functionCount()
-        mut val typeMatch2: U64 = self.arena.functionCount()
-        mut val firstLabelSame: U64 = self.arena.functionCount()
-        mut val typeMatchSame: U64 = self.arena.functionCount()
-        mut val typeMatch2Same: U64 = self.arena.functionCount()
-        // candidates whose module the use's module DIRECTLY imported — preferred over a
-        // merely name-visible one so coexisting versions bind their own export.
-        mut val firstLabelEdge: U64 = self.arena.functionCount()
-        mut val typeMatchEdge: U64 = self.arena.functionCount()
-        mut val typeMatch2Edge: U64 = self.arena.functionCount()
-        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        // Resolve the written binding once, then overload only within its
+        // defining module. Import edges and unrelated same-spelled declarations
+        // cannot change the selected overload set.
+        mut val firstLabel = self.arena.functionCount()
+        mut val typeMatch = self.arena.functionCount()
+        mut val typeMatch2 = self.arena.functionCount()
+        mut val targetModule = 4000000000U64
+        mut val lookupStart = nameStart
+        mut val lookupLen = nameLen
+        match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
+            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
+                targetModule = moduleId
+                lookupStart = start
+                lookupLen = len
+            }
+            _ => {}
+        }
+        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
@@ -294,53 +270,13 @@ pub impl Comp {
             // named `add` from colliding with Core's `Add.add` (spec/07).
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
-                    val matchRank: U64 = (try self.callableArgMatchRank(f: f, args: args))
-                    if matchRank != 0U64 {
-                        val same: Bool = cand.sourceModule == useMod
-                        val visible: Bool = same || self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
-                        val edged: Bool = visible && self.hasImportEdge(useMod: useMod, targetMod: cand.sourceModule)
-                        if visible {
-                            if firstLabel == self.arena.functionCount() {
-                                firstLabel = cand.funcIdx
-                            }
-                        }
-                        if edged {
-                            if firstLabelEdge == self.arena.functionCount() {
-                                firstLabelEdge = cand.funcIdx
-                            }
-                        }
-                        if same {
-                            if firstLabelSame == self.arena.functionCount() {
-                                firstLabelSame = cand.funcIdx
-                            }
-                        }
-                        if matchRank == 2U64 {
-                            if visible {
-                                if typeMatch == self.arena.functionCount() {
-                                    typeMatch = cand.funcIdx
-                                } else {
-                                    if typeMatch2 == self.arena.functionCount() {
-                                        typeMatch2 = cand.funcIdx
-                                    }
-                                }
-                            }
-                            if same {
-                                if typeMatchSame == self.arena.functionCount() {
-                                    typeMatchSame = cand.funcIdx
-                                } else {
-                                    if typeMatch2Same == self.arena.functionCount() {
-                                        typeMatch2Same = cand.funcIdx
-                                    }
-                                }
-                            }
-                            if edged {
-                                if typeMatchEdge == self.arena.functionCount() {
-                                    typeMatchEdge = cand.funcIdx
-                                } else {
-                                    if typeMatch2Edge == self.arena.functionCount() {
-                                        typeMatch2Edge = cand.funcIdx
-                                    }
-                                }
+                    if cand.sourceModule == targetModule {
+                        val matchRank = (try self.callableArgMatchRank(f: f, args: args))
+                        if matchRank != 0U64 {
+                            if firstLabel == self.arena.functionCount() { firstLabel = cand.funcIdx }
+                            if matchRank == 2U64 {
+                                if typeMatch == self.arena.functionCount() { typeMatch = cand.funcIdx }
+                                else if typeMatch2 == self.arena.functionCount() { typeMatch2 = cand.funcIdx }
                             }
                         }
                     }
@@ -348,33 +284,11 @@ pub impl Comp {
             }
             i = self.decls.nextCallableNamed(index: i)
         }
-        // same-module first
-        if typeMatchSame != self.arena.functionCount() {
-            try self.checkOverloadAmbiguity(a: typeMatchSame, b: typeMatch2Same, args: args)
-            return <Result.Ok value=typeMatchSame />
-        }
-        if firstLabelSame != self.arena.functionCount() {
-            return <Result.Ok value=firstLabelSame />
-        }
-        // then a DIRECTLY-imported module's candidate (prefer the version this module
-        // actually imported when a name is shared across coexisting versions).
-        if typeMatchEdge != self.arena.functionCount() {
-            try self.checkOverloadAmbiguity(a: typeMatchEdge, b: typeMatch2Edge, args: args)
-            return <Result.Ok value=typeMatchEdge />
-        }
-        if firstLabelEdge != self.arena.functionCount() {
-            return <Result.Ok value=firstLabelEdge />
-        }
-        // no same-module candidate: fall back to an in-scope imported one (the general
-        // accumulators only recorded `nameVisibleFrom` candidates, so an out-of-scope
-        // cross-module fn is never returned — it simply doesn't resolve here).
         if typeMatch != self.arena.functionCount() {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return <Result.Ok value=typeMatch />
         }
-        if firstLabel != self.arena.functionCount() {
-            return <Result.Ok value=firstLabel />
-        }
+        if firstLabel != self.arena.functionCount() { return <Result.Ok value=firstLabel /> }
         // gen mode (spec/16): the synthesized derive-runner harness calls force-loaded std
         // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `import` —
         // force-load is NOT import, so scoped resolution above found no visible candidate
@@ -428,14 +342,25 @@ pub impl Comp {
     }
 
     inout fn firstVisibleFuncByName(useMod: U64, nameStart: U64, nameLen: U64) -> U64 {
-        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val targetModule = 4000000000U64
+        mut val lookupStart = nameStart
+        mut val lookupLen = nameLen
+        match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
+            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
+                targetModule = moduleId
+                lookupStart = start
+                lookupLen = len
+            }
+            _ => {}
+        }
+        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
         mut val i: U64 = 0
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
-                    if self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen) {
+                    if cand.sourceModule == targetModule {
                         return cand.funcIdx
                     }
                 }
@@ -454,7 +379,18 @@ pub impl Comp {
     // remaining mismatch is a normal overload/type error) or when nothing matches the labels
     // (a local / closure / builtin, handled elsewhere).
     inout fn labelMatchOnlyInvisible(useMod: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
-        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val targetModule = 4000000000U64
+        mut val lookupStart = nameStart
+        mut val lookupLen = nameLen
+        match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
+            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
+                targetModule = moduleId
+                lookupStart = start
+                lookupLen = len
+            }
+            _ => {}
+        }
+        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
         mut val foundInvisible: Bool = false
         mut val i: U64 = 0
         while i < self.decls.callableCount() {
@@ -463,7 +399,7 @@ pub impl Comp {
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
                     if self.paramsLabelsOk(params: f.params, args: args) {
-                        if self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen) {
+                        if cand.sourceModule == targetModule {
                             return false
                         }
                         foundInvisible = true

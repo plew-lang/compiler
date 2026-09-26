@@ -1,0 +1,1 @@
+pub import @Std/Io with { write as out }

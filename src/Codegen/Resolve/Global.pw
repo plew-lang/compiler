@@ -366,11 +366,24 @@ pub impl Comp {
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Call(val nameStart, val nameLen, val args) => {
+                    // A qualified member belongs to its namespace, not to an
+                    // unrelated local import alias with the same spelling.
+                    if self.modules.qualifiedUseIndex(offset: nameStart) < self.modules.qualifiedUseCount() {
+                        i += 1U64
+                        continue
+                    }
                     mut val ai: U64 = 0
                     while ai < self.decls.importAliases.count() {
                         val al: Bind = self.decls.importAliases[ai]
                         if spansEqual(c: inout self, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
                             if self.moduleOf(offset: al.nameStart) == self.moduleOf(offset: nameStart) {
+                                val useModule = self.moduleOf(offset: nameStart)
+                                val nameId = intern(c: inout self, start: al.nameStart, len: al.nameLen)
+                                val originIndex = self.modules.firstImportOriginNamed(moduleId: useModule, nameId: nameId)
+                                if originIndex < self.modules.importOriginCount() {
+                                    val origin = self.modules.importOriginAt(index: originIndex)
+                                    self.modules.registerQualifiedUse(<ImportOrigin localStart=al.fieldStart localLength=al.fieldLen localModule=useModule sourceStart=origin.sourceStart sourceLength=origin.sourceLength targetModule=origin.targetModule />)
+                                }
                                 self.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
                                 ai = self.decls.importAliases.count()
                             } else {
