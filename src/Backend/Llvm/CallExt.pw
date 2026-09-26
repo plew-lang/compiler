@@ -9,65 +9,65 @@ pub impl LlvmCtx {
     // Even empty parameter and argument vectors have distinct nominal handle
     // types. Keep this physical runtime-call ABI construction shared by the
     // prepared Mid emitter and the remaining source emitter.
-    inout fn emitRuntimeCallWithoutArguments(c: inout Comp, name: String, resultType: LLVMTypeRef) -> LLVMValueRef {
+    inout fn emitRuntimeCallWithoutArguments(c: inout Comp, name: String, resultType: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         val parameters: Array[LLVMTypeRef] = []
         val values: Array[LLVMValueRef] = []
         val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(parameters), 0U64, 0I32)
-        return LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: name, fnTy: signature), arrayCPtr(values), 0U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, signature, (try self.getOrDeclare(c: inout c, name: name, fnTy: signature)), arrayCPtr(values), 0U64, anon()) />
     }
 
     // C scalar/pointer ABI slice. Consume grounded types, never recover a
     // signature from the spelling at a call site. Narrow integers require
     // target ABI extension attributes; aggregates require C classification.
     // Neither may silently inherit the ordinary Plew calling convention.
-    inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Bool {
-        if ref == 0U64 || ref >= c.arena.typeCount() { return false }
-        val ty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: ref)
+    inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Result[Bool, CompileDiagnostic] {
+        if ref == 0U64 || ref >= c.arena.typeCount() { return <Result.Ok value=false /> }
+        val ty: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: ref))
         val kind: U32 = LLVMGetTypeKind(ty)
-        if kind == 12U32 { return true }
-        if kind == 8U32 { return LLVMGetIntTypeWidth(ty) >= 32U32 }
+        if kind == 12U32 { return <Result.Ok value=true /> }
+        if kind == 8U32 { return <Result.Ok value=LLVMGetIntTypeWidth(ty) >= 32U32 /> }
         val term: TypeRef = c.arena.typeAt(index: ref)
         // F32 currently has a double Plew representation, not a C float ABI.
-        return kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64")
+        return <Result.Ok value=kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64") />
     }
 
-    inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Bool {
-        if selected.callee >= c.arena.functionCount() { return false }
+    inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Result[Bool, CompileDiagnostic] {
+        if selected.callee >= c.arena.functionCount() { return <Result.Ok value=false /> }
         val declaration: Func = c.arena.functionAt(index: selected.callee)
         // Only a closed Direct target denotes a raw external symbol. Bundled
         // runtime operations (including timers) have a separate descriptor.
-        match selected.target { CallTarget.Direct => {} _ => { return false } }
-        if !declaration.isExtern || declaration.hasRecv || declaration.isAsync { return false }
-        if declaration.typeParams.count() != 0U64 || selected.parameterTypeRefs.count() != declaration.params.count() { return false }
+        match selected.target { CallTarget.Direct => {} _ => { return <Result.Ok value=false /> } }
+        if !declaration.isExtern || declaration.hasRecv || declaration.isAsync { return <Result.Ok value=false /> }
+        if declaration.typeParams.count() != 0U64 || selected.parameterTypeRefs.count() != declaration.params.count() { return <Result.Ok value=false /> }
         val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
         mut val index: U64 = 0U64
         while index < parameters.count() {
-            if !self.resolvedCTypeSupported(c: inout c, ref: parameters[index]) { return false }
+            if !(try self.resolvedCTypeSupported(c: inout c, ref: parameters[index])) { return <Result.Ok value=false /> }
             index += 1U64
         }
-        return !declaration.hasRet || self.resolvedCTypeSupported(c: inout c, ref: selected.resultTypeRef)
+        return <Result.Ok value=!declaration.hasRet || (try self.resolvedCTypeSupported(c: inout c, ref: selected.resultTypeRef)) />
     }
 
     // Both Mid and the remaining legacy caller use one declaration cache and
     // one finalized signature. The source span below spells only the selected
     // foreign symbol; it does not resolve a callable or a type.
-    inout fn declareResolvedCFunction(c: inout Comp, selected: CallResolution) -> U64 {
+    inout fn declareResolvedCFunction(c: inout Comp, selected: CallResolution) -> Result[U64, CompileDiagnostic] {
         val declaration: Func = c.arena.functionAt(index: selected.callee)
         val key: U64 = declaration.nameId
         mut val slot: U64 = 0U64
         while slot < self.declId.count() {
-            if self.declId[slot] == key { return slot }
+            if self.declId[slot] == key { return <Result.Ok value=slot /> }
             slot += 1U64
         }
         val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
         mut val types: Array[LLVMTypeRef] = []
         mut val index: U64 = 0U64
         while index < parameters.count() {
-            types.append(self.llvmTypeOfRef(c: inout c, ref: parameters[index]))
+            types.append((try self.llvmTypeOfRef(c: inout c, ref: parameters[index])))
             index += 1U64
         }
         mut val result: LLVMTypeRef = self.voidty
-        if declaration.hasRet { result = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
+        if declaration.hasRet { result = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
         val signature: LLVMTypeRef = LLVMFunctionType(result, arrayCPtr(types), types.count(), 0I32)
         mut val symbol: Array[U8] = []
         index = 0U64
@@ -80,7 +80,7 @@ pub impl LlvmCtx {
         self.declId.append(key)
         self.declFn.append(function)
         self.declTy.append(signature)
-        return slot
+        return <Result.Ok value=slot />
     }
 
 }

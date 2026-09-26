@@ -22,7 +22,7 @@ import ./Mid with { MidParametricBody, MidExecutableBody, MidPreparationError, M
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Diag with { CompileDiagnostic, DiagnosticLocation, compileErrorAt, digitStrU }
+import ./Diag with { CompileDiagnostic, DiagnosticLocation, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // The initial backend subset is deliberately fail-closed. Keep the reason as
@@ -805,20 +805,35 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     c.appendSrc(from: "self".bytes())
     st.selfLen = 4U64
 
-    st.registerFinalLayoutNames(c: inout c)
-    st.registerFinalStructBodies(c: inout c)
+    match st.registerFinalLayoutNames(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    match st.registerFinalStructBodies(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:types:done")
 
     // pass 1: declare generic free-fn instances + generic method instances (one per
     // receiver instantiation). Non-generic free/assoc fns and methods are no longer
     // eagerly declared — each reachable free-function body is declared from its frozen
     // BodyInstance, while receiver methods use their corresponding body identity.
-    st.declareGenFns(c: inout c)
-    st.declareGenMethods(c: inout c)
+    match st.declareGenFns(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    match st.declareGenMethods(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     // async fns: build each frame struct + resume fn, and a non-main entry symbol
     // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
     // call). Done before bodies emit so main's resume can call them.
-    st.declareAsyncFns(c: inout c)
+    match st.declareAsyncFns(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     match st.collectClosures(c: inout c) {
@@ -831,7 +846,10 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     // every global's initializer once) and record each global's metadata, BEFORE any
     // function body so `seedGlobals` can re-bind them at every body entry. Done after
     // pass-1 declarations so an initializer may call a user function.
-    st.genLlvmInitGlobals(c: inout c)
+    match st.genLlvmInitGlobals(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:globals:done")
 
     // pass 2: emit `main` and every plain user function's body.
@@ -854,7 +872,10 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
             // an `async fn main` is lowered with the rest of the async fns (entry +
             // resume + drain the event loop); a plain main is the synchronous shape.
             if !(isAsyncFn(c: inout c, fi: fi)) {
-                st.genLlvmMain(c: inout c, fi: fi)
+                match st.genLlvmMain(c: inout c, fi: fi) {
+                    Result.Ok(value: _) => {}
+                    Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+                }
             }
             foundMain = true
         }
@@ -865,11 +886,17 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     }
     tracePhase(c: inout c, label: "backend:entry:done")
     // async fn entry + resume bodies (main's entry drains the loop).
-    st.emitAsyncFns(c: inout c)
+    match st.emitAsyncFns(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:async:done")
     // generic-method instance bodies. Free-function bodies drain through the same fixed
     // finalized queue below.
-    st.emitGenMethods(c: inout c)
+    match st.emitGenMethods(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:generic-methods:done")
     // `emitGenMethods` has consumed every slot available through main/async
     // emission. Closure bodies are emitted next and may enqueue additional
@@ -879,7 +906,10 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
     mut val genmDone: U64 = st.genMethEmit.count()
     // lambda-lifted closure bodies. Named-function-value thunks stay empty in v1 because
     // named declarations are not first-class values.
-    st.emitClosures(c: inout c)
+    match st.emitClosures(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
     tracePhase(c: inout c, label: "backend:closures-thunks:done")
     // provided trait methods + lazily-declared std/generic methods reached during
     // the passes above. Both queues can grow as bodies emit (a provided body calls
@@ -900,23 +930,38 @@ export fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLow
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-queued", count: st.genFnEmit.count(), stride: 16U64)
         while genmDone < st.genMethEmit.count() {
             tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-emitting", count: genmDone, stride: 16U64)
-            st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
+            match st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone]) {
+                Result.Ok(value: _) => {}
+                Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+            }
             genmDone += 1
         }
         // Free-function bodies were all declared from the frozen closure. Keep the queue
         // drain separate from method/witness drains for ABI order, not source discovery.
         while genfDone < st.genFnEmit.count() {
             tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-emitting", count: genfDone, stride: 16U64)
-            st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone])
+            match st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone]) {
+                Result.Ok(value: _) => {}
+                Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+            }
             genfDone += 1
         }
         // per-type drop/retain/copy-witness bodies (declared on demand at drop sites). A
         // witness body's deinit call is now a `gm` instance (B3-2), which queues onto
         // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
         // or those deinit method bodies would be declared but never emitted (link error).
-        st.emitClosureEnvironmentDrops(c: inout c)
-        st.emitExistentialWitnesses(c: inout c)
-        st.emitWitnessBodies(c: inout c)
+        match st.emitClosureEnvironmentDrops(c: inout c) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match st.emitExistentialWitnesses(c: inout c) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match st.emitWitnessBodies(c: inout c) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-method-after-witness", count: st.genMethEmit.count(), stride: 16U64)
         tracePhaseProgress(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count(), stride: 16U64)
         if genmDone >= st.genMethEmit.count() && genfDone >= st.genFnEmit.count() && st.existentialWitnessesEmitted >= st.existentialWitnesses.count() && st.closureEnvironmentDropsEmitted >= st.closureEnvironmentDrops.count() {

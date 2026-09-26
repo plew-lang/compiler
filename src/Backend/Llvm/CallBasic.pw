@@ -8,23 +8,23 @@
 // fn TypeRef args = [retTy, paramTy0, paramTy1, ...].
 
 pub impl LlvmCtx {
-    inout fn genTimerSleep(c: inout Comp, duration: LLVMValueRef) -> LLVMValueRef {
+    inout fn genTimerSleep(c: inout Comp, duration: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val sty: Array[LLVMTypeRef] = []
         sty.append(self.i64ty)
         val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
-        val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", fnTy: sleepTy)
+        val sleepFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_sleep", fnTy: sleepTy))
         mut val sargs: Array[LLVMValueRef] = []
         sargs.append(self.extendToI64(v: duration, unsigned: false))
-        return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon()) />
     }
 
-    inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> LLVMTypeRef {
+    inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val t: TypeRef = c.arena.typeAt(index: fnRef)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val i: U64 = 1
         while i < t.args.count() {
-            ptys.append(self.llvmTypeOfRef(c: inout c, ref: t.args[i]))
+            ptys.append((try self.llvmTypeOfRef(c: inout c, ref: t.args[i])))
             i += 1
         }
         mut val rty: LLVMTypeRef = self.voidty
@@ -32,10 +32,10 @@ pub impl LlvmCtx {
             val rt: TypeRef = c.arena.typeAt(index: t.args[0])
             // a `()` return (the unnamed unit record) is void; any named type is a value.
             if rt.nameLen != 0U64 {
-                rty = self.llvmTypeOfRef(c: inout c, ref: t.args[0])
+                rty = (try self.llvmTypeOfRef(c: inout c, ref: t.args[0]))
             }
         }
-        return LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
+        return <Result.Ok value=LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32) />
     }
 
 }

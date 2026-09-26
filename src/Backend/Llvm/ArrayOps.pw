@@ -2,46 +2,46 @@
 
 pub impl LlvmCtx {
     // Operands and the result layout are already selected by canonical Mid.
-    inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, type: LLVMTypeRef) -> LLVMValueRef {
+    inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, type: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         if values.count() == 0U64 {
-            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: type)
+            return <Result.Ok value=(try self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: type)) />
         }
-        val data: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32))
+        val data: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32)))
         mut val i: U64 = 0U64
         while i < values.count() {
             llvmStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1U64
         }
-        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: type)
+        return <Result.Ok value=(try self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: type)) />
     }
 
     // `Buffer.new()`: a fresh empty buffer (header-only, cap=0 — the first append grows
     // it). The element size is irrelevant at cap=0, so a unit elemSize suffices.
-    inout fn genLlvmBufferNew(c: inout Comp) -> LLVMValueRef {
-        return self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))
+    inout fn genLlvmBufferNew(c: inout Comp) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))) />
     }
 
     // Buffer byte equality is a physical ABI operation. Both legacy and Mid
     // callers have selected the descriptor and materialized operands already;
     // this helper performs no expression/type lookup or equality selection.
-    inout fn genLlvmBufferEqValues(c: inout Comp, elemTy: LLVMTypeRef, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+    inout fn genLlvmBufferEqValues(c: inout Comp, elemTy: LLVMTypeRef, lhs: LLVMValueRef, rhs: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         val size: LLVMValueRef = LLVMSizeOf(elemTy)
-        val leftBytes: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: lhs), size, anon())
-        val rightBytes: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: rhs), size, anon())
+        val leftBytes: LLVMValueRef = LLVMBuildMul(self.b, (try self.rawbufCount(c: inout c, data: lhs)), size, anon())
+        val rightBytes: LLVMValueRef = LLVMBuildMul(self.b, (try self.rawbufCount(c: inout c, data: rhs)), size, anon())
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_str_eq", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(lhs)
         av.append(leftBytes)
         av.append(rhs)
         av.append(rightBytes)
         val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
-        return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        return <Result.Ok value=LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon()) />
     }
 
     // The ABI fast-path is legal only for LLVM integer element types. Float

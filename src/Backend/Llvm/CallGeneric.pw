@@ -12,18 +12,19 @@ pub impl LlvmCtx {
 
     // Shared by source and canonical callers. Both inputs are evaluated,
     // retained cells; this helper never recovers source expressions.
-    inout fn emitInoutCellCheck(c: inout Comp, cell: LLVMValueRef, otherCell: LLVMValueRef, hasReadBorrow: Bool = false) {
+    inout fn emitInoutCellCheck(c: inout Comp, cell: LLVMValueRef, otherCell: LLVMValueRef, hasReadBorrow: Bool = false) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
         mut val name = "plew_inout_overlap"
         if hasReadBorrow { name = "plew_read_inout_overlap" }
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: name, fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: name, fnTy: fty))
         mut val cav: Array[LLVMValueRef] = []
         cav.append(cell)
         cav.append(otherCell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 2U64, anon())
+        return <Result.Ok value=() />
     }
 }
 
@@ -44,7 +45,7 @@ pub impl LlvmCtx {
     // Resolve a free-function LLVM slot from the body id selected by frontend finalization.
     // Declarations are all created before body emission, so this is a pure frozen-table lookup:
     // LLVM cannot fabricate a body from a source function plus guessed substitutions.
-    inout fn ensureFinalGenFnBody(c: inout Comp, bodyId: U64) -> U64 {
+    inout fn ensureFinalGenFnBody(c: inout Comp, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         if c.traceCodegen {
             eprint(text: "[trace-codegen] frozen free body request id=")
             self.traceCodegenU64(n: bodyId)
@@ -57,9 +58,8 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: existing)
                 eprint(text: "\n")
             }
-            return existing
+            return <Result.Ok value=existing />
         }
-        c.errorAt(offset: 0U64, msg: "internal error: frontend finalization did not declare the selected free-function body")
-        return self.genFnK.count()
+        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: frontend finalization did not declare the selected free-function body") />
     }
 }

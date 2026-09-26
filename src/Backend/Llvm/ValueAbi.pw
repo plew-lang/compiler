@@ -70,21 +70,21 @@ pub impl LlvmCtx {
         return slot
     }
 
-    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> LLVMValueRef {
+    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMIsAFunction(function)
         mut val abiId = 0U64
         if handle != 0U64 {
             abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
             if abiId == 0U64 {
-                compileErrorAt(line: 0I64, msg: "internal error: private call lacks a declared value ABI")
+                return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call lacks a declared value ABI" /> />
             }
         } else { abiId = self.valueAbi(signature) }
         val abi = self.valueAbis[abiId - 1U64]
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
-            compileErrorAt(line: 0I64, msg: "internal error: private call logical signature mismatch")
+            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call logical signature mismatch" /> />
         }
         if abi.parameterCount != arguments.count() {
-            compileErrorAt(line: 0I64, msg: "internal error: private value ABI argument count mismatch")
+            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI argument count mismatch" /> />
         }
         mut val values: Array[LLVMValueRef] = []
         mut val index = 0U64
@@ -114,24 +114,24 @@ pub impl LlvmCtx {
             }
             index += 1U64
         }
-        return call
+        return <Result.Ok value=call />
     }
 
-    inout fn valueParameter(function: LLVMValueRef, index: U64) -> LLVMValueRef {
+    inout fn valueParameter(function: LLVMValueRef, index: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
         val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
         if abiId == 0U64 {
-            compileErrorAt(line: 0I64, msg: "internal error: private value ABI parameter lacks declaration")
+            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter lacks declaration" /> />
         }
         val abi = self.valueAbis[abiId - 1U64]
         if index >= abi.parameterCount {
-            compileErrorAt(line: 0I64, msg: "internal error: private value ABI parameter index out of range")
+            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter index out of range" /> />
         }
         val parameter = self.valueAbiParameters[abi.parameterStart + index]
         match parameter.passing {
-            LlvmValuePassing.Omitted => { return LLVMGetUndef(parameter.type) }
-            LlvmValuePassing.Direct => { return LLVMGetParam(function, parameter.physicalIndex) }
-            LlvmValuePassing.Indirect => { return llvmLoad(self.b, parameter.type, LLVMGetParam(function, parameter.physicalIndex), anon()) }
+            LlvmValuePassing.Omitted => { return <Result.Ok value=LLVMGetUndef(parameter.type) /> }
+            LlvmValuePassing.Direct => { return <Result.Ok value=LLVMGetParam(function, parameter.physicalIndex) /> }
+            LlvmValuePassing.Indirect => { return <Result.Ok value=llvmLoad(self.b, parameter.type, LLVMGetParam(function, parameter.physicalIndex), anon()) /> }
         }
     }
 }

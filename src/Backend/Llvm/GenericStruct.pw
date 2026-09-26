@@ -15,42 +15,39 @@ pub impl LlvmCtx {
 
     // Finalized contract identities index physical slots directly. Newtypes
     // follow their explicit representation edge, never a declaration lookup.
-    inout fn physicalLayoutContract(c: inout Comp, typeRef: U64) -> U64 {
-        val identity = c.requireFinalDestruction(typeRef: typeRef)
+    inout fn physicalLayoutContract(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        val identity = (try c.checkedFinalDestruction(typeRef: typeRef))
         val contract = c.arena.finalDestructions[identity - 1U64]
-        if contract.underlying != 0U64 { return self.physicalLayoutContract(c: inout c, typeRef: contract.underlying) }
-        return identity
+        if contract.underlying != 0U64 { return <Result.Ok value=(try self.physicalLayoutContract(c: inout c, typeRef: contract.underlying)) /> }
+        return <Result.Ok value=identity />
     }
 
-    inout fn requireStructLayoutSlot(c: inout Comp, typeRef: U64) -> U64 {
-        val identity = self.physicalLayoutContract(c: inout c, typeRef: typeRef)
+    inout fn requireStructLayoutSlot(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        val identity = (try self.physicalLayoutContract(c: inout c, typeRef: typeRef))
         if identity > self.finalStructSlots.count() || self.finalStructSlots[identity - 1U64] == 0U64 {
-            c.errorAt(offset: 0U64, msg: "internal error: finalized struct has no LLVM layout slot")
-            return self.genStructRefs.count()
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized struct has no LLVM layout slot") />
         }
-        return self.finalStructSlots[identity - 1U64] - 1U64
+        return <Result.Ok value=self.finalStructSlots[identity - 1U64] - 1U64 />
     }
 
-    inout fn requireEnumLayoutSlot(c: inout Comp, typeRef: U64) -> U64 {
-        val identity = self.physicalLayoutContract(c: inout c, typeRef: typeRef)
+    inout fn requireEnumLayoutSlot(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        val identity = (try self.physicalLayoutContract(c: inout c, typeRef: typeRef))
         if identity > self.finalEnumSlots.count() || self.finalEnumSlots[identity - 1U64] == 0U64 {
-            c.errorAt(offset: 0U64, msg: "internal error: finalized enum has no LLVM layout slot")
-            return self.genEnumRefs.count()
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized enum has no LLVM layout slot") />
         }
-        return self.finalEnumSlots[identity - 1U64] - 1U64
+        return <Result.Ok value=self.finalEnumSlots[identity - 1U64] - 1U64 />
     }
 
     // Only finalized reachable types can enter LLVM. Publish all names before
     // filling any struct body so mutually recursive boxed layouts are valid.
-    inout fn registerFinalLayoutNames(c: inout Comp) {
+    inout fn registerFinalLayoutNames(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < c.arena.finalDestructions.count() {
             val contract = c.arena.finalDestructions[index]
             self.finalStructSlots.append(0U64)
             self.finalEnumSlots.append(0U64)
             if !contract.ready {
-                c.errorAt(offset: 0U64, msg: "internal error: LLVM layout registration requires a finalized type contract")
-                return
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: LLVM layout registration requires a finalized type contract") />
             }
             if contract.underlying == 0U64 {
                 if contract.structLayout != 0U64 {
@@ -70,7 +67,7 @@ pub impl LlvmCtx {
                             val type = LLVMStructCreateNamed(self.ctx, arrayCPtr(name))
                             mut val fields: Array[LLVMTypeRef] = []
                             fields.append(self.i64ty)
-                            fields.append(LLVMArrayType2(self.i64ty, self.enumPayloadWords(c: inout c, typeRef: contract.typeRef)))
+                            fields.append(LLVMArrayType2(self.i64ty, (try self.enumPayloadWords(c: inout c, typeRef: contract.typeRef))))
                             LLVMStructSetBody(type, arrayCPtr(fields), fields.count(), 0I32)
                             self.finalEnumSlots[index] = self.genEnumRefs.count() + 1U64
                             self.genEnumRefs.append(contract.typeRef)
@@ -83,26 +80,27 @@ pub impl LlvmCtx {
             }
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn registerFinalStructBodies(c: inout Comp) {
+    inout fn registerFinalStructBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot = 0U64
         while slot < self.genStructRefs.count() {
-            val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: self.genStructRefs[slot]) - 1U64]
+            val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: self.genStructRefs[slot])) - 1U64]
             if contract.fieldTypes.count() != contract.fieldBoxed.count() {
-                c.errorAt(offset: 0U64, msg: "internal error: finalized struct layout has inconsistent fields")
-                return
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized struct layout has inconsistent fields") />
             }
             mut val fields: Array[LLVMTypeRef] = []
             mut val field = 0U64
             while field < contract.fieldTypes.count() {
                 if contract.fieldBoxed[field] { fields.append(self.ptrty) }
-                else { fields.append(self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field])) }
+                else { fields.append((try self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field]))) }
                 field += 1U64
             }
             LLVMStructSetBody(self.genStructTys[slot], arrayCPtr(fields), fields.count(), 0I32)
             slot += 1U64
         }
+        return <Result.Ok value=() />
     }
 
 }

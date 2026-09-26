@@ -14,7 +14,7 @@ fn check(noncopyable: Bool, transfer: Bool) {
     val contract = compiler.finalDestructionIndex(typeRef: type)
     assert(compiler.arena.finalDestructions[contract - 1U64].isUnique == noncopyable)
     // Even a trivial noncopyable type without deinit cannot be copied.
-    assert(!compiler.finalNeedsRelease(typeRef: type))
+    assert(!compiler.finalNeedsRelease(typeRef: type).unwrap())
     val place = <MidPlace local=0U64 typeTerm=type />
     val value = if transfer { give <MidOperand.Move place=place /> } else { give <MidOperand.Copy place=place /> }
     // Deliberately stale local metadata must not authorize a noncopyable Copy.

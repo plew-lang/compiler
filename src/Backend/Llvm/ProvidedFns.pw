@@ -7,7 +7,7 @@ pub impl LlvmCtx {
     // can have the same source function and ABI receiver under different selected proofs.
     // `MonoWork.fnInsts` is intentionally absent here; it is provisional discovery work and
     // must not grow normal compiler codegen after finalization.
-    inout fn declareGenFns(c: inout Comp) {
+    inout fn declareGenFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val bodyIndex: U64 = 0U64
         while bodyIndex < c.monoWork.bodyInstances.count() {
             val bodyId: U64 = c.monoWork.bodyInstances[bodyIndex]
@@ -33,10 +33,10 @@ pub impl LlvmCtx {
                     val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
                     mut val pi: U64 = 0
                     while pi < parameterCount {
-                        ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi))
+                        ptys.append((try self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi)))
                         pi += 1
                     }
-                    val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId), arrayCPtr(ptys), ptys.count(), 0I32)
+                    val fty: LLVMTypeRef = LLVMFunctionType((try self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)), arrayCPtr(ptys), ptys.count(), 0I32)
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)
@@ -52,15 +52,16 @@ pub impl LlvmCtx {
             }
             bodyIndex += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // The frozen body ID carries the complete specialization and proof identity.
     // Emission never installs a parallel ambient substitution environment.
-    inout fn emitOneGenFn(c: inout Comp, slot: U64) {
+    inout fn emitOneGenFn(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.genFnK[slot]
-        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return }
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Ok value=() /> }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
-        if body.fnIdx >= c.arena.functionCount() { return }
+        if body.fnIdx >= c.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = c.arena.functionAt(index: body.fnIdx)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] generic fn body-start index=")
@@ -71,7 +72,7 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: slot)
             eprint(text: "\n")
         }
-        self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genFnVal[slot])
+        try self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genFnVal[slot])
         if c.traceCodegen {
             eprint(text: "[trace-codegen] generic fn body-done index=")
             self.traceCodegenU64(n: body.fnIdx)
@@ -79,6 +80,7 @@ pub impl LlvmCtx {
             self.traceCodegenU64(n: slot)
             eprint(text: "\n")
         }
+        return <Result.Ok value=() />
     }
 
 }

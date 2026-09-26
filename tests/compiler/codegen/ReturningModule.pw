@@ -1,8 +1,10 @@
+import ../../../src/PreparedProgram with { PreparedProgram }
+import ../../../src/Ir with { FinalDestruction }
 // The common LLVM entry returns a diagnostic and leaves its embedding caller
 // alive. A fresh request can lower another module after the failed request.
 import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
 import ../../../src/SourceAccess with { SourceAccess }
-import ../../../src/Backend with { lowerLlvm, LlvmLoweringResult }
+import ../../../src/Backend with { lowerLlvm, lowerPreparedLlvm, LlvmLoweringResult }
 import @Std/Io with { print }
 import @Std/Process with { argAt }
 
@@ -34,9 +36,24 @@ fn lowerMissingEntry() {
         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message) }
     }
 }
+fn lowerInvalidContract() {
+    mut val compiler: Comp = <Comp />
+    analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.Text text="fn main() {}" path="InvalidContract.pw" />,
+        sources: <SourceAccess />).unwrap()
+    val prepared = PreparedProgram.prepare(c: inout compiler).unwrap()
+    // A deliberately unfinished backend input must fail after LLVM allocation,
+    // return its diagnostic, and leave the embedding process alive.
+    compiler.arena.finalDestructions.append(<FinalDestruction typeRef=0U64 />)
+    match lowerPreparedLlvm(c: inout compiler, prepared: prepared) {
+        LlvmLoweringResult.Success(module: val module) => { panic("unfinished contract was accepted") }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message) }
+    }
+}
 fn main() {
     lowerInput(path: argAt(1I64), shouldFail: false)
     lowerInput(path: argAt(2I64), shouldFail: true)
     lowerMissingEntry()
+    lowerInvalidContract()
     lowerInput(path: argAt(1I64), shouldFail: false)
 }

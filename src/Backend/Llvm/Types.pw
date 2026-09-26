@@ -3,22 +3,21 @@
 pub impl LlvmCtx {
     // Primitive language-item widths are a physical lowering decision.
     // Nominal, generic, newtype and opaque representations are already closed.
-    inout fn llvmPrimitiveTy(c: inout Comp, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return self.i1ty }
+    inout fn llvmPrimitiveTy(c: inout Comp, tyStart: U64, tyLen: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return <Result.Ok value=self.i1ty /> }
         // Preserve the current F32-as-double runtime representation.
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") { return self.f64ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F64") { return self.f64ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I8") { return self.i8ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U8") { return self.i8ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I16") { return self.i16ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U16") { return self.i16ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I32") { return self.i32ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U32") { return self.i32ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I64") { return self.i64ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U64") { return self.i64ty }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Unit") { return self.i64ty }
-        c.errorAt(offset: tyStart, msg: "internal error: finalized type has no physical representation")
-        return self.i64ty
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") { return <Result.Ok value=self.f64ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F64") { return <Result.Ok value=self.f64ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I8") { return <Result.Ok value=self.i8ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U8") { return <Result.Ok value=self.i8ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I16") { return <Result.Ok value=self.i16ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U16") { return <Result.Ok value=self.i16ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I32") { return <Result.Ok value=self.i32ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U32") { return <Result.Ok value=self.i32ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "I64") { return <Result.Ok value=self.i64ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U64") { return <Result.Ok value=self.i64ty /> }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Unit") { return <Result.Ok value=self.i64ty /> }
+        return <Result.Err error=c.diagnosticAt(offset: tyStart, msg: "internal error: finalized type has no physical representation") />
     }
 
 }

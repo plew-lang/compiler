@@ -3,20 +3,19 @@
 import ../../Mid with { planCanonicalMidAsyncFrame }
 
 pub impl LlvmCtx {
-    inout fn prepareAsyncMidCanonical(c: inout Comp, bodyId: U64) -> MidCanonicalBody {
+    inout fn prepareAsyncMidCanonical(c: inout Comp, bodyId: U64) -> Result[MidCanonicalBody, CompileDiagnostic] {
         val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         match self.prepareMidExecutable(c: inout c, bodyId: bodyId, fnIdx: fi) {
-            Optional.Some(v: val executable) => { return executable.canonical }
+            Optional.Some(v: val executable) => { return <Result.Ok value=executable.canonical /> }
             Optional.None => {
-                c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid preparation failed")
-                return <MidCanonicalBody body=0U64 />
+                return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid preparation failed") />
             }
         }
     }
 
-    inout fn buildMidAsyncFrameTy(c: inout Comp, bodyId: U64) -> LLVMTypeRef {
+    inout fn buildMidAsyncFrameTy(c: inout Comp, bodyId: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
-        val canonical = self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId)
+        val canonical = (try self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId))
         val plan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
         if !plan.valid {
             if c.traceCodegen {
@@ -44,8 +43,8 @@ pub impl LlvmCtx {
                     index += 1U64
                 }
             }
-            c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid frame analysis failed")
-            return self.i64ty }
+            return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid frame analysis failed") />
+            }
         val body = c.mid.bodies[canonical.body - 1U64]
         mut val types: Array[LLVMTypeRef] = [self.i32ty, self.ptrty]
         mut val slots: Array[U64] = []
@@ -57,7 +56,7 @@ pub impl LlvmCtx {
             if declaration.isParameter || plan.storedLocals[local] {
                 slots.append(types.count())
                 if declaration.isCaptureCell { types.append(self.ptrty) }
-                else { types.append(self.midCanonicalLocalTy(c: inout c, body: body, local: local)) }
+                else { types.append((try self.midCanonicalLocalTy(c: inout c, body: body, local: local))) }
             } else { slots.append(0U64) }
             local += 1U64
         }
@@ -69,25 +68,26 @@ pub impl LlvmCtx {
         LLVMStructSetBody(frame, arrayCPtr(types), types.count(), 0I32)
         self.asyncMidBodies.append(canonical)
         self.asyncLocalSlots.append(slots)
-        return frame
+        return <Result.Ok value=frame />
     }
 
-    inout fn midAsyncComplete(c: inout Comp, value: LLVMValueRef) {
+    inout fn midAsyncComplete(c: inout Comp, value: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         // Mid has already emitted every source Drop before the return. This
         // tail owns only the activation's Promise count and its frame memory.
         val promise = llvmLoad(self.b, self.ptrty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 1U64, anon()), anon())
         val arguments: Array[LLVMValueRef] = [promise, value]
         val types: Array[LLVMTypeRef] = [self.ptrty, self.i64ty]
         val signature = LLVMFunctionType(self.voidty, arrayCPtr(types), types.count(), 0I32)
-        val function = self.getOrDeclare(c: inout c, name: "plew_promise_resolve", fnTy: signature)
+        val function = (try self.getOrDeclare(c: inout c, name: "plew_promise_resolve", fnTy: signature))
         val ignored = LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), arguments.count(), anon())
-        self.rawbufDrop(c: inout c, cell: promise)
-        self.asyncFreeFrame(c: inout c, frame: self.curFrameBase)
+        try self.rawbufDrop(c: inout c, cell: promise)
+        try self.asyncFreeFrame(c: inout c, frame: self.curFrameBase)
         LLVMBuildRetVoid(self.b)
+        return <Result.Ok value=() />
     }
 
-    inout fn midAsyncSuspend(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, target: LLVMBasicBlockRef) -> Bool {
-        val promise = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value)
+    inout fn midAsyncSuspend(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, target: LLVMBasicBlockRef) -> Result[Bool, CompileDiagnostic] {
+        val promise = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value))
         llvmStore(self.b, LLVMConstInt(self.i32ty, term.state, 0I32), LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()))
         val done = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.promiseTy, promise, 0U64, anon()), anon())
         val complete = LLVMBuildICmp(self.b, llvmIntNe(), done, LLVMConstInt(self.i32ty, 0U64, 0I32), anon())
@@ -100,34 +100,34 @@ pub impl LlvmCtx {
         val arguments: Array[LLVMValueRef] = [promise, self.curResumeFn, self.curFrameBase]
         val types: Array[LLVMTypeRef] = [self.ptrty, self.ptrty, self.ptrty]
         val signature = LLVMFunctionType(self.voidty, arrayCPtr(types), types.count(), 0I32)
-        val function = self.getOrDeclare(c: inout c, name: "plew_promise_await", fnTy: signature)
+        val function = (try self.getOrDeclare(c: inout c, name: "plew_promise_await", fnTy: signature))
         val ignored = LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), arguments.count(), anon())
         LLVMBuildRetVoid(self.b)
         LLVMAddCase(self.curAsyncSwitch, LLVMConstInt(self.i32ty, term.state, 0I32), completion)
         LLVMPositionBuilderAtEnd(self.b, completion)
         // The pre-suspend SSA value does not dominate a callback re-entry.
-        val retained = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value)
+        val retained = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value))
         val result = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.promiseTy, retained, 1U64, anon()), anon())
         val destination = c.mid.places[term.destination - 1U64]
-        val type = self.midCanonicalLocalTy(c: inout c, body: body, local: destination.local)
-        llvmStore(self.b, self.coerceInt(v: result, target: type, unsigned: false), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true))
+        val type = (try self.midCanonicalLocalTy(c: inout c, body: body, local: destination.local))
+        llvmStore(self.b, self.coerceInt(v: result, target: type, unsigned: false), (try self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true)))
         LLVMBuildBr(self.b, target)
-        return true
+        return <Result.Ok value=true />
     }
 
-    inout fn genLlvmMidAsyncResume(c: inout Comp, slot: U64) {
+    inout fn genLlvmMidAsyncResume(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
         val canonical = self.asyncMidBodies[slot]
         val body = c.mid.bodies[canonical.body - 1U64]
         val parameters = c.arena.bodySignature(bodyId: body.bodyInstance).parameterTypes.count()
-        match self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameters, asyncBody: true) {
+        match (try self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameters, asyncBody: true)) {
             MidLlvmPreflight.Ready => {}
-            _ => { c.errorAt(offset: c.fnAnchor(f: c.arena.functionAt(index: body.sourceFunction)), msg: "async Mid LLVM preflight failed")
-                return }
+            _ => { return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: body.sourceFunction)), msg: "async Mid LLVM preflight failed") />
+                return <Result.Ok value=() /> }
         }
         self.curFn = self.asyncResumeFn[slot]
         self.curResumeFn = self.curFn
         self.curFrameTy = self.asyncFrameTy[slot]
-        self.curFrameBase = self.valueParameter(function: self.curFn, index: 0U64)
+        self.curFrameBase = (try self.valueParameter(function: self.curFn, index: 0U64))
         self.curIsMain = false
         self.curRetVoid = true
         self.beginFnBody(fv: self.curFn)
@@ -137,15 +137,16 @@ pub impl LlvmCtx {
         while local < body.locals.len {
             if slots[local] != 0U64 { storage.append(LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, slots[local], anon())) }
             else if c.mid.locals[body.locals.start + local].isCaptureCell { storage.append(self.entryAlloca(ty: self.ptrty)) }
-            else { storage.append(self.entryAlloca(ty: self.midCanonicalLocalTy(c: inout c, body: body, local: local))) }
+            else { storage.append(self.entryAlloca(ty: (try self.midCanonicalLocalTy(c: inout c, body: body, local: local)))) }
             local += 1U64
         }
-        if !self.midPrepareCanonicalLocals(c: inout c, body: body, storage: storage, initializeParameters: false) { c.errorAt(offset: 0U64, msg: "async Mid local binding failed")
-            return }
+        if !(try self.midPrepareCanonicalLocals(c: inout c, body: body, storage: storage, initializeParameters: false)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid local binding failed") />
+            return <Result.Ok value=() /> }
         val start = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.async.start"))
         val state = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()), anon())
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, start, 8U32)
         LLVMPositionBuilderAtEnd(self.b, start)
-        if !self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=parameters />, localsPrepared: true, asyncBody: true) { c.errorAt(offset: 0U64, msg: "async Mid LLVM emission failed") }
+        if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=parameters />, localsPrepared: true, asyncBody: true)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid LLVM emission failed") /> }
+        return <Result.Ok value=() />
     }
 }

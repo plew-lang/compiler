@@ -1,4 +1,5 @@
 module returned
 `\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)
 LLVM backend: no `main` function found
+internal error: LLVM layout registration requires a finalized type contract
 module returned

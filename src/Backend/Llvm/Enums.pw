@@ -6,11 +6,10 @@ pub impl LlvmCtx {
     // The payload reserves whole i64 words. Summing per-field rounded sizes
     // is conservative for subword scalars and keeps alignment at most one word.
     // Boxed recursion ends at its pointer; inline cycles are rejected upstream.
-    inout fn enumPayloadWords(c: inout Comp, typeRef: U64) -> U64 {
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: typeRef) - 1U64]
+    inout fn enumPayloadWords(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: typeRef)) - 1U64]
         if contract.variantFieldStarts.count() == 0U64 || contract.fieldTypes.count() != contract.fieldBoxed.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: finalized enum layout has inconsistent fields")
-            return 0U64
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized enum layout has inconsistent fields") />
         }
         mut val maximum = 0U64
         mut val variant = 0U64
@@ -18,65 +17,62 @@ pub impl LlvmCtx {
             mut val field = contract.variantFieldStarts[variant]
             val end = contract.variantFieldStarts[variant + 1U64]
             if field > end || end > contract.fieldTypes.count() {
-                c.errorAt(offset: 0U64, msg: "internal error: finalized enum layout has an invalid variant range")
-                return 0U64
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized enum layout has an invalid variant range") />
             }
             mut val words = 0U64
             while field < end {
                 if contract.fieldBoxed[field] { words += 1U64 }
-                else { words += self.typeWords(c: inout c, typeRef: contract.fieldTypes[field]) }
+                else { words += (try self.typeWords(c: inout c, typeRef: contract.fieldTypes[field])) }
                 field += 1U64
             }
             if words > maximum { maximum = words }
             variant += 1U64
         }
-        return maximum
+        return <Result.Ok value=maximum />
     }
 
-    inout fn typeWords(c: inout Comp, typeRef: U64) -> U64 {
-        if typeRef == 0U64 { return 0U64 }
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: typeRef) - 1U64]
-        if contract.underlying != 0U64 { return self.typeWords(c: inout c, typeRef: contract.underlying) }
+    inout fn typeWords(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        if typeRef == 0U64 { return <Result.Ok value=0U64 /> }
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: typeRef)) - 1U64]
+        if contract.underlying != 0U64 { return <Result.Ok value=(try self.typeWords(c: inout c, typeRef: contract.underlying)) /> }
         if contract.structLayout != 0U64 {
             mut val words = 0U64
             mut val field = 0U64
             while field < contract.fieldTypes.count() {
                 if contract.fieldBoxed[field] { words += 1U64 }
-                else { words += self.typeWords(c: inout c, typeRef: contract.fieldTypes[field]) }
+                else { words += (try self.typeWords(c: inout c, typeRef: contract.fieldTypes[field])) }
                 field += 1U64
             }
-            return words
+            return <Result.Ok value=words />
         }
         match contract.ownershipClass {
-            ArcClass.EnumVal(eidx: _) => { return 1U64 + self.enumPayloadWords(c: inout c, typeRef: typeRef) }
-            ArcClass.AnyBox => { return 2U64 }
-            ArcClass.ClosureVal => { return 2U64 }
-            _ => { return 1U64 }
+            ArcClass.EnumVal(eidx: _) => { return <Result.Ok value=1U64 + (try self.enumPayloadWords(c: inout c, typeRef: typeRef)) /> }
+            ArcClass.AnyBox => { return <Result.Ok value=2U64 /> }
+            ArcClass.ClosureVal => { return <Result.Ok value=2U64 /> }
+            _ => { return <Result.Ok value=1U64 /> }
         }
     }
 
     // Payload layout consumes the same concrete field contract as ownership.
-    inout fn variantPayloadTy(c: inout Comp, instanceRef: U64, vi: U64) -> LLVMTypeRef {
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: instanceRef) - 1U64]
-        if contract.underlying != 0U64 { return self.variantPayloadTy(c: inout c, instanceRef: contract.underlying, vi: vi) }
+    inout fn variantPayloadTy(c: inout Comp, instanceRef: U64, vi: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: instanceRef)) - 1U64]
+        if contract.underlying != 0U64 { return <Result.Ok value=(try self.variantPayloadTy(c: inout c, instanceRef: contract.underlying, vi: vi)) /> }
         if vi + 1U64 >= contract.variantFieldStarts.count() || contract.fieldBoxed.count() != contract.fieldTypes.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: enum payload has an incomplete field contract")
-            return self.voidty
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum payload has an incomplete field contract") />
         }
         val start = contract.variantFieldStarts[vi]
         val end = contract.variantFieldStarts[vi + 1U64]
         if start > end || end > contract.fieldTypes.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: enum payload has an invalid field range")
-            return self.voidty
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum payload has an invalid field range") />
         }
         mut val elements: Array[LLVMTypeRef] = []
         mut val field = start
         while field < end {
             if contract.fieldBoxed[field] { elements.append(self.ptrty) }
-            else { elements.append(self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field])) }
+            else { elements.append((try self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field]))) }
             field += 1U64
         }
-        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elements), elements.count(), 0I32)
+        return <Result.Ok value=LLVMStructTypeInContext(self.ctx, arrayCPtr(elements), elements.count(), 0I32) />
     }
 
     // ---- enum value ARC (tag-dispatch over the active variant's payload) ----
@@ -84,51 +80,47 @@ pub impl LlvmCtx {
     // Release any heap held by enum value `v` whose type ref is `ref` (a generic instance
     // such as `Optional[Array[I64]]`, using its finalized instance layout).
     // Returns true if `ref` was an enum (so the caller knows it was handled).
-    inout fn emitEnumReleaseRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
+    inout fn emitEnumReleaseRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[Bool, CompileDiagnostic] {
         if ref == 0U64 {
-            return false
+            return <Result.Ok value=false />
         }
-        val reg = self.requireEnumLayoutSlot(c: inout c, typeRef: ref)
-        if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
+        val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
+        if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = self.enumReleaseWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
-            self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments)
+            (try self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments))
         }
-        return true
+        return <Result.Ok value=true />
     }
 
-    inout fn enumNeedsDeinit(c: inout Comp, typeRef: U64) -> Bool {
+    inout fn enumNeedsDeinit(c: inout Comp, typeRef: U64) -> Result[Bool, CompileDiagnostic] {
         val identity = c.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
-            c.errorAt(offset: 0U64, msg: "internal error: enum ownership query has no finalized destruction contract")
-            return false
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum ownership query has no finalized destruction contract") />
         }
         val contract = c.arena.finalDestructions[identity - 1U64]
         if !contract.ready || contract.fieldTypes.count() != contract.fieldBoxed.count() || contract.fieldNeedsRelease.count() != contract.fieldTypes.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: enum ownership query has an incomplete destruction contract")
-            return false
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum ownership query has an incomplete destruction contract") />
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
-            if contract.fieldNeedsRelease[field] { return true }
+            if contract.fieldNeedsRelease[field] { return <Result.Ok value=true /> }
             field += 1U64
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // Consume the frozen instance contract. LLVM only lays out the payload
     // and expands the selected ownership operation; no declaration field is
     // grounded against the current callable environment here.
-    inout fn emitEnumOwnership(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64, retain: Bool) {
+    inout fn emitEnumOwnership(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64, retain: Bool) -> Result[(), CompileDiagnostic] {
         val identity = c.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
-            c.errorAt(offset: 0U64, msg: "internal error: enum ownership has no finalized destruction contract")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum ownership has no finalized destruction contract") />
         }
         val contract = c.arena.finalDestructions[identity - 1U64]
         if !contract.ready || contract.variantFieldStarts.count() == 0U64 || contract.fieldBoxed.count() != contract.fieldTypes.count() || contract.fieldNeedsRelease.count() != contract.fieldTypes.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: enum ownership has an incomplete destruction contract")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum ownership has an incomplete destruction contract") />
         }
         val slot = self.entryAlloca(ty: ety)
         llvmStore(self.b, v, slot)
@@ -139,8 +131,7 @@ pub impl LlvmCtx {
             val start = contract.variantFieldStarts[variant]
             val end = contract.variantFieldStarts[variant + 1U64]
             if start > end || end > contract.fieldTypes.count() {
-                c.errorAt(offset: 0U64, msg: "internal error: enum ownership has an invalid variant range")
-                return
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: enum ownership has an invalid variant range") />
             }
             mut val hasOwnership = false
             mut val field = start
@@ -158,7 +149,7 @@ pub impl LlvmCtx {
                 field = start
                 while field < end {
                     if contract.fieldBoxed[field] { types.append(self.ptrty) }
-                    else { types.append(self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field])) }
+                    else { types.append((try self.llvmTypeOfRef(c: inout c, ref: contract.fieldTypes[field]))) }
                     field += 1U64
                 }
                 val payloadType = LLVMStructTypeInContext(self.ctx, arrayCPtr(types), types.count(), 0I32)
@@ -168,10 +159,10 @@ pub impl LlvmCtx {
                     val type = contract.fieldTypes[field]
                     if contract.fieldBoxed[field] {
                         val cell = LLVMBuildExtractValue(self.b, value, field - start, anon())
-                        if retain { self.rawbufRetain(c: inout c, cell: cell) }
-                        else { self.emitCellRelease(c: inout c, cell: cell, ref: type) }
+                        if retain { try self.rawbufRetain(c: inout c, cell: cell) }
+                        else { try self.emitCellRelease(c: inout c, cell: cell, ref: type) }
                     } else if contract.fieldNeedsRelease[field] {
-                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, value, field - start, anon()), typeRef: type, retain: retain)
+                        try self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, value, field - start, anon()), typeRef: type, retain: retain)
                     }
                     field += 1U64
                 }
@@ -180,14 +171,17 @@ pub impl LlvmCtx {
             }
             variant += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) {
-        self.emitEnumOwnership(c: inout c, v: v, eid: eid, ety: ety, typeRef: typeRef, retain: false)
+    inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) -> Result[(), CompileDiagnostic] {
+        try self.emitEnumOwnership(c: inout c, v: v, eid: eid, ety: ety, typeRef: typeRef, retain: false)
+        return <Result.Ok value=() />
     }
 
-    inout fn emitEnumRetain(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) {
-        self.emitEnumOwnership(c: inout c, v: v, eid: eid, ety: ety, typeRef: typeRef, retain: true)
+    inout fn emitEnumRetain(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef, typeRef: U64) -> Result[(), CompileDiagnostic] {
+        try self.emitEnumOwnership(c: inout c, v: v, eid: eid, ety: ety, typeRef: typeRef, retain: true)
+        return <Result.Ok value=() />
     }
 
     // ---- per-enum value-ARC witnesses (registered/concrete enums only) ----
@@ -231,17 +225,18 @@ pub impl LlvmCtx {
         self.enumRelWitTy.append(fty)
         return self.enumRelWitReg.count() - 1U64
     }
-    inout fn emitEnumReleaseWitnessBodies(c: inout Comp) {
+    inout fn emitEnumReleaseWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.enumRelWitDone < self.enumRelWitReg.count() {
             val s: U64 = self.enumRelWitDone
             val reg: U64 = self.enumRelWitReg[s]
             val fv: LLVMValueRef = self.enumRelWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRelease(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRelease(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRelWitDone += 1
         }
+        return <Result.Ok value=() />
     }
 
     inout fn enumRetWitSlot(reg: U64) -> U64 {
@@ -272,33 +267,34 @@ pub impl LlvmCtx {
         self.enumRetWitTy.append(fty)
         return self.enumRetWitReg.count() - 1U64
     }
-    inout fn emitEnumRetainWitnessBodies(c: inout Comp) {
+    inout fn emitEnumRetainWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.enumRetWitDone < self.enumRetWitReg.count() {
             val s: U64 = self.enumRetWitDone
             val reg = self.enumRetWitReg[s]
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRetain(c: inout c, v: self.valueParameter(function: fv, index: 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRetain(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
+        return <Result.Ok value=() />
     }
 
     // Retain the heap of enum value `v` of type `ref` if it owns any (genericinstance or
     // concrete enum needing deinit); else a nop. The retain counterpart of
     // emitEnumReleaseRef.
-    inout fn emitEnumRetainRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
+    inout fn emitEnumRetainRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[Bool, CompileDiagnostic] {
         if ref == 0U64 {
-            return false
+            return <Result.Ok value=false />
         }
-        val reg = self.requireEnumLayoutSlot(c: inout c, typeRef: ref)
-        if self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg]) {
+        val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
+        if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = self.enumRetainWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
-            self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments)
+            (try self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments))
         }
-        return true
+        return <Result.Ok value=true />
     }
 
 }
@@ -309,12 +305,12 @@ pub impl LlvmCtx {
     // already-computed LLVM payload values (vs. buildEnumValue which evaluates expr
     // ids). Used by the `?.` / `try` desugar where the payload is an extracted SSA
     // value. The payload value types must match the variant's payload struct.
-    inout fn buildEnumFromValues(c: inout Comp, instanceRef: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
+    inout fn buildEnumFromValues(c: inout Comp, instanceRef: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         llvmStore(self.b, LLVMConstNull(ety), slot)
         llvmStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         if payloadVals.count() > 0U64 {
-            val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, instanceRef: instanceRef, vi: vi)
+            val payloadTy: LLVMTypeRef = (try self.variantPayloadTy(c: inout c, instanceRef: instanceRef, vi: vi))
             mut val agg: LLVMValueRef = LLVMGetUndef(payloadTy)
             mut val j: U64 = 0
             while j < payloadVals.count() {
@@ -323,6 +319,6 @@ pub impl LlvmCtx {
             }
             llvmStore(self.b, agg, LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon()))
         }
-        return llvmLoad(self.b, ety, slot, anon())
+        return <Result.Ok value=llvmLoad(self.b, ety, slot, anon()) />
     }
 }

@@ -1,32 +1,31 @@
 // Part of the LLVM backend (root: _.pw): parameter / return LLVM-type lowering.
 
 pub impl LlvmCtx {
-    inout fn bodyResultType(c: inout Comp, bodyId: U64) -> U64 {
+    inout fn bodyResultType(c: inout Comp, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         val signature = c.arena.bodySignature(bodyId: bodyId)
         if !signature.ready {
-            c.errorAt(offset: 0U64, msg: "internal error: body ABI signature was not finalized")
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: body ABI signature was not finalized") />
         }
-        return signature.resultType
+        return <Result.Ok value=signature.resultType />
     }
 
-    inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64) -> LLVMTypeRef {
-        val result = self.bodyResultType(c: inout c, bodyId: bodyId)
-        if result == 0U64 { return self.voidty }
-        return self.llvmTypeOfRef(c: inout c, ref: result)
+    inout fn bodyReturnLlvmTy(c: inout Comp, bodyId: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        val result = (try self.bodyResultType(c: inout c, bodyId: bodyId))
+        if result == 0U64 { return <Result.Ok value=self.voidty /> }
+        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: result)) />
     }
 
-    inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64) -> LLVMTypeRef {
+    inout fn bodyParameterLlvmTy(c: inout Comp, bodyId: U64, index: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val signature = c.arena.bodySignature(bodyId: bodyId)
         if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() || index >= signature.parameterTypes.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: finalized body parameter type is missing")
-            return self.voidty
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized body parameter type is missing") />
         }
         match signature.parameterPassings[index] {
-            CallArgumentPassing.Inout => { return self.ptrty }
+            CallArgumentPassing.Inout => { return <Result.Ok value=self.ptrty /> }
             CallArgumentPassing.Borrow => {}
             CallArgumentPassing.Move => {}
         }
-        return self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])
+        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) />
     }
 
 }

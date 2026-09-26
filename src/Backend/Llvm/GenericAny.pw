@@ -4,30 +4,28 @@ pub impl LlvmCtx {
 
     // Layout selection consumes a closed type contract. Type spelling is
     // consulted only for the physical widths of primitive language items.
-    inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
-        if ref == 0U64 { return self.i64ty }
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: ref) - 1U64]
-        if contract.underlying != 0U64 { return self.llvmTypeOfRef(c: inout c, ref: contract.underlying) }
-        if contract.isOpaquePointer { return self.ptrty }
+    inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        if ref == 0U64 { return <Result.Ok value=self.i64ty /> }
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
+        if contract.underlying != 0U64 { return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: contract.underlying)) /> }
+        if contract.isOpaquePointer { return <Result.Ok value=self.ptrty /> }
         if contract.structLayout != 0U64 {
-            val slot = self.requireStructLayoutSlot(c: inout c, typeRef: contract.typeRef)
-            if slot < self.genStructTys.count() { return self.genStructTys[slot] }
-            c.errorAt(offset: 0U64, msg: "internal error: finalized struct type has no registered LLVM layout")
-            return self.i64ty
+            val slot = (try self.requireStructLayoutSlot(c: inout c, typeRef: contract.typeRef))
+            if slot < self.genStructTys.count() { return <Result.Ok value=self.genStructTys[slot] /> }
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized struct type has no registered LLVM layout") />
         }
         match contract.ownershipClass {
-            ArcClass.AnyBox => { return self.anyTy }
-            ArcClass.ClosureVal => { return self.closureTy }
+            ArcClass.AnyBox => { return <Result.Ok value=self.anyTy /> }
+            ArcClass.ClosureVal => { return <Result.Ok value=self.closureTy /> }
             ArcClass.EnumVal(eidx: _) => {
-                val slot = self.requireEnumLayoutSlot(c: inout c, typeRef: contract.typeRef)
-                if slot < self.genEnumTys.count() { return self.genEnumTys[slot] }
-                c.errorAt(offset: 0U64, msg: "internal error: finalized enum type has no registered LLVM layout")
-                return self.i64ty
+                val slot = (try self.requireEnumLayoutSlot(c: inout c, typeRef: contract.typeRef))
+                if slot < self.genEnumTys.count() { return <Result.Ok value=self.genEnumTys[slot] /> }
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized enum type has no registered LLVM layout") />
             }
             _ => {}
         }
         val type = c.arena.typeAt(index: contract.typeRef)
-        return self.llvmPrimitiveTy(c: inout c, tyStart: type.nameStart, tyLen: type.nameLen)
+        return <Result.Ok value=(try self.llvmPrimitiveTy(c: inout c, tyStart: type.nameStart, tyLen: type.nameLen)) />
     }
 
     // Sign/zero-extend an integer value to i64 for the runtime boundary (print / exit
@@ -73,16 +71,17 @@ pub impl LlvmCtx {
 
     // Emit a runtime NaN-compare guard (spec/02): panics if either double operand is NaN
     // before an ordered comparison runs (so NaN compares are loud, not silently false).
-    inout fn emitF64NanCheck(c: inout Comp, l: LLVMValueRef, r: LLVMValueRef) {
+    inout fn emitF64NanCheck(c: inout Comp, l: LLVMValueRef, r: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val tys: Array[LLVMTypeRef] = []
         tys.append(self.f64ty)
         tys.append(self.f64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(tys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(l)
         av.append(r)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        return <Result.Ok value=() />
     }
 
 }

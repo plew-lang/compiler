@@ -216,13 +216,6 @@ pub impl Comp {
         return <CompileDiagnostic location=<DiagnosticLocation.Line line=self.lineOf(offset: offset) /> message=msg />
     }
 
-    // Terminal adapter retained until each caller propagates its failure.
-    inout fn errorAt(offset: U64, msg: String) {
-        val diagnostic = self.diagnosticAt(offset: offset, msg: msg)
-        emitDiagnostic(diagnostic: diagnostic)
-        exit(code: 1)
-    }
-
     // Diagnostic anchor for a function declaration: defOffset is the declaration's
     // SOURCE offset (a real file:line); nameStart is interned (maps to no file) and
     // remains only as the fallback for synthesized Funcs that carry no defOffset.

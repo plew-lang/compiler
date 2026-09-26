@@ -14,7 +14,7 @@ pub impl LlvmCtx {
     // non-main async fn) its entry symbol in the fnIdx table (signature: params ->
     // PlewPromise*, so a call site `doubler(x: 21)` resolves to a promise-returning
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
-    inout fn declareAsyncFns(c: inout Comp) {
+    inout fn declareAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val bodyIndex = 0U64
         while bodyIndex < c.monoWork.bodyInstances.count() {
             val bodyId = c.monoWork.bodyInstances[bodyIndex]
@@ -26,15 +26,15 @@ pub impl LlvmCtx {
             if isAsyncFn(c: inout c, fi: fi) {
                 val signature = c.arena.bodySignature(bodyId: bodyId)
                 if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() {
-                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry requires a finalized parameter contract")
+                    return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry requires a finalized parameter contract") />
                 }
                 if c.arena.functionAt(index: fi).typeParams.count() > 0U64 {
-                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: generic `async fn` is not yet supported")
+                    return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: generic `async fn` is not yet supported") />
                 }
                 if c.arena.functionAt(index: fi).hasRecv {
-                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
+                    return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)") />
                 }
-                val frameTy: LLVMTypeRef = self.buildMidAsyncFrameTy(c: inout c, bodyId: bodyId)
+                val frameTy: LLVMTypeRef = (try self.buildMidAsyncFrameTy(c: inout c, bodyId: bodyId))
                 // resume fn: void __af<fi>_resume(void*).
                 mut val rptys: Array[LLVMTypeRef] = []
                 rptys.append(self.ptrty)
@@ -54,16 +54,16 @@ pub impl LlvmCtx {
                     mut val pi: U64 = 0
                     while pi < signature.parameterTypes.count() {
                         match signature.parameterPassings[pi] {
-                            CallArgumentPassing.Inout => { c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry does not support inout parameters") }
+                            CallArgumentPassing.Inout => { return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry does not support inout parameters") /> }
                             CallArgumentPassing.Borrow => {
-                                val contract = c.requireFinalDestruction(typeRef: signature.parameterTypes[pi])
+                                val contract = (try c.checkedFinalDestruction(typeRef: signature.parameterTypes[pi]))
                                 if contract != 0U64 && c.arena.finalDestructions[contract - 1U64].isUnique {
-                                    c.errorAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry cannot copy a borrowed unique parameter")
+                                    return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry cannot copy a borrowed unique parameter") />
                                 }
                             }
                             CallArgumentPassing.Move => {}
                         }
-                        ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[pi]))
+                        ptys.append((try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[pi])))
                         pi += 1
                     }
                     val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), ptys.count(), 0I32)
@@ -78,6 +78,7 @@ pub impl LlvmCtx {
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // The async-fn registry slot for `fi` (frame type / resume fn), or count if absent.
@@ -105,47 +106,49 @@ pub impl LlvmCtx {
         return self.asyncEntryIdx.count()
     }
 
-    inout fn asyncFreeFrame(c: inout Comp, frame: LLVMValueRef) {
+    inout fn asyncFreeFrame(c: inout Comp, frame: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val fargs: Array[LLVMValueRef] = []
         fargs.append(frame)
         mut val fty: Array[LLVMTypeRef] = []
         fty.append(self.ptrty)
         val freeTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(fty), 1U64, 0I32)
-        val freeFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_free", fnTy: freeTy)
+        val freeFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_frame_free", fnTy: freeTy))
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, freeTy, freeFn, arrayCPtr(fargs), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
-    inout fn asyncPromiseNew(c: inout Comp) -> LLVMValueRef {
+    inout fn asyncPromiseNew(c: inout Comp) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val newTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(noty), 0U64, 0I32)
-        val newFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_new", fnTy: newTy)
-        return LLVMBuildCall2(self.b, newTy, newFn, arrayCPtr(noargs), 0U64, anon())
+        val newFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_promise_new", fnTy: newTy))
+        return <Result.Ok value=LLVMBuildCall2(self.b, newTy, newFn, arrayCPtr(noargs), 0U64, anon()) />
     }
 
-    inout fn asyncFrameAlloc(c: inout Comp, frameTy: LLVMTypeRef) -> LLVMValueRef {
+    inout fn asyncFrameAlloc(c: inout Comp, frameTy: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val aargs: Array[LLVMValueRef] = []
         aargs.append(LLVMSizeOf(frameTy))
         mut val aty: Array[LLVMTypeRef] = []
         aty.append(self.i64ty)
         val allocTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(aty), 1U64, 0I32)
-        val allocFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_frame_alloc", fnTy: allocTy)
-        return LLVMBuildCall2(self.b, allocTy, allocFn, arrayCPtr(aargs), 1U64, anon())
+        val allocFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_frame_alloc", fnTy: allocTy))
+        return <Result.Ok value=LLVMBuildCall2(self.b, allocTy, allocFn, arrayCPtr(aargs), 1U64, anon()) />
     }
 
-    inout fn asyncLoopRun(c: inout Comp) {
+    inout fn asyncLoopRun(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val noargs: Array[LLVMValueRef] = []
         mut val noty: Array[LLVMTypeRef] = []
         val loopTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noty), 0U64, 0I32)
-        val loopFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_loop_run", fnTy: loopTy)
+        val loopFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_loop_run", fnTy: loopTy))
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, loopTy, loopFn, arrayCPtr(noargs), 0U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Emit one async fn's entry + resume bodies.
-    inout fn genLlvmAsyncFunc(c: inout Comp, fi: U64) {
+    inout fn genLlvmAsyncFunc(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
         val slot: U64 = self.asyncSlotOf(fi: fi)
         if slot >= self.asyncFnIdx.count() {
-            return
+            return <Result.Ok value=() />
         }
         val f: Func = c.arena.functionAt(index: fi)
         val frameTy: LLVMTypeRef = self.asyncFrameTy[slot]
@@ -169,9 +172,9 @@ pub impl LlvmCtx {
         // an `async fn main`: initialize module-level variables (spec/15) before the
         // first resume runs (so an init referencing a global, or main reading one, sees it).
         if isMain {
-            self.callInitGlobals(c: inout c)
+            try self.callInitGlobals(c: inout c)
         }
-        val frame: LLVMValueRef = self.asyncFrameAlloc(c: inout c, frameTy: frameTy)
+        val frame: LLVMValueRef = (try self.asyncFrameAlloc(c: inout c, frameTy: frameTy))
         // __f->__state = 0
         llvmStore(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(self.b, frameTy, frame, 0U64, anon()))
         // Frame storage owns the entry arguments. Copy borrowed ABI values here;
@@ -182,18 +185,18 @@ pub impl LlvmCtx {
         val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
         mut val pi: U64 = 0
         while pi < signature.parameterTypes.count() {
-            val pv: LLVMValueRef = self.valueParameter(function: entryFn, index: pi)
+            val pv: LLVMValueRef = (try self.valueParameter(function: entryFn, index: pi))
             llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, self.asyncLocalSlots[slot][pi], anon()))
             match signature.parameterPassings[pi] {
-                CallArgumentPassing.Borrow => { self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
+                CallArgumentPassing.Borrow => { try self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
                 CallArgumentPassing.Move => {}
-                CallArgumentPassing.Inout => { c.errorAt(offset: c.fnAnchor(f: f), msg: "async entry does not support inout parameters") }
+                CallArgumentPassing.Inout => { return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: f), msg: "async entry does not support inout parameters") /> }
             }
             pi += 1
         }
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a
         // synchronously-completing resume frees the frame, so __f->__self would dangle).
-        val promiseSelf: LLVMValueRef = self.asyncPromiseNew(c: inout c)
+        val promiseSelf: LLVMValueRef = (try self.asyncPromiseNew(c: inout c))
         llvmStore(self.b, promiseSelf, LLVMBuildStructGEP2(self.b, frameTy, frame, 1U64, anon()))
         if !(isMain) {
             // the to-be-returned Promise VALUE is a second owner, retained BEFORE the
@@ -201,29 +204,31 @@ pub impl LlvmCtx {
             // in midAsyncComplete, and without the caller's count already held the
             // cell would be freed before this thunk returns it (UAF). Balanced by the
             // caller binding's scope-exit drop or the awaited-temp drop.
-            self.rawbufRetain(c: inout c, cell: promiseSelf)
+            try self.rawbufRetain(c: inout c, cell: promiseSelf)
         }
         mut val cargs: Array[LLVMValueRef] = []
         cargs.append(frame)
         mut val cty: Array[LLVMTypeRef] = []
         cty.append(self.ptrty)
         val resumeFnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(cty), 1U64, 0I32)
-        val ignore: LLVMValueRef = self.callValueFunction(signature: resumeFnTy, function: resumeFn, arguments: cargs)
+        val ignore: LLVMValueRef = (try self.callValueFunction(signature: resumeFnTy, function: resumeFn, arguments: cargs))
         if isMain {
-            self.asyncLoopRun(c: inout c)
+            try self.asyncLoopRun(c: inout c)
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
         } else {
             LLVMBuildRet(self.b, promiseSelf)
         }
-        self.genLlvmMidAsyncResume(c: inout c, slot: slot)
+        try self.genLlvmMidAsyncResume(c: inout c, slot: slot)
+        return <Result.Ok value=() />
     }
 
     // Declaration fixes the reachable set and prepares each Mid body once.
-    inout fn emitAsyncFns(c: inout Comp) {
+    inout fn emitAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot = 0U64
         while slot < self.asyncFnIdx.count() {
-            self.genLlvmAsyncFunc(c: inout c, fi: self.asyncFnIdx[slot])
+            try self.genLlvmAsyncFunc(c: inout c, fi: self.asyncFnIdx[slot])
             slot += 1U64
         }
+        return <Result.Ok value=() />
     }
 }

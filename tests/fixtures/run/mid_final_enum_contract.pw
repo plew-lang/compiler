@@ -34,7 +34,7 @@ fn main() {
     compiler.monoWork.boxedFields = []
     val contract = compiler.arena.finalDestructions[identity - 1U64]
     assert(contract.ready)
-    match compiler.finalOwnershipClass(typeRef: type) {
+    match compiler.finalOwnershipClass(typeRef: type).unwrap() {
         ArcClass.EnumVal(eidx: val index) => { assert(index == 0U64) }
         _ => { assert(false) }
     }

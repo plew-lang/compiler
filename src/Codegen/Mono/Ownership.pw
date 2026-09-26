@@ -92,15 +92,15 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn finalOwnershipClass(typeRef: U64) -> ArcClass {
-        if typeRef == 0U64 { return <ArcClass.Scalar /> }
-        return self.arena.finalDestructions[self.requireFinalDestruction(typeRef: typeRef) - 1U64].ownershipClass
+    inout fn finalOwnershipClass(typeRef: U64) -> Result[ArcClass, CompileDiagnostic] {
+        if typeRef == 0U64 { return <Result.Ok value=<ArcClass.Scalar /> /> }
+        return <Result.Ok value=self.arena.finalDestructions[(try self.checkedFinalDestruction(typeRef: typeRef)) - 1U64].ownershipClass />
     }
 
-    inout fn finalNeedsRelease(typeRef: U64) -> Bool {
+    inout fn finalNeedsRelease(typeRef: U64) -> Result[Bool, CompileDiagnostic] {
         // Zero is the closed Mid Unit term, with no owned payload.
-        if typeRef == 0U64 { return false }
-        return self.arena.finalDestructions[self.requireFinalDestruction(typeRef: typeRef) - 1U64].needsRelease
+        if typeRef == 0U64 { return <Result.Ok value=false /> }
+        return <Result.Ok value=self.arena.finalDestructions[(try self.checkedFinalDestruction(typeRef: typeRef)) - 1U64].needsRelease />
     }
 
     inout fn checkedFinalDestruction(typeRef: U64) -> Result[U64, CompileDiagnostic] {
@@ -111,25 +111,7 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: ownership action has no finalized classification") />
     }
 
-    // Transitional adapter for LLVM consumers not yet returning diagnostics.
-    // Mid analysis uses checkedFinalDestruction and never terminates its host.
-    inout fn requireFinalDestruction(typeRef: U64) -> U64 {
-        match self.checkedFinalDestruction(typeRef: typeRef) {
-            Result.Ok(value: val identity) => { return identity }
-            Result.Err(error: _) => {}
-        }
-        eprint(text: "[ownership-contract] missing typeRef=")
-        eprintU64(n: typeRef)
-        eprint(text: " type=")
-        self.traceMonoTypeHead(ref: typeRef)
-        eprint(text: " function=")
-        eprintU64(n: self.cur.checkFn)
-        eprint(text: "\n")
-        mut val offset = 0U64
-        if typeRef < self.arena.typeCount() { offset = self.arena.typeAt(index: typeRef).nameStart }
-        self.errorAt(offset: offset, msg: "internal error: ownership action has no finalized classification")
-        return 0U64
-    }
+
 
     // Collect shape first; no unfinished recursive node is interpreted as
     // release-free. Propagate positive effects over reverse dependency edges.

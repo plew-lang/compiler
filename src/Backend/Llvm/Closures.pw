@@ -8,17 +8,17 @@ pub impl LlvmCtx {
 
     // The captured variable's own VALUE type (ignoring boxing) — the type stored in
     // the shared cell for a boxed capture, or in the env slot for a by-value one.
-    inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
-        return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
+    inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.llvmTypeOfRef(c: inout c, ref: cap.ty)) />
     }
 
     // The LLVM type of a capture slot in the env struct: a `mut val` (boxed) capture is
     // a pointer to the shared cell; otherwise the captured value's own type.
-    inout fn captureSlotTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
+    inout fn captureSlotTy(c: inout Comp, cap: CaptureEntry) -> Result[LLVMTypeRef, CompileDiagnostic] {
         if cap.boxed {
-            return self.ptrty
+            return <Result.Ok value=self.ptrty />
         }
-        return self.captureValueTy(c: inout c, cap: cap)
+        return <Result.Ok value=(try self.captureValueTy(c: inout c, cap: cap)) />
     }
 }
 
@@ -27,28 +27,27 @@ pub impl LlvmCtx {
     // The env struct type for closure `cloId`: slot 0 = the per-closure drop thunk
     // pointer (release calls it at env rc 0 to destroy the captures), slots 1.. =
     // the captures in order. Caller guards on caps.count() > 0 before using it.
-    inout fn closureEnvTy(c: inout Comp, caps: Array[CaptureEntry]) -> LLVMTypeRef {
+    inout fn closureEnvTy(c: inout Comp, caps: Array[CaptureEntry]) -> Result[LLVMTypeRef, CompileDiagnostic] {
         mut val elems: Array[LLVMTypeRef] = []
         elems.append(self.ptrty)
         mut val i: U64 = 0
         while i < caps.count() {
-            elems.append(self.captureSlotTy(c: inout c, cap: caps[i]))
+            elems.append((try self.captureSlotTy(c: inout c, cap: caps[i])))
             i += 1
         }
-        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
+        return <Result.Ok value=LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32) />
     }
 
     // Register only. Emission must not overwrite the enclosing body's locals.
-    inout fn declareClosureEnvironmentDrop(c: inout Comp, closureSlot: U64) -> LLVMValueRef {
+    inout fn declareClosureEnvironmentDrop(c: inout Comp, closureSlot: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val closure = self.closures[closureSlot]
         val bodyId = c.arena.closureSignature(bodyId: closure.bodyId).environmentDropBodyId
         if bodyId == 0U64 {
-            c.errorAt(offset: c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId), msg: "internal error: closure environment has no finalized drop body")
-            return LLVMConstNull(self.ptrty)
+            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId), msg: "internal error: closure environment has no finalized drop body") />
         }
         mut val index = 0U64
         while index < self.closureEnvironmentDrops.count() {
-            if self.closureEnvironmentDrops[index].bodyId == bodyId { return self.closureEnvironmentDrops[index].function }
+            if self.closureEnvironmentDrops[index].bodyId == bodyId { return <Result.Ok value=self.closureEnvironmentDrops[index].function /> }
             index += 1U64
         }
         val parameters: Array[LLVMTypeRef] = [self.ptrty]
@@ -59,10 +58,10 @@ pub impl LlvmCtx {
         name.append(0U8)
         val function = self.declareValueFunction(name: arrayCPtr(name), signature: type)
         self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
-        return function
+        return <Result.Ok value=function />
     }
 
-    inout fn emitClosureEnvironmentDrops(c: inout Comp) {
+    inout fn emitClosureEnvironmentDrops(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.closureEnvironmentDropsEmitted < self.closureEnvironmentDrops.count() {
             val queued = self.closureEnvironmentDrops[self.closureEnvironmentDropsEmitted]
             val closure = self.closures[queued.closureSlot]
@@ -72,29 +71,30 @@ pub impl LlvmCtx {
             self.curIsMain = false
             self.curRetVoid = true
             self.curRetTy = self.voidty
-            val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: queued.bodyId, fnIdx: body.fnIdx, parameterCount: closure.captures.count())
+            val prepared = (try self.prepareSyntheticMidBody(c: inout c, bodyId: queued.bodyId, fnIdx: body.fnIdx, parameterCount: closure.captures.count()))
             match prepared {
-                MidLlvmPrepared.None => { c.errorAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") }
+                MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") /> }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
                     self.beginFnBody(fv: queued.function)
-                    val environment = self.valueParameter(function: queued.function, index: 0U64)
-                    val environmentType = self.closureEnvTy(c: inout c, caps: closure.captures)
+                    val environment = (try self.valueParameter(function: queued.function, index: 0U64))
+                    val environmentType = (try self.closureEnvTy(c: inout c, caps: closure.captures))
                     mut val parameters: Array[LLVMValueRef] = []
                     mut val index = 0U64
                     while index < closure.captures.count() {
                         val capture = closure.captures[index]
                         val address = LLVMBuildStructGEP2(self.b, environmentType, environment, index + 1U64, anon())
-                        parameters.append(llvmLoad(self.b, self.captureSlotTy(c: inout c, cap: capture), address, anon()))
+                        parameters.append(llvmLoad(self.b, (try self.captureSlotTy(c: inout c, cap: capture)), address, anon()))
                         index += 1U64
                     }
-                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters) {
-                        c.errorAt(offset: offset, msg: "LLVM backend: prepared closure environment Mid body failed to emit")
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters)) {
+                        return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: prepared closure environment Mid body failed to emit") />
                     }
                 }
             }
             self.closureEnvironmentDropsEmitted += 1U64
             tracePhaseProgress(c: inout c, label: "backend:closure-environment-drop", count: self.closureEnvironmentDropsEmitted, stride: 16U64)
         }
+        return <Result.Ok value=() />
     }
 
     // Release one owner of a closure value's env: decrement the env cell's rc, and at
@@ -102,9 +102,9 @@ pub impl LlvmCtx {
     // Null-safe twice over: a non-capturing closure's env is null (release no-op), and
     // a null thunk slot (a boxed capture that is not a cell home — the async-frame
     // corner) skips the capture destruction but still frees the env.
-    inout fn emitClosureRelease(c: inout Comp, fat: LLVMValueRef) {
+    inout fn emitClosureRelease(c: inout Comp, fat: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         val env: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: env)
+        val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: env))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), env, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
@@ -123,12 +123,13 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(env)
-        self.callValueFunction(signature: dty, function: dropFn, arguments: av)
+        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av))
         LLVMBuildBr(self.b, tailBB)
         LLVMPositionBuilderAtEnd(self.b, tailBB)
-        self.rawbufFree(c: inout c, cell: env)
+        try self.rawbufFree(c: inout c, cell: env)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+        return <Result.Ok value=() />
     }
 
     // Missing keys are never materialized after frontend finalization.
@@ -141,19 +142,17 @@ pub impl LlvmCtx {
         return self.closures.count()
     }
 
-    inout fn declareClosure(c: inout Comp, semanticIndex: U64, environment: InstanceEnvironment) {
+    inout fn declareClosure(c: inout Comp, semanticIndex: U64, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
         val closure: SemanticClosure = c.decls.semanticClosures[semanticIndex]
         val bodyId: U64 = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment)
         if bodyId == 0U64 {
-            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized BodyInstance")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized BodyInstance") />
         }
-        if self.closureSlot(bodyId: bodyId) < self.closures.count() { return }
+        if self.closureSlot(bodyId: bodyId) < self.closures.count() { return <Result.Ok value=() /> }
         val frozen = c.arena.closureSignature(bodyId: bodyId)
         val functionType: U64 = frozen.functionTypeTerm
         if functionType == 0U64 || functionType >= c.arena.typeCount() || frozen.captures.count() != closure.captures.count() {
-            c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature") />
         }
         mut val captures: Array[CaptureEntry] = []
         mut val captureI: U64 = 0U64
@@ -161,8 +160,7 @@ pub impl LlvmCtx {
             val capture = frozen.captures[captureI]
             val term: U64 = capture.typeTerm
             if term == 0U64 || term >= c.arena.typeCount() {
-                c.errorAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure capture is not grounded")
-                return
+                return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: closure capture is not grounded") />
             }
             val type: TypeRef = c.arena.typeAt(index: term)
             val boxed: Bool = match capture.mode {
@@ -172,13 +170,14 @@ pub impl LlvmCtx {
             captures.append(<CaptureEntry closureId=closure.exprId nameStart=capture.bindingTarget nameLen=0U64 tyStart=type.nameStart tyLen=type.nameLen isArray=false ty=term boxed=boxed />)
             captureI += 1U64
         }
-        val functionTypeLlvm: LLVMTypeRef = self.closureLlvmFnTy(c: inout c, fnRef: functionType)
+        val functionTypeLlvm: LLVMTypeRef = (try self.closureLlvmFnTy(c: inout c, fnRef: functionType))
         mut val name: Array[U8] = []
         appendBytes(into: inout name, from: "__closure".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
         val function: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(name), signature: functionTypeLlvm)
         self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
+        return <Result.Ok value=() />
     }
 
     // Only frontend-reachable lexical instances make their frozen closures
@@ -189,13 +188,13 @@ pub impl LlvmCtx {
         while closureI < c.decls.semanticClosures.count() {
             val closure: SemanticClosure = c.decls.semanticClosures[closureI]
             if closure.ownerFnIdx == 18446744073709551615U64 {
-                self.declareClosure(c: inout c, semanticIndex: closureI, environment: <InstanceEnvironment />)
+                try self.declareClosure(c: inout c, semanticIndex: closureI, environment: <InstanceEnvironment />)
             } else {
                 mut val bodyI: U64 = 0U64
                 while bodyI < c.monoWork.bodyInstances.count() {
                     val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyInstances[bodyI] - 1U64)
                     if c.arena.bodyIsCallable(bodyId: c.monoWork.bodyInstances[bodyI]) && (try c.semanticBodyOwner(fnIdx: body.fnIdx)) == closure.ownerFnIdx {
-                        self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
+                        try self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
                     }
                     bodyI += 1U64
                 }
@@ -205,37 +204,37 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
-    inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> MidLlvmPrepared {
+    inout fn prepareClosureMidBody(c: inout Comp, closure: LlvmClosure) -> Result[MidLlvmPrepared, CompileDiagnostic] {
         val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
-        return self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
+        return <Result.Ok value=(try self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())) />
     }
 
     // Captures are borrowed from the environment for this activation. Mutable
     // captures bind the shared cell, not a new value copy or a new ARC owner.
-    inout fn bindMidClosureCaptures(c: inout Comp, body: MidBodyNode, bodyId: U64) -> Bool {
+    inout fn bindMidClosureCaptures(c: inout Comp, body: MidBodyNode, bodyId: U64) -> Result[Bool, CompileDiagnostic] {
         val slot: U64 = self.closureSlot(bodyId: bodyId)
-        if slot >= self.closures.count() { return false }
+        if slot >= self.closures.count() { return <Result.Ok value=false /> }
         val closure: LlvmClosure = self.closures[slot]
         val parameterCount: U64 = c.decls.semanticClosures[closure.semanticIndex].parameters.count()
-        if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return false }
-        if closure.captures.count() == 0U64 { return true }
-        val environmentType: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: closure.captures)
-        val environment: LLVMValueRef = self.valueParameter(function: self.curFn, index: 0U64)
+        if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return <Result.Ok value=false /> }
+        if closure.captures.count() == 0U64 { return <Result.Ok value=true /> }
+        val environmentType: LLVMTypeRef = (try self.closureEnvTy(c: inout c, caps: closure.captures))
+        val environment: LLVMValueRef = (try self.valueParameter(function: self.curFn, index: 0U64))
         mut val captureI: U64 = 0U64
         while captureI < closure.captures.count() {
             val capture: CaptureEntry = closure.captures[captureI]
             val local: U64 = parameterCount + captureI
             val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
-            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || declaration.isCaptureCell != capture.boxed || declaration.isInout != capture.boxed || declaration.isBorrowed == capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return false }
-            val type: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: capture)
+            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || declaration.isCaptureCell != capture.boxed || declaration.isInout != capture.boxed || declaration.isBorrowed == capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return <Result.Ok value=false /> }
+            val type: LLVMTypeRef = (try self.captureSlotTy(c: inout c, cap: capture))
             val value: LLVMValueRef = llvmLoad(self.b, type, LLVMBuildStructGEP2(self.b, environmentType, environment, captureI + 1U64, anon()), anon())
             llvmStore(self.b, value, self.locPtr[local])
             captureI += 1U64
         }
-        return true
+        return <Result.Ok value=true />
     }
 
-    inout fn emitClosures(c: inout Comp) {
+    inout fn emitClosures(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot: U64 = 0U64
         while slot < self.closures.count() {
             val closure: LlvmClosure = self.closures[slot]
@@ -245,8 +244,8 @@ pub impl LlvmCtx {
             self.curIsMain = false
             self.curRetVoid = !fact.hasReturn
             self.curRetTy = self.voidty
-            if fact.hasReturn { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: signature.args[0U64]) }
-            val prepared: MidLlvmPrepared = self.prepareClosureMidBody(c: inout c, closure: closure)
+            if fact.hasReturn { self.curRetTy = (try self.llvmTypeOfRef(c: inout c, ref: signature.args[0U64])) }
+            val prepared: MidLlvmPrepared = (try self.prepareClosureMidBody(c: inout c, closure: closure))
             match prepared {
                 MidLlvmPrepared.None => {
                     if c.emitMidCoverage || c.traceCodegen {
@@ -258,16 +257,17 @@ pub impl LlvmCtx {
                             diagnostic += 1U64
                         }
                     }
-                    c.errorAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: closure body could not be prepared as Mid IR")
+                    return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: closure body could not be prepared as Mid IR") />
                 }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
                     self.beginFnBody(fv: closure.function)
-                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterStart: 1U64, closureBodyId: closure.bodyId) {
-                        c.errorAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: prepared closure Mid body failed to emit")
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterStart: 1U64, closureBodyId: closure.bodyId)) {
+                        return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: prepared closure Mid body failed to emit") />
                     }
                 }
             }
             slot += 1U64
         }
+        return <Result.Ok value=() />
     }
 }

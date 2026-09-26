@@ -11,16 +11,16 @@ pub impl LlvmCtx {
     // its initializer body runs.  This is the same separation as a local
     // alloca from the value later stored into it: backend storage metadata is
     // not an observation made by legacy expression emission.
-    inout fn declareGlobalStorage(c: inout Comp, bodyId: U64) -> Bool {
-        if bodyId == 0U64 { return false }
+    inout fn declareGlobalStorage(c: inout Comp, bodyId: U64) -> Result[Bool, CompileDiagnostic] {
+        if bodyId == 0U64 { return <Result.Ok value=false /> }
         mut val gi: U64 = 0U64
         while gi < c.arena.globals.count() {
             val global = c.arena.globals[gi]
             val storage = c.finalStorageIndex(bodyId: bodyId, stmtId: global.letStmt)
-            if storage >= c.arena.finalStorages.count() { return false }
+            if storage >= c.arena.finalStorages.count() { return <Result.Ok value=false /> }
             val term = c.arena.finalStorages[storage].targetTypeRef
-            if term == 0U64 || term >= c.arena.typeCount() { return false }
-            val lty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: term)
+            if term == 0U64 || term >= c.arena.typeCount() { return <Result.Ok value=false /> }
+            val lty: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: term))
             val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
             LLVMSetInitializer(gv, LLVMConstNull(lty))
             self.gvalRef.append(gv)
@@ -28,7 +28,7 @@ pub impl LlvmCtx {
             self.gvalTref.append(term)
             gi += 1U64
         }
-        return self.gvalRef.count() == c.arena.globals.count()
+        return <Result.Ok value=self.gvalRef.count() == c.arena.globals.count() />
     }
 
     // Emit `void @plew_init_globals()` (spec/15): one body that runs each module-level
@@ -36,13 +36,13 @@ pub impl LlvmCtx {
     // fully-evaluated temporary into predeclared storage through the synthetic
     // canonical Mid body. Global storage is process-lifetime, so this is an
     // initialization transfer, not an overwrite or a scope-exit drop.
-    inout fn genLlvmInitGlobals(c: inout Comp) {
+    inout fn genLlvmInitGlobals(c: inout Comp) -> Result[(), CompileDiagnostic] {
         if c.arena.globals.count() == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val fv: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: fnTy)
+        val fv: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: fnTy))
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = true
@@ -64,30 +64,30 @@ pub impl LlvmCtx {
         self.locCellHome = []
         val globalOwner: U64 = 18446744073709551615U64
         val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
-        val storageReady: Bool = self.declareGlobalStorage(c: inout c, bodyId: bodyId)
+        val storageReady: Bool = (try self.declareGlobalStorage(c: inout c, bodyId: bodyId))
         mut val midReady: Bool = false
         if !storageReady {
             self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: <MidLlvmPreflight.Terminator />)
         } else if bodyId == 0U64 {
             self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: globalOwner)
         } else {
-            val prepared = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64)
+            val prepared = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64))
             match prepared {
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = self.genLlvmPreparedMidBody(c: inout c, prepared: prepared) }
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = (try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) }
                 _ => {}
             }
         }
         if !midReady {
-            c.errorAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering") />
         }
+        return <Result.Ok value=() />
     }
 }
 
 pub impl LlvmCtx {
 
     // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
-    inout fn genLlvmMain(c: inout Comp, fi: U64) {
+    inout fn genLlvmMain(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
         // plew_set_args before the body runs.
@@ -110,7 +110,7 @@ pub impl LlvmCtx {
         // Mid rather than fabricate a local root if that initialization ever
         // failed to produce the complete declaration-target map.
         if self.gvalRef.count() == c.arena.globals.count() {
-            preparedMid = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64)
+            preparedMid = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64))
             match preparedMid {
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { midReady = true }
                 _ => {}
@@ -120,7 +120,7 @@ pub impl LlvmCtx {
         }
         if !midReady {
             val mainDef: Func = c.arena.functionAt(index: fi)
-            c.errorAt(offset: mainDef.nameStart, msg: "internal error: main requires verified Mid lowering")
+            return <Result.Err error=c.diagnosticAt(offset: mainDef.nameStart, msg: "internal error: main requires verified Mid lowering") />
         }
         self.beginFnBody(fv: mainFn)
         // plew_set_args(argc, argv).
@@ -128,33 +128,35 @@ pub impl LlvmCtx {
         saTys.append(self.i32ty)
         saTys.append(self.ptrty)
         val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
-        val saFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: saTy)
+        val saFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: saTy))
         mut val saArgs: Array[LLVMValueRef] = []
         saArgs.append(LLVMGetParam(mainFn, 0U64))
         saArgs.append(LLVMGetParam(mainFn, 1U64))
         LLVMBuildCall2(self.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
         // initialize module-level variables (spec/15) before the body runs.
-        self.callInitGlobals(c: inout c)
+        try self.callInitGlobals(c: inout c)
         if midReady {
             // canonical preflight completed before beginFnBody, so this
             // call cannot fail into an AST fallback after partially emitting a
             // function.  A failure here is therefore a backend invariant bug.
-            if !(self.genLlvmPreparedMidBody(c: inout c, prepared: preparedMid)) {
-                c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid body failed LLVM lowering")
+            if !((try self.genLlvmPreparedMidBody(c: inout c, prepared: preparedMid))) {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: preflighted Mid body failed LLVM lowering") />
             }
-            return
+            return <Result.Ok value=() />
         }
+        return <Result.Ok value=() />
     }
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
-    inout fn callInitGlobals(c: inout Comp) {
+    inout fn callInitGlobals(c: inout Comp) -> Result[(), CompileDiagnostic] {
         if c.arena.globals.count() == 0U64 {
-            return
+            return <Result.Ok value=() />
         }
         mut val noParams: Array[LLVMTypeRef] = []
         val igTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val igFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: igTy)
+        val igFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: igTy))
         mut val noArgs: Array[LLVMValueRef] = []
         LLVMBuildCall2(self.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
+        return <Result.Ok value=() />
     }
 }

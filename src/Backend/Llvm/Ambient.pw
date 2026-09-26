@@ -10,22 +10,23 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn ambientRuntimeCall(c: inout Comp, name: String, values: Array[LLVMValueRef]) {
+    inout fn ambientRuntimeCall(c: inout Comp, name: String, values: Array[LLVMValueRef]) -> Result[(), CompileDiagnostic] {
         mut val types: Array[LLVMTypeRef] = []
         mut val index = 0U64
         while index < values.count() { types.append(LLVMTypeOf(values[index]))
             index += 1U64 }
         val type = LLVMFunctionType(self.voidty, arrayCPtr(types), types.count(), 0I32)
-        val function = self.getOrDeclare(c: inout c, name: name, fnTy: type)
+        val function = (try self.getOrDeclare(c: inout c, name: name, fnTy: type))
         LLVMBuildCall2(self.b, type, function, arrayCPtr(values), values.count(), anon())
+        return <Result.Ok value=() />
     }
 
-    inout fn ambientStorageValues(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, storage: MidAmbientStorage, writes: Bool) -> Array[LLVMValueRef] {
+    inout fn ambientStorageValues(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, storage: MidAmbientStorage, writes: Bool) -> Result[Array[LLVMValueRef], CompileDiagnostic] {
         val root = if storage.kind == 2U64 {
             give LLVMConstIntToPtr(LLVMConstInt(self.i64ty, place.globalTarget, 0I32), self.ptrty)
         } else {
             val prefix = <MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=place.projections.start len=storage.rootLength /> typeTerm=place.typeTerm />
-            give self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: prefix)
+            give (try self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: prefix))
         }
         mut val fields: Array[LLVMValueRef] = []
         mut val index = 0U64
@@ -42,54 +43,55 @@ pub impl LlvmCtx {
             LLVMSetGlobalConstant(path, 1I32)
             LLVMSetLinkage(path, 9U32)
         }
-        return [LLVMConstInt(self.i64ty, storage.kind, 0I32), root, path, LLVMConstInt(self.i64ty, fields.count(), 0I32), LLVMConstInt(self.i64ty, if writes { give 1U64 } else { give 0U64 }, 0I32)]
+        return <Result.Ok value=[LLVMConstInt(self.i64ty, storage.kind, 0I32), root, path, LLVMConstInt(self.i64ty, fields.count(), 0I32), LLVMConstInt(self.i64ty, if writes { give 1U64 } else { give 0U64 }, 0I32)] />
     }
 
-    inout fn midAmbientCheck(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, writes: Bool) {
-        if !self.ambientProgram.enabled { return }
+    inout fn midAmbientCheck(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, writes: Bool) -> Result[(), CompileDiagnostic] {
+        if !self.ambientProgram.enabled { return <Result.Ok value=() /> }
         val path = self.ambientBody.path(c: c, body: body, place: place)
         mut val index = 0U64
         while index < path.count() {
-            mut val values = self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[index], writes: writes && index + 1U64 == path.count())
+            mut val values = (try self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[index], writes: writes && index + 1U64 == path.count()))
             values.append(self.ambientPermission())
-            self.ambientRuntimeCall(c: inout c, name: "plew_access_check", values: values)
+            try self.ambientRuntimeCall(c: inout c, name: "plew_access_check", values: values)
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn midAmbientBeginOperand(c: inout Comp, body: MidBodyNode, operandId: U64, receiver: Bool, group: LLVMValueRef, allocation: Optional[LLVMValueRef], allocateOnly: Bool) -> Optional[LLVMValueRef] {
-        if operandId == 0U64 { return <Optional.None /> }
+    inout fn midAmbientBeginOperand(c: inout Comp, body: MidBodyNode, operandId: U64, receiver: Bool, group: LLVMValueRef, allocation: Optional[LLVMValueRef], allocateOnly: Bool) -> Result[Optional[LLVMValueRef], CompileDiagnostic] {
+        if operandId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val operand = c.mid.operands[operandId - 1U64]
-        if operand.tag != 4U64 && !(operand.tag == 3U64 && (receiver || operand.borrowsStorage)) { return <Optional.None /> }
+        if operand.tag != 4U64 && !(operand.tag == 3U64 && (receiver || operand.borrowsStorage)) { return <Result.Ok value=<Optional.None /> /> }
         val placeId = if operand.accessPlace == 0U64 { give operand.place } else { give operand.accessPlace }
-        if placeId == 0U64 { return <Optional.None /> }
+        if placeId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val place = c.mid.places[placeId - 1U64]
         val path = self.ambientBody.path(c: c, body: body, place: place)
-        if path.count() == 0U64 { return <Optional.None /> }
+        if path.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val types = [self.ptrty, self.i64ty, self.ptrty, self.ptrty, self.i64ty, self.i64ty, self.ptrty]
         val record = match allocation {
             Optional.Some(v: val pointer) => { give pointer }
             Optional.None => { give self.entryAlloca(ty: LLVMStructTypeInContext(self.ctx, arrayCPtr(types), types.count(), 0I32)) }
         }
-        if allocateOnly { return <Optional.Some v=record /> }
+        if allocateOnly { return <Result.Ok value=<Optional.Some v=record /> /> }
         mut val index = 0U64
         while index + 1U64 < path.count() {
-            mut val values = self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[index], writes: false)
+            mut val values = (try self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[index], writes: false))
             values.append(self.ambientPermission())
-            self.ambientRuntimeCall(c: inout c, name: "plew_access_check", values: values)
+            try self.ambientRuntimeCall(c: inout c, name: "plew_access_check", values: values)
             index += 1U64
         }
-        val storage = self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[path.count() - 1U64], writes: operand.tag == 4U64)
+        val storage = (try self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[path.count() - 1U64], writes: operand.tag == 4U64))
         mut val values = [record]
         index = 0U64
         while index < storage.count() { values.append(storage[index])
             index += 1U64 }
         values.append(group)
-        self.ambientRuntimeCall(c: inout c, name: "plew_access_begin", values: values)
-        return <Optional.Some v=record />
+        try self.ambientRuntimeCall(c: inout c, name: "plew_access_begin", values: values)
+        return <Result.Ok value=<Optional.Some v=record /> />
     }
 
-    inout fn midAmbientBeginCall(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, allocation: LlvmAmbientScope, allocateOnly: Bool = false) -> LlvmAmbientScope {
+    inout fn midAmbientBeginCall(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, allocation: LlvmAmbientScope, allocateOnly: Bool = false) -> Result[LlvmAmbientScope, CompileDiagnostic] {
         val group = match allocation.group {
             Optional.Some(v: val pointer) => { give pointer }
             Optional.None => { give self.entryAlloca(ty: self.i8ty) }
@@ -99,65 +101,67 @@ pub impl LlvmCtx {
         if term.callReceiver != 0U64 {
             val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
             if receiver.tag == 2U64 {
-                val record = self.midAmbientBeginOperand(c: inout c, body: body, operandId: receiver.operand, receiver: true, group: group, allocation: if records.count() < allocation.records.count() { give <Optional.Some v=allocation.records[records.count()] /> } else { give <Optional.None /> }, allocateOnly: allocateOnly)
+                val record = (try self.midAmbientBeginOperand(c: inout c, body: body, operandId: receiver.operand, receiver: true, group: group, allocation: if records.count() < allocation.records.count() { give <Optional.Some v=allocation.records[records.count()] /> } else { give <Optional.None /> }, allocateOnly: allocateOnly))
                 match record { Optional.Some(v: val pointer) => { records.append(pointer) } Optional.None => {} }
             }
         }
         mut val index = 0U64
         while index < term.args.len {
-            val record = self.midAmbientBeginOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index], receiver: false, group: group, allocation: if records.count() < allocation.records.count() { give <Optional.Some v=allocation.records[records.count()] /> } else { give <Optional.None /> }, allocateOnly: allocateOnly)
+            val record = (try self.midAmbientBeginOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index], receiver: false, group: group, allocation: if records.count() < allocation.records.count() { give <Optional.Some v=allocation.records[records.count()] /> } else { give <Optional.None /> }, allocateOnly: allocateOnly))
             match record { Optional.Some(v: val pointer) => { records.append(pointer) } Optional.None => {} }
             index += 1U64
         }
-        return <LlvmAmbientScope group=<Optional.Some v=group /> records=records />
+        return <Result.Ok value=<LlvmAmbientScope group=<Optional.Some v=group /> records=records /> />
     }
 
     // Allocate capabilities before emitting any CFG block. Block storage order
     // is not execution order; verified writeback scopes can cross either way.
-    inout fn midAmbientAllocateScopes(c: inout Comp, body: MidBodyNode) {
-        if !self.ambientProgram.enabled { return }
+    inout fn midAmbientAllocateScopes(c: inout Comp, body: MidBodyNode) -> Result[(), CompileDiagnostic] {
+        if !self.ambientProgram.enabled { return <Result.Ok value=() /> }
         mut val index = 0U64
         while index < body.blocks.len {
             val term = c.mid.terminators[c.mid.blocks[body.blocks.start + index].terminator - 1U64]
             if term.accessScopeRole == 1U64 {
-                self.ambientScopes[term.accessScope] = self.midAmbientBeginCall(c: inout c, body: body, term: term, allocation: <LlvmAmbientScope />, allocateOnly: true)
+                self.ambientScopes[term.accessScope] = (try self.midAmbientBeginCall(c: inout c, body: body, term: term, allocation: <LlvmAmbientScope />, allocateOnly: true))
             }
             index += 1U64
         }
         self.ambientPermit = <Optional.None />
+        return <Result.Ok value=() />
     }
 
-    inout fn midAmbientEnd(c: inout Comp, scope: LlvmAmbientScope) {
+    inout fn midAmbientEnd(c: inout Comp, scope: LlvmAmbientScope) -> Result[(), CompileDiagnostic] {
         mut val index = scope.records.count()
         while index > 0U64 {
             index -= 1U64
-            self.ambientRuntimeCall(c: inout c, name: "plew_access_end", values: [scope.records[index]])
+            try self.ambientRuntimeCall(c: inout c, name: "plew_access_end", values: [scope.records[index]])
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+    inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Result[Bool, CompileDiagnostic] {
         val term = c.mid.terminators[terminatorId - 1U64]
         if !self.ambientProgram.enabled {
-            self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
-            return self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId)
+            try self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
+            return <Result.Ok value=(try self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId)) />
         }
         val priorPermit = self.ambientPermit
         val allocation = self.ambientScopes.getOr(key: term.accessScope, fallback: <LlvmAmbientScope />)
         if term.accessScopeRole != 0U64 {
-            match allocation.group { Optional.None => { return false } Optional.Some(v: _) => {} }
+            match allocation.group { Optional.None => { return <Result.Ok value=false /> } Optional.Some(v: _) => {} }
         }
         val scope = if term.accessScopeRole >= 2U64 {
             give allocation
         } else {
-            self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
+            try self.midCanonicalEmitInoutChecks(c: inout c, body: body, term: term)
             val selected = if term.accessScopeRole == 0U64 && !self.ambientProgram.callMayAccess(c: c, term: term) { give <LlvmAmbientScope /> }
-            else { give self.midAmbientBeginCall(c: inout c, body: body, term: term, allocation: allocation) }
+            else { give (try self.midAmbientBeginCall(c: inout c, body: body, term: term, allocation: allocation)) }
             give selected
         }
         self.ambientPermit = scope.group
-        val result = self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId)
-        if term.accessScopeRole == 0U64 || term.accessScopeRole == 3U64 { self.midAmbientEnd(c: inout c, scope: scope) }
+        val result = (try self.midCanonicalEmitCallUnchecked(c: inout c, body: body, terminatorId: terminatorId))
+        if term.accessScopeRole == 0U64 || term.accessScopeRole == 3U64 { try self.midAmbientEnd(c: inout c, scope: scope) }
         self.ambientPermit = priorPermit
-        return result
+        return <Result.Ok value=result />
     }
 }

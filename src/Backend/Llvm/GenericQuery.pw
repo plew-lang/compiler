@@ -1,10 +1,10 @@
 // Physical struct identity comes from the finalized layout contract.
 pub impl LlvmCtx {
-    inout fn structIdxOfRef(c: inout Comp, ref: U64) -> U64 {
-        if ref == 0U64 { return c.arena.structCount() }
-        val contract = c.arena.finalDestructions[c.requireFinalDestruction(typeRef: ref) - 1U64]
-        if contract.underlying != 0U64 { return self.structIdxOfRef(c: inout c, ref: contract.underlying) }
-        if contract.structLayout == 0U64 { return c.arena.structCount() }
-        return contract.structLayout - 1U64
+    inout fn structIdxOfRef(c: inout Comp, ref: U64) -> Result[U64, CompileDiagnostic] {
+        if ref == 0U64 { return <Result.Ok value=c.arena.structCount() /> }
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
+        if contract.underlying != 0U64 { return <Result.Ok value=(try self.structIdxOfRef(c: inout c, ref: contract.underlying)) /> }
+        if contract.structLayout == 0U64 { return <Result.Ok value=c.arena.structCount() /> }
+        return <Result.Ok value=contract.structLayout - 1U64 />
     }
 }

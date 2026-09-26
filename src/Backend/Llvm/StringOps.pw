@@ -6,7 +6,7 @@
 // it (a body-less prototype resolved at link time against the emitted runtime.c).
 
 pub impl LlvmCtx {
-    inout fn getOrDeclare(c: inout Comp, name: String, fnTy: LLVMTypeRef) -> LLVMValueRef {
+    inout fn getOrDeclare(c: inout Comp, name: String, fnTy: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         // Symbol spelling is the identity. Hand-assigned numeric IDs can alias
         // unrelated functions and silently call them with the wrong ABI.
         val key = c.internBytes(s: name).nameId
@@ -16,9 +16,9 @@ pub impl LlvmCtx {
                 // LLVM uniques types within a context. Compare the opaque C
                 // handles at the FFI boundary, not as Plew value identities.
                 if plew_pointer_equal(self.declTy[index], fnTy) == 0I32 {
-                    c.errorAt(offset: 0U64, msg: "internal error: conflicting runtime function signature: " + name)
+                    return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: conflicting runtime function signature: " + name) />
                 }
-                return self.declFn[index]
+                return <Result.Ok value=self.declFn[index] />
             }
             index += 1U64
         }
@@ -26,7 +26,7 @@ pub impl LlvmCtx {
         self.declId.append(key)
         self.declFn.append(function)
         self.declTy.append(fnTy)
-        return function
+        return <Result.Ok value=function />
     }
 }
 
@@ -73,34 +73,34 @@ pub impl LlvmCtx {
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink
     // (`plew_write_raw` / `plew_eprint_raw` / `plew_panic_raw`). Passing scalars, not
     // the struct by value, sidesteps the C struct-by-value ABI until it is modeled.
-    inout fn emitStrSinkValue(c: inout Comp, rtName: String, value: LLVMValueRef) -> LLVMValueRef {
+    inout fn emitStrSinkValue(c: inout Comp, rtName: String, value: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         val sv: LLVMValueRef = value
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sv)
-        val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sv)
+        val len: LLVMValueRef = (try self.arrValCount(c: inout c, arr: sv))
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: rtName, fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(ptr)
         av.append(len)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon()) />
     }
 
     // A path-taking runtime intrinsic (`readFile`/`readFileBytes`/`fileExists`): the
     // path is a {ptr,i64} value (String or Array[U8], same layout) passed as two args;
     // returns the selected physical `retTy`.
-    inout fn emitPathStrIntrinsicValue(c: inout Comp, rtName: String, retTy: LLVMTypeRef, path: LLVMValueRef) -> LLVMValueRef {
+    inout fn emitPathStrIntrinsicValue(c: inout Comp, rtName: String, retTy: LLVMTypeRef, path: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(retTy, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: rtName, fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(self.arrValData(c: inout c, arr: path))
-        av.append(self.arrValCount(c: inout c, arr: path))
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        av.append((try self.arrValCount(c: inout c, arr: path)))
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon()) />
     }
 
 }

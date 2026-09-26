@@ -24,21 +24,21 @@ pub impl LlvmCtx {
 
     // Register the physical erased ABI. The semantic body is emitted later
     // from verified Mid, never while another body owns the local environment.
-    inout fn buildAnyThunk(c: inout Comp, resolutionIndex: U64, sidx: U64, idx: U64) -> LLVMValueRef {
+    inout fn buildAnyThunk(c: inout Comp, resolutionIndex: U64, sidx: U64, idx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val member = c.arena.finalExistentials[resolutionIndex].members[idx]
-        if member.bodyId == 0U64 { return LLVMConstNull(self.ptrty) }
+        if member.bodyId == 0U64 { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
         // The erased ABI is a frontend fact. Only physical types are selected here.
         mut val ptys: Array[LLVMTypeRef] = [self.ptrty]
         mut val pi = 0U64
         while pi < member.parameterTypes.count() {
             match member.argumentPassings[pi] {
                 CallArgumentPassing.Inout => { ptys.append(self.ptrty) }
-                _ => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: member.parameterTypes[pi])) }
+                _ => { ptys.append((try self.llvmTypeOfRef(c: inout c, ref: member.parameterTypes[pi]))) }
             }
             pi += 1U64
         }
         mut val rty = self.voidty
-        if member.resultType != 0U64 { rty = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
+        if member.resultType != 0U64 { rty = (try self.llvmTypeOfRef(c: inout c, ref: member.resultType)) }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvt".bytes())
@@ -50,10 +50,10 @@ pub impl LlvmCtx {
         nm.append(0)
         val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
-        return fv
+        return <Result.Ok value=fv />
     }
 
-    inout fn emitExistentialWitnesses(c: inout Comp) {
+    inout fn emitExistentialWitnesses(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.existentialWitnessesEmitted < self.existentialWitnesses.count() {
             val witness = self.existentialWitnesses[self.existentialWitnessesEmitted]
             val member = c.arena.finalExistentials[witness.resolution].members[witness.member]
@@ -62,39 +62,40 @@ pub impl LlvmCtx {
             self.curIsMain = false
             self.curRetVoid = member.resultType == 0U64
             self.curRetTy = self.voidty
-            if member.resultType != 0U64 { self.curRetTy = self.llvmTypeOfRef(c: inout c, ref: member.resultType) }
-            val prepared = self.prepareSyntheticMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64)
+            if member.resultType != 0U64 { self.curRetTy = (try self.llvmTypeOfRef(c: inout c, ref: member.resultType)) }
+            val prepared = (try self.prepareSyntheticMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64))
             match prepared {
-                MidLlvmPrepared.None => { c.errorAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") }
+                MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") /> }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
                     self.beginFnBody(fv: witness.function)
                     // The only erased ABI adaptation: a read receiver is a
                     // borrowed load from its box; inout keeps the same address.
-                    mut val receiver = self.valueParameter(function: witness.function, index: 0U64)
+                    mut val receiver = (try self.valueParameter(function: witness.function, index: 0U64))
                     match member.receiverPassing {
                         CallReceiverPassing.Inout => {}
-                        _ => { receiver = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef), receiver, anon()) }
+                        _ => { receiver = llvmLoad(self.b, (try self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef)), receiver, anon()) }
                     }
                     mut val parameters: Array[LLVMValueRef] = [receiver]
                     mut val index = 0U64
                     while index < member.parameterTypes.count() {
-                        parameters.append(self.valueParameter(function: witness.function, index: index + 1U64))
+                        parameters.append((try self.valueParameter(function: witness.function, index: index + 1U64)))
                         index += 1U64
                     }
-                    if !self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters) {
-                        c.errorAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: prepared existential Mid body failed to emit")
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters)) {
+                        return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: prepared existential Mid body failed to emit") />
                     }
                 }
             }
             self.existentialWitnessesEmitted += 1U64
             tracePhaseProgress(c: inout c, label: "backend:existential-witness", count: self.existentialWitnessesEmitted, stride: 16U64)
         }
+        return <Result.Ok value=() />
     }
 
     // Privatize the existential box. The new box owns a logical copy of the
     // concrete value: nested buffers remain CoW-shared until their own writes.
-    inout fn buildAnyCopyThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> LLVMValueRef {
-        val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: sourceRef)
+    inout fn buildAnyCopyThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val concreteTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: sourceRef))
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
@@ -106,21 +107,21 @@ pub impl LlvmCtx {
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
-        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueParameter(function: fv, index: 0U64), anon())
-        self.emitStructRetain(c: inout c, v: srcVal, ref: sourceRef)
-        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.valueParameter(function: fv, index: 0U64)), anon())
+        try self.emitStructRetain(c: inout c, v: srcVal, ref: sourceRef)
+        val cell: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32)))
         llvmStore(self.b, srcVal, cell)
         LLVMBuildRet(self.b, cell)
         LLVMPositionBuilderAtEnd(self.b, savedBB)
-        return fv
+        return <Result.Ok value=fv />
     }
 
     // Build the drop thunk for concrete struct `sidx` (vtable slot 1): `drop(ptr box)`
     // destroys the boxed concrete value's owned heap (classifier-routed valueArc, which
     // lands on the per-type witnesses). The caller (emitAnyRelease) frees the box itself
     // afterwards. Rebuilt per vtable like the copy thunk (LLVM uniques duplicate names).
-    inout fn buildAnyDropThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> LLVMValueRef {
-        val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: sourceRef)
+    inout fn buildAnyDropThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val concreteTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: sourceRef))
         val instRef: U64 = sourceRef
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
@@ -135,14 +136,14 @@ pub impl LlvmCtx {
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
-        if c.finalNeedsRelease(typeRef: instRef) {
-            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueParameter(function: fv, index: 0U64), anon())
-            self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
+        if (try c.finalNeedsRelease(typeRef: instRef)) {
+            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.valueParameter(function: fv, index: 0U64)), anon())
+            try self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }
         LLVMBuildRetVoid(self.b)
         self.curFn = savedFn
         LLVMPositionBuilderAtEnd(self.b, savedBB)
-        return fv
+        return <Result.Ok value=fv />
     }
 
     // Release one owner of an existential's box: decrement its rc, and at 0 destroy
@@ -150,10 +151,10 @@ pub impl LlvmCtx {
     // Null-safe (an unset enum payload slot holds a null box; plew_rawbuf_release returns 0
     // for null, and the destroy branch is additionally gated on non-null) — mirrors
     // emitBoxedFieldRelease's dec-then-cascade shape.
-    inout fn emitAnyRelease(c: inout Comp, fat: LLVMValueRef) {
+    inout fn emitAnyRelease(c: inout Comp, fat: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vt: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
@@ -170,10 +171,11 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        self.callValueFunction(signature: dty, function: dropFn, arguments: av)
-        self.rawbufFree(c: inout c, cell: cell)
+        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av))
+        try self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+        return <Result.Ok value=() />
     }
 
     // The CoW write gate for an existential: an `inout` requirement mutates THROUGH
@@ -182,7 +184,7 @@ pub impl LlvmCtx {
     // receiver PLACE at the fresh fat pointer. Sharers keep the old value; the
     // mutation lands on this owner's private box. Mirrors plew_arr_cow / the boxed
     // field's fresh-cell repoint. Returns the (possibly privatized) fat value.
-    inout fn privatizeAnyBox(c: inout Comp, fat: LLVMValueRef, place: LLVMValueRef) -> LLVMValueRef {
+    inout fn privatizeAnyBox(c: inout Comp, fat: LLVMValueRef, place: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         // rc lives in the rawbuf header at data[-1] (see plew_rawbuf_alloc).
         mut val rcIdx: Array[LLVMValueRef] = []
@@ -194,20 +196,20 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.cont"))
         LLVMBuildCondBr(self.b, isShared, splitBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, splitBB)
-        val fresh: LLVMValueRef = self.copyAnyValue(c: inout c, fat: fat)
-        val ignore: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val fresh: LLVMValueRef = (try self.copyAnyValue(c: inout c, fat: fat))
+        val ignore: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         llvmStore(self.b, fresh, place)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
         // reload from the place: the fresh fat on the split path, the original otherwise.
-        return llvmLoad(self.b, self.anyTy, place, anon())
+        return <Result.Ok value=llvmLoad(self.b, self.anyTy, place, anon()) />
     }
 
     // Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
     // thunk (slot 0) to duplicate the boxed concrete, returning a fresh `{ newdata,
     // vtable }`. Used by privatizeAnyBox (the CoW split) — plain place->owner copies
     // CoW-share the box instead (copyAnyIfPlace).
-    inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> LLVMValueRef {
+    inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         val copyFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, vtPtr, anon())
@@ -216,11 +218,11 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
-        val newData: LLVMValueRef = self.callValueFunction(signature: fty, function: copyFn, arguments: av)
+        val newData: LLVMValueRef = (try self.callValueFunction(signature: fty, function: copyFn, arguments: av))
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())
-        return agg
+        return <Result.Ok value=agg />
     }
 }
 
@@ -230,7 +232,7 @@ pub impl LlvmCtx {
     // `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics /
     // privatization), slot 1 = drop thunk (box destruction at rc 0), slots 2.. = a
     // thunk per requirement in declaration order. Returns the global pointer.
-    inout fn ensureAnyVtable(c: inout Comp, sourceRef: U64, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
+    inout fn ensureAnyVtable(c: inout Comp, sourceRef: U64, sidx: U64, anyRef: U64, traitIdx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val resolutionIndex: U64 = c.finalExistentialIndex(sourceRef: sourceRef, targetRef: anyRef)
         if resolutionIndex >= c.arena.finalExistentials.count() {
             if c.traceCodegen {
@@ -249,11 +251,11 @@ pub impl LlvmCtx {
                     diagnosticIndex += 1U64
                 }
             }
-            c.errorAt(offset: 0U64, msg: "internal error: existential conversion was not finalized")
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: existential conversion was not finalized") />
         }
         mut val ci: U64 = 0U64
         while ci < self.anyVtResolution.count() {
-            if self.anyVtResolution[ci] == resolutionIndex + 1U64 { return self.anyVtVal[ci] }
+            if self.anyVtResolution[ci] == resolutionIndex + 1U64 { return <Result.Ok value=self.anyVtVal[ci] /> }
             ci += 1U64
         }
         val t: TraitDef = c.decls.traitAt(index: traitIdx)
@@ -275,15 +277,15 @@ pub impl LlvmCtx {
         self.anyVtResolution.append(resolutionIndex + 1U64)
         self.anyVtVal.append(g)
         mut val slots: Array[LLVMValueRef] = []
-        slots.append(self.buildAnyCopyThunk(c: inout c, sourceRef: sourceRef, sidx: sidx))
-        slots.append(self.buildAnyDropThunk(c: inout c, sourceRef: sourceRef, sidx: sidx))
+        slots.append((try self.buildAnyCopyThunk(c: inout c, sourceRef: sourceRef, sidx: sidx)))
+        slots.append((try self.buildAnyDropThunk(c: inout c, sourceRef: sourceRef, sidx: sidx)))
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            slots.append(self.buildAnyThunk(c: inout c, resolutionIndex: resolutionIndex, sidx: sidx, idx: ri))
+            slots.append((try self.buildAnyThunk(c: inout c, resolutionIndex: resolutionIndex, sidx: sidx, idx: ri)))
             ri += 1
         }
         LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count()))
-        return g
+        return <Result.Ok value=g />
     }
 }
 
@@ -291,23 +293,22 @@ pub impl LlvmCtx {
 
     // Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
     // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
-    inout fn boxIntoAny(c: inout Comp, sourceRef: U64, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
-        val concreteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: sourceRef)
-        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+    inout fn boxIntoAny(c: inout Comp, sourceRef: U64, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val concreteTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: sourceRef))
+        val cell: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32)))
         llvmStore(self.b, v, cell)
-        val vt: LLVMValueRef = self.ensureAnyVtable(c: inout c, sourceRef: sourceRef, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
+        val vt: LLVMValueRef = (try self.ensureAnyVtable(c: inout c, sourceRef: sourceRef, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, cell, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vt, 1U64, anon())
-        return agg
+        return <Result.Ok value=agg />
     }
 
     // Emit a finalized body identity with explicit type/ownership contracts.
     // Ordinary and generic bodies share this path without an ambient environment.
-    inout fn genLlvmFuncBody(c: inout Comp, bodyId: U64, fv: LLVMValueRef) {
+    inout fn genLlvmFuncBody(c: inout Comp, bodyId: U64, fv: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
-            c.errorAt(offset: 0U64, msg: "internal error: function emission requires a finalized body")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: function emission requires a finalized body") />
         }
         val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         val f: Func = c.arena.functionAt(index: fi)
@@ -320,8 +321,8 @@ pub impl LlvmCtx {
         }
         self.curFn = fv
         self.curIsMain = false
-        self.curRetVoid = self.bodyResultType(c: inout c, bodyId: bodyId) == 0U64
-        self.curRetTy = self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)
+        self.curRetVoid = (try self.bodyResultType(c: inout c, bodyId: bodyId)) == 0U64
+        self.curRetTy = (try self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId))
         if c.traceCodegen {
             eprint(text: "[trace-codegen] function body-metadata-ready name=")
             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -339,14 +340,13 @@ pub impl LlvmCtx {
             CallReceiverPassing.None => {}
             _ => { abiParameterCount += 1U64 }
         }
-        val preparedMid = self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: abiParameterCount)
+        val preparedMid = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: abiParameterCount))
         val midReady = match preparedMid {
             MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { give true }
             _ => { give false }
         }
         if !midReady {
-            c.errorAt(offset: f.nameStart, msg: "internal error: function requires verified Mid lowering")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: f.nameStart, msg: "internal error: function requires verified Mid lowering") />
         }
         self.beginFnBody(fv: fv)
         if midReady {
@@ -360,8 +360,8 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            if !(self.genLlvmPreparedMidBody(c: inout c, prepared: preparedMid)) {
-                c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering")
+            if !((try self.genLlvmPreparedMidBody(c: inout c, prepared: preparedMid))) {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering") />
             }
             if c.traceCodegen {
                 eprint(text: "[trace-codegen] Mid function emit-done name=")
@@ -377,8 +377,8 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            return
+            return <Result.Ok value=() />
         }
-
+        return <Result.Ok value=() />
     }
 }

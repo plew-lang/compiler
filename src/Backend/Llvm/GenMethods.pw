@@ -83,7 +83,7 @@ pub impl LlvmCtx {
     }
 
     // Eager declaration follows the frontend-closed executable body graph.
-    inout fn declareGenMethods(c: inout Comp) {
+    inout fn declareGenMethods(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val index: U64 = 0U64
         while index < c.monoWork.bodyInstances.count() {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: index, stride: 64U64)
@@ -93,15 +93,16 @@ pub impl LlvmCtx {
                 val f = c.arena.functionAt(index: body.fnIdx)
                 if f.hasRecv && !f.isExtern && !f.isProvided && !c.methodRecvIsTrait(f: f) {
                     if self.genMethSlotFor(bodyId: bodyId) == self.genMethBody.count() {
-                        self.declareOneGenMethod(c: inout c, bodyId: bodyId)
+                        try self.declareOneGenMethod(c: inout c, bodyId: bodyId)
                     }
                 }
             }
             index += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn declareOneGenMethod(c: inout Comp, bodyId: U64) {
+    inout fn declareOneGenMethod(c: inout Comp, bodyId: U64) -> Result[(), CompileDiagnostic] {
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val mfi = body.fnIdx
         val instRef = body.environment.receiverRef
@@ -110,25 +111,23 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         val signature = c.arena.bodySignature(bodyId: bodyId)
         if !signature.ready || signature.receiverType == 0U64 {
-            c.errorAt(offset: mf.nameStart, msg: "internal error: method receiver ABI was not finalized")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: mf.nameStart, msg: "internal error: method receiver ABI was not finalized") />
         }
         match signature.receiverPassing {
             CallReceiverPassing.Inout => { ptys.append(self.ptrty) }
-            CallReceiverPassing.Borrow => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
-            CallReceiverPassing.Move => { ptys.append(self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
+            CallReceiverPassing.Borrow => { ptys.append((try self.llvmTypeOfRef(c: inout c, ref: signature.receiverType))) }
+            CallReceiverPassing.Move => { ptys.append((try self.llvmTypeOfRef(c: inout c, ref: signature.receiverType))) }
             CallReceiverPassing.None => {
-                c.errorAt(offset: mf.nameStart, msg: "internal error: method ABI has no receiver passing")
-                return
+                return <Result.Err error=c.diagnosticAt(offset: mf.nameStart, msg: "internal error: method ABI has no receiver passing") />
             }
         }
         val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
         mut val pi: U64 = 0
         while pi < parameterCount {
-            ptys.append(self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi))
+            ptys.append((try self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi)))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId), arrayCPtr(ptys), ptys.count(), 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType((try self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "gm".bytes())
         appendU64Dec(into: inout nm, n: mfi)
@@ -145,38 +144,41 @@ pub impl LlvmCtx {
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)
         self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef, bodyId: bodyId)
+        return <Result.Ok value=() />
     }
 
-    inout fn emitOneGenMethod(c: inout Comp, slot: U64) {
+    inout fn emitOneGenMethod(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.genMethBody[slot]
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         self.traceGenMethod(c: inout c, event: "emit", mfi: body.fnIdx, instRef: body.environment.receiverRef, bodyId: bodyId)
-        self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genMethVal[slot])
+        try self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genMethVal[slot])
+        return <Result.Ok value=() />
     }
 
-    inout fn emitGenMethods(c: inout Comp) {
+    inout fn emitGenMethods(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot: U64 = 0U64
         while slot < self.genMethBody.count() {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-emitting", count: slot, stride: 16U64)
-            self.emitOneGenMethod(c: inout c, slot: slot)
+            try self.emitOneGenMethod(c: inout c, slot: slot)
             slot += 1U64
         }
+        return <Result.Ok value=() />
     }
 
-    inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64) -> U64 {
+    inout fn ensureFinalGenMethodBody(c: inout Comp, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() || !c.arena.bodyIsCallable(bodyId: bodyId) {
-            return self.genMethBody.count()
+            return <Result.Ok value=self.genMethBody.count() />
         }
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val instRef = body.environment.receiverRef
         if body.fnIdx >= c.arena.functionCount() || instRef == 0U64 || instRef >= c.arena.typeCount() || !c.arena.bodySignature(bodyId: bodyId).ready {
-            return self.genMethBody.count()
+            return <Result.Ok value=self.genMethBody.count() />
         }
         val existing = self.genMethSlotFor(bodyId: bodyId)
-        if existing < self.genMethBody.count() { return existing }
-        self.declareOneGenMethod(c: inout c, bodyId: bodyId)
+        if existing < self.genMethBody.count() { return <Result.Ok value=existing /> }
+        try self.declareOneGenMethod(c: inout c, bodyId: bodyId)
         val slot = self.genMethBody.count() - 1U64
         self.genMethEmit.append(slot)
-        return slot
+        return <Result.Ok value=slot />
     }
 }

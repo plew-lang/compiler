@@ -8,25 +8,25 @@
 pub impl LlvmCtx {
 
     // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
-    inout fn rawbufAlloc(c: inout Comp, elemSize: LLVMValueRef, cap: LLVMValueRef) -> LLVMValueRef {
+    inout fn rawbufAlloc(c: inout Comp, elemSize: LLVMValueRef, cap: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_alloc", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_alloc", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(elemSize)
         av.append(cap)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon()) />
     }
 
     // The opaque Buffer floor owns this physical header layout. Keep the small
     // null-safe reader in this LLVM module so ordinary optimization can inline
     // and combine reads; do not expand a CFG at every generated call site.
-    inout fn rawbufHeaderValue(c: inout Comp, data: LLVMValueRef, name: String, distance: U64) -> LLVMValueRef {
+    inout fn rawbufHeaderValue(c: inout Comp, data: LLVMValueRef, name: String, distance: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val parameters: Array[LLVMTypeRef] = [self.ptrty]
         val signature = LLVMFunctionType(self.i64ty, arrayCPtr(parameters), 1U64, 0I32)
-        val function = self.getOrDeclare(c: inout c, name: name, fnTy: signature)
+        val function = (try self.getOrDeclare(c: inout c, name: name, fnTy: signature))
         if LLVMCountBasicBlocks(function) == 0U32 {
             // LLVMInternalLinkage: implementation-only physical runtime glue.
             LLVMSetLinkage(function, 8U32)
@@ -54,34 +54,35 @@ pub impl LlvmCtx {
             LLVMDisposeBuilder(builder)
         }
         val arguments: Array[LLVMValueRef] = [data]
-        return LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, signature, function, arrayCPtr(arguments), 1U64, anon()) />
     }
 
-    inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
-        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_count", distance: 2U64)
+    inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_count", distance: 2U64)) />
     }
 
-    inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
-        return self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_capacity", distance: 3U64)
+    inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.rawbufHeaderValue(c: inout c, data: data, name: "pw_buffer_capacity", distance: 3U64)) />
     }
 
     // Declare/cache `plew_rawbuf_set_count(ptr, i64)` — store the buffer's live-element
     // count into the heap header.
-    inout fn rawbufSetCount(c: inout Comp, data: LLVMValueRef, n: LLVMValueRef) {
+    inout fn rawbufSetCount(c: inout Comp, data: LLVMValueRef, n: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_set_count", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_set_count", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(data)
         av.append(n)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Declare/cache `plew_rawbuf_move(ptr, elemSize, dst, src, n)` — relocate `n` element
     // slots within the buffer (insertAt/removeAt shift). A pure byte move (no element ARC).
-    inout fn rawbufMove(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, dst: LLVMValueRef, src: LLVMValueRef, n: LLVMValueRef) {
+    inout fn rawbufMove(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, dst: LLVMValueRef, src: LLVMValueRef, n: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
@@ -89,7 +90,7 @@ pub impl LlvmCtx {
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 5U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_move", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_move", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(data)
         av.append(elemSize)
@@ -97,38 +98,39 @@ pub impl LlvmCtx {
         av.append(src)
         av.append(n)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 5U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Declare/cache `plew_arr_grow(data, elemSize, count) -> ptr` — ensure room for one
     // more element (grows by doubling when count>=cap), returning the (possibly new) data.
-    inout fn growBuf(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, count: LLVMValueRef) -> LLVMValueRef {
+    inout fn growBuf(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, count: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", fnTy: fty)
+        val grow: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_grow", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(data)
         av.append(LLVMSizeOf(elemTy))
         av.append(count)
-        return LLVMBuildCall2(self.b, fty, grow, arrayCPtr(av), 3U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, grow, arrayCPtr(av), 3U64, anon()) />
     }
 
     // Declare/cache `plew_arr_reserve(data, elemSize, mincap) -> ptr` — grow capacity to
     // >= mincap (preserving elements + count), returning the (possibly new) data pointer.
-    inout fn rawbufReserve(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, mincap: LLVMValueRef) -> LLVMValueRef {
+    inout fn rawbufReserve(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, mincap: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_reserve", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_reserve", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(data)
         av.append(elemSize)
         av.append(mincap)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon()) />
     }
 
     // ---- Array/String value representation SEAM (C1 migration boundary) ----
@@ -151,8 +153,8 @@ pub impl LlvmCtx {
         return arr
     }
     // The live element count of an array/string VALUE (read from the heap header; 0 for null).
-    inout fn arrValCount(c: inout Comp, arr: LLVMValueRef) -> LLVMValueRef {
-        return self.rawbufCount(c: inout c, data: self.arrValData(c: inout c, arr: arr))
+    inout fn arrValCount(c: inout Comp, arr: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.rawbufCount(c: inout c, data: self.arrValData(c: inout c, arr: arr))) />
     }
     // Wrap a bare data pointer into the `{ptr}` array/string VALUE aggregate WITHOUT touching
     // the heap header (the count is already correct — e.g. a baked string literal whose count
@@ -164,9 +166,9 @@ pub impl LlvmCtx {
     // heap header, then wrap into the `{ptr}` aggregate. Callers pass a buffer that already
     // owns the elements (a fresh rawbuf_alloc, an arr_copy, or a baked literal); set_count is
     // a no-op on null and idempotent when the header already holds `count`.
-    inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, aggTy: LLVMTypeRef) -> LLVMValueRef {
-        self.rawbufSetCount(c: inout c, data: data, n: count)
-        return self.arrValWrap(c: inout c, data: data, aggTy: aggTy)
+    inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, aggTy: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        try self.rawbufSetCount(c: inout c, data: data, n: count)
+        return <Result.Ok value=self.arrValWrap(c: inout c, data: data, aggTy: aggTy) />
     }
     // Load the data pointer from an array STORAGE SLOT (an array local / field alloca): the
     // slot holds the single data pointer.
@@ -174,8 +176,8 @@ pub impl LlvmCtx {
         return llvmLoad(self.b, self.ptrty, slot, anon())
     }
     // Load the live count from an array STORAGE SLOT (the slot's data pointer's header count).
-    inout fn arrSlotCount(c: inout Comp, slot: LLVMValueRef) -> LLVMValueRef {
-        return self.rawbufCount(c: inout c, data: self.arrSlotData(c: inout c, slot: slot))
+    inout fn arrSlotCount(c: inout Comp, slot: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return <Result.Ok value=(try self.rawbufCount(c: inout c, data: self.arrSlotData(c: inout c, slot: slot))) />
     }
     // Store a data pointer into an array STORAGE SLOT.
     inout fn arrSlotSetData(c: inout Comp, slot: LLVMValueRef, data: LLVMValueRef) {
@@ -187,42 +189,44 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     // Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
-    inout fn rawbufRetain(c: inout Comp, cell: LLVMValueRef) {
+    inout fn rawbufRetain(c: inout Comp, cell: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_retain", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_retain", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Decrement a rawbuf cell's refcount and return the new count (i64).
-    inout fn rawbufRelease(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+    inout fn rawbufRelease(c: inout Comp, cell: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_release", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_release", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon()) />
     }
 
     // Drop one owner of a rawbuf cell: decrement its refcount, free at 0 (`plew_rawbuf_drop`).
-    inout fn rawbufDrop(c: inout Comp, cell: LLVMValueRef) {
+    inout fn rawbufDrop(c: inout Comp, cell: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_drop", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_drop", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
     // A hidden value cell is shared by Copy and detached only before a
     // mutable projection. The slot and grounded pointee type are frozen
     // layout facts; this operation never recovers a source field or type.
-    inout fn privatizeValueCell(c: inout Comp, slot: LLVMValueRef, typeRef: U64) {
+    inout fn privatizeValueCell(c: inout Comp, slot: LLVMValueRef, typeRef: U64) -> Result[(), CompileDiagnostic] {
         val cell: LLVMValueRef = llvmLoad(self.b, self.ptrty, slot, anon())
         mut val indices: Array[LLVMValueRef] = [LLVMConstInt(self.i64ty, 18446744073709551615U64, 0I32)]
         val countPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(indices), 1U64, anon())
@@ -232,15 +236,16 @@ pub impl LlvmCtx {
         val continuation: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.cont"))
         LLVMBuildCondBr(self.b, shared, split, continuation)
         LLVMPositionBuilderAtEnd(self.b, split)
-        val type: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: typeRef)
+        val type: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: typeRef))
         val value: LLVMValueRef = llvmLoad(self.b, type, cell, anon())
-        self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true)
-        val fresh: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(type), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        try self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: true)
+        val fresh: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(type), cap: LLVMConstInt(self.i64ty, 1U64, 0I32)))
         llvmStore(self.b, value, fresh)
         llvmStore(self.b, fresh, slot)
-        val ignored: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val ignored: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         LLVMBuildBr(self.b, continuation)
         LLVMPositionBuilderAtEnd(self.b, continuation)
+        return <Result.Ok value=() />
     }
 
     // Release one owner of an rc'd CELL holding a single value of type `ref`:
@@ -252,8 +257,8 @@ pub impl LlvmCtx {
     // the destroy branch is additionally gated on the cell being non-null. Shared by
     // boxed (recursive) fields and closure-capture cell homes; `ref` 0 = a scalar
     // pointee (nothing to destroy — the cell itself still frees).
-    inout fn emitCellRelease(c: inout Comp, cell: LLVMValueRef, ref: U64) {
-        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+    inout fn emitCellRelease(c: inout Comp, cell: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
+        val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
@@ -262,14 +267,15 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         if ref != 0U64 {
-            if c.finalNeedsRelease(typeRef: ref) {
-                val pv: LLVMValueRef = llvmLoad(self.b, self.llvmTypeOfRef(c: inout c, ref: ref), cell, anon())
-                self.valueArc(c: inout c, v: pv, typeRef: ref, retain: false)
+            if (try c.finalNeedsRelease(typeRef: ref)) {
+                val pv: LLVMValueRef = llvmLoad(self.b, (try self.llvmTypeOfRef(c: inout c, ref: ref)), cell, anon())
+                try self.valueArc(c: inout c, v: pv, typeRef: ref, retain: false)
             }
         }
-        self.rawbufFree(c: inout c, cell: cell)
+        try self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+        return <Result.Ok value=() />
     }
 
     // ---- `Ref` / `WeakRef` two-counter control block (spec/03) ----
@@ -279,59 +285,61 @@ pub impl LlvmCtx {
     // is freed when BOTH counters reach 0 (so a weak observer can still read strong==0).
 
     // strong reached 0 (pointee deinit already emitted): free iff no weak observers remain.
-    inout fn refDisposeStrong(c: inout Comp, cell: LLVMValueRef) {
+    inout fn refDisposeStrong(c: inout Comp, cell: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_ref_dispose_strong", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_ref_dispose_strong", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
     // `r.weak()`: bump the weak count, yield the same cell as a `WeakRef` handle.
-    inout fn refWeakDowngrade(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+    inout fn refWeakDowngrade(c: inout Comp, cell: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_ref_weak", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_ref_weak", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon()) />
     }
 
     // `w.upgrade()`: alive (strong>0) → take a strong owner and return the cell; else null.
-    inout fn refUpgrade(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+    inout fn refUpgrade(c: inout Comp, cell: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_ref_upgrade", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_ref_upgrade", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon()) />
     }
 
     // `w.upgrade` alive-test: the cell's current strong count (0 once the pointee was
     // destroyed). `weakAlive` compares `> 0`.
-    inout fn refStrongCount(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+    inout fn refStrongCount(c: inout Comp, cell: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_ref_strong", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_ref_strong", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon()) />
     }
 
     // drop one weak observer (`WeakRef` scope exit): weak--; free at weak==0 && strong==0.
-    inout fn weakRelease(c: inout Comp, cell: LLVMValueRef) {
+    inout fn weakRelease(c: inout Comp, cell: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_weak_release", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_weak_release", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Release one strong owner of a `Ref[T]` cell value: decrement strong; at 0 run the
@@ -339,7 +347,7 @@ pub impl LlvmCtx {
     // observers remain). The single release entry for every Ref position — local drop,
     // struct field, array/buffer element, enum payload, set-overwrite. Balances the
     // rawbufRetain emitted by consumeIntoOwned at each Ref place-copy.
-    inout fn emitRefRelease(c: inout Comp, cell: LLVMValueRef, refTy: U64) {
+    inout fn emitRefRelease(c: inout Comp, cell: LLVMValueRef, refTy: U64) -> Result[(), CompileDiagnostic] {
         // Peek the strong count BEFORE decrementing. If this is the last strong owner
         // (count == 1), run the pointee deinit while strong is STILL held: the deinit may
         // release a field that closes a weak back-reference cycle (e.g. a child's
@@ -347,7 +355,7 @@ pub impl LlvmCtx {
         // strong==0 && weak→0 and free THIS very cell mid-deinit, so the dispose below
         // would double-free it (UAF). Holding strong across the deinit keeps the cell alive
         // until we decrement and dispose exactly once.
-        val cur: LLVMValueRef = self.refStrongCount(c: inout c, cell: cell)
+        val cur: LLVMValueRef = (try self.refStrongCount(c: inout c, cell: cell))
         val isLast: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), cur, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
         val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.last"))
         val decBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.dec"))
@@ -359,24 +367,25 @@ pub impl LlvmCtx {
         // non-struct pointee (enum / String / nested Ref) were silently never destroyed.
         if c.isStrongRefInst(ref: refTy) {
             val pr: U64 = c.arena.typeAt(index: refTy).args[0]
-            if c.finalNeedsRelease(typeRef: pr) {
-                val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
-                self.valueArc(c: inout c, v: llvmLoad(self.b, pty, cell, anon()), typeRef: pr, retain: false)
+            if (try c.finalNeedsRelease(typeRef: pr)) {
+                val pty: LLVMTypeRef = (try self.refPointeeTy(c: inout c, refTy: refTy))
+                try self.valueArc(c: inout c, v: llvmLoad(self.b, pty, cell, anon()), typeRef: pr, retain: false)
             }
         }
         LLVMBuildBr(self.b, decBB)
         LLVMPositionBuilderAtEnd(self.b, decBB)
         // Now decrement strong. If it reaches 0 (i.e. we just ran the deinit), dispose the
         // cell — freed iff no weak observers remain.
-        val newStrong: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val newStrong: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newStrong, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val dispBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.disp"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.cont"))
         LLVMBuildCondBr(self.b, isZero, dispBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, dispBB)
-        self.refDisposeStrong(c: inout c, cell: cell)
+        try self.refDisposeStrong(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+        return <Result.Ok value=() />
     }
 
     // CoW a scalar array place's buffer in its storage slot before an in-place mutation:
@@ -384,15 +393,15 @@ pub impl LlvmCtx {
     // possibly-new data back, and return that data pointer. The slot is the array local's
     // {ptr,count} alloca (or an inout param's slot — so a mutation through `inout` CoWs the
     // caller's binding, leaving other sharers untouched).
-    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> LLVMValueRef {
+    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: slotPtr)
-        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: slotPtr)
+        val count: LLVMValueRef = (try self.arrSlotCount(c: inout c, slot: slotPtr))
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_cow", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_arr_cow", fnTy: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(data)
         av.append(LLVMSizeOf(elemTy))
@@ -402,17 +411,17 @@ pub impl LlvmCtx {
         // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
         // duplicated every element's leading heap reference too — retain each so the new
         // owner co-owns it (balanced by this owner's eventual element release at drop).
-        if c.finalNeedsRelease(typeRef: elemRef) {
+        if (try c.finalNeedsRelease(typeRef: elemRef)) {
             val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
             val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.retain"))
             val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.cont"))
             LLVMBuildCondBr(self.b, copied, retBB, contBB)
             LLVMPositionBuilderAtEnd(self.b, retBB)
-            self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
+            try self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
             LLVMBuildBr(self.b, contBB)
             LLVMPositionBuilderAtEnd(self.b, contBB)
         }
-        return nd
+        return <Result.Ok value=nd />
     }
 
     // ---- recursive value ARC over array element heap (1-3b: element cascade) ----
@@ -427,14 +436,15 @@ pub impl LlvmCtx {
     // this section used to carry is gone), and the per-element action is valueArc.
 
     // Free a rawbuf cell unconditionally (rc already at 0); null / sentinel-rc left alone.
-    inout fn rawbufFree(c: inout Comp, cell: LLVMValueRef) {
+    inout fn rawbufFree(c: inout Comp, cell: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_free", fnTy: fty)
+        val callee: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_rawbuf_free", fnTy: fty))
         mut val cav: Array[LLVMValueRef] = []
         cav.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 1U64, anon())
+        return <Result.Ok value=() />
     }
 
     // Value-ARC one element VALUE `v` of type `typeRef`: `retain` bumps its leading heap rc
@@ -443,8 +453,8 @@ pub impl LlvmCtx {
     // release the buffer, recursing into ITS elements at rc 0; struct: deinit; enum: release
     // the active variant). The type dispatch is shared; only the leaf op differs by `retain`.
     // Scalars / unsupported types: nop. The single value-ARC entry (retain and release).
-    inout fn valueArc(c: inout Comp, v: LLVMValueRef, typeRef: U64, retain: Bool) {
-        match c.finalOwnershipClass(typeRef: typeRef) {
+    inout fn valueArc(c: inout Comp, v: LLVMValueRef, typeRef: U64, retain: Bool) -> Result[(), CompileDiagnostic] {
+        match (try c.finalOwnershipClass(typeRef: typeRef)) {
             ArcClass.Scalar => {}
             // a String value IS the Array[U8] buffer — value-ARC it directly (U8
             // scalars, so just the rc-managed outer buffer; literal Strings carry a
@@ -452,9 +462,9 @@ pub impl LlvmCtx {
             // emitDeinitValue's String handling.
             ArcClass.StringLike => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+                    try self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                 } else {
-                    self.rawbufDrop(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+                    try self.rawbufDrop(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                 }
             }
             // `Buffer[T]`: the opaque rawbuf floor (single data pointer, header count,
@@ -465,10 +475,10 @@ pub impl LlvmCtx {
             // into its single Buffer field and lands back here. collections.md §3-付録3.)
             ArcClass.BufferLike(val elem) => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+                    try self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                 } else {
-                    val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elem)
-                    self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), elemTy: innerTy, elemRef: elem)
+                    val innerTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: elem))
+                    try self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), elemTy: innerTy, elemRef: elem)
                 }
             }
             // a `Ref[T]` value: the cell pointer itself, with a strong rc. retain =
@@ -477,9 +487,9 @@ pub impl LlvmCtx {
             // observers).
             ArcClass.RefCell(val inst) => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: v))
+                    try self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: v))
                 } else {
-                    self.emitRefRelease(c: inout c, cell: self.refCellFromValue(v: v), refTy: inst)
+                    try self.emitRefRelease(c: inout c, cell: self.refCellFromValue(v: v), refTy: inst)
                 }
             }
             // a `WeakRef[T]` value: the cell pointer with a WEAK rc. retain = bump
@@ -487,9 +497,9 @@ pub impl LlvmCtx {
             // decrement weak, and free the cell only when BOTH counts are 0.
             ArcClass.WeakCell(inst: _) => {
                 if retain {
-                    self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: v))
+                    (try self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: v)))
                 } else {
-                    self.weakRelease(c: inout c, cell: self.refCellFromValue(v: v))
+                    try self.weakRelease(c: inout c, cell: self.refCellFromValue(v: v))
                 }
             }
             // a `Promise[T]` value: the rc'd promise cell pointer. retain = one more
@@ -498,9 +508,9 @@ pub impl LlvmCtx {
             // type-erased i64 today, so cell death releases no payload (provisional).
             ArcClass.PromiseCell(inst: _) => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: v)
+                    try self.rawbufRetain(c: inout c, cell: v)
                 } else {
-                    self.rawbufDrop(c: inout c, cell: v)
+                    try self.rawbufDrop(c: inout c, cell: v)
                 }
             }
             // an `any P` existential ({ box, vtable }): retain = one more owner of the
@@ -509,9 +519,9 @@ pub impl LlvmCtx {
             // (slot 1) and free the box.
             ArcClass.AnyBox => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                    try self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
                 } else {
-                    self.emitAnyRelease(c: inout c, fat: v)
+                    try self.emitAnyRelease(c: inout c, fat: v)
                 }
             }
             // a closure value ({ fn, env }): retain = one more owner of the env cell
@@ -519,61 +529,62 @@ pub impl LlvmCtx {
             // 0 destroy the captures via the env's drop thunk (slot 0) and free the env.
             ArcClass.ClosureVal => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 1U64, anon()))
+                    try self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 1U64, anon()))
                 } else {
-                    self.emitClosureRelease(c: inout c, fat: v)
+                    try self.emitClosureRelease(c: inout c, fat: v)
                 }
             }
             // The field contract is already grounded for this value. Physical
             // witness emission must not reopen an ambient instance environment.
             ArcClass.StructVal(sidx: _) => {
                 if retain {
-                    self.emitStructRetain(c: inout c, v: v, ref: typeRef)
+                    try self.emitStructRetain(c: inout c, v: v, ref: typeRef)
                 } else {
-                    self.emitDeinitValue(c: inout c, v: v, ref: typeRef)
+                    try self.emitDeinitValue(c: inout c, v: v, ref: typeRef)
                 }
             }
             // an enum value: value-ARC its active variant's non-boxed heap.
             ArcClass.EnumVal(eidx: _) => {
                 if retain {
-                    self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
+                    (try self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef))
                 } else {
-                    self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
+                    (try self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef))
                 }
             }
         }
+        return <Result.Ok value=() />
     }
 
     // Retain and drop use the same concrete layout registration identity.
     // Nested instances of one declaration (Box[Box[String]], Box[String])
     // must call different witnesses rather than trigger an inline cycle guard.
-    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, ref: U64) {
-        val reg = self.requireStructLayoutSlot(c: inout c, typeRef: ref)
+    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
+        val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
         val slot = self.structRetainWitness(c: inout c, reg: reg)
         val arguments: Array[LLVMValueRef] = [v]
-        self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments)
+        (try self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments))
+        return <Result.Ok value=() />
     }
 
-    inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+    inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, typeRef: U64) -> Result[(), CompileDiagnostic] {
         val identity = c.finalDestructionIndex(typeRef: typeRef)
         if identity == 0U64 {
-            c.errorAt(offset: 0U64, msg: "internal error: struct retain has no finalized destruction contract")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: struct retain has no finalized destruction contract") />
         }
         val contract = c.arena.finalDestructions[identity - 1U64]
         if !contract.ready || contract.fieldTypes.count() != contract.fieldBoxed.count() || contract.fieldTypes.count() != contract.fieldNeedsRelease.count() {
-            c.errorAt(offset: 0U64, msg: "internal error: struct retain has an incomplete destruction contract")
-            return
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: struct retain has an incomplete destruction contract") />
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
             if contract.fieldBoxed[field] {
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()))
+                try self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, field, anon()))
             } else if contract.fieldNeedsRelease[field] {
-                self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: contract.fieldTypes[field], retain: true)
+                try self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, field, anon()), typeRef: contract.fieldTypes[field], retain: true)
             }
             field += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     inout fn retWitSlot(reg: U64) -> U64 {
@@ -604,32 +615,33 @@ pub impl LlvmCtx {
 
     // Each witness consumes its frozen instance. Calls to nested witnesses
     // grow the worklist without recursively inlining the same declaration.
-    inout fn emitRetainWitnessBodies(c: inout Comp) {
+    inout fn emitRetainWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.retWitDone < self.retWitReg.count() {
             val slot: U64 = self.retWitDone
             val reg: U64 = self.retWitReg[slot]
             val fv: LLVMValueRef = self.retWitVal[slot]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitRetainWitnessWalk(c: inout c, v: self.valueParameter(function: fv, index: 0U64), typeRef: self.genStructRefs[reg])
+            try self.emitRetainWitnessWalk(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.retWitDone += 1U64
         }
+        return <Result.Ok value=() />
     }
 
     // Release one owner of array buffer `data` (element type elemTy/elemRef):
     // decrement its rc, and at 0 release every element's heap (loop) then free the buffer.
-    inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+    inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[(), CompileDiagnostic] {
         // No per-element heap to release (scalar elements): the whole decrement-and-free-
         // at-0 is exactly plew_rawbuf_drop, so emit one call instead of inlining release +
         // icmp + 2 blocks + condbr + free at every site (~8800 sites — most array releases).
         // Semantically identical; cuts ~60k IR lines. (String / Ref / struct / enum elements
         // DO need the per-element cascade below — arcNeedsRelease is true for them.)
-        if !(c.finalNeedsRelease(typeRef: elemRef)) {
-            self.rawbufDrop(c: inout c, cell: data)
-            return
+        if !((try c.finalNeedsRelease(typeRef: elemRef))) {
+            try self.rawbufDrop(c: inout c, cell: data)
+            return <Result.Ok value=() />
         }
-        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: data)
+        val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: data))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.free"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.cont"))
@@ -638,20 +650,22 @@ pub impl LlvmCtx {
         // Only the final owner needs the live range. rawbufRelease decrements
         // without freeing, so the header is still valid here; null has count 0.
         // Scalar and still-shared buffers never need a count load for release.
-        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
-        self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
-        self.rawbufFree(c: inout c, cell: data)
+        val count: LLVMValueRef = (try self.rawbufCount(c: inout c, data: data))
+        try self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
+        try self.rawbufFree(c: inout c, cell: data)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+        return <Result.Ok value=() />
     }
 
     // Retain (shallow) every element of array buffer `data` — used after a CoW copy.
-    inout fn emitRetainArrayElems(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
-        self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: true)
+    inout fn emitRetainArrayElems(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[(), CompileDiagnostic] {
+        try self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: true)
+        return <Result.Ok value=() />
     }
 
     // Emit `for i in 0..count() { v = data[i]; retain ? retainValue(v) : releaseValue(v) }`.
-    inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) {
+    inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) -> Result[(), CompileDiagnostic] {
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         llvmStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.cond"))
@@ -663,18 +677,19 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
-        self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: retain)
+        try self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: retain)
         llvmStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
+        return <Result.Ok value=() />
     }
 
     // Release each element in the half-open range [start, end) of buffer `data` (used by
     // clear/truncate to drop a removed suffix). A no-op when the element type carries no
     // value-ARC. The caller must have committed the smaller count first (commit-then-release).
-    inout fn emitArrayElemRangeRelease(c: inout Comp, data: LLVMValueRef, start: LLVMValueRef, end: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
-        if !(c.finalNeedsRelease(typeRef: elemRef)) {
-            return
+    inout fn emitArrayElemRangeRelease(c: inout Comp, data: LLVMValueRef, start: LLVMValueRef, end: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> Result[(), CompileDiagnostic] {
+        if !((try c.finalNeedsRelease(typeRef: elemRef))) {
+            return <Result.Ok value=() />
         }
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         llvmStore(self.b, start, iSlot)
@@ -687,21 +702,22 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, end, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         val elem: LLVMValueRef = llvmLoad(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
-        self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: false)
+        try self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: false)
         llvmStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
+        return <Result.Ok value=() />
     }
 
     // A physical guard, shared by all index projections. Keep the runtime's
     // signed predicate and panic text, while allowing LLVM to inline the check.
-    inout fn boundsCheckFunction(c: inout Comp, signature: LLVMTypeRef) -> LLVMValueRef {
-        val function = self.getOrDeclare(c: inout c, name: "pw_bounds", fnTy: signature)
-        if LLVMCountBasicBlocks(function) != 0U32 { return function }
+    inout fn boundsCheckFunction(c: inout Comp, signature: LLVMTypeRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val function = (try self.getOrDeclare(c: inout c, name: "pw_bounds", fnTy: signature))
+        if LLVMCountBasicBlocks(function) != 0U32 { return <Result.Ok value=function /> }
         LLVMSetLinkage(function, 8U32)
         val panicParameters: Array[LLVMTypeRef] = [self.ptrty, self.i64ty]
         val panicType = LLVMFunctionType(self.voidty, arrayCPtr(panicParameters), 2U64, 0I32)
-        val panicFunction = self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: panicType)
+        val panicFunction = (try self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: panicType))
         val builder = LLVMCreateBuilderInContext(self.ctx)
         val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
         val failed = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "failed"))
@@ -720,19 +736,20 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(builder, done)
         LLVMBuildRetVoid(builder)
         LLVMDisposeBuilder(builder)
-        return function
+        return <Result.Ok value=function />
     }
 
-    inout fn emitBoundsCheck(c: inout Comp, idx: LLVMValueRef, count: LLVMValueRef) {
+    inout fn emitBoundsCheck(c: inout Comp, idx: LLVMValueRef, count: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.i64ty)
         ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = self.boundsCheckFunction(c: inout c, signature: fty)
+        val callee: LLVMValueRef = (try self.boundsCheckFunction(c: inout c, signature: fty))
         mut val av: Array[LLVMValueRef] = []
         av.append(idx)
         av.append(count)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        return <Result.Ok value=() />
     }
 
     // GEP &data[i] for element type elemTy.
