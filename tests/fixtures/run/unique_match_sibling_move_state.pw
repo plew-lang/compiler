@@ -1,0 +1,23 @@
+// An arm's moved payload must not mark a sibling arm's reused local slot.
+import @Std/Io with { print }
+unique struct Resource { pub val label: String deinit { print(self.label) } }
+pub impl Resource { factory }
+unique enum Outcome { Success(resource: Resource) Failure(message: String) }
+fn original(success: Bool) -> Outcome {
+    if success { return <Outcome.Success resource=<Resource label="owned" /> /> }
+    return <Outcome.Failure message="failed" />
+}
+fn forward(success: Bool) -> Outcome {
+    match original(success: success) {
+        Outcome.Success(resource: val resource) => { return <Outcome.Success resource=move resource /> }
+        Outcome.Failure(message: val message) => { return <Outcome.Failure message=message /> }
+    }
+}
+fn check(success: Bool) {
+    match forward(success: success) {
+        Outcome.Success(resource: val resource) => { print("success") }
+        Outcome.Failure(message: val message) => { print(message) }
+    }
+}
+fn main() { check(success: true)
+    check(success: false) }

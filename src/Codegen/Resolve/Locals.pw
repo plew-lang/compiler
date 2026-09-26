@@ -113,6 +113,11 @@ pub impl Comp {
             i += 1
         }
         self.cur.locals = kept
+        // Move facts use local slots as keys. Discard facts for departing
+        // bindings before a sibling scope can reuse those slots.
+        if self.cur.verifyMovedIdx.count() != 0U64 {
+            self.verifyDropMovedAbove(mark: mark)
+        }
     }
 
     inout fn localIsMutable(start: U64, len: U64) -> Bool {

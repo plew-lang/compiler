@@ -156,7 +156,6 @@ pub impl Comp {
             i += 1
         }
         self.popLocals(mark: mark)
-        self.verifyDropMovedAbove(mark: mark)
         return <Result.Ok value=() />
     }
 

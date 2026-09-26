@@ -1,0 +1,12 @@
+// Closing an inner scope must retain move facts belonging to outer bindings.
+import @Std/Io with { print }
+unique struct Resource { pub val label: String }
+pub impl Resource { factory }
+fn consume(resource: move Resource) {}
+fn main() {
+    val resource = <Resource label="owned" />
+    consume(resource: move resource)
+    if true { val other = 1I64
+        print(other) }
+    print(resource.label)
+}
