@@ -1,0 +1,6 @@
+import ./Alpha
+import ./Beta
+fn main() {
+    val value = <Alpha.Choice.First />
+    match value { Beta.Choice.Other => {} }
+}

@@ -256,6 +256,7 @@ pub impl Comp {
     }
 
     inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Result[Bool, CompileDiagnostic] {
+        if te.hasDecl && tin.hasDecl && te.declOffset != tin.declOffset { return <Result.Ok value=false /> }
         mut val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
         mut val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
         // a GENERIC struct head (`Box` of `Box[I64]`) is a known type identity too.
@@ -372,7 +373,9 @@ pub impl Comp {
     // 0 when the span names no generic struct. compatNamed's identity supplement —
     // see the comment there.
     inout fn genericStructHeadId(start: U64, len: U64) -> U64 {
-        val si: U64 = self.structDefByNameAny(start: start, len: len)
+        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)
+        if declaration.nameLen == 0U64 { return 0U64 }
+        val si = self.arena.structIndexByOffset(offset: declaration.nameStart)
         if si < self.arena.structCount() {
             if self.arena.structAt(index: si).typeParams.count() > 0U64 {
                 return self.arena.structAt(index: si).nameId

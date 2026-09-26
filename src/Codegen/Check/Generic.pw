@@ -118,6 +118,15 @@ pub impl Comp {
         if self.isTypeParamOf(fnIdx: tpFn, start: start, len: len) {
             return <IdentBinding code=identTypeQualCode() target=identNoTarget() />
         }
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] unresolved identifier=")
+            eprint(text: stringFromBytesUnchecked(extractSpan(buf: self.arena.bytes, start: start, len: len)))
+            eprint(text: " offset=")
+            eprintU64(n: start)
+            eprint(text: " function=")
+            eprintU64(n: tpFn)
+            eprint(text: "\n")
+        }
         return <IdentBinding code=identUndefCode() target=identNoTarget() />
     }
 

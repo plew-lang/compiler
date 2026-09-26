@@ -1125,41 +1125,8 @@ pub impl Comp {
     }
 
     inout fn isTypeName(start: U64, len: U64) -> Bool {
-        if self.structIndexByName(start: start, len: len) < self.arena.structCount() {
-            return true
-        }
-        // an import alias (`with { Real as Alias }`) names the same type as `Real`.
-        val ar: Bind = self.aliasReal(start: start, len: len)
-        val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
-        // a newtype name is a type name too (it can be an assoc-fn/factory receiver
-        // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
-        mut val nti: U64 = 0
-        while nti < self.arena.newtypeCount() {
-            if self.arena.newtypeAt(index: nti).nameId == qId {
-                return true
-            }
-            nti += 1
-        }
-        mut val ei: U64 = 0
-        while ei < self.arena.enumCount() {
-            if self.arena.enumAt(index: ei).nameId == qId {
-                return true
-            }
-            ei += 1
-        }
-        // a trait name also qualifies as an assoc-fn receiver: a trait can own
-        // provided `assoc fn`s (no Self in their signature), called `Trait.fn(args)`
-        // — the single provided impl makes it unambiguous (the derive model's
-        // `Hash.derive(input)` rides on this). This is `isTypeName`'s only caller
-        // (assocRecvName), so traits qualify only for that routing.
-        mut val ti: U64 = 0
-        while ti < self.decls.traitCount() {
-            if self.decls.traitAt(index: ti).nameId == qId {
-                return true
-            }
-            ti += 1
-        }
-        return self.genericStructIndex(nameStart: ar.nameStart, nameLen: ar.nameLen) < self.arena.structCount()
+        val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)
+        return declaration.nameLen != 0U64
     }
 
     inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
