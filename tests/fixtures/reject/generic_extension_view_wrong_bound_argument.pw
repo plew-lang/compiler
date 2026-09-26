@@ -1,0 +1,11 @@
+// A generic extension pattern cannot change the rigid argument of a bound.
+trait Source[Element] { fn value() -> Element }
+extension Wrapped {
+    impl[Element] Source[Array[Element]] {
+        fn count() -> U64 { return self.value().count() }
+    }
+}
+fn size[T](value: T) -> U64 where T: Source[I64] {
+    return value#Wrapped.count()
+}
+fn main() {}

@@ -8,6 +8,49 @@
 // (which lower to Expr.Move, not a place) pass. `inoutOk` exempts `inout` args.
 
 pub impl Comp {
+    // Generic bodies are verified against their declared trait bounds.  This
+    // deliberately returns a requirement signature, never a concrete witness:
+    // the latter belongs to Mono after T is instantiated.  Keeping the two
+    // phases distinct prevents unrelated concrete conformance paths from
+    // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
+    inout fn checkSymbolicMethodArgs(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
+        if receiverRef == 0U64 || fnIdx >= self.arena.functionCount() { return <Result.Ok value=false /> }
+        val resolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args))
+        match resolution {
+            StaticMemberResolution.Requirement(val proof, val traitIdx, val reqIdx) => {
+                // Only symbolic proofs own declaration-time argument types.
+                // Concrete witnesses retain the ordinary callable checks.
+                mut val symbolic = false
+                match proof {
+                    StaticConformanceProof.AssumedBound(boundIdx: _) => { symbolic = true }
+                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: _, traits: _) => { symbolic = true }
+                    StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { symbolic = true }
+                    _ => {}
+                }
+                if !symbolic { return <Result.Ok value=false /> }
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
+                mut val index = 0U64
+                while index < args.len {
+                    val parameterIndex = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
+                    if parameterIndex < requirement.params.count() {
+                        val parameter = self.funcParamAt(params: requirement.params, index: parameterIndex)
+                        val argument = self.argAt(args: args, index: index)
+                        try self.checkArgInoutMode(p: parameter, arg: argument)
+                        val expected = self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index)
+                        if expected != 0U64 {
+                            val type = self.typeInfoOfRef(ref: expected)
+                            try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
+                        }
+                        try self.tcCheckValue(expectedRef: expected, valueExpr: argument.expr, pos: "arg")
+                    }
+                    index += 1U64
+                }
+                return <Result.Ok value=true />
+            }
+            _ => { return <Result.Ok value=false /> }
+        }
+    }
+
     inout fn checkUniquePlaceCopy(exprId: U64, inoutOk: Bool) -> Result[(), CompileDiagnostic] {
         if inoutOk {
             return <Result.Ok value=() />
@@ -331,6 +374,11 @@ pub impl Comp {
     inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         try self.checkUniqueArgModes(args: args)
         try self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
+        mut val receiverTerm = self.parametricExprTerm(exprId: recv)
+        if receiverTerm == 0U64 { receiverTerm = (try self.inferType(id: recv)) }
+        if (try self.checkSymbolicMethodArgs(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)) {
+            return <Result.Ok value=() />
+        }
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
         // int form, so this matches exprType exactly.)
         val rt: TypeInfo = (try self.typeOf(id: recv))

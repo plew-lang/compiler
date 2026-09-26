@@ -13,44 +13,6 @@
 // LLVMValueRef null as an LLVMTypeRef "none" sentinel).
 
 pub impl Comp {
-    // Generic bodies are verified against their declared trait bounds.  This
-    // deliberately returns a requirement signature, never a concrete witness:
-    // the latter belongs to Mono after T is instantiated.  Keeping the two
-    // phases distinct prevents unrelated concrete conformance paths from
-    // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
-    inout fn verifyBoundMethodCall(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        if receiverRef == 0U64 || fnIdx >= self.arena.functionCount() { return <Result.Ok value=false /> }
-        val resolution = (try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args))
-        match resolution {
-            StaticMemberResolution.Requirement(val proof, val traitIdx, val reqIdx) => {
-                // Only symbolic proofs own declaration-time argument types.
-                // Concrete witnesses retain the ordinary callable checks.
-                mut val symbolic = false
-                match proof {
-                    StaticConformanceProof.AssumedBound(boundIdx: _) => { symbolic = true }
-                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: _, traits: _) => { symbolic = true }
-                    StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { symbolic = true }
-                    _ => {}
-                }
-                if !symbolic { return <Result.Ok value=false /> }
-                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
-                mut val index = 0U64
-                while index < args.len {
-                    val parameterIndex = self.paramIndexForArg(params: requirement.params, args: args, argIdx: index)
-                    if parameterIndex < requirement.params.count() {
-                        val parameter = self.funcParamAt(params: requirement.params, index: parameterIndex)
-                        val argument = self.argAt(args: args, index: index)
-                        try self.checkArgInoutMode(p: parameter, arg: argument)
-                        try self.tcCheckValue(expectedRef: self.staticRequirementParamType(resolution: resolution, args: args, argIdx: index), valueExpr: argument.expr, pos: "arg")
-                    }
-                    index += 1U64
-                }
-                return <Result.Ok value=true />
-            }
-            _ => { return <Result.Ok value=false /> }
-        }
-    }
-
     inout fn knownNamedTypeId(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) denotes the same type identity as
         // `Real`: resolve so a value typed via its alias and one via the real name compare

@@ -94,7 +94,16 @@ pub impl Comp {
         while pi < f.params.count() {
             val p: Param = self.funcParamAt(params: f.params, index: pi)
             try self.checkGenericArity(ref: p.ty, offset: p.nameStart)
-            self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
+            if abstract && p.ty != 0U64 {
+                // Derive the compatibility view from the same symbolic term as
+                // the generic checker. In particular Array[Box[T]] must expose
+                // Box as its element head, not an ungrounded annotation span.
+                val term = (try self.groundTypeRef(ref: p.ty))
+                val info = self.typeInfoOfRef(ref: term)
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: term, isInout: p.isInout, isMut: false, owned: p.isMove)
+            } else {
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
+            }
             pi += 1
         }
         try self.verifyBlock(blockId: f.body)

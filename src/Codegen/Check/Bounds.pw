@@ -161,6 +161,19 @@ pub impl Comp {
                 _ => { return <Result.Ok value=assumed />}
             }
         }
+        // An extension may quantify its trait arguments (B[Element]). Match
+        // those binders against the authored bound (B[I64]); the declaration's
+        // own arguments remain rigid on the right side of the unification.
+        mut val index = 0U64
+        while index < self.decls.funcBounds.count() {
+            val bound = self.decls.funcBounds[index]
+            if bound.fnIdx == self.cur.checkFn && bound.constraint.key.owner == traitOwner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == traitArgs.count() {
+                if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) {
+                    return <Result.Ok value=<StaticConformanceProof.AssumedBound boundIdx=index /> />
+                }
+            }
+            index += 1U64
+        }
         return <Result.Ok value=(try self.concreteTraitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams)) />
     }
 

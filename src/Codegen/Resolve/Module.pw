@@ -617,6 +617,21 @@ pub impl Comp {
         // `#P` select an unimported, same-named trait from another module.
         // Extension bundles intentionally remain name-keyed above.
         val traitOwner: U64 = sourceOwner
+        // A declared bound establishes the same source identity as a concrete
+        // conformance. Preserve the lexical trait owner through re-exports;
+        // the receiver's spelling alone cannot identify an abstract proof.
+        if traitOwner != 0U64 && recvRef != 0U64 && self.cur.checkFn < self.arena.functionCount() {
+            mut val boundIndex = 0U64
+            while boundIndex < self.decls.funcBounds.count() {
+                val bound = self.decls.funcBounds[boundIndex]
+                if bound.fnIdx == self.cur.checkFn && bound.constraint.key.owner == traitOwner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: recvRef)) {
+                    val key = <ViewSource kind=2U64 id=sourceId owner=traitOwner arity=bound.constraint.key.positionalArgs.count() />
+                    if found.kind == 0U64 { found = key }
+                    else if !self.sameViewSource(a: found, b: key) { return <Result.Ok value=<ViewSource /> /> }
+                }
+                boundIndex += 1U64
+            }
+        }
         if self.traceCodegen {
             eprint(text: "[trace-codegen] view-source trait query\n")
         }
