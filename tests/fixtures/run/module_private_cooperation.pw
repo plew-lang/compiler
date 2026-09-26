@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+struct Secret {
+    mut val value: I64
+    pub(get) mut val observed: I64 = 2I64
+}
+impl Secret { fn internalValue() -> I64 { return self.value + self.observed } }
+struct Reader {}
+impl Reader {
+    fn read() -> I64 {
+        mut val secret = <Secret value=3I64 />
+        secret.value = 4I64
+        secret.observed = 5I64
+        return secret.internalValue()
+    }
+}
+fn main() {
+    val reader = <Reader />
+    print(reader.read())
+}

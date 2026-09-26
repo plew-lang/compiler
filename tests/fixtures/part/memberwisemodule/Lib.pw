@@ -1,0 +1,8 @@
+export struct Secret {
+    val value: I64
+    pub(get) mut val observed: I64 = 2I64
+}
+pub impl Secret {
+    factory
+    fn sum() -> I64 { return self.value + self.observed }
+}

@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+import ./Lib with { Secret }
+fn main() {
+    val secret = <Secret.known />
+    print(secret.value)
+}

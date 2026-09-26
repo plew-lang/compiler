@@ -685,10 +685,11 @@ pub impl Comp {
     }
 
     inout fn checkStructSurfaceInModule(surfaceMod: U64, sd: StructDef) -> Result[(), CompileDiagnostic] {
+        val publishesFactory = self.structHasPubFactory(nameId: sd.nameId)
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
             val f: FieldDef = sd.fields[fi]
-            if f.vis != 0U64 {
+            if f.vis != 0U64 || publishesFactory {
                 try self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
             }
             fi += 1

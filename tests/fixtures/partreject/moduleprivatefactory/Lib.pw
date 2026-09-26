@@ -1,0 +1,5 @@
+export struct Secret { val value: I64 }
+pub impl Secret {
+    factory known() { return <Secret value=2I64 /> }
+}
+impl Secret { fn hidden() -> I64 { return self.value } }
