@@ -1,0 +1,1 @@
+fn secret() -> I64 { return 1I64 }

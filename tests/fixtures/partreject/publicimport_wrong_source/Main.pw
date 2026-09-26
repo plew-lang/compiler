@@ -1,0 +1,2 @@
+import ./Facade with { secret }
+fn main() {}

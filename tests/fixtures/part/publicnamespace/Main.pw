@@ -1,0 +1,3 @@
+import ./Facade with { M }
+import @Std/Io with { print }
+fn main() { print(M.answer()) }
