@@ -444,29 +444,29 @@ pub impl Comp {
             }
             i = self.arena.nextStructNamed(index: i)
         }
-        i = 0
+        i = self.arena.firstEnumNamed(nameId: qId)
         while i < self.arena.enumCount() {
             val d: EnumDef = self.arena.enumAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
-            i += 1
+            i = self.arena.nextEnumNamed(index: i)
         }
-        i = 0
+        i = self.decls.firstTraitNamed(nameId: qId)
         while i < self.decls.traitCount() {
             val d: TraitDef = self.decls.traitAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.nameStart) == mod {
                 return <Bind nameStart=d.nameStart nameLen=1 fieldStart=0 fieldLen=0 />
             }
-            i += 1
+            i = self.decls.nextTraitNamed(index: i)
         }
-        i = 0
+        i = self.arena.firstNewtypeNamed(nameId: qId)
         while i < self.arena.newtypeCount() {
             val d: NewtypeDef = self.arena.newtypeAt(index: i)
             if d.nameId == qId && self.moduleOf(offset: d.defOffset) == mod {
                 return <Bind nameStart=d.defOffset nameLen=1 fieldStart=0 fieldLen=0 />
             }
-            i += 1
+            i = self.arena.nextNewtypeNamed(index: i)
         }
         return self.missingDeclIdentity()
     }

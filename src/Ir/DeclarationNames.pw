@@ -84,7 +84,18 @@ pub impl Arena {
         return self.enums.count()
     }
 
+    fn nextEnumNamed(index: U64) -> U64 {
+        val entry = self.enumNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.enums.count()
+    }
     inout fn registerEnum(declaration~: EnumDef) {
+        val nameEntry = self.enums.count() + 1U64
+        val nameTail = self.enumNameTails.getOr(key: declaration.nameId, fallback: 0U64)
+        self.enumNameNext.append(0U64)
+        if nameTail == 0U64 { self.enumNameHeads[declaration.nameId] = nameEntry }
+        else { self.enumNameNext[nameTail - 1U64] = nameEntry }
+        self.enumNameTails[declaration.nameId] = nameEntry
         val entry = self.enums.count() + 1U64
         if self.enumNameHeads.getOr(key: declaration.nameId, fallback: 0U64) == 0U64 {
             self.enumNameHeads[declaration.nameId] = entry
@@ -175,7 +186,23 @@ pub impl Arena {
     }
     fn newtypeCount() -> U64 { return self.newtypes.count() }
     fn newtypeAt(index: U64) -> NewtypeDef { return self.newtypes[index] }
+    fn nextNewtypeNamed(index: U64) -> U64 {
+        val entry = self.newtypeNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.newtypes.count()
+    }
+    fn firstNewtypeNamed(nameId: U64) -> U64 {
+        val entry = self.newtypeNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.newtypes.count()
+    }
     inout fn registerNewtype(declaration~: NewtypeDef) {
+        val nameEntry = self.newtypes.count() + 1U64
+        val nameTail = self.newtypeNameTails.getOr(key: declaration.nameId, fallback: 0U64)
+        self.newtypeNameNext.append(0U64)
+        if nameTail == 0U64 { self.newtypeNameHeads[declaration.nameId] = nameEntry }
+        else { self.newtypeNameNext[nameTail - 1U64] = nameEntry }
+        self.newtypeNameTails[declaration.nameId] = nameEntry
         if self.newtypesByOffset.getOr(key: declaration.defOffset, fallback: 0U64) == 0U64 {
             self.newtypesByOffset[declaration.defOffset] = self.newtypes.count() + 1U64
         }
@@ -203,7 +230,23 @@ pub impl Decls {
         if entry == 0U64 { return self.traits.count() }
         return entry - 1U64
     }
+    fn nextTraitNamed(index: U64) -> U64 {
+        val entry = self.traitNameNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.traits.count()
+    }
+    fn firstTraitNamed(nameId: U64) -> U64 {
+        val entry = self.traitNameHeads.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.traits.count()
+    }
     inout fn registerTrait(declaration~: TraitDef) {
+        val nameEntry = self.traits.count() + 1U64
+        val nameTail = self.traitNameTails.getOr(key: declaration.nameId, fallback: 0U64)
+        self.traitNameNext.append(0U64)
+        if nameTail == 0U64 { self.traitNameHeads[declaration.nameId] = nameEntry }
+        else { self.traitNameNext[nameTail - 1U64] = nameEntry }
+        self.traitNameTails[declaration.nameId] = nameEntry
         if self.traitsByOffset.getOr(key: declaration.nameStart, fallback: 0U64) == 0U64 {
             self.traitsByOffset[declaration.nameStart] = self.traits.count() + 1U64
         }
