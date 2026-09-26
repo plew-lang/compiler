@@ -1,0 +1,9 @@
+import ./Alpha
+import ./Beta
+import @Std/Io with { print }
+struct Local {}
+impl Local as Alpha.Read { fn alpha() -> I64 { return 41I64 } }
+impl Local as Beta.Read { fn beta() -> I64 { return 42I64 } }
+fn alpha[T](item: T) -> I64 where T: Alpha.Read { return item.alpha() }
+fn beta[T](item: T) -> I64 where T: Beta.Read { return item.beta() }
+fn main() { print(alpha(item: <Local />)) print(beta(item: <Local />)) }

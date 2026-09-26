@@ -1,0 +1,4 @@
+import ./Models
+struct Box[T] { val item: T }
+impl[Models] Box[Models] as Models.Read { fn read() -> I64 { return 41I64 } }
+fn main() {}

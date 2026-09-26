@@ -1,0 +1,4 @@
+import ./Models
+struct Local {}
+impl Local as Models[I64].Read { fn read() -> I64 { return 41I64 } }
+fn main() {}

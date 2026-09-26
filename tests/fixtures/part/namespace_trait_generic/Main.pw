@@ -1,0 +1,6 @@
+import ./Models
+import @Std/Io with { print }
+struct Local {}
+impl Local as Models.Read[I64] { fn read() -> I64 { return 41I64 } }
+fn read[T](item: T) -> I64 where T: Models.Read[I64] { return item.read() }
+fn main() { print(read(item: <Local />)) }

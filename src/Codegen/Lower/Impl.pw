@@ -356,12 +356,18 @@ pub impl Comp {
     inout fn normalizeSyntaxImplTrait(im: SyntaxImpl) -> Result[SyntaxImpl, CompileDiagnostic] {
         if im.traitPath.count == 0U64 { return <Result.Ok value=im /> }
         val ty = (try self.resolveSyntaxTypePath(t: <SyntaxType name=im.traitName namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan extView=<Span start=0 end=0 /> viewNames=<SyntaxSlice start=0 count=0 /> projectionTrait=<Span start=0 end=0 /> projectionTraitArgs=<SyntaxSlice start=0 count=0 /> projectionTraitArgLabels=<SyntaxSlice start=0 count=0 /> projectionAssoc=<Span start=0 end=0 /> isAny=false argLabels=<SyntaxSlice start=0 count=0 /> isSendable=false isRecord=false />))
+        if ty.projectionAssoc.end > ty.projectionAssoc.start {
+            return <Result.Err error=self.diagnosticAt(offset: im.traitNameSpan.start, msg: "an impl conformance requires a trait declaration, not an associated-type projection") />
+        }
         return <Result.Ok value=<SyntaxImpl recvType=im.recvType implParams=im.implParams implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.name traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName /> />
     }
 
     inout fn normalizeImplAstTrait(im: ImplAst) -> Result[ImplAst, CompileDiagnostic] {
         if im.traitPath.count() == 0U64 { return <Result.Ok value=im /> }
         val ty = (try self.normalizeProjectionTypeActive(t: <TypeAst name=im.traitName nameSpan=im.traitNameSpan namePath=im.traitPath args=im.traitArgs span=im.traitNameSpan />))
+        if ty.projectionAssoc.bytes().count() != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: im.traitNameSpan.start, msg: "an impl conformance requires a trait declaration, not an associated-type projection") />
+        }
         return <Result.Ok value=<ImplAst recvType=im.recvType implParams=im.implParams implParamSpans=im.implParamSpans implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.nameSpan traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName extNameSpan=im.extNameSpan /> />
     }
 
@@ -781,10 +787,10 @@ pub impl Comp {
     }
 
     inout fn lowerImpl(rawImpl: ImplAst) -> Result[(), CompileDiagnostic] {
-        val im = (try self.normalizeImplAstTrait(im: rawImpl))
-        val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable))
+        val implParamBinds: Array[Bind] = (try self.lowerTypeParamNames(names: rawImpl.implParams, anchor: rawImpl.span.start, sendableFlags: rawImpl.implParamSendable))
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
+        val im = (try self.normalizeImplAstTrait(im: rawImpl))
         val receiverType = (try self.normalizeProjectionTypeActive(t: im.recvType))
         val rawRecvN: Bind = self.lowerTypeName(name: receiverType.name, span: receiverType.nameSpan)
         val recvTraitOwner: U64 = self.traitOwnerAtUse(start: rawRecvN.nameStart, len: rawRecvN.nameLen, arity: receiverType.args.count())
@@ -907,18 +913,18 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxImpl(rawImpl: SyntaxImpl) -> Result[(), CompileDiagnostic] {
-        val im = (try self.normalizeSyntaxImplTrait(im: rawImpl))
         mut val implSpans: Array[Span] = []
         mut val implFlags: Array[Bool] = []
         mut val i: U64 = 0U64
-        while i < syntaxImplParamCount(file: self.syntax, impl: im) {
-            implSpans.append(syntaxImplParamSpan(file: self.syntax, impl: im, index: i))
-            implFlags.append(syntaxImplParamIsSendable(file: self.syntax, impl: im, index: i))
+        while i < syntaxImplParamCount(file: self.syntax, impl: rawImpl) {
+            implSpans.append(syntaxImplParamSpan(file: self.syntax, impl: rawImpl, index: i))
+            implFlags.append(syntaxImplParamIsSendable(file: self.syntax, impl: rawImpl, index: i))
             i += 1U64
         }
-        val implParamBinds: Array[Bind] = (try self.lowerTypeParamSpans(spans: implSpans, anchor: im.span.start, sendableFlags: implFlags))
+        val implParamBinds: Array[Bind] = (try self.lowerTypeParamSpans(spans: implSpans, anchor: rawImpl.span.start, sendableFlags: implFlags))
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
+        val im = (try self.normalizeSyntaxImplTrait(im: rawImpl))
         val recvSyntax: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: im.recvType)))
         val rawRecvN: Bind = <Bind nameStart=recvSyntax.name.start nameLen=recvSyntax.name.end - recvSyntax.name.start fieldStart=recvSyntax.name.start fieldLen=recvSyntax.name.end - recvSyntax.name.start />
         val recvArity: U64 = syntaxTypeArgCount(file: self.syntax, ty: recvSyntax)
