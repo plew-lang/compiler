@@ -21,7 +21,7 @@ fn main() {
         MidVerifyError.MissingOwnershipContract => {}
         _ => { assert(false) }
     }
-    compiler.enqueueFinalDestruction(typeRef: type)
+    compiler.enqueueFinalDestruction(typeRef: type).unwrap()
     match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
         MidVerifyError.None => {}
         _ => { assert(false) }

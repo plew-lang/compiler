@@ -17,7 +17,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val root = c.lowerSyntaxBlock(id: decl.body)
+    val root = c.lowerSyntaxBlock(id: decl.body).unwrap()
     print(c.blockStmtCount(blkId: root))
     match c.arena.stmts[c.blockStmtAt(blkId: root, index: 0U64)] {
         Stmt.Assign(target: _, value: _) => { print(1U64) }

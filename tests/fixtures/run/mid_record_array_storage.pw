@@ -12,7 +12,7 @@ fn main() {
     compiler.arena.exprChildPool.append(0U64)
     compiler.arena.exprs.append(<Expr.Array elems=<ExprRange start=0U64 len=1U64 /> />)
     // The parent is newer than its child and has no preallocated type row.
-    compiler.recordExpr(exprId: 1U64)
+    compiler.recordExpr(exprId: 1U64).unwrap()
     val term = compiler.semanticExprTerm(exprId: 1U64)
     assert(term != 0U64)
     val recorded = compiler.arena.typeAt(index: term)

@@ -18,7 +18,7 @@ fn main() {
     compiler.decls.conforms.append(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTy=source traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId traitArgs=compiler.pushConformTypes(types: [integerType]) derived=false />)
     val target = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integerType] isAny=true />)
     val wrongTarget = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[stringType] isAny=true />)
-    match compiler.callArgumentConversion(sourceRef: source, targetRef: target) {
+    match compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap() {
         ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => {
             match proof {
                 StaticConformanceProof.ConcreteWitness(witness: val witness) => { print(witness.conformIdx) }
@@ -27,7 +27,7 @@ fn main() {
         }
         _ => { print(0U64) }
     }
-    match compiler.callArgumentConversion(sourceRef: source, targetRef: wrongTarget) {
+    match compiler.callArgumentConversion(sourceRef: source, targetRef: wrongTarget).unwrap() {
         ValueConversionProof.Missing => { print("missing") }
         _ => { print("wrong-proof") }
     }

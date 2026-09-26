@@ -8,11 +8,11 @@ fn add(c: inout Comp, receiver: Bind, name: Bind, traitId: U64 = 0U64, extension
         hasRecv=hasReceiver recvStart=receiver.nameStart recvLen=receiver.nameLen recvId=receiver.nameId
         selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
         isProvided=traitId != 0U64 srcTraitId=traitId srcTraitOwner=traitId extId=extensionId viewOnly=viewOnly />)
-    c.registerCallable(funcIdx: index)
+    c.registerCallable(funcIdx: index).unwrap()
     return index
 }
 fn selected(c: inout Comp, receiver: Bind, name: Bind) -> U64 {
-    return c.findMethod(recvStart: receiver.nameStart, recvLen: receiver.nameLen, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />)
+    return c.findMethod(recvStart: receiver.nameStart, recvLen: receiver.nameLen, nameStart: name.nameStart, nameLen: name.nameLen, args: <ArgRange start=0U64 len=0U64 />).unwrap()
 }
 fn main() {
     mut val c: Comp = <Comp />

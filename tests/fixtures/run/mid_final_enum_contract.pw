@@ -28,7 +28,7 @@ fn main() {
     // must preserve that decision independently of the mutable worklist.
     compiler.monoWork.boxedFields.append(boxed.nameStart)
     val type = compiler.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-    compiler.enqueueFinalDestruction(typeRef: type)
+    compiler.enqueueFinalDestruction(typeRef: type).unwrap()
     val identity = compiler.finalDestructionIndex(typeRef: type)
     assert(identity != 0U64)
     compiler.monoWork.boxedFields = []
@@ -60,7 +60,7 @@ fn main() {
     val nominal = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=0U64 />)
     val alias = compiler.pushType(t: <TypeRef nameStart=aliasName.nameStart nameLen=aliasName.nameLen args=[] hasDecl=true declOffset=0U64 />)
     assert(compiler.typeRefEq(a: nominal, b: alias))
-    compiler.enqueueFinalDestruction(typeRef: alias)
+    compiler.enqueueFinalDestruction(typeRef: alias).unwrap()
     assert(compiler.finalDestructionIndex(typeRef: nominal) == compiler.finalDestructionIndex(typeRef: alias))
     print("ok")
 }

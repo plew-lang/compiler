@@ -21,8 +21,8 @@ fn main() {
     print(compiler.sameStaticConformanceProof(a: original, b: restored))
     match restored {
         StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: selfType, params: <PatternBindInput.Values values=[] />, matchResult: witness), b: wrapper))
-            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: underlying, params: <PatternBindInput.Values values=[] />, matchResult: witness), b: underlying))
+            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: selfType, params: <PatternBindInput.Values values=[] />, matchResult: witness).unwrap(), b: wrapper))
+            print(compiler.typeRefEq(a: compiler.groundWitnessTypeTerm(ref: underlying, params: <PatternBindInput.Values values=[] />, matchResult: witness).unwrap(), b: underlying))
         }
         _ => { print(false) }
     }

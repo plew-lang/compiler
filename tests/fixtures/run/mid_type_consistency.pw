@@ -13,11 +13,11 @@ fn check(mode: U64) {
     val integerTerm = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
     val boolName = c.internBytes(s: "Bool")
     val boolTerm = c.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
-    c.enqueueFinalDestruction(typeRef: integerTerm)
-    c.enqueueFinalDestruction(typeRef: boolTerm)
+    c.enqueueFinalDestruction(typeRef: integerTerm).unwrap()
+    c.enqueueFinalDestruction(typeRef: boolTerm).unwrap()
     val unsignedName = c.internBytes(s: "U64")
     val unsignedTerm = c.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
-    c.enqueueFinalDestruction(typeRef: unsignedTerm)
+    c.enqueueFinalDestruction(typeRef: unsignedTerm).unwrap()
     val destinationTerm = if mode == 3U64 { give unsignedTerm } else if mode == 1U64 || mode == 4U64 || mode == 7U64 { give boolTerm } else { give integerTerm }
     val placeTerm = if mode == 2U64 { give boolTerm } else { give destinationTerm }
     val destination = <MidPlace local=0U64 typeTerm=placeTerm />
@@ -43,8 +43,8 @@ fn callAndReturn(mode: U64) {
     val integer = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
     val booleanName = c.internBytes(s: "Bool")
     val boolean = c.simpleTypeRef(nameStart: booleanName.nameStart, nameLen: booleanName.nameLen)
-    c.enqueueFinalDestruction(typeRef: integer)
-    c.enqueueFinalDestruction(typeRef: boolean)
+    c.enqueueFinalDestruction(typeRef: integer).unwrap()
+    c.enqueueFinalDestruction(typeRef: boolean).unwrap()
     val value = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=false typeTerm=integer /> />
     val destination = <MidPlace local=0U64 typeTerm=integer />
     mut val instance = 0U64

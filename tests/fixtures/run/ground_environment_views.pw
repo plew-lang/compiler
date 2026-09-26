@@ -43,7 +43,7 @@ fn main() {
         val projectedTerm = compiler.arena.typeAt(index: projectedResult)
         if projectedTerm.assocNameId != 31U64 { panic "proof binder projection erased" }
         if !compiler.typeRefEq(a: compiler.typeTermProjectionReceiver(t: projectedTerm), b: expected) { panic "proof projection view lost" }
-        val bodyResult = compiler.groundTermForBody(ref: projected, environment: <InstanceEnvironment receiverRef=argument />, selfRef: argument, itemRef: argument)
+        val bodyResult = compiler.groundTermForBody(ref: projected, environment: <InstanceEnvironment receiverRef=argument />, selfRef: argument, itemRef: argument).unwrap()
         if compiler.arena.typeAt(index: bodyResult).assocNameId != 31U64 { panic "body projection erased" }
     }
     write(s: "ground-environment-views-ok\n")

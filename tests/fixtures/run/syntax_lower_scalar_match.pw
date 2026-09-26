@@ -16,7 +16,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val root = c.lowerSyntaxBlock(id: decl.body)
+    val root = c.lowerSyntaxBlock(id: decl.body).unwrap()
     print(c.arena.blocks.count())
     print(c.arena.stmts.count())
     print(c.arena.exprs.count())

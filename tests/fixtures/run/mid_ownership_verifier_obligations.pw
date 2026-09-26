@@ -9,7 +9,7 @@ fn check(mode: U64) {
     c.arena.reserveTypeSentinel()
     val name = c.internBytes(s: "String")
     val t = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-    c.enqueueFinalDestruction(typeRef: t)
+    c.enqueueFinalDestruction(typeRef: t).unwrap()
     val p = <MidPlace local=0U64 typeTerm=t />
     val q = <MidPlace local=1U64 typeTerm=t />
     mut val statements: Array[MidStatement] = []
@@ -45,7 +45,7 @@ fn flagCase(correct: Bool, clearConsumed: Bool = true) {
     c.arena.reserveTypeSentinel()
     val name = c.internBytes(s: "String")
     val t = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
-    c.enqueueFinalDestruction(typeRef: t)
+    c.enqueueFinalDestruction(typeRef: t).unwrap()
     val p = <MidPlace local=0U64 typeTerm=t />
     val owner = <MidLocalDecl typeTerm=t sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />
     val flag = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />

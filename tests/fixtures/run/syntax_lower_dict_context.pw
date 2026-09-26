@@ -22,7 +22,7 @@ fn main() {
     val i8Name = c.internBytes(s: "I8")
     val i8 = c.simpleTypeRef(nameStart: i8Name.nameStart, nameLen: i8Name.nameLen)
     val ctx = c.pushType(t: <TypeRef nameStart=dictName.nameStart nameLen=dictName.nameLen args=[i8, i8] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-    val root = c.lowerSyntaxExprWithCtx(id: stmt.child0, ctxRef: ctx)
+    val root = c.lowerSyntaxExprWithCtx(id: stmt.child0, ctxRef: ctx).unwrap()
     print(c.arena.exprs.count())
     match c.arena.exprs[root] {
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { print(1U64) }

@@ -33,7 +33,7 @@ fn check(operation: U64) {
     val body = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=owner sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=operation == 3U64 />, <MidLocalDecl typeTerm=payload sourceScope=0U64 isUnique=false isParameter=false />] blocks=[<MidBlock statements=[statement] terminator=<MidTerminator.Abort /> />] />)
     match verifyCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
     match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.MissingOwnershipContract => {} _ => { assert(false) } }
-    compiler.enqueueFinalDestruction(typeRef: payload)
+    compiler.enqueueFinalDestruction(typeRef: payload).unwrap()
     match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error { MidVerifyError.None => {} _ => { assert(false) } }
     val identity = compiler.finalDestructionIndex(typeRef: payload)
     compiler.arena.finalDestructions[identity - 1U64] = <FinalDestruction typeRef=payload />

@@ -16,18 +16,18 @@ fn main() {
     val id = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
     val helperId = pushThroughHelper(c: inout c)
     val foo: TypeAst = <TypeAst name="Foo" args=[<TypeAst name="Bar" args=[] span=<Span start=0U64 end=0U64 /> />] span=<Span start=0U64 end=0U64 /> />
-    val lowered = c.lowerType(t: foo)
+    val lowered = c.lowerType(t: foo).unwrap()
     val after = c.arena.typeCount()
     mut val projected: Comp = <Comp />
     projected.arena.reserveTypeSentinel()
-    val projectedRef = projected.lowerType(t: foo).ref
+    val projectedRef = projected.lowerType(t: foo).unwrap().ref
     val projectedCount = projected.arena.typeCount()
     mut val generic: Comp = <Comp />
     generic.arena.reserveTypeSentinel()
     val tName = generic.internBytes(s: "T")
     generic.cur.typeParams.append(<Bind nameStart=tName.nameStart nameLen=tName.nameLen nameId=tName.nameId paramId=1U64 fieldStart=0U64 fieldLen=0U64 />)
     val genericType: TypeAst = <TypeAst name="Box" args=[<TypeAst name="T" args=[] span=<Span start=0U64 end=0U64 /> />] span=<Span start=0U64 end=0U64 /> />
-    val genericRef = generic.lowerType(t: genericType).ref
+    val genericRef = generic.lowerType(t: genericType).unwrap().ref
     val genericCount = generic.arena.typeCount()
     mut val extra: U64 = 0U64
     while extra < 8U64 {

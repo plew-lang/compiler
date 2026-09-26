@@ -18,7 +18,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val root = c.lowerSyntaxExpr(id: stmt.child0)
+    val root = c.lowerSyntaxExpr(id: stmt.child0).unwrap()
     print(c.arena.exprs.count())
     match c.arena.exprs[root] {
         Expr.Make(typeStart: _, typeLen: val typeLen, variantStart: _, variantLen: _, isEnum: val isEnum, ty: val ty, fields: val fields) => {

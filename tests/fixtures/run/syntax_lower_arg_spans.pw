@@ -18,7 +18,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val value = c.lowerSyntaxExpr(id: arg.value)
+    val value = c.lowerSyntaxExpr(id: arg.value).unwrap()
     val lowered = c.appendLoweredArg(value: value, isInout: arg.isInout, label: arg.label, hasLabel: arg.hasLabel)
     print(lowered.labelLen)
     if lowered.hasLabel { print(1U64) } else { print(0U64) }

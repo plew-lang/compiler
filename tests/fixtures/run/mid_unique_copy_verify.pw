@@ -10,7 +10,7 @@ fn check(noncopyable: Bool, transfer: Bool) {
     val name = compiler.internBytes(s: "Resource")
     compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=noncopyable isExtern=false defOffset=100U64 />)
     val type = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
-    compiler.enqueueFinalDestruction(typeRef: type)
+    compiler.enqueueFinalDestruction(typeRef: type).unwrap()
     val contract = compiler.finalDestructionIndex(typeRef: type)
     assert(compiler.arena.finalDestructions[contract - 1U64].isUnique == noncopyable)
     // Even a trivial noncopyable type without deinit cannot be copied.

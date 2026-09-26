@@ -8,7 +8,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: "T U".bytes())
     val spans: Array[Span] = [<Span start=0U64 end=1U64 />, <Span start=2U64 end=3U64 />]
-    val params = c.lowerTypeParamSpans(spans: spans, anchor: 0U64, sendableFlags: [true, false])
+    val params = c.lowerTypeParamSpans(spans: spans, anchor: 0U64, sendableFlags: [true, false]).unwrap()
     print(params.count())
     print(params[0].nameStart)
     print(params[1].nameStart)

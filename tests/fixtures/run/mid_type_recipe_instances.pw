@@ -24,8 +24,8 @@ fn main() {
     compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=2U64 exprId=999U64 siteIsStmt=true callSite=site />)
     compiler.arena.semanticTypeRecipes.append(<SemanticTypeRecipe kind=4U64 input=1U64 />)
     // Frontend closes each dependency before Mid consumes the body facts.
-    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: firstBody, selfRef: firstType, itemRef: 0U64) != firstType { panic "first recipe producer failed" }
-    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: secondBody, selfRef: secondType, itemRef: 0U64) != secondType { panic "second recipe producer failed" }
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: firstBody, selfRef: firstType, itemRef: 0U64).unwrap() != firstType { panic "first recipe producer failed" }
+    if compiler.groundSemanticTypeRecipeForBody(recipeId: 2U64, bodyId: secondBody, selfRef: secondType, itemRef: 0U64).unwrap() != secondType { panic "second recipe producer failed" }
     val source = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=0U64 typeRecipe=2U64 sourceScope=0U64 isUnique=false isParameter=true />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.ReturnValue value=<MidOperand.Copy place=<MidPlace local=0U64 projections=[] typeTerm=0U64 typeRecipe=2U64 /> /> /> />] />)
     val sourceLocal = compiler.mid.bodies[source.body - 1U64].locals.start
     // Cursor points at the other instance during each instantiation.

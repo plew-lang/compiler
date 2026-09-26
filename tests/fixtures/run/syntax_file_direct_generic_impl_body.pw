@@ -32,6 +32,6 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    c.lowerSyntaxImpl(im: impl)
+    c.lowerSyntaxImpl(im: impl).unwrap()
     print(c.arena.functionCount())
 }

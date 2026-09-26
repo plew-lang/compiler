@@ -11,6 +11,6 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    c.lowerSyntaxImpl(im: syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 1U64)) />))
+    c.lowerSyntaxImpl(im: syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 1U64)) />)).unwrap()
     print(c.arena.functionCount())
 }

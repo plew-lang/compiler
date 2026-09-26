@@ -17,7 +17,7 @@ fn main() {
     mut val c: Comp = <Comp />
     c.appendSrc(from: source.bytes())
     c.syntax = file
-    val root = c.lowerSyntaxExpr(id: stmt.child0)
+    val root = c.lowerSyntaxExpr(id: stmt.child0).unwrap()
     print(c.arena.exprs.count())
     match c.arena.exprs[root] {
         Expr.Cast(operand: val operand, tyStart: _, tyLen: val tyLen, ty: _) => {

@@ -14,9 +14,9 @@ fn main() {
     val pointer = compiler.pushType(t: <TypeRef nameStart=pointerName.nameStart nameLen=pointerName.nameLen args=[integer] />)
     compiler.arena.registerStruct(<StructDef nameStart=handleName.nameStart nameLen=handleName.nameLen nameId=handleName.nameId typeParams=[] fields=[] isUnique=false isExtern=true isCExtern=true defOffset=handleName.nameStart />)
     val handle = compiler.pushType(t: <TypeRef nameStart=handleName.nameStart nameLen=handleName.nameLen args=[] hasDecl=true declOffset=handleName.nameStart />)
-    compiler.enqueueFinalDestruction(typeRef: pointer)
-    compiler.enqueueFinalDestruction(typeRef: handle)
-    compiler.enqueueFinalDestruction(typeRef: integer)
+    compiler.enqueueFinalDestruction(typeRef: pointer).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: handle).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
     val pointerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: pointer) - 1U64]
     val handleContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: handle) - 1U64]
     val integerContract = compiler.arena.finalDestructions[compiler.requireFinalDestruction(typeRef: integer) - 1U64]

@@ -17,13 +17,13 @@ fn main() {
     // an ambient type environment in this Record integration fixture.
     compiler.arena.exprs.append(<Expr.ChainHole />)
     compiler.arena.exprs.append(<Expr.Arrow base=0U64 nameStart=second.nameStart nameLen=second.nameLen />)
-    compiler.recordExpr(exprId: 1U64, chainHoleRef: referenceType)
+    compiler.recordExpr(exprId: 1U64, chainHoleRef: referenceType).unwrap()
     val arrow = compiler.arena.semanticExprTypes[1U64]
     assert(arrow.hasFieldProjection && arrow.fieldProjectionIndex == 1U64)
     assert(compiler.typeRefEq(a: arrow.term, b: integerType))
     compiler.arena.exprs.append(<Expr.ChainHole />)
     compiler.arena.exprs.append(<Expr.Field base=2U64 nameStart=second.nameStart nameLen=second.nameLen />)
-    compiler.recordExpr(exprId: 3U64, chainHoleRef: recordType)
+    compiler.recordExpr(exprId: 3U64, chainHoleRef: recordType).unwrap()
     val field = compiler.arena.semanticExprTypes[3U64]
     assert(field.hasFieldProjection && field.fieldProjectionIndex == arrow.fieldProjectionIndex)
     assert(compiler.typeRefEq(a: field.term, b: arrow.term))

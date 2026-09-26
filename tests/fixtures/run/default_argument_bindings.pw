@@ -40,7 +40,7 @@ fn main() {
         }
         _ => {}
     }
-    c.prepareDefaultArgumentGenerators()
+    c.prepareDefaultArgumentGenerators().unwrap()
     mut val combinations: U64 = 0U64
     mut val mask: U64 = 0U64
     while mask < 8U64 {
