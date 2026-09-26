@@ -46,6 +46,10 @@ import ./Diag with { compileErrorAt, compileErrorAtFile, CompileDiagnostic, Diag
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
+    // Source bytes are append-only within a session. Only successfully decoded
+    // literals are published; Mid and LLVM share this immutable value by offset.
+    pub mut val decodedStringLiterals: Dictionary[U64, Array[U8]] = [:]
+
     // the shared IR arena: source bytes + every node table (see `Arena`). The
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.

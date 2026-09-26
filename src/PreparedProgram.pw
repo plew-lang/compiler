@@ -1,3 +1,4 @@
+import ./Mid/Build with { MidBuildError }
 // LLVM-independent preparation of the frontend's selected executable program.
 // This does not yet promise whole-target checking of otherwise unused bodies.
 import ./Frontend with { Comp }
@@ -50,6 +51,10 @@ export fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationE
         ProgramPreparationError.Mid(error: val failure) => {
             match failure {
                 MidProgramError.Build(bodyId: val bodyId, error: val error) => {
+                    match error {
+                        MidBuildError.StringLiteral(val offset, val message) => { return c.diagnosticAt(offset: offset, msg: message) }
+                        _ => {}
+                    }
                     reportMidBuildError(c: inout c, fnIdx: c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx, error: error)
                 }
                 MidProgramError.Preparation(bodyId: val bodyId, error: val error) => {

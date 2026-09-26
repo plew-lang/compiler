@@ -1,5 +1,3 @@
-import ./StringLiteral with { decodeStringLiteral }
-import ./Diag with { emitDiagnostic }
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram }
 import ./PreparedProgram with { PreparedProgram }
@@ -1279,18 +1277,6 @@ fn cstr(s: String) -> CPtr[U8] {
 // Empty instruction name (LLVM auto-numbers unnamed values).
 fn anon() -> CPtr[U8] {
     return cString("")
-}
-
-fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
-    match decodeStringLiteral(source: c.arena.bytes, start: start, len: len) {
-        Result.Ok(value: val bytes) => { return bytes }
-        Result.Err(error: val message) => {
-            emitDiagnostic(diagnostic: c.diagnosticAt(offset: start, msg: message))
-            exit(code: 1)
-            // Std/Process.exit has a Unit signature but never returns.
-            return []
-        }
-    }
 }
 
 // Physical memory operations have no work for a zero-sized aggregate. Keep

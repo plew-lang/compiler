@@ -40,7 +40,7 @@ pub impl LlvmCtx {
     // rc means a literal is never freed (program-lifetime), and the header is invisible to
     // String ops (which read only {ptr,len}). The global is mutable so rc is writable.
     inout fn genLlvmStr(c: inout Comp, start: U64, len: U64, type: LLVMTypeRef) -> LLVMValueRef {
-        mut val bytes: Array[U8] = strDecodeBytes(c: inout c, start: start, len: len)
+        mut val bytes: Array[U8] = c.decodedStringLiterals.at(key: start)
         val n: U64 = bytes.count() - 1
         val i8ty: LLVMTypeRef = LLVMInt8TypeInContext(self.ctx)
         mut val cvals: Array[LLVMValueRef] = []

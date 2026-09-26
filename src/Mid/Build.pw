@@ -1,3 +1,4 @@
+import ../StringLiteral with { decodeStringLiteral }
 // Mid builder state. Source bindings are mapped once to Mid local identities;
 // later passes consume the frontend resolver's declaration identity rather than
 // recovering a place by spelling from the AST.
@@ -85,6 +86,7 @@ export enum MidUnsupportedAssign {
 }
 
 export enum MidBuildError {
+    StringLiteral(offset: U64, message: String)
     None
     InvalidStatement
     InvalidBlock
@@ -857,6 +859,14 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=value isNegative=isNegative isBool=isBool typeTerm=typeTerm /> /> />
         }
         Expr.Str(start: val start, len: val len) => {
+            if !c.decodedStringLiterals.contains(key: start) {
+                match decodeStringLiteral(source: c.arena.bytes, start: start, len: len) {
+                    Result.Ok(val value) => { c.decodedStringLiterals.insert(key: start, value: value) }
+                    Result.Err(val error) => {
+                        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.StringLiteral offset=start message=error /> />
+                    }
+                }
+            }
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.StringLiteral start=start len=len typeTerm=typeTerm /> /> />
         }
         Expr.Float(start: val start, len: val len, tyStart: _, tyLen: _) => {

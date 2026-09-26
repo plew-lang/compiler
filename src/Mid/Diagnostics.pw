@@ -114,6 +114,7 @@ fn traceMidBuildFailure(c: inout Comp, fnIdx: U64, detail: U64) {
 export fn reportMidBuildError(c: inout Comp, fnIdx: U64, error: MidBuildError) {
     match error {
         MidBuildError.None => {}
+        MidBuildError.StringLiteral(offset: _, message: _) => {}
         MidBuildError.InvalidStatement => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 1U64) }
         MidBuildError.InvalidBlock => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 2U64) }
         MidBuildError.InvalidFunction => { traceMidBuildFailure(c: inout c, fnIdx: fnIdx, detail: 3U64) }
