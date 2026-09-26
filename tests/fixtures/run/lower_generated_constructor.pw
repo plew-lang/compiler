@@ -1,0 +1,21 @@
+// Macro/value AST construction can carry a name without a source token.
+import @Plew/Syntax with { ExprAst, Span }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Expr }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val absent: Span = <Span start=0U64 end=0U64 />
+    val generated = <ExprAst.Make typeName="Box" typeNameSpan=absent typeArgs=[] variant="" variantSpan=absent isEnum=false fields=[] span=absent />
+    val root = compiler.lowerExpr(e: generated).unwrap()
+    val expected = compiler.internBytes(s: "Box")
+    match compiler.arena.exprs[root] {
+        Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+            print(typeStart == expected.nameStart && typeLen == expected.nameLen)
+            print(ty != 0U64)
+        }
+        _ => { print(false) print(false) }
+    }
+}

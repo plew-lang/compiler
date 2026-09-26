@@ -193,7 +193,7 @@ pub impl Comp {
                 result = (try self.lowerIndexRead(recv: b, key: idx))
             }
             ExprAst.Make(val typeName, val typeNameSpan, val typeArgs, val variant, val variantSpan, val isEnum, val fields, val span) => {
-                mut val tn: Bind = <Bind nameStart=typeNameSpan.start nameLen=typeNameSpan.end - typeNameSpan.start fieldStart=0U64 fieldLen=0U64 />
+                mut val tn: Bind = self.lowerTypeName(name: typeName, span: typeNameSpan)
                 mut val constructionEnum = isEnum
                 if isEnum {
                     val moduleId = self.typeNamespaceModule(name: typeNameSpan)

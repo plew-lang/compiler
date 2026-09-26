@@ -2,6 +2,15 @@
 // synthesis, and argument / field / dict-literal lowering.
 
 pub impl Comp {
+    // Authored names keep their source identity. Synthesized value ASTs
+    // have no token span, but still carry an explicit name to intern.
+    inout fn lowerTypeName(name: String, span: Span) -> Bind {
+        if span.end > span.start {
+            return <Bind nameStart=span.start nameLen=span.end - span.start fieldStart=0U64 fieldLen=0U64 />
+        }
+        return self.internBytes(s: name)
+    }
+
     inout fn typeNamespaceModule(name: Span) -> U64 {
         mut val index = 0U64
         while index < self.cur.typeParams.count() {
@@ -391,7 +400,7 @@ pub impl Comp {
             val rref: U64 = (try self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms))
             return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref /> />
         }
-        val nm: Bind = if t.nameSpan.end > t.nameSpan.start { give <Bind nameStart=t.nameSpan.start nameLen=t.nameSpan.end - t.nameSpan.start fieldStart=0U64 fieldLen=0U64 /> } else { give self.internBytes(s: t.name) }
+        val nm: Bind = self.lowerTypeName(name: t.name, span: t.nameSpan)
         mut val args: Array[U64] = []
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0
