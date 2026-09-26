@@ -1,3 +1,4 @@
+import ../../../src/Mid/AmbientEffects with { MidAmbientEffects }
 import ../../../src/Mid/Build with { buildParametricMidBody, MidBuildError }
 // Invalid semantic state is rejected without exiting the embedding process.
 // Each failed Comp is discarded; this does not test recovery inside a request.
@@ -91,6 +92,25 @@ fn missingMidOwner() {
     }
 }
 
+fn missingFinalDestruction() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "I64")
+    val term = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    expectDiagnostic(result: c.checkedFinalDestruction(typeRef: term))
+}
+fn missingAmbientDestruction() {
+    mut val c: Comp = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "I64")
+    val term = c.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
+    mut val effects = <MidAmbientEffects bodyCount=0U64 />
+    match effects.destruction(c: inout c, owner: 0U64, type: term) {
+        Result.Ok(value: _) => { panic("missing destruction was accepted by ambient analysis") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+    }
+}
+
 export fn checkInvariantDiagnostics() {
     missingShape()
     duplicateOrigin()
@@ -99,5 +119,7 @@ export fn checkInvariantDiagnostics() {
     missingProtocolDependency()
     missingLexicalOwner()
     missingMidOwner()
+    missingFinalDestruction()
+    missingAmbientDestruction()
     print("invariant diagnostics returned")
 }

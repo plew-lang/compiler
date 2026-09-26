@@ -103,9 +103,21 @@ pub impl Comp {
         return self.arena.finalDestructions[self.requireFinalDestruction(typeRef: typeRef) - 1U64].needsRelease
     }
 
-    inout fn requireFinalDestruction(typeRef: U64) -> U64 {
+    inout fn checkedFinalDestruction(typeRef: U64) -> Result[U64, CompileDiagnostic] {
         val identity = self.finalDestructionIndex(typeRef: typeRef)
-        if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready { return identity }
+        if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready { return <Result.Ok value=identity /> }
+        mut val offset = 0U64
+        if typeRef < self.arena.typeCount() { offset = self.arena.typeAt(index: typeRef).nameStart }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: ownership action has no finalized classification") />
+    }
+
+    // Transitional adapter for LLVM consumers not yet returning diagnostics.
+    // Mid analysis uses checkedFinalDestruction and never terminates its host.
+    inout fn requireFinalDestruction(typeRef: U64) -> U64 {
+        match self.checkedFinalDestruction(typeRef: typeRef) {
+            Result.Ok(value: val identity) => { return identity }
+            Result.Err(error: _) => {}
+        }
         eprint(text: "[ownership-contract] missing typeRef=")
         eprintU64(n: typeRef)
         eprint(text: " type=")
@@ -202,7 +214,8 @@ pub impl Comp {
         }
         val child = identity - 1U64
         if child < start {
-            if self.finalNeedsRelease(typeRef: typeRef) { needs[owner] = true }
+            val finalized = try self.checkedFinalDestruction(typeRef: typeRef)
+            if self.arena.finalDestructions[finalized - 1U64].needsRelease { needs[owner] = true }
             return <Result.Ok value=() />
         }
         val edge = edges.count() + 1U64
@@ -218,7 +231,10 @@ pub impl Comp {
         if identity == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: ownership field has no collected shape") />
         }
-        if identity - 1U64 < start { return <Result.Ok value=self.finalNeedsRelease(typeRef: typeRef) />}
+        if identity - 1U64 < start {
+            val finalized = try self.checkedFinalDestruction(typeRef: typeRef)
+            return <Result.Ok value=self.arena.finalDestructions[finalized - 1U64].needsRelease />
+        }
         return <Result.Ok value=needs[identity - 1U64 - start] />
     }
 

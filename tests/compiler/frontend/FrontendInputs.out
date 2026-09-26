@@ -10,4 +10,6 @@ internal error (compiler bug): record ownership requires a registered layout mat
 internal error: implicit protocol call dependency was not finalized
 internal error: lexical function owner is missing
 internal error: provided body has no source owner
+internal error: ownership action has no finalized classification
+internal error: ownership action has no finalized classification
 invariant diagnostics returned

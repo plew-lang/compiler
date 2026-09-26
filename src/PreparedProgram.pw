@@ -9,6 +9,7 @@ import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
 
 export enum ProgramPreparationError {
+    Frontend(diagnostic: CompileDiagnostic)
     Mid(error: MidProgramError)
     GlobalAccess(offset: U64)
 }
@@ -21,21 +22,28 @@ export struct PreparedProgram {
 pub impl PreparedProgram {
     assoc fn prepare(c: inout Comp) -> Result[Self, ProgramPreparationError] {
         val preparation = MidExecutableProgram.prepare(c: inout c)
-        val ambient = match preparation {
+        val ambient: Result[MidAmbientProgram, CompileDiagnostic] = match preparation {
             Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
-            Result.Err(error: _) => { give <MidAmbientProgram.empty /> }
+            Result.Err(error: _) => { give <Result.Ok value=<MidAmbientProgram.empty /> /> }
         }
         // Preserve the existing diagnostic precedence, including partial Mid
         // failures. This analysis reads the same arena prepared above.
-        val conflictingBody = conflictingMidGlobalAccess(c: inout c)
+        val conflictingBody = match conflictingMidGlobalAccess(c: inout c) {
+            Result.Ok(value: val body) => { give body }
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<ProgramPreparationError.Frontend diagnostic=diagnostic /> /> }
+        }
         if conflictingBody != 0U64 {
             val sourceFunction = c.mid.bodies[conflictingBody - 1U64].sourceFunction
             mut val offset = 0U64
             if sourceFunction < c.arena.functionCount() { offset = c.arena.functionAt(index: sourceFunction).defOffset }
             return <Result.Err error=<ProgramPreparationError.GlobalAccess offset=offset /> />
         }
+        val ambientProgram = match ambient {
+            Result.Ok(value: val program) => { give program }
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<ProgramPreparationError.Frontend diagnostic=diagnostic /> /> }
+        }
         match preparation {
-            Result.Ok(value: val program) => { return <Result.Ok value=<PreparedProgram executable=program ambient=ambient /> /> }
+            Result.Ok(value: val program) => { return <Result.Ok value=<PreparedProgram executable=program ambient=ambientProgram /> /> }
             Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Mid error=error /> /> }
         }
     }
@@ -45,6 +53,7 @@ pub impl PreparedProgram {
 // retain the existing detailed internal-error output.
 export fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationError) -> CompileDiagnostic {
     match error {
+        ProgramPreparationError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
         ProgramPreparationError.GlobalAccess(offset: val offset) => {
             return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
         }

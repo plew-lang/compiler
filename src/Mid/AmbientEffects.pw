@@ -1,6 +1,7 @@
 // Closed-world may-effects select reservations, never diagnose execution of
 // an unchosen branch. Unknown dispatch/foreign effects are not purity facts.
 import ../Frontend with { Comp }
+import ../Diag with { CompileDiagnostic }
 import ../Ir with { ArcClass, CallTarget, RuntimeIntrinsic }
 import ./Ir with { MidTerminatorNode }
 import ./Program with { MidExecutableProgram }
@@ -23,12 +24,11 @@ pub impl MidAmbientEffects {
         self.edges.append(self.heads[dependency])
         self.heads[dependency] = self.edges.count() - 1U64
     }
-    inout fn destruction(c: inout Comp, owner: U64, type: U64) {
-        if type == 0U64 { return }
-        val contract = c.requireFinalDestruction(typeRef: type)
-        if contract == 0U64 { self.mark(node: owner)
-            return }
+    inout fn destruction(c: inout Comp, owner: U64, type: U64) -> Result[(), CompileDiagnostic] {
+        if type == 0U64 { return <Result.Ok value=() /> }
+        val contract = try c.checkedFinalDestruction(typeRef: type)
         self.edge(owner: owner, dependency: self.bodyCount + contract)
+        return <Result.Ok value=() />
     }
     inout fn close() {
         mut val index = 0U64
@@ -54,7 +54,7 @@ pub impl MidAmbientEffects {
         }
         return true
     }
-    assoc fn prepare(c: inout Comp, program: MidExecutableProgram, ambientBodies: Array[U64]) -> Self {
+    assoc fn prepare(c: inout Comp, program: MidExecutableProgram, ambientBodies: Array[U64]) -> Result[Self, CompileDiagnostic] {
         val bodyCount = c.arena.bodyInstanceCount()
         mut val graph = <MidAmbientEffects bodyCount=bodyCount />
         mut val index = 0U64
@@ -72,19 +72,19 @@ pub impl MidAmbientEffects {
             val node = bodyCount + index + 1U64
             if contract.needsRelease {
                 if contract.deinitCall.bodyId != 0U64 { graph.edge(owner: node, dependency: contract.deinitCall.bodyId) }
-                if contract.underlying != 0U64 { graph.destruction(c: inout c, owner: node, type: contract.underlying) }
+                if contract.underlying != 0U64 { try graph.destruction(c: inout c, owner: node, type: contract.underlying) }
                 else {
                     match contract.ownershipClass {
-                        ArcClass.BufferLike(elem: val element) => { graph.destruction(c: inout c, owner: node, type: element) }
-                        ArcClass.RefCell(inst: val instance) => { graph.destruction(c: inout c, owner: node, type: c.arena.typeAt(index: instance).args[0U64]) }
+                        ArcClass.BufferLike(elem: val element) => { try graph.destruction(c: inout c, owner: node, type: element) }
+                        ArcClass.RefCell(inst: val instance) => { try graph.destruction(c: inout c, owner: node, type: c.arena.typeAt(index: instance).args[0U64]) }
                         ArcClass.StructVal(sidx: _) => {
                             mut val field = 0U64
-                            while field < contract.fieldTypes.count() { graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
+                            while field < contract.fieldTypes.count() { try graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
                                 field += 1U64 }
                         }
                         ArcClass.EnumVal(eidx: _) => {
                             mut val field = 0U64
-                            while field < contract.fieldTypes.count() { graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
+                            while field < contract.fieldTypes.count() { try graph.destruction(c: inout c, owner: node, type: contract.fieldTypes[field])
                                 field += 1U64 }
                         }
                         ArcClass.ClosureVal => { graph.mark(node: node) }
@@ -111,7 +111,7 @@ pub impl MidAmbientEffects {
                             // Replacement releases the old value as well as
                             // explicit/conditional/capture-cell destruction.
                             if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
-                                graph.destruction(c: inout c, owner: bodyId, type: c.mid.places[statement.destination - 1U64].typeTerm)
+                                try graph.destruction(c: inout c, owner: bodyId, type: c.mid.places[statement.destination - 1U64].typeTerm)
                             }
                             statementIndex += 1U64
                         }
@@ -136,6 +136,6 @@ pub impl MidAmbientEffects {
             bodyId += 1U64
         }
         graph.close()
-        return graph
+        return <Result.Ok value=graph />
     }
 }

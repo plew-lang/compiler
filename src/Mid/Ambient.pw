@@ -1,3 +1,4 @@
+import ../Diag with { CompileDiagnostic }
 // Logical storage recipes for dynamic exclusivity. Formal value storage is
 // protected by the caller; capture boxes and cells are independent aliases.
 // Paths describe physical fields, never byte intervals (including zero-sized
@@ -105,7 +106,7 @@ pub impl MidAmbientProgram {
 
     fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool { return self.effects.callMayAccess(c: c, term: term) }
 
-    assoc fn prepare(c: inout Comp, program: MidExecutableProgram) -> Self {
+    assoc fn prepare(c: inout Comp, program: MidExecutableProgram) -> Result[Self, CompileDiagnostic] {
         // No aliasable storage means no dynamic obligations. Do not add a
         // runtime registry operation to ordinary local/by-value accesses.
         mut val possible = false
@@ -124,7 +125,7 @@ pub impl MidAmbientProgram {
             possible = c.mid.projections[index].tag == 3U64
             index += 1U64
         }
-        if !possible { return <MidAmbientProgram /> }
+        if !possible { return <Result.Ok value=<MidAmbientProgram /> /> }
         mut val ambientBodies: Array[U64] = []
         mut val plans: Dictionary[U64, MidAmbientBodyPlan] = [:]
         mut val bodyId = 1U64
@@ -172,8 +173,8 @@ pub impl MidAmbientProgram {
             }
             bodyId += 1U64
         }
-        val effects = MidAmbientEffects.prepare(c: inout c, program: program, ambientBodies: ambientBodies)
-        return <MidAmbientProgram enabled=true bodies=plans effects=effects />
+        val effects = try MidAmbientEffects.prepare(c: inout c, program: program, ambientBodies: ambientBodies)
+        return <Result.Ok value=<MidAmbientProgram enabled=true bodies=plans effects=effects /> />
     }
 }
 
