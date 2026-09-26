@@ -1396,7 +1396,16 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
             mut val sawDirective: Bool = false
             mut val ii: U64 = 0
             while ii < roots.count {
-                val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + ii)
+                mut val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + ii)
+                // Publication changes visibility, not dependency discovery.
+                // Inspect the wrapped item so derives inside pub extern blocks
+                // load their generated sibling just like non-public externs.
+                while true {
+                    match syntaxTopItemKind(file: c.syntax, item: item) {
+                        SyntaxTopItemKind.Export => { item = <TopItemId raw=syntaxTopItemPayload(file: c.syntax, item: item) /> }
+                        _ => { break }
+                    }
+                }
                 match syntaxTopItemKind(file: c.syntax, item: item) {
                     SyntaxTopItemKind.Import => {
                         val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
