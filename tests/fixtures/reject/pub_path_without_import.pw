@@ -1,0 +1,2 @@
+pub @Std/Io with { print }
+fn main() {}

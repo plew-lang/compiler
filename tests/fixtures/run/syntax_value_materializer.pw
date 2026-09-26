@@ -8,7 +8,7 @@ import @Std/Io with { print }
 fn main() {
     // The source slice begins at an original-file offset; materialization must
     // subtract that base before recovering spellings from the slice bytes.
-    val item = parseItem(source: "@[Eq]\nexport struct Box { val value: U8 }", start: 17U64, end: 60U64)
+    val item = parseItem(source: "@[Eq]\npub struct Box { val value: U8 }", start: 17U64, end: 57U64)
     match item {
         TopItemAst.Decl(d: val d) => { print(d.name.bytes().count()) }
         _ => { print(0U64) }

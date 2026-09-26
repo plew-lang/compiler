@@ -25,7 +25,7 @@ def variant(template, revision, scenario, functions, expression_shape):
                         f'fn revised(input: I64) -> I64 {{ val box: Revision[I64] = <Revision[I64] number=input {argument} /> return unbox(box: box) }}\n')
         expression = f'revised(input: {revision}I64)'
     elif kind == 'module':
-        modules['Changes.pw'] = f'export fn revised() -> I64 {{ return {revision}I64 }}\n'
+        modules['Changes.pw'] = f'pub fn revised() -> I64 {{ return {revision}I64 }}\n'
         declarations = 'import ./Changes with { revised }\n'
         expression = 'revised()'
     else:

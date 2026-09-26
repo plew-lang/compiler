@@ -15,7 +15,7 @@
 // Verified against Homebrew LLVM 22 (libLLVM-C). 1:1 with <llvm-c/Core.h>; a
 // future `bindgen` could generate this whole file from the header.
 
-export extern(c) {
+pub extern(c) {
     // Opaque handles (LLVM-C `typedef struct …Opaque *…Ref`).
     type LLVMContextRef
     type LLVMModuleRef

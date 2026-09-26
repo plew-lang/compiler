@@ -227,8 +227,8 @@ pub impl Comp {
         }
     }
 
-    // Re-exports do not introduce a local binding.  Both input decoders only
-    // choose the source spelling; this sink records the exported spelling.
+    // Public imports also introduce local bindings through lowerImport. This
+    // helper records their published spelling for both input decoders.
     inout fn lowerSyntaxReExport(imp: SyntaxImport) {
         mut val i: U64 = 0U64
         while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
@@ -340,7 +340,7 @@ pub impl Comp {
                 }
             }
             TopItemAst.NewType(val name, nameSpan: _, val ty, isPub: _, val span) => {
-                // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
+                // `pub newtype Name = Underlying` (spec/10,15): lower the distinct type,
                 // then record its name as exported so other modules can import it.
                 val ntB: U64 = self.arena.newtypeCount()
                 try self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
@@ -366,7 +366,6 @@ pub impl Comp {
             TopItemAst.Extern(val e) => { try self.lowerExtern(e: e) }
             TopItemAst.Import(val imp) => { self.lowerImport(imp: imp) }
             TopItemAst.Export(val inner) => { try self.lowerExportItem(inner: inner) }
-            TopItemAst.ReExport(val imp) => { self.lowerReExport(imp: imp) }
             TopItemAst.Directive(val dir) => { try self.lowerDirective(dir: dir) }
             TopItemAst.GlobalVal(val s) => { try self.lowerGlobalVal(s: s) }
             TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { try self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
@@ -432,7 +431,6 @@ pub impl Comp {
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Export => { try self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
-            SyntaxTopItemKind.ReExport => { self.lowerSyntaxReExport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.GlobalVal => { try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.NewType => { try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }

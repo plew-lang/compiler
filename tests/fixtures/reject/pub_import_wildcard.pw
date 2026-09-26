@@ -1,0 +1,2 @@
+pub import @Std/Io with *
+fn main() {}

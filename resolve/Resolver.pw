@@ -80,7 +80,7 @@ fn fail(msg: Array[U8]) {
     exit(code: 1)
 }
 
-export fn needsResolution() -> Bool {
+pub fn needsResolution() -> Bool {
     if fileExists(path: "Plew.lock".bytes()) { return false }
     val manifest = parseManifest(bytes: readFileBytes("Plew.toml".bytes()).bytes())
     mut val index: U64 = 0U64
@@ -91,7 +91,7 @@ export fn needsResolution() -> Bool {
     return false
 }
 
-export fn runResolver() {
+pub fn runResolver() {
     val cr: Array[U8] = cacheRoot()
     // root manifest from the current directory.
     val rootSrc: String = readFileBytes("Plew.toml".bytes())

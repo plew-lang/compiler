@@ -1457,48 +1457,6 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
                             }
                         }
                     }
-                    SyntaxTopItemKind.ReExport => {
-                        val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
-                        // a re-export (`export <path> with { … }`, spec/15) forwards another
-                        // module's names; follow its path so that origin module is LOADED
-                        // (its declarations + own exports must exist for the forward to
-                        // resolve). It always starts a fresh module (like an import). Binds
-                        // nothing locally — that's lowerReExport's job (export surface only).
-                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count(), sources: sources)
-                        // a re-export may forward a dependency's lib face (`export @Dep
-                        // with { … }`); resolve `@dep` the same way as an import.
-                        if rePath.count() == 0 {
-                            rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, pkgDir: fPkgDir)
-                        }
-                        if rePath.count() == 0 {
-                            rePath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
-                        }
-                        if rePath.count() == 0 {
-                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
-                                return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)") />
-                            }
-                        }
-                        if rePath.count() != 0 {
-                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
-                                if !(sources.exists(path: rePath)) {
-                                    return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "cannot open module file: the re-export path does not resolve to an existing file") />
-                                }
-                                val rm: U64 = nextModuleId
-                                nextModuleId = nextModuleId + 1
-                                val rs: U64 = pathBuf.count()
-                                appendBytes(into: inout pathBuf, from: rePath)
-                                loaded.append(<Bind nameStart=rs nameLen=rePath.count() fieldStart=rm fieldLen=rePath.count() />)
-                            }
-                            // record the re-export edge (this module -> the source module it
-                            // forwards from), whether newly loaded or deduped, so visibility can
-                            // compose an import-of-the-barrel with the barrel's forward.
-                            val reTgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: rePath)
-                            if reTgt != 4000000000U64 {
-                                c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=reTgt />)
-                                c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: reTgt, reExport: true)
-                            }
-                        }
-                    }
                     SyntaxTopItemKind.Directive => { sawDirective = true }
                     SyntaxTopItemKind.Extern => {
                         // a `@[...]` derive on an opaque extern lang-item (spec/15,16:
