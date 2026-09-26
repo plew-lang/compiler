@@ -1,0 +1,5 @@
+unique struct File { val descriptor: I64 }
+impl File { move fn close() {} }
+fn take(file: move File) {}
+fn unused(file: borrow File) { take(file: move file) }
+fn main() {}

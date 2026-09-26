@@ -1,0 +1,4 @@
+unique struct File { val descriptor: I64 }
+impl File { move fn close() {} }
+fn unused(file: inout File) { file.close() }
+fn main() {}

@@ -23,6 +23,35 @@ pub impl Comp {
         }
     }
 
+    // Both explicit moves and consuming receivers require an owned source.
+    // A view changes method selection, never the ownership of its operand.
+    inout fn verifyOwnershipSource(id: U64) -> Result[(), CompileDiagnostic] {
+        if self.moveOperandIsAggregatePartial(id: id) {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)") />
+        }
+        match self.arena.exprs[id] {
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.verifyOwnershipSource(id: operand) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.verifyOwnershipSource(id: recv) }
+            Expr.Move(val operand, val isBorrow) => {
+                if !isBorrow { return self.verifyOwnershipSource(id: operand) }
+            }
+            Expr.Ident(val start, val len) => {
+                if self.isSelfRef(start: start, len: len) {
+                    if self.cur.selfMove { return <Result.Ok value=() /> }
+                } else {
+                    val localIndex = self.localIndexByName(start: start, len: len)
+                    if localIndex < self.cur.locals.count() && self.cur.locals[localIndex].owned {
+                        return <Result.Ok value=() />
+                    }
+                }
+            }
+            _ => {
+                if self.expressionProvidesOwnership(exprId: id) { return <Result.Ok value=() /> }
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cannot consume a borrowed value; ownership is required") />
+    }
+
     inout fn verifyExpr(id: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Str(start: val start, len: val len) => { try self.prepareStringLiteral(start: start, len: len) }
@@ -524,6 +553,7 @@ pub impl Comp {
                 // deliberately rejects (spec/11). Conditional moves remain rejected until
                 // drop-elaboration dataflow lands.
                 if !(isBorrow) {
+                    try self.verifyOwnershipSource(id: operand)
                     if self.moveOperandIsAggregatePartial(id: operand) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)") />
                     } else {
@@ -818,6 +848,7 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val st: TypeInfo = (try self.typeOf(id: scrut))
+        val ownsPayload = self.matchConsumesValue(scrut: scrut, typeTerm: self.typedIrRefOfInfo(ti: st))
         val generic: Bool = self.isGenericInst(ref: st.ref)
         mut val bi: U64 = 0
         if a.isStruct {
@@ -833,7 +864,7 @@ pub impl Comp {
                 } else {
                     ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 }
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: ownsPayload)
                 bi += 1
             }
         } else {
@@ -846,7 +877,7 @@ pub impl Comp {
                 // Bind concrete and generic payloads through the subject's
                 // declaration identity, preserving its exact field TypeTerm.
                 val bti: TypeInfo = (try self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: ownsPayload)
                 bi += 1
             }
         }

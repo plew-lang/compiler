@@ -407,6 +407,9 @@ pub impl Comp {
     inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if mf < self.arena.functionCount() {
                 try self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.functionAt(index: mf), offset: nameStart)
+                if self.arena.functionAt(index: mf).selfMove {
+                    try self.verifyOwnershipSource(id: recv)
+                }
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
                 // value that is immediately discarded — spec/03).

@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+unique struct File {
+    val descriptor: I64
+    deinit { print(self.descriptor) }
+}
+impl File { move fn close() {} }
+unique enum Opened { Ready(file: File) }
+fn open(descriptor: I64) -> File { return <File descriptor=descriptor /> }
+fn close(file: move File) { file.close() }
+fn main() {
+    open(descriptor: 1).close()
+    val file = open(descriptor: 2)
+    close(file: move file)
+    val result = <Opened.Ready file=open(descriptor: 3) />
+    match move result { Opened.Ready(val file) => { file.close() } }
+    match <Opened.Ready file=open(descriptor: 4) /> {
+        Opened.Ready(val file) => { file.close() }
+    }
+}
