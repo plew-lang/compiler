@@ -24,9 +24,9 @@ while argv and argv[0].startswith("--"):
     else:
         sys.exit("unknown flag: " + argv[0])
 if MOVE_TYPES:
-    movable_start = re.compile(r'^(export )?(fn|struct|enum|trait|newtype|extern) ')
+    movable_start = re.compile(r'^(pub )?(fn|struct|enum|trait|newtype|extern) ')
 else:
-    movable_start = re.compile(r'^(export )?fn ')
+    movable_start = re.compile(r'^(pub )?fn ')
 fn_start = movable_start
 impl_start = re.compile(r'^(pub )?impl ')
 

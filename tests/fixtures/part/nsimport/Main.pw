@@ -1,5 +1,5 @@
 // namespace import (spec/15): `import /Lib` (no `with`) binds `Lib` as a namespace,
-// so `Lib.twice(...)` resolves to `twice` exported from /Lib. Export visibility is
+// so `Lib.twice(...)` resolves to `twice` exported from /Lib. Published visibility is
 // enforced exactly as for `import … with { }`.
 import @Std/Io with { print, write }
 import /Lib

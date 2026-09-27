@@ -44,7 +44,7 @@ entry:
   array for `LLVMFunctionType`'s param list).
 - `@Std/Ffi` boundary helpers — `cString` / `stringFromCString` / `arrayCPtr`.
 - Positional `extern(c)` calls (no argument labels).
-- Cross-module bindings (`export extern(c)` in `Llvm.pw`, imported by `BuildAdd.pw`).
+- Cross-module bindings (`pub extern(c)` in `Llvm.pw`, imported by `BuildAdd.pw`).
 
 Linking against the **real** libLLVM is just the link line above; the Plew code
 is unchanged from how it ran against a local stub during bring-up.

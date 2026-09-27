@@ -324,7 +324,7 @@ pub impl Comp {
     inout fn predeclareTraitItem(item: TopItemAst) {
         match item {
             TopItemAst.Trait(val t) => { self.predeclareTrait(t: t) }
-            TopItemAst.Export(val inner) => { self.predeclareTraitItem(item: inner) }
+            TopItemAst.Published(val inner) => { self.predeclareTraitItem(item: inner) }
             _ => {}
         }
     }
@@ -346,7 +346,7 @@ pub impl Comp {
                 }
                 self.predeclareTraitIdentity(nameStart: trait.name.start, nameLen: nameLen, arity: syntaxTraitTypeParamCount(file: self.syntax, trait: trait), associated: associated)
             }
-            SyntaxTopItemKind.Export => {
+            SyntaxTopItemKind.Published => {
                 self.predeclareSyntaxTraitItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
             }
             _ => {}

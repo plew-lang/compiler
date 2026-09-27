@@ -1,7 +1,7 @@
 // Part of compile-time checks (root: _.pw): import and use-site visibility
 // constraints.
 
-// Is `(nameStart,nameLen)` the name of an `export`ed declaration (spec/15)? Matched
+// Is `(nameStart,nameLen)` the name of an published declaration (spec/15)? Matched
 // by text against the recorded export name spans (across all loaded modules).
 
 pub impl Comp {

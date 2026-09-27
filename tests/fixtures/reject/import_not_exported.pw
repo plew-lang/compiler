@@ -1,4 +1,4 @@
-// `digitByteI` is an internal helper in @Std/Core, not `export`ed. Importing it
+// `digitByteI` is an internal helper in @Std/Core, not published. Importing it
 // with `with { }` must be rejected (spec/15: only a module's exported names are
 // importable) even though the module is loaded — this is the pure export gate, as
 // opposed to import_wrong_module.pw where the owning module isn't loaded at all.

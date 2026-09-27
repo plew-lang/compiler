@@ -1,2 +1,2 @@
 # Package manifest: marks the package root; `/` resolves from src/.
-name = "exportnewtype"
+name = "publicnewtype"

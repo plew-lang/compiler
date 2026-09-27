@@ -49,7 +49,7 @@ fn main() {
     val second = syntaxFileTopLevel(file: file, index: 1U64)
     val third = syntaxFileTopLevel(file: file, index: 2U64)
     match syntaxTopItemKind(file: file, item: second) {
-        SyntaxTopItemKind.Export => { print(1U64) }
+        SyntaxTopItemKind.Published => { print(1U64) }
         _ => { print(0U64) }
     }
     match syntaxTopItemKind(file: file, item: third) {

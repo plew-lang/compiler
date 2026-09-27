@@ -1,6 +1,6 @@
-// `export newtype` (spec/10,15): a newtype is part of a module's public surface.
+// `pub newtype` (spec/10,15): a newtype is part of a module's public surface.
 // `newtype` is a contextual keyword, so the shared parser must recognise it after
-// `export` (it lands in the Ident arm, not a `Kind.Kw…` arm).
+// `pub` (it lands in the Ident arm, not a `Kind.Kw…` arm).
 pub newtype UserId = String
 
 // a factory over the underlying (the inherited `as` re-tag wraps the String).

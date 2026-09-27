@@ -19,7 +19,7 @@ lines = open(path).read().split("\n")
 # Refuse loudly so the human moves it out first (column-0 keyword = top-level item).
 # `impl` is exempt: an existing `pub impl Comp { }` block (e.g. from earlier twin
 # work) is preserved verbatim as a raw segment, and new methods join a fresh block.
-_decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|val|mut val)\b')
+_decl_re = re.compile(r'^(pub )?(struct|enum|trait|newtype|extern|val|mut val)\b')
 _bad = [L for L in lines if _decl_re.match(L)]
 if _bad:
     print(f"REFUSE: {path} has top-level non-fn declarations that would be dropped:", file=sys.stderr)
@@ -28,10 +28,10 @@ if _bad:
     print("Move them out (e.g. to the module root) before methodizing.", file=sys.stderr)
     sys.exit(2)
 
-fn_start = re.compile(r'^(export )?fn ')
+fn_start = re.compile(r'^(pub )?fn ')
 impl_start = re.compile(r'^(pub )?impl ')
-fn_re = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) -> (.+) \{$')
-fn_re_noret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) \{$')
+fn_re = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) -> (.+) \{$')
+fn_re_noret = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) \{$')
 
 def consume_fn(i):
     # Return (block_lines, next_i): lines[i] (the `fn …`/`impl …` line) through its
@@ -144,5 +144,5 @@ for f in glob.glob(SRC + "/**/*.pw", recursive=True):
     if s != orig:
         open(f, "w").write(s)
 
-print("methodized:", ", ".join(f"{n}{'(export)' if e else ''}" for n, e in methodized))
+print("methodized:", ", ".join(f"{n}{'(pub)' if e else ''}" for n, e in methodized))
 print("exported (drop from Backend import if present):", ", ".join(n for n, e in methodized if e))

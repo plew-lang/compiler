@@ -267,7 +267,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerExportItem(inner: TopItemAst) -> Result[(), CompileDiagnostic] {
+    inout fn lowerPublishedItem(inner: TopItemAst) -> Result[(), CompileDiagnostic] {
         match inner {
             TopItemAst.Extern(val e) => {
                 val xfB: U64 = self.arena.functionCount()
@@ -327,7 +327,7 @@ pub impl Comp {
             TopItemAst.Trait(val t) => { try self.lowerTrait(t: t) }
             TopItemAst.Extern(val e) => { try self.lowerExtern(e: e) }
             TopItemAst.Import(val imp) => { self.lowerImport(imp: imp) }
-            TopItemAst.Export(val inner) => { try self.lowerExportItem(inner: inner) }
+            TopItemAst.Published(val inner) => { try self.lowerPublishedItem(inner: inner) }
             TopItemAst.Directive(val dir) => { try self.lowerDirective(dir: dir) }
             TopItemAst.GlobalVal(val s) => { try self.lowerGlobalVal(s: s) }
             TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { try self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
@@ -335,7 +335,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerSyntaxExportItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
+    inout fn lowerSyntaxPublishedItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extern => {
                 val funcBefore: U64 = self.arena.functionCount()
@@ -385,7 +385,7 @@ pub impl Comp {
             SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Export => { try self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.Published => { try self.lowerSyntaxPublishedItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.GlobalVal => { try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.NewType => { try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }

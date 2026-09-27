@@ -10,7 +10,7 @@ fn main() {
     print(syntaxFileTopLevelCount(file: file))
     val exported = syntaxFileTopLevel(file: file, index: 0U64)
     match syntaxTopItemKind(file: file, item: exported) {
-        SyntaxTopItemKind.Export => {
+        SyntaxTopItemKind.Published => {
             val inner = <TopItemId raw=syntaxTopItemPayload(file: file, item: exported) />
             match syntaxTopItemKind(file: file, item: inner) {
                 SyntaxTopItemKind.Decl => { print(1U64) }

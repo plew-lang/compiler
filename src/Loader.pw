@@ -30,7 +30,7 @@ pub impl Comp {
     }
 
     // This deliberately needs no declaration/statement materialization: the
-    // top-level tag, source span, and Export's nested TopItemId completely
+    // top-level tag, source span, and Published's nested TopItemId completely
     // determine this rule.
     inout fn checkPartSyntaxOnly(roots: SyntaxSlice) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0U64
@@ -49,7 +49,7 @@ pub impl Comp {
                 if imp.isPublic { return <Result.Err error=self.partItemDiagnostic(offset: imp.span.start) /> }
             }
             SyntaxTopItemKind.Directive => {}
-            SyntaxTopItemKind.Export => {
+            SyntaxTopItemKind.Published => {
                 try self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
             }
             _ => {

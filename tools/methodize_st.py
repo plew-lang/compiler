@@ -20,7 +20,7 @@ path = sys.argv[1]
 ALLOW = set(sys.argv[2].split(",")) if len(sys.argv) > 2 and sys.argv[2] else None
 lines = open(path).read().split("\n")
 
-_decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|val|mut val)\b')
+_decl_re = re.compile(r'^(pub )?(struct|enum|trait|newtype|extern|val|mut val)\b')
 _bad = [L for L in lines if _decl_re.match(L)]
 if _bad:
     print(f"REFUSE: {path} has top-level non-fn declarations that would be dropped:", file=sys.stderr)
@@ -40,14 +40,14 @@ if _self_local:
     print("Rename the local before methodizing.", file=sys.stderr)
     sys.exit(2)
 
-fn_start = re.compile(r'^(export )?fn ')
+fn_start = re.compile(r'^(pub )?fn ')
 impl_start = re.compile(r'^(pub )?impl ')
 # (c, st) forms — keep the c parameter, drop st (it becomes self)
-cst_ret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp, st: inout LlvmCtx(, )?(.*)\) -> (.+) \{$')
-cst_nor = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp, st: inout LlvmCtx(, )?(.*)\) \{$')
+cst_ret = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(c: inout Comp, st: inout LlvmCtx(, )?(.*)\) -> (.+) \{$')
+cst_nor = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(c: inout Comp, st: inout LlvmCtx(, )?(.*)\) \{$')
 # (st) forms — drop st (becomes self)
-st_ret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(st: inout LlvmCtx(, )?(.*)\) -> (.+) \{$')
-st_nor = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(st: inout LlvmCtx(, )?(.*)\) \{$')
+st_ret = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(st: inout LlvmCtx(, )?(.*)\) -> (.+) \{$')
+st_nor = re.compile(r'^(pub )?fn ([A-Za-z0-9_]+)\(st: inout LlvmCtx(, )?(.*)\) \{$')
 
 def consume_fn(i):
     block = [lines[i]]
@@ -155,5 +155,5 @@ for f in glob.glob(SRC + "/**/*.pw", recursive=True):
     if s != orig:
         open(f, "w").write(s)
 
-print("methodized:", ", ".join(f"{n}{'(export)' if e else ''}" for n, e in methodized))
+print("methodized:", ", ".join(f"{n}{'(pub)' if e else ''}" for n, e in methodized))
 print("exported (drop from Backend import if present):", ", ".join(n for n, e in methodized if e))
