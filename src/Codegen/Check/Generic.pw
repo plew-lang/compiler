@@ -168,7 +168,6 @@ pub impl Comp {
         while ti < self.decls.traitCount() {
             val t: TraitDef = self.decls.traitAt(index: ti)
             if t.nameStart == traitOwner && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
-                val concreteArity: U64 = t.typeParams.count()
                 // requirement of this trait
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
@@ -196,7 +195,7 @@ pub impl Comp {
                 while gi < self.arena.functionCount() {
                     val g: Func = self.arena.functionAt(index: gi)
                     if g.hasRecv {
-                        if g.provTraitOwner == traitOwner && g.provTraitArity == concreteArity {
+                        if g.recvStart == traitOwner {
                             if includePrivateProvided || g.isPub {
                                 if g.nameId == qName {
                                     if self.paramsLabelsOk(params: g.params, args: args) {
