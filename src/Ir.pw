@@ -1365,7 +1365,7 @@ pub enum StaticConformanceProof {
     // zero-based Conform indices for trait-subject edges, ordered from the
     // bound trait to the selected target trait. They are symbolic patterns;
     // BodyInstance grounds/validates the receiver later.
-    AssumedTraitPath(source: DeclarationBoundRef, edges: Array[U64])
+    AssumedTraitPath(source: DeclarationBoundRef, edges: Array[WitnessMatch])
     // A generic bound also entails every declared supertrait. `traits` is
     // the ordered TraitDef-index path after the authored bound's trait; it
     // makes that derivation explicit instead of mislabeling `T: Sub` as an
@@ -1460,11 +1460,17 @@ pub struct FrozenEnumPayloadConversion {
 pub impl FrozenEnumPayloadConversion { factory }
 
 // One worklist state while resolving a concrete trait instance.  The current
-// trait key is ground; `edges` is the predecessor proof needed both for a
+// trait key is rigid; `origin` identifies authored evidence and `edges` is the predecessor proof needed both for a
 // final callable and for associated-output grounding.  Keeping this state in
 // IR avoids parallel owner/args/path arrays and is the migration carrier for
 // the eventual canonical ConformanceProof DAG.
+pub enum TraitProofOrigin {
+    Witness
+    Assumption(source: DeclarationBoundRef)
+}
+
 pub struct TraitProofState {
+    pub val origin: TraitProofOrigin = <TraitProofOrigin.Witness />
     pub val traitOwner: U64
     pub val traitId: U64
     pub val traitArgs: Array[U64]

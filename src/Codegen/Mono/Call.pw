@@ -43,10 +43,10 @@ pub impl Comp {
                 self.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) />)
             }
             StaticConformanceProof.AssumedTraitPath(source: val boundRef, edges: val edges) => {
-                val start: U64 = self.arena.staticProofU64Pool.count()
+                val start: U64 = self.arena.staticProofWitnessPool.count()
                 mut val i: U64 = 0U64
                 while i < edges.count() {
-                    self.arena.staticProofU64Pool.append(edges[i])
+                    self.arena.staticProofWitnessPool.append(self.freezeWitnessMatch(witness: edges[i]))
                     i += 1U64
                 }
                 self.arena.staticProofs.append(<StaticProofNode tag=3U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=edges.count() />)
@@ -143,10 +143,10 @@ pub impl Comp {
         if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 1U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
         if node.tag == 3U64 {
-            mut val edges: Array[U64] = []
+            mut val edges: Array[WitnessMatch] = []
             mut val i: U64 = 0U64
             while i < node.pathCount {
-                edges.append(self.arena.staticProofU64Pool[node.path + i])
+                edges.append(self.thawFrozenWitnessMatch(witness: self.arena.staticProofWitnessPool[node.path + i]))
                 i += 1U64
             }
             return <StaticConformanceProof.AssumedTraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) edges=edges />
@@ -834,7 +834,7 @@ pub impl Comp {
                     StaticConformanceProof.AssumedTraitPath(source: val rightBound, edges: val rightEdges) => {
                         if !self.sameDeclarationBound(a: leftBound, b: rightBound) || leftEdges.count() != rightEdges.count() { return false }
                         mut val i: U64 = 0U64
-                        while i < leftEdges.count() { if leftEdges[i] != rightEdges[i] { return false } i += 1U64 }
+                        while i < leftEdges.count() { if !self.sameWitnessMatch(a: leftEdges[i], b: rightEdges[i]) { return false } i += 1U64 }
                         return true
                     }
                     _ => {}

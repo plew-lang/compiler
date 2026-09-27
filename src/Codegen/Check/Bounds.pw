@@ -8,6 +8,26 @@ import ../../Ir with { DynamicCallTemplateTarget }
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
+        mut val result: Array[DeclarationBoundRef] = []
+        mut val index = 0U64
+        while index < self.decls.funcBounds.count() {
+            if self.decls.funcBounds[index].fnIdx == fnIdx { result.append(<DeclarationBoundRef.Function index=index />) }
+            index += 1U64
+        }
+        return result
+    }
+
+    fn conformanceBoundAssumptions(bounds: ConformBoundRange) -> Array[DeclarationBoundRef] {
+        mut val result: Array[DeclarationBoundRef] = []
+        mut val index = 0U64
+        while index < bounds.len {
+            result.append(<DeclarationBoundRef.Conformance index=bounds.start + index />)
+            index += 1U64
+        }
+        return result
+    }
+
     fn declarationBoundIsValid(source: DeclarationBoundRef) -> Bool {
         match source {
             DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
@@ -162,7 +182,7 @@ pub impl Comp {
     // A view can establish a conformance that the bare receiver does not have.
     // Keep this policy beside the constraint API, rather than asking each
     // generic-bound checker to unpack owner, positional args and predicates.
-    inout fn viewedTypeConformsTraitConstraint(ref: U64, constraint: TraitConstraint) -> Result[Bool, CompileDiagnostic] {
+    inout fn viewedTypeConformsTraitConstraint(ref: U64, constraint: TraitConstraint, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
         if constraint.key.owner == 0U64 { return <Result.Ok value=false />}
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
@@ -172,7 +192,7 @@ pub impl Comp {
             values.append(constraint.assocPredicates[i].value)
             i += 1U64
         }
-        return <Result.Ok value=(try self.viewedTypeConforms(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values)) />
+        return <Result.Ok value=(try self.viewedTypeConforms(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)) />
     }
 
     // Declaration-time evidence is a separate query from concrete
@@ -208,28 +228,8 @@ pub impl Comp {
     // parameter names: `x#E` is valid exactly when E's receiver constraint is
     // statically proved for x.
     inout fn staticTraitPatternProof(receiverRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: PatternBindInput) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        if self.cur.checkFn < self.arena.functionCount() {
-            val requested: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=traitOwner positionalArgs=traitArgs /> positionalArgsOpen=false assocPredicates=[] />
-            val assumed: StaticConformanceProof = self.assumedBoundProof(fnIdx: self.cur.checkFn, receiverRef: receiverRef, constraint: requested)
-            match assumed {
-                StaticConformanceProof.Missing => {}
-                _ => { return <Result.Ok value=assumed />}
-            }
-        }
-        // An extension may quantify its trait arguments (B[Element]). Match
-        // those binders against the authored bound (B[I64]); the declaration's
-        // own arguments remain rigid on the right side of the unification.
-        mut val index = 0U64
-        while index < self.decls.funcBounds.count() {
-            val bound = self.decls.funcBounds[index]
-            if bound.fnIdx == self.cur.checkFn && bound.constraint.key.owner == traitOwner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == traitArgs.count() {
-                if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) {
-                    return <Result.Ok value=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=index /> /> />
-                }
-            }
-            index += 1U64
-        }
-        return <Result.Ok value=(try self.concreteTraitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams)) />
+        val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+        return <Result.Ok value=(try self.traitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, assumptions: assumptions)) />
     }
 
     inout fn staticRequirementMatchRank(resolution: StaticMemberResolution, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
@@ -416,11 +416,13 @@ pub impl Comp {
                         while ci < self.decls.conforms.count() {
                             val edge: Conform = self.decls.conforms[ci]
                             if (self.canonicalTraitOwner(start: edge.typeStart, len: edge.typeLen) != 0U64) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
+                                val selectedWitness = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
+                                if selectedWitness.conformIdx == 0U64 || !(try self.witnessConditionsSatisfied(witness: selectedWitness, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) { ci += 1U64 continue }
                                 mut val ti: U64 = 0U64
                                 while ti < self.decls.traitCount() {
                                     val traitDef: TraitDef = self.decls.traitAt(index: ti)
                                     if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
-                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef edges=[ci] />
+                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef edges=[selectedWitness] />
                                         mut val fi: U64 = 0U64
                                         while fi < self.arena.functionCount() {
                                             val candidate: Func = self.arena.functionAt(index: fi)
@@ -756,10 +758,10 @@ pub impl Comp {
     // A view is an unordered source set.  Bounds may use any active extension
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
-    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
+    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=false /> }
         val resolved = (try self.resolveTy(tyRef: ref))
-        val proof = (try self.concreteTraitPatternProof(baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues))
+        val proof = (try self.traitPatternProof(baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
         match proof {
             StaticConformanceProof.Missing => { return <Result.Ok value=false /> }
             _ => { return <Result.Ok value=true /> }

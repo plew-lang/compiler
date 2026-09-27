@@ -1087,6 +1087,19 @@ pub impl Comp {
     // its one directional substitution are the proof that owns the output.
     inout fn associatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
         match proof {
+            StaticConformanceProof.AssumedBound(val source) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=0U64 /> }
+                val bound = self.declarationBound(source: source)
+                if bound.constraint.key.owner != traitOwner { return <Result.Ok value=0U64 /> }
+                for val predicate in bound.constraint.assocPredicates {
+                    if predicate.member == assocId { return <Result.Ok value=predicate.value /> }
+                }
+                return <Result.Ok value=0U64 />
+            }
+            StaticConformanceProof.AssumedTraitPath(source: _, edges: val edges) => {
+                if edges.count() == 0U64 { return <Result.Ok value=0U64 /> }
+                return <Result.Ok value=(try self.associatedOutputInProof(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitOwner: traitOwner, assocId: assocId)) />
+            }
             StaticConformanceProof.ConcreteWitness(val witness) => {
                 if witness.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
                 val ci: U64 = witness.conformIdx - 1U64

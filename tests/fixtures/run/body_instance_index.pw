@@ -1,5 +1,5 @@
 import /Frontend with { Comp }
-import /Ir with { DeclarationBoundRef, Bind, TypeRef, InstanceEnvironment, StaticConformanceProof }
+import /Ir with { WitnessMatch, DeclarationBoundRef, Bind, TypeRef, InstanceEnvironment, StaticConformanceProof }
 import @Std/Io with { write }
 
 fn main() {
@@ -27,8 +27,8 @@ fn main() {
         <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=other />,
         <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> /> />,
         <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=1U64 /> /> />,
-        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath source=<DeclarationBoundRef.Function index=0U64 /> edges=[1U64,2U64] /> />,
-        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath source=<DeclarationBoundRef.Function index=0U64 /> edges=[2U64,1U64] /> />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath source=<DeclarationBoundRef.Function index=0U64 /> edges=[<WitnessMatch conformIdx=1U64 />, <WitnessMatch conformIdx=2U64 />] /> />,
+        <InstanceEnvironment params=[parameter] args=[concrete] receiverRef=concrete proof=<StaticConformanceProof.AssumedTraitPath source=<DeclarationBoundRef.Function index=0U64 /> edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=1U64 />] /> />,
         <InstanceEnvironment params=[parameter,otherParameter] args=[concrete,other] />,
         <InstanceEnvironment params=[otherParameter,parameter] args=[other,concrete] />]
     // Interleave functions so candidate links cannot accidentally follow global order.
