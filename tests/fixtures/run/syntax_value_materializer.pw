@@ -1,5 +1,5 @@
 // The macro-facing value APIs are all views over the canonical SyntaxFile
-// parser.  Cover an annotated/exported item, whole program, expression, and
+// parser.  Cover an annotated public item, whole program, expression, and
 // block independently so a legacy grammar cannot be reintroduced behind one
 // compatible value result.
 import @Plew/Syntax with { ExprAst, Lexer, P, StmtAst, TopItemAst, lex, parseBlockFrom, parseExprFrom, parseItem, parseProgramAst }
