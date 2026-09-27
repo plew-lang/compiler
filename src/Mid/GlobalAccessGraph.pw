@@ -1,0 +1,141 @@
+// Mutable-global effect propagation shared by body-analysis stages.
+// Callers supply graph nodes, known call edges, and canonical storage facts.
+// This module does not discover bodies, resolve call templates, or finalize
+// destruction contracts. Missing edges never constitute a purity proof.
+import ../Frontend with { Comp }
+import ./Ir with { MidOperandNode }
+import ./Verify with { canonicalMidValuePlacesOverlap }
+
+struct GlobalAccessEffect {
+    pub val body: U64
+    pub val place: U64
+    pub val writes: Bool
+    pub val next: U64
+}
+pub impl GlobalAccessEffect { factory }
+struct GlobalAccessCall {
+    pub val caller: U64
+    pub val callee: U64
+    pub val term: U64
+    pub val next: U64
+}
+pub impl GlobalAccessCall { factory }
+pub struct GlobalAccessGraph {
+    mut val heads: Array[U64] = []
+    mut val incoming: Array[U64] = []
+    mut val effects: Array[GlobalAccessEffect] = []
+    mut val calls: Array[GlobalAccessCall] = []
+}
+
+pub impl GlobalAccessGraph {
+    factory empty() { return <GlobalAccessGraph /> }
+}
+
+fn globalPlace(c: Comp, placeId: U64) -> Bool {
+    if placeId == 0U64 { return false }
+    val place = c.mid.places[placeId - 1U64]
+    if place.rootTag != 2U64 || !place.globalMutable { return false }
+    mut val index = 0U64
+    while index < place.projections.len {
+        if c.mid.projections[place.projections.start + index].tag == 3U64 { return false }
+        index += 1U64
+    }
+    return true
+}
+
+// Equal paths can have different arena IDs. Deduplicate by storage identity,
+// retaining distinct fields and modes. Array indices reserve the container.
+fn sameGlobalPath(c: Comp, first: U64, second: U64) -> Bool {
+    val left = c.mid.places[first - 1U64]
+    val right = c.mid.places[second - 1U64]
+    if left.globalTarget != right.globalTarget || left.projections.len != right.projections.len { return false }
+    mut val index = 0U64
+    while index < left.projections.len {
+        val projection = c.mid.projections[left.projections.start + index]
+        val other = c.mid.projections[right.projections.start + index]
+        if projection.tag != other.tag || projection.index != other.index { return false }
+        index += 1U64
+    }
+    return true
+}
+
+pub impl GlobalAccessGraph {
+    inout fn node() -> U64 {
+        val index = self.heads.count()
+        self.heads.append(0U64)
+        self.incoming.append(0U64)
+        return index
+    }
+    inout fn edge(caller: U64, callee: U64, term: U64 = 0U64) {
+        self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term next=self.incoming[callee] />)
+        self.incoming[callee] = self.calls.count()
+    }
+    inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
+        if !globalPlace(c: c, placeId: place) { return }
+        mut val entry = self.heads[body]
+        while entry != 0U64 {
+            val effect = self.effects[entry - 1U64]
+            if effect.writes == writes && sameGlobalPath(c: c, first: effect.place, second: place) { return }
+            entry = effect.next
+        }
+        self.effects.append(<GlobalAccessEffect body=body place=place writes=writes next=self.heads[body] />)
+        self.heads.set(i: body, value: self.effects.count())
+    }
+
+    inout fn operand(c: Comp, body: U64, operandId: U64) {
+        if operandId == 0U64 { return }
+        val operand = c.mid.operands[operandId - 1U64]
+        mut val place = operand.place
+        if operand.accessPlace != 0U64 { place = operand.accessPlace }
+        self.add(c: c, body: body, place: place, writes: operand.tag == 2U64 || operand.tag == 4U64)
+    }
+
+    fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool) -> Bool {
+        if operand.tag != 4U64 && !(operand.tag == 3U64 && (receiver || operand.borrowsStorage)) { return false }
+        mut val place = operand.place
+        if operand.accessPlace != 0U64 { place = operand.accessPlace }
+        if !globalPlace(c: c, placeId: place) { return false }
+        mut val entry = self.heads[callee]
+        while entry != 0U64 {
+            val effect = self.effects[entry - 1U64]
+            if (operand.tag == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(c: c, leftId: place, rightId: effect.place) { return true }
+            entry = effect.next
+        }
+        return false
+    }
+
+    // Returns the one-based caller node containing a conflict, or zero.
+    // Nodes are opaque to this solver: declaration bodies, concrete bodies,
+    // and destruction summaries are selected by their respective collectors.
+    inout fn solve(c: Comp) -> U64 {
+        mut val index = 0U64
+        while index < self.effects.count() {
+            val effect = self.effects[index]
+            mut val entry = self.incoming[effect.body]
+            while entry != 0U64 {
+                val call = self.calls[entry - 1U64]
+                self.add(c: c, body: call.caller, place: effect.place, writes: effect.writes)
+                entry = call.next
+            }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.calls.count() {
+            val call = self.calls[index]
+            if call.term == 0U64 { index += 1U64
+                continue }
+            val term = c.mid.terminators[call.term - 1U64]
+            if term.callReceiver != 0U64 {
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if receiver.operand != 0U64 && self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[receiver.operand - 1U64], receiver: true) { return call.caller + 1U64 }
+            }
+            mut val argument = 0U64
+            while argument < term.args.len {
+                if self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[c.mid.callArguments[term.args.start + argument] - 1U64], receiver: false) { return call.caller + 1U64 }
+                argument += 1U64
+            }
+            index += 1U64
+        }
+        return 0U64
+    }
+}

@@ -4,31 +4,9 @@
 import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
 import ../Ir with { CallTarget, ArcClass }
-import ./Ir with { MidCanonicalBody, MidOperandNode }
-import ./Verify with { canonicalMidReachable, canonicalMidValuePlacesOverlap }
-
-struct GlobalAccessEffect {
-    pub val body: U64
-    pub val place: U64
-    pub val writes: Bool
-    pub val next: U64
-}
-pub impl GlobalAccessEffect { factory }
-struct GlobalAccessCall {
-    pub val caller: U64
-    pub val callee: U64
-    pub val term: U64
-    pub val next: U64
-}
-pub impl GlobalAccessCall { factory }
-struct GlobalAccessGraph {
-    pub mut val heads: Array[U64] = []
-    pub mut val incoming: Array[U64] = []
-    pub mut val effects: Array[GlobalAccessEffect] = []
-    pub mut val calls: Array[GlobalAccessCall] = []
-}
-
-pub impl GlobalAccessGraph { factory }
+import ./Ir with { MidCanonicalBody }
+import ./GlobalAccessGraph with { GlobalAccessGraph }
+import ./Verify with { canonicalMidReachable }
 
 // Record verified bodies once during the normal typed preparation pipeline.
 // With no mutable globals this tier has no possible obligations.
@@ -44,77 +22,12 @@ pub fn registerMidGlobalAccessBody(c: inout Comp, canonical: MidCanonicalBody) {
     if c.mid.globalAccessState == 2U64 { c.mid.globalAccessBodies.append(canonical.body) }
 }
 
-fn globalPlace(c: Comp, placeId: U64) -> Bool {
-    if placeId == 0U64 { return false }
-    val place = c.mid.places[placeId - 1U64]
-    if place.rootTag != 2U64 || !place.globalMutable { return false }
-    mut val index = 0U64
-    while index < place.projections.len {
-        if c.mid.projections[place.projections.start + index].tag == 3U64 { return false }
-        index += 1U64
-    }
-    return true
-}
-
-// Equal paths can have different arena IDs. Deduplicate by storage identity,
-// retaining distinct fields and modes. Array indices reserve the container.
-fn sameGlobalPath(c: Comp, first: U64, second: U64) -> Bool {
-    val left = c.mid.places[first - 1U64]
-    val right = c.mid.places[second - 1U64]
-    if left.globalTarget != right.globalTarget || left.projections.len != right.projections.len { return false }
-    mut val index = 0U64
-    while index < left.projections.len {
-        val projection = c.mid.projections[left.projections.start + index]
-        val other = c.mid.projections[right.projections.start + index]
-        if projection.tag != other.tag || projection.index != other.index { return false }
-        index += 1U64
-    }
-    return true
-}
-
-pub impl GlobalAccessGraph {
-    inout fn edge(caller: U64, callee: U64, term: U64 = 0U64) {
-        self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term next=self.incoming[callee] />)
-        self.incoming[callee] = self.calls.count()
-    }
+impl GlobalAccessGraph {
     inout fn destruction(c: inout Comp, caller: U64, type: U64) -> Result[(), CompileDiagnostic] {
         if type == 0U64 { return <Result.Ok value=() /> }
         val contract = try c.checkedFinalDestruction(typeRef: type)
         self.edge(caller: caller, callee: c.mid.globalAccessBodies.count() + contract - 1U64)
         return <Result.Ok value=() />
-    }
-    inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
-        if !globalPlace(c: c, placeId: place) { return }
-        mut val entry = self.heads[body]
-        while entry != 0U64 {
-            val effect = self.effects[entry - 1U64]
-            if effect.writes == writes && sameGlobalPath(c: c, first: effect.place, second: place) { return }
-            entry = effect.next
-        }
-        self.effects.append(<GlobalAccessEffect body=body place=place writes=writes next=self.heads[body] />)
-        self.heads.set(i: body, value: self.effects.count())
-    }
-
-    inout fn operand(c: Comp, body: U64, operandId: U64) {
-        if operandId == 0U64 { return }
-        val operand = c.mid.operands[operandId - 1U64]
-        mut val place = operand.place
-        if operand.accessPlace != 0U64 { place = operand.accessPlace }
-        self.add(c: c, body: body, place: place, writes: operand.tag == 2U64 || operand.tag == 4U64)
-    }
-
-    fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool) -> Bool {
-        if operand.tag != 4U64 && !(operand.tag == 3U64 && (receiver || operand.borrowsStorage)) { return false }
-        mut val place = operand.place
-        if operand.accessPlace != 0U64 { place = operand.accessPlace }
-        if !globalPlace(c: c, placeId: place) { return false }
-        mut val entry = self.heads[callee]
-        while entry != 0U64 {
-            val effect = self.effects[entry - 1U64]
-            if (operand.tag == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(c: c, leftId: place, rightId: effect.place) { return true }
-            entry = effect.next
-        }
-        return false
     }
 }
 
@@ -124,7 +37,7 @@ pub impl GlobalAccessGraph {
 // Return the one-based canonical body containing a conflicting call, or zero.
 pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnostic] {
     if c.mid.globalAccessBodies.count() == 0U64 { return <Result.Ok value=0U64 /> }
-    mut val graph = <GlobalAccessGraph />
+    mut val graph = <GlobalAccessGraph.empty />
     mut val bodyMap: Array[U64] = []
     mut val index = 0U64
     while index <= c.arena.bodyInstanceCount() { bodyMap.append(0U64)
@@ -132,8 +45,7 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
     index = 0U64
     while index < c.mid.globalAccessBodies.count() {
         val body = c.mid.bodies[c.mid.globalAccessBodies[index] - 1U64]
-        graph.heads.append(0U64)
-        graph.incoming.append(0U64)
+        graph.node()
         if body.bodyInstance != 0U64 { bodyMap.set(i: body.bodyInstance, value: index + 1U64) }
         index += 1U64
     }
@@ -141,8 +53,7 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
     // closes by the same worklist as authored calls; no recursive unfolding.
     index = 0U64
     while index < c.arena.finalDestructions.count() {
-        graph.heads.append(0U64)
-        graph.incoming.append(0U64)
+        graph.node()
         index += 1U64
     }
     index = 0U64
@@ -224,8 +135,7 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
                             if selected.calleeBodyId != 0U64 && selected.calleeBodyId < bodyMap.count() {
                                 val callee = bodyMap[selected.calleeBodyId]
                                 if callee != 0U64 && !c.arena.functionAt(index: selected.callee).isAsync {
-                                    graph.calls.append(<GlobalAccessCall caller=index callee=callee - 1U64 term=block.terminator next=graph.incoming[callee - 1U64] />)
-                                    graph.incoming.set(i: callee - 1U64, value: graph.calls.count())
+                                    graph.edge(caller: index, callee: callee - 1U64, term: block.terminator)
                                 }
                             }
                         }
@@ -237,33 +147,7 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
         }
         index += 1U64
     }
-    index = 0U64
-    while index < graph.effects.count() {
-        val effect = graph.effects[index]
-        mut val entry = graph.incoming[effect.body]
-        while entry != 0U64 {
-            val call = graph.calls[entry - 1U64]
-            graph.add(c: c, body: call.caller, place: effect.place, writes: effect.writes)
-            entry = call.next
-        }
-        index += 1U64
-    }
-    index = 0U64
-    while index < graph.calls.count() {
-        val call = graph.calls[index]
-        if call.term == 0U64 { index += 1U64
-            continue }
-        val term = c.mid.terminators[call.term - 1U64]
-        if term.callReceiver != 0U64 {
-            val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
-            if receiver.operand != 0U64 && graph.conflicts(c: c, callee: call.callee, operand: c.mid.operands[receiver.operand - 1U64], receiver: true) { return <Result.Ok value=c.mid.globalAccessBodies[call.caller] /> }
-        }
-        mut val argument = 0U64
-        while argument < term.args.len {
-            if graph.conflicts(c: c, callee: call.callee, operand: c.mid.operands[c.mid.callArguments[term.args.start + argument] - 1U64], receiver: false) { return <Result.Ok value=c.mid.globalAccessBodies[call.caller] /> }
-            argument += 1U64
-        }
-        index += 1U64
-    }
+    val conflict = graph.solve(c: c)
+    if conflict != 0U64 { return <Result.Ok value=c.mid.globalAccessBodies[conflict - 1U64] /> }
     return <Result.Ok value=0U64 />
 }
