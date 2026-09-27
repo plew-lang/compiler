@@ -1267,6 +1267,59 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Resolve a no-argument protocol signature without demanding its body.
+    // Zero retains an unresolved substitution for the later instance obligation.
+    inout fn checkedProtocolResult(callee: U64, receiver: U64, statement: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
+        val selected = try self.selectedCallableSubstitution(selection: <CallSiteSelection exprId=statement siteIsStmt=true slot=slot callee=callee receiverRef=receiver resultHintRef=receiver />)
+        match selected {
+            Optional.None => { return <Result.Ok value=0U64 /> }
+            Optional.Some(v: val substitution) => {
+                val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: substitution.args, recvInstRef: substitution.receiverRef, selectedProof: substitution.proof)
+                try self.checkSelectedCallableBounds(fnIdx: callee, args: substitution.args, receiver: environment.receiverRef)
+                return self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
+            }
+        }
+    }
+
+    inout fn checkClosedIterationProtocols() -> Result[(), CompileDiagnostic] {
+        val count = self.decls.callTemplates.count()
+        mut val index = 0U64
+        while index < count {
+            val template = self.decls.callTemplates[index]
+            if template.siteKey.slot == 1U64 {
+                match template.kind {
+                    CallTemplateKind.Protocol(receiver: val receiver) => {
+                        match receiver {
+                            CallTemplateReceiver.Term(term: val term) => {
+                                if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
+                                    val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
+                                    val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
+                                    val arguments = self.pushArgs(args: [])
+                                    val iterator = try self.resolveProtocolMethodForReceiver(recvRef: term, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments)
+                                    mut val nextReceiver = term
+                                    if iterator < self.arena.functionCount() {
+                                        nextReceiver = try self.checkedProtocolResult(callee: iterator, receiver: term, statement: template.siteKey.originSerial - 1U64, slot: 1U64)
+                                    }
+                                    if nextReceiver != 0U64 {
+                                        val next = try self.resolveProtocolMethodForReceiver(recvRef: nextReceiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments)
+                                        if next >= self.arena.functionCount() {
+                                            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
+                                        }
+                                        val result = try self.checkedProtocolResult(callee: next, receiver: nextReceiver, statement: template.siteKey.originSerial - 1U64, slot: 2U64)
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     // Unused source calls still impose constraints. Symbolic substitutions
     // retain their bound-aware abstract checking and later instance obligations.
     // This pass never registers an executable body or resolves a new callee.

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1261,12 +1261,12 @@ pub impl Comp {
         eprint(text: "\n")
     }
 
-    inout fn enqueueSelectedCallee(selection: CallSiteSelection) -> Result[(), CompileDiagnostic] {
+    inout fn selectedCallableSubstitution(selection: CallSiteSelection) -> Result[Optional[SelectedCallableSubstitution], CompileDiagnostic] {
         val exprId: U64 = selection.exprId
         val callee: U64 = selection.callee
         val siteIsStmt: Bool = selection.siteIsStmt
         val slot: U64 = selection.slot
-        if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
+        if callee >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
         val f: Func = self.arena.functionAt(index: callee)
         mut val finalArgs: Array[U64] = []
         mut val recvInst: U64 = selection.receiverRef
@@ -1334,9 +1334,7 @@ pub impl Comp {
             if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.typeCount() {
                 val recvArgs: Array[U64] = self.arena.typeAt(index: recvInst).args
                 if recvArgs.count() == f.typeParams.count() && (try self.fnArgsAllGround(args: recvArgs)) {
-                    val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst, selectedProof: calleeProof))
-                    try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
-                    return <Result.Ok value=() />
+                    return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=recvArgs proof=calleeProof /> /> />
                 }
             }
             // A recorded call template owns the parametric substitution.  Its
@@ -1446,9 +1444,25 @@ pub impl Comp {
             if finalArgs.count() != f.typeParams.count() || !((try self.fnArgsAllGround(args: finalArgs))) {
                 // An incomplete generic call has no emittable final instance.
                 self.traceIncompleteFinalCallee(exprId: exprId, f: f, args: finalArgs, recvRef: recvInst, expectedRef: selection.resultHintRef)
-                return <Result.Ok value=() />
+                return <Result.Ok value=<Optional.None /> />
             }
         }
+        return <Result.Ok value=<Optional.Some v=<SelectedCallableSubstitution receiverRef=recvInst args=finalArgs proof=calleeProof /> /> />
+    }
+
+    inout fn enqueueSelectedCallee(selection: CallSiteSelection) -> Result[(), CompileDiagnostic] {
+        val substitution = match (try self.selectedCallableSubstitution(selection: selection)) {
+            Optional.Some(v: val value) => { give value }
+            Optional.None => { return <Result.Ok value=() /> }
+        }
+        val exprId = selection.exprId
+        val callee = selection.callee
+        val siteIsStmt = selection.siteIsStmt
+        val slot = selection.slot
+        val f = self.arena.functionAt(index: callee)
+        val finalArgs = substitution.args
+        val recvInst = substitution.receiverRef
+        val calleeProof = substitution.proof
         val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof))
         try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))

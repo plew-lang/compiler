@@ -1737,6 +1737,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     if !c.genMode {
         try c.closeProgramCallTemplates()
         try c.checkClosedCallTemplateBounds()
+        try c.checkClosedIterationProtocols()
     }
     try c.prepareDiscriminantType()
     return <Result.Ok value=() />

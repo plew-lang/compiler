@@ -1945,6 +1945,15 @@ pub impl FinalForResolution { factory }
 // expected-result provenance for argument-less associated factories; `resultRef`
 // is an already-selected result for a call with no user callable. Dynamic target
 // identity belongs here too: the final builder may copy it but never recover it.
+// A selected callable's substitutions, independent of executable body demand.
+// Incomplete inference is represented by Optional.None at the producer.
+pub struct SelectedCallableSubstitution {
+    pub val receiverRef: U64 = 0U64
+    pub val args: Array[U64] = []
+    pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
+}
+pub impl SelectedCallableSubstitution { factory }
+
 pub struct CallSiteSelection {
     pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val exprId: U64

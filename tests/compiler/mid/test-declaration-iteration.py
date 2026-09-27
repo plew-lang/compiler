@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Check closed iteration declarations without executable body discovery."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--probe', type=Path, required=True)
+parser.add_argument('--std', type=Path, required=True)
+parser.add_argument('--out', type=Path, required=True)
+args = parser.parse_args()
+args.out.mkdir(parents=True, exist_ok=False)
+fixtures = Path(__file__).resolve().parents[2] / 'fixtures'
+cases = []
+for name in ('unused_for_not_iterable', 'unused_for_float_range'):
+    source = (fixtures / 'reject' / (name + '.pw')).read_text()
+    expected = (fixtures / 'reject' / (name + '.err')).read_text().strip()
+    cases.append((name, source, expected))
+    cases.append((name + '-generic', source.replace('fn unused()', 'fn unused[T]()'), expected))
+for name in ('iter_for_map', 'range_custom_step_arc', 'any_iterator', 'for_call_ref_array',
+             'range_literal_context', 'temp_for_iterable_deinit', 'for_record_destructure_arc'):
+    source = (fixtures / 'run' / (name + '.pw')).read_text()
+    cases.append((name, source, 'ok'))
+    cases.append((name + '-unused', source.replace('fn main()', 'fn unused[T]()') + '\nfn main() {}\n', 'ok'))
+rows = []
+for name, source, expected in cases:
+    path = args.out / (name + '.pw')
+    path.write_text(source)
+    result = subprocess.run([str(args.probe.resolve()), str(path.resolve()), str(args.std.resolve()) + '/'],
+                            capture_output=True, text=True, timeout=60)
+    passed = result.returncode == 0 and not result.stderr and result.stdout.strip() == expected
+    rows.append(dict(case=name, passed=passed, exit=result.returncode,
+                     stdout=result.stdout, stderr=result.stderr, expected=expected))
+    print(('PASS ' if passed else 'FAIL ') + name, flush=True)
+(args.out / 'results.json').write_text(json.dumps(dict(
+    probe_sha256=hashlib.sha256(args.probe.read_bytes()).hexdigest(), cases=rows), indent=2))
+if not all(row['passed'] for row in rows):
+    raise SystemExit(1)
