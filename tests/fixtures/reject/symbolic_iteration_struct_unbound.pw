@@ -1,0 +1,3 @@
+struct Box[T] {}
+fn unused[T](values: Box[T]) { for val value in values {} }
+fn main() {}

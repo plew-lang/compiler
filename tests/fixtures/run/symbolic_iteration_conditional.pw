@@ -1,0 +1,11 @@
+import @Std/Core with { Iterable, Iterator }
+trait Required {}
+struct Cursor[T] {}
+impl[T] Cursor[T] as Iterator { type Item=T
+ inout fn next() -> Optional[T] { return <Optional.None /> } }
+struct Box[T] {}
+impl[T] Box[T] as Iterable where T: Required { type Item=T
+ type Iter=Cursor[T]
+ fn iterator() -> Cursor[T] { return <Cursor[T] /> } }
+fn unused[T](values: Box[T]) where T: Required { for val value in values {} }
+fn main() {}

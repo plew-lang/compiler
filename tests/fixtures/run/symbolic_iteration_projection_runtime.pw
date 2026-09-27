@@ -1,0 +1,11 @@
+import @Std/Core with { Iterable }
+import @Std/Io with { print }
+trait Source { type Values: Iterable[Item=I64] }
+struct Owner {}
+impl Owner as Source { type Values=Array[I64] }
+fn total[T](owner: T, values: T#Source.Values) -> I64 where T: Source {
+    mut val result = 0I64
+    for val value in values { result += value }
+    return result
+}
+fn main() { print(total(owner: <Owner />, values: [2I64, 3I64])) }

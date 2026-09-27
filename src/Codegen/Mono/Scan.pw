@@ -61,6 +61,8 @@ pub impl Comp {
     }
 
     inout fn iterableItemInfo(et: TypeInfo) -> Result[TypeInfo, CompileDiagnostic] {
+        val symbolicItem = try self.symbolicIterationItemTerm(receiver: et.ref)
+        if symbolicItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: symbolicItem) /> }
         val protocolItem: U64 = (try self.iterableProtocolItemTerm(iterTerm: et.ref))
         if protocolItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: protocolItem) />}
         val noArgs: Array[Arg] = []

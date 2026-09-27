@@ -1,0 +1,4 @@
+struct Box[T] {}
+fn identity[T](values: T) -> T { return values }
+fn unused[T](values: Box[T]) { for val value in identity(values: values) {} }
+fn main() {}

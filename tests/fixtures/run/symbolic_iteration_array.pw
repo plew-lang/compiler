@@ -1,0 +1,2 @@
+fn unused[T](values: Array[T]) { for val value in values {} }
+fn main() {}

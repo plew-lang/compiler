@@ -1,0 +1,25 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+fn main() {
+    mut val compiler = <Comp />
+    val name = compiler.internBytes(s: "Value")
+    val source = compiler.internBytes(s: "Source")
+    val target = compiler.internBytes(s: "Target")
+    val item = compiler.internBytes(s: "Item")
+    val other = compiler.internBytes(s: "Other")
+    compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />)
+    val base = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=base assocTraitStart=source.nameStart assocTraitLen=source.nameLen assocTraitId=source.nameId assocNameStart=item.nameStart assocNameLen=item.nameLen assocNameId=item.nameId />)
+    val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=base assocTraitStart=source.nameStart assocTraitLen=source.nameLen assocTraitId=source.nameId assocNameStart=other.nameStart assocNameLen=other.nameLen assocNameId=other.nameId />)
+    val nested = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=first assocTraitStart=target.nameStart assocTraitLen=target.nameLen assocTraitId=target.nameId assocNameStart=item.nameStart assocNameLen=item.nameLen assocNameId=item.nameId />)
+    assert(compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: nested)) == first)
+    assert(compiler.typeTermRefProjectionReceiver(ref: nested) == first)
+    val rebuilt = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: nested), receiver: second, traitArgs: [])
+    assert(compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: rebuilt)) == second)
+    assert(!compiler.typeRefEq(a: nested, b: rebuilt))
+    val identical = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: nested), receiver: first, traitArgs: [])
+    assert(compiler.typeRefEq(a: nested, b: identical))
+    print("ok")
+}

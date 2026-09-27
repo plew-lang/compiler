@@ -1,0 +1,5 @@
+import @Std/Core with { Iterable }
+fn unused[T](values: T) where T: Iterable {
+    for val value in values { val item: T#Iterable.Item = value }
+}
+fn main() {}

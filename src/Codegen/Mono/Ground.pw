@@ -329,6 +329,7 @@ pub impl Comp {
     // and arguments as the projection itself. Expose it as an explicit term so
     // all structural operations can recurse into it.
     inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
+        if t.projectionReceiver != 0U64 { return t.projectionReceiver }
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
@@ -511,7 +512,7 @@ pub impl Comp {
     inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
         if receiver >= self.arena.typeCount() { return 0U64 }
         val base: TypeRef = self.arena.typeAt(index: receiver)
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query

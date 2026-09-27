@@ -1,0 +1,3 @@
+trait Source { type Values }
+fn unused[T](values: T#Source.Values) where T: Source { for val value in values {} }
+fn main() {}

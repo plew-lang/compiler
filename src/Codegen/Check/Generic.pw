@@ -1041,12 +1041,37 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // The protocol's associated Item is part of its declaration contract.
+    // Preserve an opaque projection when a bound does not give an equality;
+    // scalarInfo would silently discard that type in an unused generic body.
+    inout fn symbolicIterationItemTerm(receiver: U64) -> Result[U64, CompileDiagnostic] {
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || self.typeTermIsClosed(ref: receiver) { return <Result.Ok value=0U64 /> }
+        val receiverType = self.arena.typeAt(index: receiver)
+        if receiverType.isAny { return <Result.Ok value=0U64 /> }
+        val item = self.internBytes(s: "Item")
+        for val name in ["Iterable", "Iterator"] {
+            val owner = self.coreTraitOwner(name: name)
+            if owner != 0U64 {
+                val proof = try self.staticTraitPatternProof(receiverRef: receiver, traitId: self.internBytes(s: name).nameId, traitOwner: owner, traitArgs: [], patternParams: <PatternBindInput.Values values=[] />)
+                mut val proven = true
+                match proof { StaticConformanceProof.Missing => { proven = false } _ => {} }
+                if proven {
+                    val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: item.nameId)
+                    if output != 0U64 { return <Result.Ok value=output /> }
+                    return <Result.Ok value=self.pushType(t: <TypeRef nameStart=receiverType.nameStart nameLen=receiverType.nameLen nameId=receiverType.nameId paramId=receiverType.paramId args=receiverType.args isRecord=receiverType.isRecord recordFieldLabels=receiverType.recordFieldLabels recordFieldTerms=receiverType.recordFieldTerms projectionReceiver=receiver assocTraitStart=owner assocTraitLen=self.traitNameLenByOwner(owner: owner) assocTraitId=self.internBytes(s: name).nameId assocNameStart=item.nameStart assocNameLen=item.nameLen assocNameId=item.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner hasDecl=receiverType.hasDecl declOffset=receiverType.declOffset />) />
+                }
+            }
+        }
+        return <Result.Ok value=0U64 />
+    }
+
     // A rigid lexical parameter can only be iterated through its declared
     // protocol evidence. Use the same member selection as explicit calls so
     // supertrait paths and declaration owners retain their identities.
     inout fn checkAbstractIterationReceiver(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || receiver >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if !self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[receiver].paramId) { return <Result.Ok value=() /> }
+        if self.typeTermIsClosed(ref: receiver) || self.arena.typeAt(index: receiver).isAny { return <Result.Ok value=() /> }
+        if (try self.symbolicIterationItemTerm(receiver: receiver)) != 0U64 { return <Result.Ok value=() /> }
         val arguments = self.pushArgs(args: [])
         val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
         val iterableOwner = self.coreTraitOwner(name: "Iterable")
