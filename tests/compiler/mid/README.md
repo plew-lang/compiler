@@ -36,3 +36,18 @@ It retains symbolic type recipes and `try`/`for` branches; implicit conversions,
 access materialization, and concrete destruction contracts still belong to
 later stages. `tests/fixtures/run/mid_symbolic_drops.pw` independently checks
 conditional cleanup and preservation of the immutable source snapshot.
+
+## Declaration-time global effects
+
+`DeclarationAccess.pw` runs the shared global-effect graph over source function
+bodies without requesting executable instances for unused declarations.
+Compile and link it as above, then run `test-declaration-access.py --probe PATH
+--std PATH --out NEW_DIRECTORY`. The seven cases distinguish unused ordinary
+and generic conflicts, transitive calls, nested/generic destruction, disjoint
+globals, and ownership returned beyond the borrow lifetime. The probe also
+checks that concrete body, layout, and destruction inventories remain unchanged.
+
+The result retains unresolved call, value, storage and symbolic destruction
+obligations. `clear` means no definite conflict in this analysis, not successful
+whole-program checking. Closure and global-initializer coverage and obligation
+discharge remain required before this can supply a checked-program token.

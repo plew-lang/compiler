@@ -3,7 +3,7 @@
 // This module does not discover bodies, resolve call templates, or finalize
 // destruction contracts. Missing edges never constitute a purity proof.
 import ../Frontend with { Comp }
-import ./Ir with { MidOperandNode }
+import ./Ir with { MidOperandNode, MidStatementNode, MidTerminatorNode }
 import ./Verify with { canonicalMidValuePlacesOverlap }
 
 struct GlobalAccessEffect {
@@ -88,6 +88,32 @@ pub impl GlobalAccessGraph {
         mut val place = operand.place
         if operand.accessPlace != 0U64 { place = operand.accessPlace }
         self.add(c: c, body: body, place: place, writes: operand.tag == 2U64 || operand.tag == 4U64)
+    }
+
+    inout fn statement(c: Comp, body: U64, statement: MidStatementNode) {
+        mut val destination = 0U64
+        while destination < statement.destinationCount() {
+            self.add(c: c, body: body, place: c.mid.statementDestinationAt(statement: statement, index: destination), writes: true)
+            destination += 1U64
+        }
+        self.add(c: c, body: body, place: statement.source, writes: false)
+        if statement.value != 0U64 {
+            val value = c.mid.rvalues[statement.value - 1U64]
+            self.add(c: c, body: body, place: value.place, writes: false)
+            mut val operand = 0U64
+            while operand < value.operandCount() {
+                self.operand(c: c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: operand))
+                operand += 1U64
+            }
+        }
+    }
+
+    inout fn terminatorOperands(c: Comp, body: U64, term: MidTerminatorNode) {
+        mut val operand = 0U64
+        while operand < c.mid.terminatorOperandCount(term: term) {
+            self.operand(c: c, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: operand))
+            operand += 1U64
+        }
     }
 
     fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool) -> Bool {

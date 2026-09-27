@@ -22,13 +22,13 @@ pub fn registerMidGlobalAccessBody(c: inout Comp, canonical: MidCanonicalBody) {
     if c.mid.globalAccessState == 2U64 { c.mid.globalAccessBodies.append(canonical.body) }
 }
 
-impl GlobalAccessGraph {
-    inout fn destruction(c: inout Comp, caller: U64, type: U64) -> Result[(), CompileDiagnostic] {
-        if type == 0U64 { return <Result.Ok value=() /> }
-        val contract = try c.checkedFinalDestruction(typeRef: type)
-        self.edge(caller: caller, callee: c.mid.globalAccessBodies.count() + contract - 1U64)
-        return <Result.Ok value=() />
-    }
+// Concrete destruction lookup belongs to the executable collector, not the
+// shared graph or an anonymous impl outside the graph's defining module.
+fn addFinalDestructionEdge(c: inout Comp, graph: inout GlobalAccessGraph, caller: U64, type: U64) -> Result[(), CompileDiagnostic] {
+    if type == 0U64 { return <Result.Ok value=() /> }
+    val contract = try c.checkedFinalDestruction(typeRef: type)
+    graph.edge(caller: caller, callee: c.mid.globalAccessBodies.count() + contract - 1U64)
+    return <Result.Ok value=() />
 }
 
 // Called after body discovery closes, before any LLVM text is published.
@@ -65,19 +65,19 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
                 val callee = bodyMap[contract.deinitCall.bodyId]
                 if callee != 0U64 { graph.edge(caller: owner, callee: callee - 1U64) }
             }
-            if contract.underlying != 0U64 { try graph.destruction(c: inout c, caller: owner, type: contract.underlying) }
+            if contract.underlying != 0U64 { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: contract.underlying) }
             else {
                 match contract.ownershipClass {
-                    ArcClass.BufferLike(elem: val element) => { try graph.destruction(c: inout c, caller: owner, type: element) }
-                    ArcClass.RefCell(inst: val instance) => { try graph.destruction(c: inout c, caller: owner, type: c.arena.typeAt(index: instance).args[0U64]) }
+                    ArcClass.BufferLike(elem: val element) => { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: element) }
+                    ArcClass.RefCell(inst: val instance) => { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: c.arena.typeAt(index: instance).args[0U64]) }
                     ArcClass.StructVal(sidx: _) => {
                         mut val field = 0U64
-                        while field < contract.fieldTypes.count() { try graph.destruction(c: inout c, caller: owner, type: contract.fieldTypes[field])
+                        while field < contract.fieldTypes.count() { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: contract.fieldTypes[field])
                             field += 1U64 }
                     }
                     ArcClass.EnumVal(eidx: _) => {
                         mut val field = 0U64
-                        while field < contract.fieldTypes.count() { try graph.destruction(c: inout c, caller: owner, type: contract.fieldTypes[field])
+                        while field < contract.fieldTypes.count() { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: contract.fieldTypes[field])
                             field += 1U64 }
                     }
                     // Erased targets retain dynamic checks; no absent static
@@ -99,32 +99,14 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
                 mut val statementIndex = 0U64
                 while statementIndex < block.statements.len {
                     val statement = c.mid.statements[block.statements.start + statementIndex]
-                    mut val destinationIndex = 0U64
-                    while destinationIndex < statement.destinationCount() {
-                        graph.add(c: c, body: index, place: c.mid.statementDestinationAt(statement: statement, index: destinationIndex), writes: true)
-                        destinationIndex += 1U64
-                    }
-                    graph.add(c: c, body: index, place: statement.source, writes: false)
-                    if statement.value != 0U64 {
-                        val value = c.mid.rvalues[statement.value - 1U64]
-                        graph.add(c: c, body: index, place: value.place, writes: false)
-                        mut val operandIndex = 0U64
-                        while operandIndex < value.operandCount() {
-                            graph.operand(c: c, body: index, operandId: c.mid.rvalueOperandAt(value: value, index: operandIndex))
-                            operandIndex += 1U64
-                        }
-                    }
+                    graph.statement(c: c, body: index, statement: statement)
                     if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
-                        try graph.destruction(c: inout c, caller: index, type: c.mid.places[statement.destination - 1U64].typeTerm)
+                        try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: index, type: c.mid.places[statement.destination - 1U64].typeTerm)
                     }
                     statementIndex += 1U64
                 }
                 val term = c.mid.terminators[block.terminator - 1U64]
-                mut val operandIndex = 0U64
-                while operandIndex < c.mid.terminatorOperandCount(term: term) {
-                    graph.operand(c: c, body: index, operandId: c.mid.terminatorOperandAt(term: term, index: operandIndex))
-                    operandIndex += 1U64
-                }
+                graph.terminatorOperands(c: c, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
                     val selected = c.arena.finalCallees[target.resolution]

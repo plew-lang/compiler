@@ -1,0 +1,42 @@
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Mid/Build with { MidFunctionTemplates }
+import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError }
+import ../../../src/Mid/Diagnostics with { reportMidBuildError }
+import @Std/Core with { assert }
+import @Std/Process with { argAt }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
+        sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    val instances = compiler.arena.bodyInstanceCount()
+    val bodies = compiler.monoWork.bodyInstances.count()
+    val destructions = compiler.arena.finalDestructions.count()
+    val structures = compiler.arena.structCount()
+    mut val templates = <MidFunctionTemplates />
+    match analyzeDeclarationGlobalAccess(c: inout compiler, templates: inout templates) {
+        Result.Ok(value: val analysis) => {
+            if analysis.conflictingFunction != 0U64 { print("conflict") }
+            else { print("clear") }
+            assert(analysis.obligations.count() > 0U64)
+            print("pending")
+        }
+        Result.Err(error: val failure) => {
+            match failure {
+                DeclarationAccessError.Build(function: val function, error: val error) => {
+                    compiler.traceCodegen = true
+                    reportMidBuildError(c: inout compiler, fnIdx: function, error: error)
+                }
+                DeclarationAccessError.Ownership(function: val function) => { print(function) }
+                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
+            }
+            panic "declaration analysis failed"
+        }
+    }
+    assert(compiler.arena.bodyInstanceCount() == instances)
+    assert(compiler.monoWork.bodyInstances.count() == bodies)
+    assert(compiler.arena.finalDestructions.count() == destructions)
+    assert(compiler.arena.structCount() == structures)
+}
