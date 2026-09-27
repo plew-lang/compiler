@@ -105,7 +105,7 @@ pub impl Comp {
         if li < self.cur.locals.count() {
             return <IdentBinding code=identValueCode() target=self.cur.locals[li].nameStart />
         }
-        val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
+        val fi: U64 = self.firstVisibleFuncByName(useMod: self.moduleOf(offset: start), nameStart: start, nameLen: len)
         if fi < self.arena.functionCount() {
             return <IdentBinding code=identFnCode() target=fi />
         }

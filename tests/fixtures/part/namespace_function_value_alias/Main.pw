@@ -1,0 +1,7 @@
+import ./Alpha
+import ./Beta with { read as chosen }
+import @Std/Io with { print }
+fn main() {
+    val callback: fn() -> String = fn() -> String { return chosen() }
+    print(callback())
+}
