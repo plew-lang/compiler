@@ -501,21 +501,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Declaration offset of a unique struct/enum named by (start, len) — the anchor
-    // for diagnostics whose use site only survives as an interned span (which maps
-    // to no source file). 0 when the name matches no declaration.
-    inout fn uniqueDeclAnchor(start: U64, len: U64) -> U64 {
-        val usi: U64 = self.structIndexByName(start: start, len: len)
-        if usi < self.arena.structCount() {
-            return self.arena.structAt(index: usi).defOffset
-        }
-        val uei: U64 = self.enumIdxByName(start: start, len: len)
-        if uei < self.arena.enumCount() {
-            return self.arena.enumAt(index: uei).defOffset
-        }
-        return 0
-    }
-
     // Reject `Array[unique]` (spec/03): unique values cannot be stored in a generic
     // container directly — wrap them in `Ref[T]`. Without this a unique array element
     // is silently never deinit'd (CoW shares the buffer; the elements leak). Checks
@@ -525,10 +510,10 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
-            if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
+            if self.typeTermIsUnique(ref: ae.fieldStart) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.
-                return <Result.Err error=self.diagnosticAt(offset: self.uniqueDeclAnchor(start: ae.nameStart, len: ae.nameLen), msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ae.fieldStart).declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
             }
             i += 1
         }

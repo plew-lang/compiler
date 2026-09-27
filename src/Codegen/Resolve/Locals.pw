@@ -77,29 +77,6 @@ pub impl Comp {
         return false
     }
 
-    inout fn typeIsUnique(start: U64, len: U64) -> Bool {
-        // a newtype over a unique type is itself unique (spec/10: uniqueness propagates —
-        // else the newtype could be copied to dodge the underlying's single-ownership and
-        // break resource safety). Resolve to the underlying before the struct lookup.
-        val ntu: Bind = self.newtypeUnderName(start: start, len: len)
-        mut val rStart: U64 = start
-        mut val rLen: U64 = len
-        if ntu.nameStart != start || ntu.nameLen != len {
-            rStart = ntu.nameStart
-            rLen = ntu.nameLen
-        }
-        val si: U64 = self.structIndexByName(start: rStart, len: rLen)
-        if si < self.arena.structCount() {
-            return self.arena.structAt(index: si).isUnique
-        }
-        // `unique enum` (spec/03): the same predicate serves enums, so every
-        // uniqueness consumer (copy rejection, param modes, contagion) covers both.
-        val ei: U64 = self.anyEnumIndex(nameStart: rStart, nameLen: rLen)
-        if ei < self.arena.enumCount() {
-            return self.arena.enumAt(index: ei).isUnique
-        }
-        return false
-    }
 
     // Whether an assignment-target identifier names a binding at all: `self` (an
     // inout receiver is replaceable), a closure capture, or a local / parameter /
@@ -165,7 +142,7 @@ pub impl Comp {
         if lo.moved {
             return
         }
-        if self.typeIsUnique(start: lo.tyStart, len: lo.tyLen) {
+        if self.typeTermIsUnique(ref: lo.ty) {
             self.verifyMarkMoved(idx: idx)
         }
     }

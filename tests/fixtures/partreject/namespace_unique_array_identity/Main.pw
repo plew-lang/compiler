@@ -1,0 +1,4 @@
+import ./Copyable
+import ./Unique
+fn accept(items: Array[Unique.Item]) {}
+fn main() {}

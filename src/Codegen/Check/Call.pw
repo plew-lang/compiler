@@ -66,7 +66,7 @@ pub impl Comp {
             // divergence from exprType — is kind 0, taking neither this nor any sibling branch.)
             val ti: TypeInfo = (try self.typeOf(id: exprId))
             if ti.kind == 2 {
-                if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
+                if self.typeTermIsUnique(ref: self.typedIrRefOfInfo(ti: ti)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`") />
                 }
             }
@@ -93,8 +93,7 @@ pub impl Comp {
         if !self.expressionProvidesOwnership(exprId: scrut) { return false }
         if self.matchScrutIsMove(scrut: scrut) { return true }
         if typeTerm == 0U64 || typeTerm >= self.arena.typeCount() { return false }
-        val subject: TypeRef = self.arena.typeAt(index: typeTerm)
-        return self.typeIsUnique(start: subject.nameStart, len: subject.nameLen)
+        return self.typeTermIsUnique(ref: typeTerm)
     }
 
     inout fn matchScrutIsMove(scrut: U64) -> Bool {
@@ -131,7 +130,7 @@ pub impl Comp {
         if self.isPlaceExpr(id: scrut) {
             val ti: TypeInfo = (try self.typeOf(id: scrut))
             if ti.kind == 2 {
-                if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
+                if self.typeTermIsUnique(ref: self.typedIrRefOfInfo(ti: ti)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: scrut), msg: "matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)") />
                 }
             }

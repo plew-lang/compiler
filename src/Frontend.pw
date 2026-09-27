@@ -1613,7 +1613,6 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     // before impl++method lists merge.)
     try c.checkFieldDefaults()
     try c.checkParamDefaults()
-    try c.checkArrayElemsNotUnique()
     // match pattern soundness (spec/11): a variant/struct pattern must name real
     // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
     try c.checkMatchBinds()
@@ -1632,7 +1631,6 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     try c.checkDuplicateTraitReqs()
     try c.checkImplOnBuiltin()
     try c.checkImplOnNewtype()
-    try c.checkMoveFnReceivers()
     // module visibility (spec/15): a name brought in by `import … with { }` must be
     // part of its module's public surface (`export`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
@@ -1644,6 +1642,8 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     c.resolveTypeDeclIdentities()
     // Ownership is checked only after nominal declaration identities are resolved.
     try c.checkFieldContagion()
+    try c.checkArrayElemsNotUnique()
+    try c.checkMoveFnReceivers()
     try c.checkAllParamModes()
     try c.checkDeinitOnlyOnUnique()
     try c.checkPublicApiClosure()

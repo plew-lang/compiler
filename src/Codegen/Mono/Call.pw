@@ -6050,7 +6050,7 @@ pub impl Comp {
                 val previous: U64 = self.localIndexByName(start: nameStart, len: nameLen)
                 if previous < self.cur.locals.count() {
                     val prior = self.cur.locals[previous]
-                    if prior.owned && self.typeIsUnique(start: prior.tyStart, len: prior.tyLen) {
+                    if prior.owned && self.typeTermIsUnique(ref: prior.ty) {
                         shadowedBindingTarget = prior.nameStart
                     }
                 }

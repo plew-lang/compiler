@@ -1,0 +1,3 @@
+import ./Copyable
+import ./Unique
+fn main() { val first = <Unique.Item /> val second = first }

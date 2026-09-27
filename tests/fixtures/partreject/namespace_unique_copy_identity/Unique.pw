@@ -1,0 +1,2 @@
+pub unique struct Item {}
+pub impl Item { factory }
