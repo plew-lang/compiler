@@ -5,10 +5,11 @@ import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
 import ../Ir with { CallSiteKey, CallTemplateKind }
 import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
+import ./Ir with { MidTerminatorNode }
 import ./Prepare with { MidParametricBody }
 import ./OwnershipAnalysis with { MidOwnershipAnalysis }
 import ./GlobalAccessGraph with { GlobalAccessGraph }
-import ./Verify with { canonicalMidReachable }
+import ./Verify with { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError }
 
 pub enum DeclarationAccessNode {
     Function(function: U64)
@@ -29,6 +30,7 @@ pub enum DeclarationAccessObligation {
 pub enum DeclarationAccessError {
     Build(body: DeclarationAccessNode, error: MidBuildError)
     Ownership(body: DeclarationAccessNode)
+    LocalAccess(body: DeclarationAccessNode, error: MidVerifyError)
     CallSelection(body: DeclarationAccessNode, terminator: U64)
     Frontend(diagnostic: CompileDiagnostic)
 }
@@ -207,4 +209,80 @@ pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctio
         Result.Ok(value: _) => {}
     }
     return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(c: c) obligations=state.obligations /> />
+}
+
+// Local place conflicts do not require a mutable global or executable instance.
+// Function snapshots are shared with global analysis and executable preparation.
+fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool {
+    mut val index = 0U64
+    while index < term.args.len {
+        val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        if argument.tag == 2U64 || argument.tag == 4U64 || (argument.tag == 3U64 && argument.borrowsStorage) { return true }
+        index += 1U64
+    }
+    // No pair can conflict when every argument is an independent value.
+    // Unelaborated access markers remain subject to the later Access pass.
+    return false
+}
+
+fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
+    match built.error { MidBuildError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> } }
+    val body = c.mid.bodies[built.canonical.body - 1U64]
+    val reachable = canonicalMidReachable(c: c, body: body)
+    mut val index = 0U64
+    while index < body.blocks.len {
+        if reachable[index] {
+            val block = c.mid.blocks[body.blocks.start + index]
+            val term = c.mid.terminators[block.terminator - 1U64]
+            if term.tag == 4U64 && declarationCallHasStorageArguments(c: c, term: term) {
+                val target = c.mid.callTargets[term.callTarget - 1U64]
+                mut val receiverTag = 0U64
+                if target.tag == 1U64 {
+                    val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                    val template = c.callTemplateIndex(siteKey: key)
+                    if template < c.decls.callTemplates.count() {
+                        match c.decls.callTemplates[template].kind {
+                            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                                if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=owner terminator=block.terminator /> /> }
+                                val function = c.arena.functionAt(index: callee)
+                                if function.hasRecv {
+                                    receiverTag = if function.selfInout { give 4U64 } else if function.selfMove { give 2U64 } else { give 3U64 }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                val conflict = canonicalMidCallAccessError(c: c, term: term, receiverTag: receiverTag)
+                match conflict { MidVerifyError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=conflict /> /> } }
+            }
+        }
+        index += 1U64
+    }
+    return <Result.Ok value=() />
+}
+
+pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[(), DeclarationAccessError] {
+    val count = c.arena.functionCount()
+    mut val index = 0U64
+    while index < count {
+        val function = c.arena.functionAt(index: index)
+        if function.body != 0U64 && !function.isExtern {
+            val built = templates.body(c: inout c, function: index)
+            try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.Function function=index />, built: built)
+        }
+        index += 1U64
+    }
+    index = 0U64
+    while index < c.decls.semanticClosures.count() {
+        val closure = c.decls.semanticClosures[index]
+        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
+        try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built)
+        index += 1U64
+    }
+    if c.arena.globals.count() != 0U64 {
+        val built = buildParametricMidGlobalInit(c: inout c)
+        try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built)
+    }
+    return <Result.Ok value=() />
 }

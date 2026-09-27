@@ -63,12 +63,13 @@ pub fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Boo
     return true
 }
 
-fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
+fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode, receiverTag: U64) -> Bool {
     if term.callReceiver == 0U64 { return false }
     val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
     if receiver.tag != 2U64 { return false }
     val operand = c.mid.operands[receiver.operand - 1U64]
-    if operand.tag != 3U64 { return false }
+    val mode = if receiverTag == 0U64 { give operand.tag } else { give receiverTag }
+    if mode != 3U64 || operand.place == 0U64 { return false }
     mut val index = 0U64
     while index < term.args.len {
         val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
@@ -84,14 +85,21 @@ fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
 
 // Only language borrows participate here. A guaranteed by-value operand
 // already denotes a snapshot, even though its physical passing is Read.
-fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode) -> Bool {
+fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode, receiverTag: U64) -> Bool {
     mut val index = 0U64
     while index < term.args.len {
         val operand = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
         if operand.tag == 3U64 && operand.borrowsStorage {
             if term.callReceiver != 0U64 {
                 val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
-                if receiver.tag == 2U64 && canonicalMidReadWriteOverlap(c: c, read: operand, other: c.mid.operands[receiver.operand - 1U64]) { return true }
+                if receiver.tag == 2U64 {
+                    val other = c.mid.operands[receiver.operand - 1U64]
+                    val mode = if receiverTag == 0U64 { give other.tag } else { give receiverTag }
+                    if (mode == 2U64 || mode == 4U64) && other.place != 0U64 {
+                        val storage = if other.accessPlace != 0U64 { give other.accessPlace } else { give other.place }
+                        if canonicalMidValuePlacesOverlap(c: c, leftId: operand.place, rightId: storage) { return true }
+                    }
+                }
             }
             mut val otherIndex = 0U64
             while otherIndex < term.args.len {
@@ -102,6 +110,15 @@ fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode) -> Bool
         index += 1U64
     }
     return false
+}
+
+// The caller supplies an already-selected receiver mode for parametric calls.
+// Zero consumes the executable operand's mode. Access markers without a place
+// remain for access elaboration; this query proves conflicts, not full validity.
+pub fn canonicalMidCallAccessError(c: Comp, term: MidTerminatorNode, receiverTag: U64 = 0U64) -> MidVerifyError {
+    if canonicalMidBorrowArgumentConflicts(c: c, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingBorrowAccess /> }
+    if canonicalMidReceiverConflicts(c: c, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingReceiverAccess /> }
+    return <MidVerifyError.None />
 }
 
 fn canonicalMidReadWriteOverlap(c: Comp, read: MidOperandNode, other: MidOperandNode) -> Bool {
@@ -921,8 +938,10 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 argumentI = argumentI + 1U64
             }
-            if executable && canonicalMidBorrowArgumentConflicts(c: c, term: term) { return <MidVerification error=<MidVerifyError.ConflictingBorrowAccess /> block=blockI /> }
-            if executable && canonicalMidReceiverConflicts(c: c, term: term) { return <MidVerification error=<MidVerifyError.ConflictingReceiverAccess /> block=blockI /> }
+            if executable {
+                val conflict = canonicalMidCallAccessError(c: c, term: term)
+                match conflict { MidVerifyError.None => {} _ => { return <MidVerification error=conflict block=blockI /> } }
+            }
             if term.destination != 0U64 && term.destination <= c.mid.places.count() {
                 val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
                 if destination.projections.len == 0U64 && destination.local < states.count() {

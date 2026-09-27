@@ -6,7 +6,8 @@ import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
 import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/Ambient with { MidAmbientProgram }
-import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, checkDeclarationLocalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/Verify with { MidVerifyError }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
 
@@ -26,6 +27,12 @@ pub struct PreparedProgram {
 pub impl PreparedProgram {
     assoc fn prepare(c: inout Comp) -> Result[Self, ProgramPreparationError] {
         mut val templates = <MidFunctionTemplates />
+        if !c.genMode {
+            match checkDeclarationLocalAccess(c: inout c, templates: inout templates) {
+                Result.Ok(value: _) => {}
+                Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Declaration error=error /> /> }
+            }
+        }
         val declarationAccess = if c.genMode { give <DeclarationAccessAnalysis /> } else {
             give match analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates) {
                 Result.Ok(value: val analysis) => { give analysis }
@@ -102,6 +109,14 @@ pub fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationErro
                         _ => {}
                     }
                     return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration Mid construction failed")
+                }
+                DeclarationAccessError.LocalAccess(body: val owner, error: val error) => {
+                    val offset = declarationAccessOffset(c: inout c, owner: owner)
+                    match error {
+                        MidVerifyError.ConflictingBorrowAccess => { return c.diagnosticAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call") }
+                        MidVerifyError.ConflictingReceiverAccess => { return c.diagnosticAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call") }
+                        _ => { return c.diagnosticAt(offset: offset, msg: "internal error: invalid declaration access result") }
+                    }
                 }
                 DeclarationAccessError.Ownership(body: val owner) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration ownership analysis failed") }
                 DeclarationAccessError.CallSelection(body: val owner, terminator: _) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration call selection is missing") }
