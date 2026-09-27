@@ -1,0 +1,2 @@
+pub struct Handler { pub val run: fn() -> String }
+pub impl Handler { factory }

@@ -225,27 +225,15 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    inout fn fieldDeclaredMut(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
-        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
-        val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
-        while si < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: si)
-            if s.nameId == qStruct {
-                val fs: Array[FieldDef] = s.fields
-                mut val fi: U64 = 0
-                while fi < fs.count() {
-                    val f: FieldDef = fs[fi]
-                    if f.nameId == qField {
-                        return f.isMut
-                    }
-                    fi += 1
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
-        }
-        return true
+    inout fn fieldDeclaredMut(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> Bool {
+        val storage = self.fieldStorageTypeRef(receiverRef: receiverRef)
+        if storage == 0U64 || storage >= self.arena.typeCount() { return true }
+        mut val declaration = self.structIndexForType(ref: storage)
+        if self.arena.typeTerms[storage].isRecord { declaration = self.recordStructIndex(ref: storage) }
+        if declaration >= self.arena.structCount() { return true }
+        val field = self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: fieldStart, fieldLen: fieldLen)
+        if field >= self.arena.structAt(index: declaration).fields.count() { return true }
+        return self.arena.structFieldAt(structIndex: declaration, fieldIndex: field).isMut
     }
 
     inout fn fieldVis(structIndex: U64, fieldStart: U64, fieldLen: U64) -> U64 {
@@ -407,7 +395,7 @@ pub impl Comp {
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val bt: TypeInfo = (try self.typeOf(id: base))
                 if bt.kind == 2 {
-                    if self.fieldDeclaredMut(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
+                    if self.fieldDeclaredMut(receiverRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen) {
                         return <Result.Ok value=(try self.placeIsMutable(id: base)) />
                     }
                     return <Result.Ok value=false />
@@ -435,7 +423,7 @@ pub impl Comp {
                     val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
-                        return <Result.Ok value=self.fieldDeclaredMut(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen) />
+                        return <Result.Ok value=self.fieldDeclaredMut(receiverRef: inst.args[0], fieldStart: nameStart, fieldLen: nameLen) />
                     }
                     return <Result.Ok value=true />
                 }

@@ -353,21 +353,21 @@ pub impl Comp {
         return false
     }
 
-    inout fn providedCopyTypeParams(recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
+    inout fn providedCopyTypeParams(receiverRef: U64, recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
         mut val out: Array[Bind] = []
-        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qRecv)
-        while si < self.arena.structCount() {
-            if self.arena.structAt(index: si).typeParams.count() > 0 {
-                if self.arena.structAt(index: si).nameId == qRecv {
-                    mut val k: U64 = 0
-                    while k < self.arena.structAt(index: si).typeParams.count() {
-                        out.append(self.arena.structAt(index: si).typeParams[k])
-                        k += 1
-                    }
-                }
+        mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
+        if receiverRef != 0U64 && receiverRef < self.arena.typeCount() {
+            val receiver = self.arena.typeTerms[receiverRef]
+            if receiver.hasDecl { declaration = <Bind nameStart=receiver.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
+        }
+        if declaration.nameLen == 0U64 {
+            declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: recvStart), start: recvStart, len: recvLen)
+        }
+        if declaration.nameLen != 0U64 {
+            val structIndex = self.arena.structIndexByOffset(offset: declaration.nameStart)
+            if structIndex < self.arena.structCount() {
+                out = self.arena.structAt(index: structIndex).typeParams
             }
-            si = self.arena.nextStructNamed(index: si)
         }
         mut val oi: U64 = 0
         while oi < ownParams.count() {
@@ -794,7 +794,7 @@ pub impl Comp {
                             // emits it per receiver instantiation (`MapIter[Counter,…]`) like
                             // an inherent method. Onto a non-generic conformer this is a
                             // no-op (the conformer has no params).
-                            val copiedTP: Array[Bind] = self.providedCopyTypeParams(recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: self.copyFuncBinds(binds: f.typeParams))
+                            val copiedTP: Array[Bind] = self.providedCopyTypeParams(receiverRef: cf.subjectTy, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: self.copyFuncBinds(binds: f.typeParams))
                             // A provided template can be bare while the conformance that
                             // makes it available is extension-selected:
                             //

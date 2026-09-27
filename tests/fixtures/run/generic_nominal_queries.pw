@@ -22,4 +22,6 @@ fn main() {
     print(compiler.genericEnumIndexForType(ref: genericStruct) == compiler.arena.enumCount())
     print(compiler.recvParamCount(ref: concreteStruct) == 0U64)
     print(compiler.recvParamCount(ref: genericEnum) == 1U64)
+    val copied = compiler.providedCopyTypeParams(receiverRef: concreteStruct, recvStart: name.nameStart, recvLen: name.nameLen, ownParams: [])
+    print(copied.count() == 0U64)
 }

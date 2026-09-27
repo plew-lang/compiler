@@ -60,28 +60,6 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    // Raw declared TypeRef of struct `(structStart,structLen)`'s field `field`, or 0
-    // when the struct or field is unknown (the arena field ty, pre-grounding).
-    inout fn structFieldRawTyRef(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
-        while si < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: si)
-            if s.nameId == qStruct {
-                mut val fi: U64 = 0
-                while fi < s.fields.count() {
-                    if s.fields[fi].nameId == qField {
-                        return s.fields[fi].ty
-                    }
-                    fi += 1
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
-        }
-        return 0
-    }
-
     // The result TypeInfo of `recv.name(args)` when `name` is not a method but a
     // closure-typed FIELD (`struct Handler { val run: fn() -> I64 }`): the backend loads
     // the field and calls it indirectly (CallMethod's closure-field branch), so the
@@ -89,12 +67,9 @@ pub impl Comp {
     // through a generic receiver's env (`fn() -> T` on `Handler[I64]`). scalarInfo when
     // the name is not a closure field (the caller then keeps its unknown result).
     inout fn closureFieldRetInfo(rt: TypeInfo, nameStart: U64, nameLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
-        mut val fr: U64 = self.structFieldRawTyRef(structStart: rt.nameStart, structLen: rt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+        val fr = (try self.fieldTypeRefOfReceiver(receiverRef: self.typedIrRefOfInfo(ti: rt), fieldStart: nameStart, fieldLen: nameLen))
         if fr == 0U64 {
             return <Result.Ok value=scalarInfo() />
-        }
-        if self.isGenericInst(ref: rt.ref) {
-            fr = (try self.groundUnderInst(instRef: rt.ref, tyRef: fr))
         }
         if self.isFnType(ref: fr) {
             val ft: TypeRef = self.arena.typeAt(index: fr)
@@ -889,7 +864,7 @@ pub impl Comp {
                 // `buf.count()` / `buf.capacity()` are ordinary methods now (collections.md
                 // §3-付録4), resolved through normal method typing below — no property branch.
                 // A generic struct instantiation's field type is substituted.
-                if self.isGenericInst(ref: bt.ref) {
+                if bt.ref != 0U64 {
                     return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)) />
                 }
                 if bt.kind == 2 {
@@ -1399,7 +1374,7 @@ pub impl Comp {
                     val inst: TypeRef = self.arena.typeAt(index: bt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
-                        return <Result.Ok value=self.fieldType(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen) />
+                        return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: inst.args[0], fieldStart: nameStart, fieldLen: nameLen)) />
                     }
                 }
                 return <Result.Ok value=scalarInfo() />

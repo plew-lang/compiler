@@ -1622,8 +1622,11 @@ pub impl Comp {
                 i = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
-                    mut val ctxRef: U64 = self.typedIrRefOfInfo(ti: ft)
+                    mut val ctxRef: U64 = 0U64
+                    if instance == 0U64 {
+                        val fieldType = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                        ctxRef = self.typedIrRefOfInfo(ti: fieldType)
+                    }
                     // a generic construction's field context is the DECLARED field type
                     // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
                     // instance so the literal records `Array[I64]`, and never store a

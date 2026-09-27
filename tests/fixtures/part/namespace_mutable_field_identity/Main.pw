@@ -1,0 +1,10 @@
+import ./First
+import ./Second
+import @Std/Io with { print }
+fn main() {
+    val first = <First.Item value=11I64 />
+    mut val second = <Second.Item value=22I64 />
+    second.value = 33I64
+    print(first.value)
+    print(second.value)
+}

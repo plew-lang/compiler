@@ -76,10 +76,10 @@ pub impl Comp {
             mut val ft: TypeInfo = scalarInfo()
             if ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeAt(index: ty).isRecord {
                 ft = self.typeInfoOfRef(ref: (try self.fieldTypeRefOfReceiver(receiverRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)))
-            } else if self.isGenericEnumInst(ref: ty) {
+            } else if ty != 0U64 && isEnum {
                 ft = (try self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
             } else {
-                if self.isGenericInst(ref: ty) {
+                if ty != 0U64 {
                     ft = (try self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen))
                 } else {
                     ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
