@@ -1283,6 +1283,16 @@ pub impl Comp {
         }
     }
 
+    // Async declarations expose a Promise at the call boundary. An omitted
+    // signature still needs its implicit result term; never substitute the
+    // logical body return for the call result.
+    fn hasDeclaredCallResult(function: Func) -> Bool {
+        if !function.isAsync { return true }
+        if function.retTy == 0U64 || function.retTy >= self.arena.typeCount() { return false }
+        val result = self.arena.typeAt(index: function.retTy)
+        return rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise")
+    }
+
     // A declaration-time dependency reads the selected signature and its exact
     // substitutions. It never executes the producer or demands its body.
     inout fn closedSelectedCallResult(siteKey: CallSiteKey) -> Result[U64, CompileDiagnostic] {
@@ -1293,9 +1303,7 @@ pub impl Comp {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 /> }
                 val function = self.arena.functionAt(index: callee)
-                // Async source results require their promise carrier, not the
-                // underlying declared return. Keep that obligation unresolved.
-                if function.isAsync { return <Result.Ok value=0U64 /> }
+                if !self.hasDeclaredCallResult(function: function) { return <Result.Ok value=0U64 /> }
                 val args = self.callTemplateTypeArgs(range: arguments)
                 if args.count() != function.typeParams.count() { return <Result.Ok value=0U64 /> }
                 mut val argument = 0U64
@@ -1312,20 +1320,20 @@ pub impl Comp {
                 return <Result.Ok value=result />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: val result) => {
-                mut val asynchronous = true
+                mut val hasResult = false
                 match resolution {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => {
                         if traitIndex < self.decls.traitCount() {
                             val requirements = self.decls.traitAt(index: traitIndex).reqs
-                            if requirement < requirements.count() { asynchronous = self.traitReqAt(reqs: requirements, index: requirement).isAsync }
+                            if requirement < requirements.count() { hasResult = self.hasDeclaredCallResult(function: self.traitReqAt(reqs: requirements, index: requirement)) }
                         }
                     }
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
-                        if callee < self.arena.functionCount() { asynchronous = self.arena.functionAt(index: callee).isAsync }
+                        if callee < self.arena.functionCount() { hasResult = self.hasDeclaredCallResult(function: self.arena.functionAt(index: callee)) }
                     }
                     _ => {}
                 }
-                if !asynchronous && result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
+                if hasResult && result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
             }
             CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: val target) => {
                 mut val result = 0U64
@@ -1339,7 +1347,7 @@ pub impl Comp {
                             if slot <= requirements.count() {
                                 val requirement = self.traitReqAt(reqs: requirements, index: slot - 1U64)
                                 val receiverTerm = try self.closedProtocolReceiver(receiver: receiver)
-                                if !requirement.isAsync && receiverTerm != 0U64 && self.typeTermIsClosed(ref: receiverTerm) {
+                                if self.hasDeclaredCallResult(function: requirement) && receiverTerm != 0U64 && self.typeTermIsClosed(ref: receiverTerm) {
                                     result = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
                                 }
                             }

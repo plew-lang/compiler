@@ -1,0 +1,3 @@
+async fn produce() -> Promise[I64] { return 1I64 }
+fn unused() { for val value in produce() { value } }
+fn main() {}
