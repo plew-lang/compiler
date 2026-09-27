@@ -142,10 +142,10 @@ pub impl Comp {
 
     // Existential interfaces carry dynamic evidence, not a static generic
     // conformance. Follow only their authored interface and supertraits.
-    inout fn existentialIterationItemInBound(bound: TraitBound, visited: Array[U64] = []) -> U64 {
+    inout fn existentialIterationItemInBound(bound: TraitBound, visited: Array[U64] = [], requiredOwner: U64 = 0U64) -> U64 {
         val owner = bound.constraint.key.owner
         for val prior in visited { if prior == owner { return 0U64 } }
-        if owner != 0U64 && (owner == self.coreTraitOwner(name: "Iterable") || owner == self.coreTraitOwner(name: "Iterator")) {
+        if owner != 0U64 && (requiredOwner == 0U64 || owner == requiredOwner) && (owner == self.coreTraitOwner(name: "Iterable") || owner == self.coreTraitOwner(name: "Iterator")) {
             val item = self.internBytes(s: "Item")
             for val predicate in bound.constraint.assocPredicates {
                 if predicate.member == item.nameId { return predicate.value }
@@ -159,7 +159,7 @@ pub impl Comp {
         mut val clause = 0U64
         while clause < declaration.supertraits.count() {
             val parent = self.traitConstraintInBound(constraint: self.traitConstraintAt(constraints: declaration.supertraits, index: clause), bound: bound, traitIndex: index)
-            val item = self.existentialIterationItemInBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, visited: path)
+            val item = self.existentialIterationItemInBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, visited: path, requiredOwner: requiredOwner)
             if item != 0U64 { return item }
             clause += 1U64
         }
@@ -169,6 +169,33 @@ pub impl Comp {
     inout fn existentialIterationItemTerm(receiver: U64) -> U64 {
         if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeAt(index: receiver).isAny { return 0U64 }
         return self.existentialIterationItemInBound(bound: <TraitBound subject=receiver constraint=self.existentialTraitConstraint(ref: receiver) offset=self.arena.typeAt(index: receiver).siteOffset />)
+    }
+
+    // A for-loop contains a second operation on the result of iterator().
+    // The erased receiver's interface does not become an extra static bound
+    // on that result type. Check next() under the enclosing lexical facts.
+    inout fn checkExistentialIterationReceiver(receiver: U64, fnIdx: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val item = self.existentialIterationItemTerm(receiver: receiver)
+        if item == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") /> }
+        val name = self.internBytes(s: "iterator")
+        val slot = self.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: self.pushArgs(args: []))
+        if slot == 0U64 { return <Result.Ok value=() /> }
+        val traitIndex = self.recordAnyTraitIndex(anyRef: receiver)
+        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+        val cursor = (try self.anyMemberRetInfo(anyRef: receiver, req: requirement)).ref
+        val owner = self.coreTraitOwner(name: "Iterator")
+        mut val valid = false
+        if cursor != 0U64 && cursor < self.arena.typeCount() && owner != 0U64 {
+            if self.arena.typeAt(index: cursor).isAny {
+                val cursorItem = self.existentialIterationItemInBound(bound: <TraitBound subject=cursor constraint=self.existentialTraitConstraint(ref: cursor) offset=offset />, requiredOwner: owner)
+                valid = cursorItem != 0U64 && self.typeRefEq(a: cursorItem, b: item)
+            } else {
+                val constraint = <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=self.internBytes(s: "Item").nameId value=item span=offset />] />
+                valid = try self.viewedTypeConformsTraitConstraint(ref: cursor, constraint: constraint, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))
+            }
+        }
+        if !valid { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop iterator result must satisfy Iterator with the declared Item type") /> }
+        return <Result.Ok value=() />
     }
 
     // Compatibility projection for existing bool consumers.  The input is
@@ -1461,9 +1488,7 @@ pub impl Comp {
                     CallTemplateKind.Protocol(receiver: val receiver) => {
                         val term = try self.closedProtocolReceiver(receiver: receiver)
                         if term != 0U64 && self.arena.typeAt(index: term).isAny {
-                            if self.existentialIterationItemTerm(receiver: term) == 0U64 {
-                                return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
-                            }
+                            try self.checkExistentialIterationReceiver(receiver: term, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
                         }
                         if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
                             val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)

@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+fn main() {
+    mut val c = <Comp />
+    val source = "struct Value {}\ntrait Cursor { type Item }\ntrait Source { type Iter fn iterator() -> Iter }\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {}\n"
+    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val bound = c.decls.funcBounds[0U64]
+    val function = c.arena.functionAt(index: bound.fnIdx)
+    val receiver = c.funcParamAt(params: function.params, index: 0U64).ty
+    val traitIndex = c.recordAnyTraitIndex(anyRef: receiver)
+    val req = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: 0U64)
+    val cursor = c.anyMemberRetInfo(anyRef: receiver, req: req).unwrap().ref
+    assert(cursor != 0U64)
+    assert(c.arena.typeAt(index: cursor).paramId == c.arena.typeAt(index: bound.paramTy).paramId)
+    assert(c.typeRefEq(a: cursor, b: bound.paramTy))
+    assert(c.viewedTypeConformsTraitConstraint(ref: cursor, constraint: bound.constraint, assumptions: c.functionBoundAssumptions(fnIdx: bound.fnIdx)).unwrap())
+    assert(c.monoWork.bodyInstances.count() == 0U64)
+    print("ok")
+}

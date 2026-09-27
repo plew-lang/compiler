@@ -517,9 +517,10 @@ pub impl Comp {
             else { eprint(text: "false") }
             eprint(text: "\n")
         }
-        if g != 0U64 && (try self.tyRefIsGround(ref: g)) {
-            return <Result.Ok value=self.typeInfoOfRef(ref: g) />
-        }
+        // A declaration result may still contain the caller's rigid type
+        // parameters. It is nevertheless a known semantic type; erasing it
+        // to scalarInfo loses both its identity and the applicable bounds.
+        if g != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: g) /> }
         return <Result.Ok value=scalarInfo() />
     }
 

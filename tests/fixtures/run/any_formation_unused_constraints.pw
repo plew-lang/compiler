@@ -1,0 +1,5 @@
+import @Std/Core with { Iterable }
+// Merely naming an existential does not perform its implicit protocol calls.
+fn unused[T](values: any Iterable[Item=I64, Iter=T]) {}
+fn concrete(values: any Iterable[Item=I64, Iter=I64]) {}
+fn main() {}

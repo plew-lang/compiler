@@ -1,0 +1,41 @@
+import @Std/Io with { print }
+import @Std/Core with { Iterator, Iterable }
+
+// A countdown from `n` down to 1, exercising the user-defined iterator protocol.
+struct CountdownIter {
+    pub mut val n: I64
+}
+pub impl CountdownIter { factory }
+
+pub impl CountdownIter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.n <= 0 {
+            return <Optional.None />
+        }
+        val v: I64 = self.n
+        self.n = self.n - 1
+        return <Optional.Some v=v />
+    }
+}
+
+struct Countdown {
+    pub val start: I64
+}
+pub impl Countdown { factory }
+
+pub impl Countdown as Iterable {
+    type Item = I64
+    type Iter = CountdownIter
+    fn iterator() -> CountdownIter {
+        return <CountdownIter n=self.start />
+    }
+}
+
+fn show[T](values: any Iterable[Item=I64, Iter=T]) where T: Iterator[Item=I64] {
+    for val value in values { print(value) }
+}
+fn main() {
+    val values: any Iterable[Item=I64, Iter=CountdownIter] = <Countdown start=4 />
+    show(values: values)
+}

@@ -1,0 +1,3 @@
+import @Std/Core with { Iterable }
+fn unused[T](values: any Iterable[Item=I64, Iter=T]) { for val item in values {} }
+fn main() {}
