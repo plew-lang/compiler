@@ -1,0 +1,5 @@
+struct Plain { val value: I64 }
+impl Plain { factory }
+fn identity[T](item: T) -> T { return item }
+fn unused() { for val item in identity(item: <Plain value=3I64 />) { item } }
+fn main() {}

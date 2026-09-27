@@ -1,0 +1,5 @@
+struct Plain { val value: I64 }
+impl Plain { factory }
+fn make() -> Plain { return <Plain value=3I64 /> }
+fn unused() { for val item in make() { item } }
+fn main() {}

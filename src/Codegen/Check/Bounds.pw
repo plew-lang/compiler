@@ -1281,6 +1281,51 @@ pub impl Comp {
         }
     }
 
+    // A declaration-time dependency reads the selected signature and its exact
+    // substitutions. It never executes the producer or demands its body.
+    inout fn closedSelectedCallResult(siteKey: CallSiteKey) -> Result[U64, CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: siteKey)
+        if index >= self.decls.callTemplates.count() { return <Result.Ok value=0U64 /> }
+        val template = self.decls.callTemplates[index]
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
+                if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 /> }
+                val function = self.arena.functionAt(index: callee)
+                // Async source results require their promise carrier, not the
+                // underlying declared return. Keep that obligation unresolved.
+                if function.isAsync { return <Result.Ok value=0U64 /> }
+                val args = self.callTemplateTypeArgs(range: arguments)
+                if args.count() != function.typeParams.count() { return <Result.Ok value=0U64 /> }
+                mut val argument = 0U64
+                while argument < args.count() {
+                    if args[argument] == 0U64 || !self.typeTermIsClosed(ref: args[argument]) { return <Result.Ok value=0U64 /> }
+                    argument += 1U64
+                }
+                val receiver = template.receiverTypeTerm
+                if (function.hasRecv || function.isAssoc) && (receiver == 0U64 || !self.typeTermIsClosed(ref: receiver)) { return <Result.Ok value=0U64 /> }
+                val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: args, recvInstRef: receiver, selectedProof: self.thawStaticConformanceProof(id: proofId))
+                try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: environment.receiverRef)
+                val result = try self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
+                if result == 0U64 || !self.typeTermIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
+                return <Result.Ok value=result />
+            }
+            _ => { return <Result.Ok value=0U64 /> }
+        }
+    }
+
+    inout fn closedProtocolReceiver(receiver: CallTemplateReceiver) -> Result[U64, CompileDiagnostic] {
+        match receiver {
+            CallTemplateReceiver.Term(term: val term) => { return <Result.Ok value=term /> }
+            CallTemplateReceiver.PriorCallResult(exprId: _, siteKey: val dependency) => { return self.closedSelectedCallResult(siteKey: dependency) }
+            CallTemplateReceiver.PriorCallResultWithViews(exprId: _, siteKey: val dependency, views: val views) => {
+                val term = try self.closedSelectedCallResult(siteKey: dependency)
+                if term == 0U64 { return <Result.Ok value=0U64 /> }
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: term, additions: self.callTemplateViews(range: views)) />
+            }
+            _ => { return <Result.Ok value=0U64 /> }
+        }
+    }
+
     inout fn checkClosedIterationProtocols() -> Result[(), CompileDiagnostic] {
         val count = self.decls.callTemplates.count()
         mut val index = 0U64
@@ -1289,27 +1334,23 @@ pub impl Comp {
             if template.siteKey.slot == 1U64 {
                 match template.kind {
                     CallTemplateKind.Protocol(receiver: val receiver) => {
-                        match receiver {
-                            CallTemplateReceiver.Term(term: val term) => {
-                                if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
-                                    val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                                    val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
-                                    val arguments = self.pushArgs(args: [])
-                                    val iterator = try self.resolveProtocolMethodForReceiver(recvRef: term, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments)
-                                    mut val nextReceiver = term
-                                    if iterator < self.arena.functionCount() {
-                                        nextReceiver = try self.checkedProtocolResult(callee: iterator, receiver: term, statement: template.siteKey.originSerial - 1U64, slot: 1U64)
-                                    }
-                                    if nextReceiver != 0U64 {
-                                        val next = try self.resolveProtocolMethodForReceiver(recvRef: nextReceiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments)
-                                        if next >= self.arena.functionCount() {
-                                            return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
-                                        }
-                                        val result = try self.checkedProtocolResult(callee: next, receiver: nextReceiver, statement: template.siteKey.originSerial - 1U64, slot: 2U64)
-                                    }
-                                }
+                        val term = try self.closedProtocolReceiver(receiver: receiver)
+                        if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
+                            val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
+                            val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
+                            val arguments = self.pushArgs(args: [])
+                            val iterator = try self.resolveProtocolMethodForReceiver(recvRef: term, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments)
+                            mut val nextReceiver = term
+                            if iterator < self.arena.functionCount() {
+                                nextReceiver = try self.checkedProtocolResult(callee: iterator, receiver: term, statement: template.siteKey.originSerial - 1U64, slot: 1U64)
                             }
-                            _ => {}
+                            if nextReceiver != 0U64 {
+                                val next = try self.resolveProtocolMethodForReceiver(recvRef: nextReceiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments)
+                                if next >= self.arena.functionCount() {
+                                    return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
+                                }
+                                val result = try self.checkedProtocolResult(callee: next, receiver: nextReceiver, statement: template.siteKey.originSerial - 1U64, slot: 2U64)
+                            }
                         }
                     }
                     _ => {}

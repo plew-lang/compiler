@@ -14,7 +14,8 @@ args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=False)
 fixtures = Path(__file__).resolve().parents[2] / 'fixtures'
 cases = []
-for name in ('unused_for_not_iterable', 'unused_for_float_range'):
+for name in ('unused_for_not_iterable', 'unused_for_float_range',
+             'unused_for_call_not_iterable', 'unused_for_generic_call_not_iterable'):
     source = (fixtures / 'reject' / (name + '.pw')).read_text()
     expected = (fixtures / 'reject' / (name + '.err')).read_text().strip()
     cases.append((name, source, expected))
@@ -24,6 +25,8 @@ for name in ('iter_for_map', 'range_custom_step_arc', 'any_iterator', 'for_call_
     source = (fixtures / 'run' / (name + '.pw')).read_text()
     cases.append((name, source, 'ok'))
     cases.append((name + '-unused', source.replace('fn main()', 'fn unused[T]()') + '\nfn main() {}\n', 'ok'))
+cases.append(('generic-producer', 'fn identity[T](item: T) -> T { return item }\nfn unused() { for val item in identity(item: [1I64, 2I64]) { item } }\nfn main() {}\n', 'ok'))
+cases.append(('method-producer', 'struct Source { val items: Array[I64] }\nimpl Source { factory fn values() -> Array[I64] { return self.items } }\nfn unused() { val source = <Source items=[1I64] /> for val item in source.values() { item } }\nfn main() {}\n', 'ok'))
 rows = []
 for name, source, expected in cases:
     path = args.out / (name + '.pw')
