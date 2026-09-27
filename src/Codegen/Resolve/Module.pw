@@ -1083,8 +1083,8 @@ pub impl Comp {
         mut val receiver = receiverRef
         val underlying = self.newtypeUnderlying(ref: receiver)
         if underlying != 0U64 { receiver = underlying }
-        val selected = self.arena.typeAt(index: receiver)
-        val declared = self.arena.typeAt(index: f.recvTy)
+        val selected = self.arena.typeTerms[receiver]
+        val declared = self.arena.typeTerms[f.recvTy]
         if selected.hasDecl && declared.hasDecl { return selected.declOffset == declared.declOffset }
         return true
     }

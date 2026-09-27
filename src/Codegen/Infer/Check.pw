@@ -355,10 +355,18 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         match self.arena.exprs[makeId] {
-            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 if et.hasDecl {
-                    val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-                    if identity.nameLen == 0U64 || identity.nameStart != et.declOffset {
+                    // Lowered construction types already carry lexical identity.
+                    // Resolve spelling only for a legacy term without that facet.
+                    mut val matchesDeclaration: Bool = false
+                    if ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTerms[ty].hasDecl {
+                        matchesDeclaration = self.arena.typeTerms[ty].declOffset == et.declOffset
+                    } else {
+                        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+                        matchesDeclaration = identity.nameLen != 0U64 && identity.nameStart == et.declOffset
+                    }
+                    if !matchesDeclaration {
                         return <Result.Ok value=() />
                     }
                 } else if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {

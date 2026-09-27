@@ -152,7 +152,7 @@ pub impl Comp {
     // never select an unrelated declaration with the same spelling.
     fn newtypeUnderlying(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
-        val type = self.arena.typeAt(index: ref)
+        val type = self.arena.typeTerms[ref]
         if !type.hasDecl { return 0U64 }
         return self.arena.newtypeUnderlyingByOffset(offset: type.declOffset)
     }
