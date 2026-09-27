@@ -429,7 +429,7 @@ pub impl Comp {
             }
             return <Result.Ok value=() />
         }
-        val structIndex: U64 = self.structDefByNameAny(start: recvTy.nameStart, len: recvTy.nameLen)
+        val structIndex: U64 = self.structIndexForType(ref: receiverTerm)
         if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val fields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields

@@ -3732,10 +3732,7 @@ pub impl Comp {
     }
 
     inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {
-        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traitCount() }
-        val t: TypeRef = self.arena.typeAt(index: anyRef)
-        if !(t.isAny) { return self.decls.traitCount() }
-        return self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
+        return self.recordAnyTraitIndex(anyRef: anyRef)
     }
 
     // Source/implicit resolvers construct the whole dynamic call decision.
@@ -3743,8 +3740,7 @@ pub impl Comp {
     // a shared expression or looks through an earlier descriptor.
     inout fn selectedClosureFieldCall(exprId: U64, callee: U64, recvRef: U64, resultHintRef: U64, nameStart: U64, nameLen: U64) -> Result[CallSiteSelection, CompileDiagnostic] {
         if recvRef == 0U64 || recvRef >= self.arena.typeCount() { return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />}
-        val rt: TypeRef = self.arena.typeAt(index: recvRef)
-        val sidx: U64 = self.structDefByNameAny(start: rt.nameStart, len: rt.nameLen)
+        val sidx: U64 = self.structIndexForType(ref: recvRef)
         if sidx >= self.arena.structCount() { return <Result.Ok value=<CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> />}
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val fi: U64 = 0U64

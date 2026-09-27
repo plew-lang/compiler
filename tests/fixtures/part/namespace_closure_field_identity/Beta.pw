@@ -1,0 +1,2 @@
+pub struct Handler { pub val padding: I64 pub val run: fn() -> String }
+pub impl Handler { factory }

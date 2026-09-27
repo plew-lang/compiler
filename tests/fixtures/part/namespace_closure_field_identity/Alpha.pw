@@ -1,0 +1,2 @@
+pub struct Handler { pub val run: fn() -> I64 }
+pub impl Handler { factory }
