@@ -1,4 +1,4 @@
-import ./Ir with { TraitAssociatedBound, TraitAssociatedBoundRange }
+import ./Ir with { TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }
 import ./SourceAccess with { SourceAccess }
@@ -307,6 +307,16 @@ pub impl Comp {
 
     fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
         return self.arena.matchArmPool[arms.start + index]
+    }
+
+    inout fn pushConformBounds(bounds: Array[ConformBound]) -> ConformBoundRange {
+        val start = self.decls.conformBoundPool.count()
+        for val bound in bounds { self.decls.conformBoundPool.append(bound) }
+        return <ConformBoundRange start=start len=bounds.count() />
+    }
+
+    fn conformBoundAt(bounds: ConformBoundRange, index: U64) -> ConformBound {
+        return self.decls.conformBoundPool[bounds.start + index]
     }
 
     inout fn pushTraitAssociatedBounds(bounds: Array[TraitAssociatedBound]) -> TraitAssociatedBoundRange {

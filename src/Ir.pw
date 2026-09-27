@@ -1148,6 +1148,19 @@ pub struct AssocBinding {
     pub val ty: U64
 }
 
+// Conditions belong to the impl declaration even when it has no methods.
+pub struct ConformBound {
+    pub val subject: U64
+    pub val constraint: TraitConstraint
+    pub val offset: U64
+}
+pub impl ConformBound { factory }
+pub struct ConformBoundRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConformBoundRange { factory }
+
 pub struct Conform {
     pub val sourceModule: U64
     pub val typeStart: U64
@@ -1164,6 +1177,7 @@ pub struct Conform {
     // Binders introduced by `impl[T]`; used to compare subject keys modulo
     // spelling (`impl[T] Box[T]` == `impl[U] Box[U]`).
     pub val typeParams: ConformBindRange = <ConformBindRange start=0U64 len=0U64 />
+    pub val bounds: ConformBoundRange = <ConformBoundRange start=0U64 len=0U64 />
     // arity of the impl subject. For `impl B as A`, this disambiguates same-name
     // traits such as a user `Sub` and Core's `Sub[Rhs]`; for concrete types it is
     // the receiver type-arg count. The conformance owner checks only use it when
@@ -2944,6 +2958,7 @@ pub struct Decls {
     mut val traitNameTails: Dictionary[U64, U64] = [:]
     mut val traitNameNext: Array[U64] = []
     pub mut val traitBindPool: Array[Bind] = []
+    pub mut val conformBoundPool: Array[ConformBound] = []
     pub mut val traitAssociatedBoundPool: Array[TraitAssociatedBound] = []
     pub mut val traitReqPool: Array[Func] = []
     mut val traitOwnerRows: Array[TraitOwner] = []
