@@ -1,5 +1,5 @@
 import /Frontend with { Comp }
-import /Ir with { TraitDef, TraitOwner, Func, ArgRange }
+import /Ir with { TraitDef, TraitOwner, Func, ArgRange, TypeRef }
 import @Std/Io with { print }
 fn main() {
     mut val compiler = <Comp />
@@ -25,4 +25,9 @@ fn main() {
     print(compiler.traitProvidesMember(traitOwner: second, traitArity: 0U64, qName: hidden.nameId, args: args, depth: 0U64, useMod: 1U64))
     val result = compiler.traitMemberRetInfo(traitOwner: second, traitArity: 0U64, qName: read.nameId, args: args, tpStart: padding.nameStart, tpLen: padding.nameLen, depth: 0U64, useMod: 2U64)
     print(result.nameStart == stringType.nameStart)
+    val anySecond = compiler.pushType(t: <TypeRef nameStart=first.nameStart nameLen=4U64 args=[] isAny=true hasDecl=true declOffset=second />)
+    val missing = compiler.pushType(t: <TypeRef nameStart=first.nameStart nameLen=4U64 args=[] isAny=true hasDecl=true declOffset=999999U64 />)
+    print(compiler.recordAnyTraitIndex(anyRef: anySecond) == 1U64)
+    print(compiler.recordAnyTraitIndex(anyRef: missing) == compiler.decls.traitCount())
+
 }

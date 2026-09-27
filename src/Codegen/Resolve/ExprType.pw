@@ -1143,21 +1143,11 @@ pub impl Comp {
                     if rt.ref != 0U64 {
                         if rt.ref < self.arena.typeCount() {
                             if self.arena.typeAt(index: rt.ref).isAny {
-                                val qTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
-                                val qMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                                mut val ti: U64 = 0
-                                while ti < self.decls.traitCount() {
-                                    if self.decls.traitAt(index: ti).nameId == qTrait {
-                                        val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traitAt(index: ti).reqs)
-                                        mut val ri: U64 = 0
-                                        while ri < reqs.count() {
-                                            if reqs[ri].nameId == qMethod {
-                                                return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, req: reqs[ri])) />
-                                            }
-                                            ri += 1
-                                        }
-                                    }
-                                    ti += 1
+                                val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
+                                val slot = self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
+                                if traitIndex < self.decls.traitCount() && slot != 0U64 {
+                                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+                                    return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, req: requirement)) />
                                 }
                                 return <Result.Ok value=scalarInfo() />
                             }

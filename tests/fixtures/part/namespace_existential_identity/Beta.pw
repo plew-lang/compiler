@@ -1,0 +1,4 @@
+pub trait Read { fn read() -> String }
+pub struct Item {}
+pub impl Item { factory }
+pub impl Item as Read { fn read() -> String { return "beta" } }

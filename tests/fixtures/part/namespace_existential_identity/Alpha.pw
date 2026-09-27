@@ -1,0 +1,4 @@
+pub trait Read { fn read() -> I64 }
+pub struct Item {}
+pub impl Item { factory }
+pub impl Item as Read { fn read() -> I64 { return 42I64 } }

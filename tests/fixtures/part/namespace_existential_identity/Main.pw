@@ -1,0 +1,9 @@
+import ./Alpha
+import ./Beta
+import @Std/Io with { print }
+fn main() {
+    val first: any Alpha.Read = <Alpha.Item />
+    val second: any Beta.Read = <Beta.Item />
+    print(first.read())
+    print(second.read())
+}

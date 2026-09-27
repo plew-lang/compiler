@@ -368,14 +368,17 @@ pub impl Comp {
         if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return self.decls.traitCount() }
         val anyTy: TypeRef = self.arena.typeAt(index: anyRef)
         if !(anyTy.isAny) { return self.decls.traitCount() }
-        if anyTy.hasDecl {
-            mut val i: U64 = 0U64
-            while i < self.decls.traitCount() {
-                if self.decls.traitAt(index: i).nameStart == anyTy.declOffset { return i }
-                i += 1U64
-            }
+        mut val owner = anyTy.declOffset
+        if !anyTy.hasDecl {
+            owner = self.traitOwnerAtUse(start: anyTy.nameStart, len: anyTy.nameLen, arity: 0U64, openArgs: true)
         }
-        return self.findTraitIdxByName(start: anyTy.nameStart, len: anyTy.nameLen)
+        if owner == 0U64 { return self.decls.traitCount() }
+        mut val i: U64 = 0U64
+        while i < self.decls.traitCount() {
+            if self.decls.traitAt(index: i).nameStart == owner { return i }
+            i += 1U64
+        }
+        return self.decls.traitCount()
     }
 
     inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
