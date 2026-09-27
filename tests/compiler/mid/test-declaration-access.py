@@ -32,6 +32,10 @@ generic_owner = generic_owner.replace('pub val unused: I64', 'pub val unused: T'
 generic_owner = generic_owner.replace('pub impl Observer {', 'pub impl Observer[T] {')
 generic_owner = generic_owner.replace('<Observer unused=', '<Observer[I64] unused=')
 cases = {
+    'closure-creation-only': (source.replace('val observer = <Observer unused=0I64 />', 'val action = fn() { print(value) }'), 'clear'),
+    'nested-closure': (source.replace('fn unused[T]() {', 'fn unused() { val outer = fn() { val inner = fn() {').replace('    print(value)\n}', '    print(value)\n} } }'), 'conflict'),
+    'unused-closure': (source.replace('fn unused[T]() {', 'fn unused() { val action = fn() {').replace('    print(value)\n}', '    print(value)\n} }'), 'conflict'),
+    'global-initializer': (source[:source.index('fn unused[T]()')].replace('fn update(destination: inout I64) {', 'fn update(destination: inout I64) -> I64 {').replace('    destination += 1I64\n', '    destination += 1I64\n    return 0I64\n') + '\nval initialized = update(destination: inout value)\nfn main() {}\n', 'conflict'),
     'generic-unused': (source, 'conflict'),
     'ordinary-unused': (source.replace('fn unused[T]()', 'fn unused()'), 'conflict'),
     'disjoint': (source.replace('mut val value = 7I64',

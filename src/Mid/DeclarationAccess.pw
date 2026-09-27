@@ -4,13 +4,15 @@
 import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
 import ../Ir with { CallSiteKey, CallTemplateKind, ArcClass }
-import ./Build with { MidFunctionTemplates, MidBuildError }
+import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
 import ./Drop with { elaborateCanonicalMidDrops }
 import ./GlobalAccessGraph with { GlobalAccessGraph }
 import ./Verify with { canonicalMidReachable }
 
 pub enum DeclarationAccessNode {
     Function(function: U64)
+    Closure(bodyKey: U64)
+    GlobalInitializer
     Destruction(typeTerm: U64)
 }
 // body indexes the result's nodes array. Canonical instruction IDs are
@@ -22,15 +24,15 @@ pub enum DeclarationAccessObligation {
     Storage(body: U64, statement: U64)
 }
 pub enum DeclarationAccessError {
-    Build(function: U64, error: MidBuildError)
-    Ownership(function: U64)
+    Build(body: DeclarationAccessNode, error: MidBuildError)
+    Ownership(body: DeclarationAccessNode)
     Frontend(diagnostic: CompileDiagnostic)
 }
 pub struct DeclarationAccessAnalysis {
-    // One-based source function identity, zero when no definite conflict exists.
+    // One-based node identity, zero when no definite conflict exists.
     // Zero does NOT establish absence of effects represented by obligations.
     pub val nodes: Array[DeclarationAccessNode] = []
-    pub val conflictingFunction: U64 = 0U64
+    pub val conflictingNode: U64 = 0U64
     pub val obligations: Array[DeclarationAccessObligation] = []
 }
 pub impl DeclarationAccessAnalysis { factory }
@@ -44,6 +46,65 @@ struct DeclarationAccessState {
     mut val typeNodes: Dictionary[U64, U64] = [:]
 }
 impl DeclarationAccessState {
+    inout fn body(c: inout Comp, index: U64, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
+        match built.error {
+            MidBuildError.None => {}
+            _ => { return <Result.Err error=<DeclarationAccessError.Build body=self.owners[index] error=built.error /> /> }
+        }
+        val ownership = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: built.canonical)
+        if ownership.body == 0U64 { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] /> /> }
+        val body = c.mid.bodies[ownership.body - 1U64]
+        val reachable = canonicalMidReachable(c: c, body: body)
+        mut val blockIndex = 0U64
+        while blockIndex < body.blocks.len {
+            if reachable[blockIndex] {
+                val block = c.mid.blocks[body.blocks.start + blockIndex]
+                mut val statementIndex = 0U64
+                while statementIndex < block.statements.len {
+                    val statementId = block.statements.start + statementIndex
+                    val statement = c.mid.statements[statementId]
+                    self.graph.statement(c: c, body: index, statement: statement)
+                    if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
+                        val place = c.mid.places[statement.destination - 1U64]
+                        self.destruction(c: c, caller: index, term: place.typeTerm, recipe: place.typeRecipe)
+                    }
+                    if statement.tag == 11U64 { self.obligations.append(<DeclarationAccessObligation.Storage body=index statement=statementId + 1U64 />) }
+                    if statement.value != 0U64 {
+                        val value = c.mid.rvalues[statement.value - 1U64]
+                        if value.isParametricOnly() || value.tag == 6U64 || (value.tag >= 8U64 && value.tag <= 10U64) || value.hasAggregateElements() || value.hasClosureCaptures() {
+                            self.obligations.append(<DeclarationAccessObligation.Value body=index value=statement.value />)
+                        }
+                    }
+                    statementIndex += 1U64
+                }
+                val term = c.mid.terminators[block.terminator - 1U64]
+                self.graph.terminatorOperands(c: c, body: index, term: term)
+                if term.tag == 4U64 {
+                    val target = c.mid.callTargets[term.callTarget - 1U64]
+                    if target.tag == 1U64 {
+                        val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                        val template = c.callTemplateIndex(siteKey: key)
+                        if template < c.decls.callTemplates.count() {
+                            match c.decls.callTemplates[template].kind {
+                                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                                    if callee < c.arena.functionCount() && !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
+                                        self.graph.edge(caller: index, callee: callee, term: block.terminator)
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    // A known declaration edge does not discharge argument
+                    // conversions, generic substitutions, or access planning.
+                    self.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator />)
+                }
+            }
+            blockIndex += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn destruction(c: Comp, caller: U64, term: U64, recipe: U64 = 0U64) {
         if recipe != 0U64 || (term != 0U64 && !c.typeTermIsClosed(ref: term)) {
             self.obligations.append(<DeclarationAccessObligation.Destruction body=caller typeTerm=term typeRecipe=recipe />)
@@ -116,67 +177,30 @@ pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctio
         val function = c.arena.functionAt(index: index)
         if function.body != 0U64 && !function.isExtern {
             val built = templates.body(c: inout c, function: index)
-            match built.error {
-                MidBuildError.None => {}
-                _ => { return <Result.Err error=<DeclarationAccessError.Build function=index error=built.error /> /> }
-            }
-            val ownership = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: built.canonical)
-            if ownership.body == 0U64 { return <Result.Err error=<DeclarationAccessError.Ownership function=index /> /> }
-            val body = c.mid.bodies[ownership.body - 1U64]
-            val reachable = canonicalMidReachable(c: c, body: body)
-            mut val blockIndex = 0U64
-            while blockIndex < body.blocks.len {
-                if reachable[blockIndex] {
-                    val block = c.mid.blocks[body.blocks.start + blockIndex]
-                    mut val statementIndex = 0U64
-                    while statementIndex < block.statements.len {
-                        val statementId = block.statements.start + statementIndex
-                        val statement = c.mid.statements[statementId]
-                        state.graph.statement(c: c, body: index, statement: statement)
-                        if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
-                            val place = c.mid.places[statement.destination - 1U64]
-                            state.destruction(c: c, caller: index, term: place.typeTerm, recipe: place.typeRecipe)
-                        }
-                        if statement.tag == 11U64 { state.obligations.append(<DeclarationAccessObligation.Storage body=index statement=statementId + 1U64 />) }
-                        if statement.value != 0U64 {
-                            val value = c.mid.rvalues[statement.value - 1U64]
-                            if value.isParametricOnly() || value.tag == 6U64 || (value.tag >= 8U64 && value.tag <= 10U64) || value.hasAggregateElements() || value.hasClosureCaptures() {
-                                state.obligations.append(<DeclarationAccessObligation.Value body=index value=statement.value />)
-                            }
-                        }
-                        statementIndex += 1U64
-                    }
-                    val term = c.mid.terminators[block.terminator - 1U64]
-                    state.graph.terminatorOperands(c: c, body: index, term: term)
-                    if term.tag == 4U64 {
-                        val target = c.mid.callTargets[term.callTarget - 1U64]
-                        if target.tag == 1U64 {
-                            val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                            val template = c.callTemplateIndex(siteKey: key)
-                            if template < c.decls.callTemplates.count() {
-                                match c.decls.callTemplates[template].kind {
-                                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                                        if callee < functions && !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
-                                            state.graph.edge(caller: index, callee: callee, term: block.terminator)
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        // A known declaration edge does not discharge argument
-                        // conversions, generic substitutions, or access planning.
-                        state.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator />)
-                    }
-                }
-                blockIndex += 1U64
-            }
+            try state.body(c: inout c, index: index, built: built)
         }
         index += 1U64
+    }
+    // Closures have independent lexical execution. Creating a closure does
+    // not execute its body, so no effect edge is added from the enclosing body.
+    index = 0U64
+    while index < c.decls.semanticClosures.count() {
+        val closure = c.decls.semanticClosures[index]
+        val node = state.graph.node()
+        state.owners.append(<DeclarationAccessNode.Closure bodyKey=closure.bodyKey />)
+        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
+        try state.body(c: inout c, index: node, built: built)
+        index += 1U64
+    }
+    if c.arena.globals.count() != 0U64 {
+        val node = state.graph.node()
+        state.owners.append(<DeclarationAccessNode.GlobalInitializer />)
+        val built = buildParametricMidGlobalInit(c: inout c)
+        try state.body(c: inout c, index: node, built: built)
     }
     match state.closeDestructions(c: inout c) {
         Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
         Result.Ok(value: _) => {}
     }
-    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingFunction=state.graph.solve(c: c) obligations=state.obligations /> />
+    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(c: c) obligations=state.obligations /> />
 }

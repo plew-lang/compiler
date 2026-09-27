@@ -1,7 +1,7 @@
 import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/Mid/Build with { MidFunctionTemplates }
-import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError }
+import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode }
 import ../../../src/Mid/Diagnostics with { reportMidBuildError }
 import @Std/Core with { assert }
 import @Std/Process with { argAt }
@@ -18,18 +18,21 @@ fn main() {
     mut val templates = <MidFunctionTemplates />
     match analyzeDeclarationGlobalAccess(c: inout compiler, templates: inout templates) {
         Result.Ok(value: val analysis) => {
-            if analysis.conflictingFunction != 0U64 { print("conflict") }
+            if analysis.conflictingNode != 0U64 { print("conflict") }
             else { print("clear") }
             assert(analysis.obligations.count() > 0U64)
             print("pending")
         }
         Result.Err(error: val failure) => {
             match failure {
-                DeclarationAccessError.Build(function: val function, error: val error) => {
+                DeclarationAccessError.Build(body: val body, error: val error) => {
                     compiler.traceCodegen = true
-                    reportMidBuildError(c: inout compiler, fnIdx: function, error: error)
+                    match body {
+                        DeclarationAccessNode.Function(function: val function) => { reportMidBuildError(c: inout compiler, fnIdx: function, error: error) }
+                        _ => { print("synthetic body build failed") }
+                    }
                 }
-                DeclarationAccessError.Ownership(function: val function) => { print(function) }
+                DeclarationAccessError.Ownership(body: _) => { print("ownership rewrite failed") }
                 DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
             }
             panic "declaration analysis failed"
