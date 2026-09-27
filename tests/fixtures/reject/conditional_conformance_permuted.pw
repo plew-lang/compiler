@@ -1,0 +1,7 @@
+trait Required {}
+trait Marker {}
+struct Pair[A, B] { val a: A
+val b: B }
+impl[Second, First] Pair[First, Second] as Marker where Second: Required {}
+fn accept[T](value: T) where T: Marker {}
+fn main() { accept(value: <Pair[String, I64] a="ok" b=1I64 />) }

@@ -1,0 +1,8 @@
+trait Required {}
+trait Marker {}
+struct Box[T] { val value: T }
+impl I64 as Marker where I64: Required {}
+impl[T] Box[T] as Marker where T: Marker {}
+fn accept[T](value: T) where T: Marker {}
+fn main() { accept(value: <Box[Box[I64]] value=<Box[I64] value=1I64 /> />) }
+impl I64 as Required {}

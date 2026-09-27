@@ -557,51 +557,6 @@ pub impl Comp {
         return count
     }
 
-    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
-        if viewId == 0U64 {
-            return <Result.Ok value=false />
-        }
-        val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
-            // Direct `extension Ext { impl T as P }` conformances are view
-            // facts too (not only trait-subject `impl B as A` edges).
-            val matchResult: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: traitArgs))
-            if cf.extId == viewId && cf.typeId == typeId && cf.traitStart == traitStart && cf.traitLen == traitLen && matchResult.conformIdx != 0U64 && (try self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues)) {
-                if !((self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64)) {
-                    return <Result.Ok value=true />
-                }
-            }
-            val noParams: Array[Bind] = []
-            if cf.traitStart == traitStart && cf.traitLen == traitLen && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=noParams />, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
-                // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
-                // a bare inter-trait conform whose subject trait is the view, or an
-                // extension conform whose extId is the view.
-                if (self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64) {
-                    mut val viaView: Bool = false
-                    if cf.extId == 0U64 {
-                        if cf.typeId == viewId {
-                            viaView = true
-                        }
-                    } else {
-                        if cf.extId == viewId {
-                            viaView = true
-                        }
-                    }
-                    if viaView {
-                        // does the underlying type conform to the subject trait B?
-                        if self.conformExistsTraitInstance(typeRef: typeRef, traitOwner: cf.typeStart, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
-                            return <Result.Ok value=true />
-                        }
-                    }
-                }
-            }
-            i += 1
-        }
-        return <Result.Ok value=false />
-    }
-
     inout fn instantiateTraitSubjectConforms() -> Result[(), CompileDiagnostic] {
         // snapshot before any conferral: the dup guard and source-method scan must see
         // only originals, so sibling conferred copies coexist (multi-path ambiguity).

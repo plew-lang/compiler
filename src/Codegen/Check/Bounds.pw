@@ -700,49 +700,17 @@ pub impl Comp {
         return <Result.Ok value=0U64 />
     }
 
-    // A named trait argument constrains an associated output after the
-    // positional instance key selected a conformance witness.
-    // The selected conformance is the witness identity.  Do not look up an
-    // associated output by receiver spelling: one receiver may implement the
-    // same parameterized trait more than once, and an extension witness is
-    // distinct from a bare one.  `implOffset` ties the output to that witness.
-    inout fn traitAssocOutputsMatch(cf: Conform, matchResult: WitnessMatch, assocNames: Array[U64], assocValues: Array[U64]) -> Result[Bool, CompileDiagnostic] {
-        if assocNames.count() != assocValues.count() { return <Result.Ok value=false />}
-        if assocNames.count() == 0U64 { return <Result.Ok value=true />}
-        mut val need: U64 = 0U64
-        while need < assocNames.count() {
-            mut val found: Bool = false
-            mut val i: U64 = 0U64
-            while i < self.decls.assocBindings.count() {
-                val ab: AssocBinding = self.decls.assocBindings[i]
-                if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocNames[need] {
-                    val output: U64 = (try self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=cf.typeParams />, matchResult: matchResult))
-                    if (try self.typesCompatible(expected: assocValues[need], inferred: output)) { found = true }
-                }
-                i += 1U64
-            }
-            if !found { return <Result.Ok value=false />}
-            need += 1U64
-        }
-        return <Result.Ok value=true />
-    }
-
     // A view is an unordered source set.  Bounds may use any active extension
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
     inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
-        if ref >= self.arena.typeCount() { return <Result.Ok value=false />}
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if (try self.conformsInstance(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)) { return <Result.Ok value=true />}
-        mut val i: U64 = 0U64
-        while i < t.viewIds.count() {
-            if (try self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewIds[i], traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, assocNames: assocNames, assocValues: assocValues)) { return <Result.Ok value=true />}
-            i += 1U64
+        if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=false /> }
+        val resolved = (try self.resolveTy(tyRef: ref))
+        val proof = (try self.concreteTraitPatternProof(baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues))
+        match proof {
+            StaticConformanceProof.Missing => { return <Result.Ok value=false /> }
+            _ => { return <Result.Ok value=true /> }
         }
-        if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 {
-            return <Result.Ok value=(try self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewExtId, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, assocNames: assocNames, assocValues: assocValues)) />
-        }
-        return <Result.Ok value=false />
     }
 
     // Completeness belongs to one selected impl, not every same-named
@@ -1182,116 +1150,11 @@ pub impl Comp {
         return self.arena.functionCount()
     }
 
-    // Does the concrete type INSTANCE `ref` (a TypeRef, args carried) conform to the trait?
-    // The single authoritative conformance query — CONDITIONAL conformance is a first-class
-    // answer here, not a cascade of name checks across monomorphization levels. For
-    // `impl[T] Array[T] as Eq where T: Eq`, `Array[NoEq]` returns FALSE by binding the impl's
-    // `where` bound (recorded as a funcBound on the witness `Array.eq`, its param at position
-    // i in the witness typeParams ↔ instance arg i) and recursing on `NoEq`. Name-level
-    // conformance (primitive/String registered impls, newtype inheritance) is delegated to
-    // `typeConformsTo`; the recursion terminates on finite type depth. Both the operator gate
-    // (hasCompareWitness) and the `where` bound-check consult this, so acceptance == the
-    // reality of instantiation and the diagnostic lands where the type is written.
+    // Boolean projection of the canonical source-witness proof query. Bare
+    // conformance excludes outer views; each source condition is checked under
+    // its own witness substitution, including trait-subject path conditions.
     inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
-        if ref >= self.arena.typeCount() {
-            return <Result.Ok value=false />
-        }
-        val rr: U64 = (try self.resolveTy(tyRef: ref))
-        if rr != ref {
-            return <Result.Ok value=(try self.conformsInstance(ref: rr, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)) />
-        }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.assocNameId != 0U64 {
-            return <Result.Ok value=false />
-        }
-        // Candidate existence is not conformance.  Match the full subject
-        // pattern here, so `impl Box[I64] as P` never grants P to Box[String].
-        mut val applies: Bool = false
-        mut val ci: U64 = 0U64
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
-            if cf.extId == 0U64 && cf.traitStart == traitStart && cf.traitLen == traitLen {
-                val matchResult: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: ci, typeRef: ref, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen))
-                if matchResult.conformIdx != 0U64 {
-                    if (try self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues)) {
-                        applies = true
-                    }
-                }
-            }
-            ci += 1U64
-        }
-        if !(applies) { return <Result.Ok value=false />}
-        // a non-generic instance (no args) has no conditional bounds to check.
-        if t.args.count() == 0U64 {
-            return <Result.Ok value=true />
-        }
-        // conditional impl: check the impl-level `where` bounds against THIS instance's args.
-        mut val traitIdx: U64 = self.decls.traitCount()
-        mut val traitScan: U64 = 0U64
-        while traitScan < self.decls.traitCount() {
-            if self.decls.traitAt(index: traitScan).nameStart == traitStart && self.decls.traitAt(index: traitScan).nameLen == traitLen {
-                traitIdx = traitScan
-            }
-            traitScan += 1U64
-        }
-        if traitIdx >= self.decls.traitCount() {
-            return <Result.Ok value=true />
-        }
-        val tr: TraitDef = self.decls.traitAt(index: traitIdx)
-        if tr.reqs.count() == 0U64 {
-            return <Result.Ok value=true />
-        }
-        // any requirement's witness carries the impl-level bounds (the lowerer duplicates them
-        // onto every method of the impl), so one witness fn suffices to read them.
-        val firstReq: Func = self.traitReqAt(reqs: tr.reqs, index: 0U64)
-        val wfi: U64 = self.witnessFnFor(typeStart: t.nameStart, typeLen: t.nameLen, nameStart: firstReq.nameStart, nameLen: firstReq.nameLen)
-        if wfi >= self.arena.functionCount() {
-            return <Result.Ok value=true />
-        }
-        val wf: Func = self.arena.functionAt(index: wfi)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
-            if fb.fnIdx == wfi {
-                if fb.paramTy != 0U64 {
-                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: wf.typeParams), values: t.args)
-                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: wf.typeParams), args: t.args)
-                    if lhs >= self.arena.typeCount() {
-                        return <Result.Ok value=false />
-                    }
-                    if !((try self.tyRefIsGround(ref: lhs))) {
-                        return <Result.Ok value=false />
-                    }
-                    if !((try self.conformsTraitConstraint(ref: lhs, constraint: constraint))) {
-                        return <Result.Ok value=false />
-                    }
-                    bi += 1
-                } else {
-                // map the bound's type-param name to its position in the witness type params;
-                // a receiver/impl param (position < instance arity) is checked against the
-                // matching instance arg, a method-own param (position ≥ arity) is unrelated
-                // to this instance and skipped.
-                mut val pos: U64 = wf.typeParams.count()
-                mut val k: U64 = 0
-                while k < wf.typeParams.count() {
-                    if self.funcBindAt(binds: wf.typeParams, index: k).nameId == fb.paramNameId {
-                        pos = k
-                    }
-                    k += 1
-                }
-                if pos < t.args.count() {
-                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: wf.typeParams), args: t.args)
-                    if !((try self.conformsTraitConstraint(ref: t.args[pos], constraint: constraint))) {
-                        return <Result.Ok value=false />
-                    }
-                }
-                bi += 1
-                }
-            } else {
-                bi += 1
-            }
-        }
-        return <Result.Ok value=true />
+        return <Result.Ok value=(try self.viewedTypeConforms(ref: self.runtimeTypeRef(ref: ref), traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues)) />
     }
 
     inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {

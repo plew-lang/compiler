@@ -1,0 +1,6 @@
+trait Required {}
+trait Marker {}
+struct Item {}
+impl Item as Marker where I64: Required {}
+fn accept[T](value: T) where T: Marker {}
+fn main() { accept(value: <Item />) }

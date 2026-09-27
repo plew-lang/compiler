@@ -81,6 +81,8 @@ pub struct Comp {
     // Monotonic identity allocator for lexical generic binders. It is separate
     // from the name interner because same-spelled binders are not one term.
     pub mut val nextParamId: U64 = 1
+    // Active conditional witnesses are query state, never proof assumptions.
+    pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
     // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor
     // because it uses Syntax-layer TypeAst and must not leak into Ir.pw.
