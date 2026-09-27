@@ -16,7 +16,7 @@ fixtures = Path(__file__).resolve().parents[2] / 'fixtures'
 cases = []
 for name in ('unused_for_not_iterable', 'unused_for_float_range',
              'unused_for_call_not_iterable', 'unused_for_generic_call_not_iterable',
-             'unused_for_async_result', 'unused_for_static_result', 'unused_for_closure_result', 'unused_for_existential_result'):
+             'unused_for_unbound_parameter', 'unused_for_unrelated_bound', 'unused_for_async_result', 'unused_for_static_result', 'unused_for_closure_result', 'unused_for_existential_result'):
     source = (fixtures / 'reject' / (name + '.pw')).read_text()
     expected = (fixtures / 'reject' / (name + '.err')).read_text().strip()
     cases.append((name, source, expected))
@@ -36,6 +36,12 @@ for name, declaration, call in (
 ):
     cases.append((name, declaration + ' { for val value in ' + call + ' { value } }\nfn main() {}\n', 'ok'))
 cases.append(('async-promise-value', 'async fn produce() -> Promise[I64] { return 1I64 }\nfn unused() { val value = produce() }\nfn main() {}\n', 'ok'))
+for name, prefix, bound in (
+    ('iterable-bound', 'import @Std/Core with { Iterable }\n', 'Iterable'),
+    ('iterator-bound', 'import @Std/Core with { Iterator }\n', 'Iterator'),
+    ('supertrait-bound', 'import @Std/Core with { Iterator }\ntrait Cursor: Iterator {}\n', 'Cursor'),
+):
+    cases.append((name, prefix + 'fn unused[T](item: T) where T: ' + bound + ' { for val value in item { value } }\nfn main() {}\n', 'ok'))
 rows = []
 for name, source, expected in cases:
     path = args.out / (name + '.pw')

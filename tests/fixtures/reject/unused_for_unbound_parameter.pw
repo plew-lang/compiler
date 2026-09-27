@@ -1,0 +1,2 @@
+fn unused[T](item: T) { for val value in item { value } }
+fn main() {}

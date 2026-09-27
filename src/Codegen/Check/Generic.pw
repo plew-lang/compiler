@@ -1005,6 +1005,7 @@ pub impl Comp {
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
                     val et: TypeInfo = (try self.typeOf(id: iter))
+                    try self.checkAbstractIterationReceiver(receiver: et.ref, offset: self.exprOffset(id: iter))
                     if isStruct {
                         try self.addForStructBinds(et: et, binds: binds)
                     } else {
@@ -1038,6 +1039,28 @@ pub impl Comp {
             Stmt.Continue(offset: _) => {}
         }
         return <Result.Ok value=() />
+    }
+
+    // A rigid lexical parameter can only be iterated through its declared
+    // protocol evidence. Use the same member selection as explicit calls so
+    // supertrait paths and declaration owners retain their identities.
+    inout fn checkAbstractIterationReceiver(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if receiver == 0U64 || receiver >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        if !self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[receiver].paramId) { return <Result.Ok value=() /> }
+        val arguments = self.pushArgs(args: [])
+        val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
+        val iterableOwner = self.coreTraitOwner(name: "Iterable")
+        if iterableOwner != 0U64 {
+            val selected = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: arguments, requiredTraitOwner: iterableOwner)
+            match selected { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=() /> } }
+        }
+        val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
+        val iteratorOwner = self.coreTraitOwner(name: "Iterator")
+        if iteratorOwner != 0U64 {
+            val selected = try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiver, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: arguments, requiredTraitOwner: iteratorOwner)
+            match selected { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=() /> } }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") />
     }
 
     inout fn checkBoundsBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
