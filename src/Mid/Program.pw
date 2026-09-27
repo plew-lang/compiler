@@ -26,6 +26,10 @@ pub impl MidExecutableProgram {
 
     assoc fn prepare(c: inout Comp) -> Result[MidExecutableProgram, MidProgramError] {
         mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
+        return MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)
+    }
+
+    assoc fn prepareWithTemplates(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[MidExecutableProgram, MidProgramError] {
         mut val bodies: Array[Optional[MidExecutableBody]] = []
         mut val index = 0U64
         while index <= c.arena.bodyInstanceCount() {

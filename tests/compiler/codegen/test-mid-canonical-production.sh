@@ -130,9 +130,19 @@ for path in Path('src').rglob('*.pw'):
     for name in passes:
         if path in [Path('src/Mid/Prepare.pw'), Path(f'src/Mid/{owners[name]}.pw')]:
             continue
+        if path == Path('src/Mid/OwnershipAnalysis.pw') and name == 'elaborateCanonicalMidDrops':
+            continue  # Analysis token is deliberately separate from executable admission.
         assert not re.search(r'\b' + name + r'\(', path.read_text()), f'{path}: bypasses typed preparation'
 
 # Match each executable entry, not just a symbol somewhere in the file.
+analysis = Path('src/Mid/OwnershipAnalysis.pw').read_text()
+assert 'body: MidParametricBody' in analysis
+assert '-> Optional[MidOwnershipAnalysis]' in analysis
+assert 'factory' not in re.sub(r'//[^\n]*', '', analysis)
+assert analysis.count('elaborateCanonicalMidDrops(') == 1
+for stage in ['MidInstantiatedBody', 'MidAccessResolvedBody', 'MidDropElaboratedBody', 'MidExecutableBody']:
+    assert '<' + stage not in analysis, 'analysis must not forge executable stage tokens'
+assert 'registerMidGlobalAccessBody(' not in analysis
 entries = [('Any', 'genLlvmFuncBody', 'prepareCanonicalForLlvm'),
            ('Entry', 'genLlvmInitGlobals', 'prepareCanonicalForLlvm'),
            ('Entry', 'genLlvmMain', 'prepareCanonicalForLlvm'),
@@ -159,7 +169,10 @@ assert 'buildMidBodyForInstance(' in program
 entry = Path('src/Backend.pw').read_text().split('pub fn emitLlvm(', 1)[1]
 assert entry.index('PreparedProgram.prepare(') < entry.index('LLVMContextCreate()')
 analysis = Path('src/PreparedProgram.pw').read_text()
-assert analysis.index('MidExecutableProgram.prepare(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
+assert analysis.index('MidExecutableProgram.prepareWithTemplates(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
+assert analysis.index('analyzeDeclarationGlobalAccess(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
+assert 'analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates)' in analysis
+assert 'MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)' in analysis
 assert 'import ./Backend' not in analysis and 'LLVMContextCreate(' not in analysis
 assert 'midProgram=prepared.executable' in entry and 'ambientProgram=prepared.ambient' in entry
 for path in Path('src/Backend').rglob('*.pw'):

@@ -1,15 +1,18 @@
-import ./Mid/Build with { MidBuildError }
+import ./Mid/Build with { MidBuildError, MidFunctionTemplates }
 // LLVM-independent preparation of the frontend's selected executable program.
-// This does not yet promise whole-target checking of otherwise unused bodies.
+// Includes declaration global effects; unresolved declaration obligations do
+// not yet constitute a whole-target checked-program token.
 import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
 import ./Mid/Program with { MidExecutableProgram, MidProgramError }
 import ./Mid/Ambient with { MidAmbientProgram }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 import ./Mid/GlobalAccess with { conflictingMidGlobalAccess }
 import ./Mid/Diagnostics with { reportMidBuildError, midPreparationDiagnostic }
 
 pub enum ProgramPreparationError {
     Frontend(diagnostic: CompileDiagnostic)
+    Declaration(error: DeclarationAccessError)
     Mid(error: MidProgramError)
     GlobalAccess(offset: U64)
 }
@@ -17,11 +20,23 @@ pub enum ProgramPreparationError {
 pub struct PreparedProgram {
     pub val executable: MidExecutableProgram
     pub val ambient: MidAmbientProgram
+    pub val declarationAccess: DeclarationAccessAnalysis
 }
 
 pub impl PreparedProgram {
     assoc fn prepare(c: inout Comp) -> Result[Self, ProgramPreparationError] {
-        val preparation = MidExecutableProgram.prepare(c: inout c)
+        mut val templates = <MidFunctionTemplates />
+        val declarationAccess = if c.genMode { give <DeclarationAccessAnalysis /> } else {
+            give match analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates) {
+                Result.Ok(value: val analysis) => { give analysis }
+                Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Declaration error=error /> /> }
+            }
+        }
+        if declarationAccess.conflictingNode != 0U64 {
+            val owner = declarationAccess.nodes[declarationAccess.conflictingNode - 1U64]
+            return <Result.Err error=<ProgramPreparationError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: owner) /> />
+        }
+        val preparation = MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)
         val ambient: Result[MidAmbientProgram, CompileDiagnostic] = match preparation {
             Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
             Result.Err(error: _) => { give <Result.Ok value=<MidAmbientProgram.empty /> /> }
@@ -43,10 +58,26 @@ pub impl PreparedProgram {
             Result.Err(error: val diagnostic) => { return <Result.Err error=<ProgramPreparationError.Frontend diagnostic=diagnostic /> /> }
         }
         match preparation {
-            Result.Ok(value: val program) => { return <Result.Ok value=<PreparedProgram executable=program ambient=ambientProgram /> /> }
+            Result.Ok(value: val program) => { return <Result.Ok value=<PreparedProgram executable=program ambient=ambientProgram declarationAccess=declarationAccess /> /> }
             Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Mid error=error /> /> }
         }
     }
+}
+
+fn declarationAccessOffset(c: inout Comp, owner: DeclarationAccessNode) -> U64 {
+    match owner {
+        DeclarationAccessNode.Function(function: val function) => { if function < c.arena.functionCount() { return c.arena.functionAt(index: function).defOffset } }
+        DeclarationAccessNode.Closure(bodyKey: val key) => {
+            mut val index = 0U64
+            while index < c.decls.semanticClosures.count() {
+                val closure = c.decls.semanticClosures[index]
+                if closure.bodyKey == key { return c.exprOffset(id: closure.exprId) }
+                index += 1U64
+            }
+        }
+        _ => {}
+    }
+    return 0U64
 }
 
 // Convert a preparation failure without terminating the caller. Trace options
@@ -56,6 +87,25 @@ pub fn programPreparationDiagnostic(c: inout Comp, error: ProgramPreparationErro
         ProgramPreparationError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
         ProgramPreparationError.GlobalAccess(offset: val offset) => {
             return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+        }
+        ProgramPreparationError.Declaration(error: val failure) => {
+            match failure {
+                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
+                DeclarationAccessError.Build(body: val owner, error: val error) => {
+                    match error {
+                        MidBuildError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
+                        MidBuildError.StringLiteral(val offset, val message) => { return c.diagnosticAt(offset: offset, msg: message) }
+                        _ => {}
+                    }
+                    match owner {
+                        DeclarationAccessNode.Function(function: val function) => { reportMidBuildError(c: inout c, fnIdx: function, error: error) }
+                        _ => {}
+                    }
+                    return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration Mid construction failed")
+                }
+                DeclarationAccessError.Ownership(body: val owner) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration ownership analysis failed") }
+                DeclarationAccessError.CallSelection(body: val owner, terminator: _) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration call selection is missing") }
+            }
         }
         ProgramPreparationError.Mid(error: val failure) => {
             match failure {

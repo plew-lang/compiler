@@ -3,9 +3,10 @@
 // remain explicit obligations for instance analysis or dynamic enforcement.
 import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
-import ../Ir with { CallSiteKey, CallTemplateKind, ArcClass }
+import ../Ir with { CallSiteKey, CallTemplateKind }
 import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
-import ./Drop with { elaborateCanonicalMidDrops }
+import ./Prepare with { MidParametricBody }
+import ./OwnershipAnalysis with { MidOwnershipAnalysis }
 import ./GlobalAccessGraph with { GlobalAccessGraph }
 import ./Verify with { canonicalMidReachable }
 
@@ -19,6 +20,8 @@ pub enum DeclarationAccessNode {
 // one-based, including statement, so absence never aliases the first row.
 pub enum DeclarationAccessObligation {
     Call(body: U64, terminator: U64, template: U64)
+    ForProtocol(body: U64, terminator: U64, statement: U64, slot: U64)
+    TryConversion(body: U64, terminator: U64, expression: U64)
     Destruction(body: U64, typeTerm: U64, typeRecipe: U64)
     Value(body: U64, value: U64)
     Storage(body: U64, statement: U64)
@@ -52,9 +55,11 @@ impl DeclarationAccessState {
             MidBuildError.None => {}
             _ => { return <Result.Err error=<DeclarationAccessError.Build body=self.owners[index] error=built.error /> /> }
         }
-        val ownership = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: built.canonical)
-        if ownership.body == 0U64 { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] /> /> }
-        val body = c.mid.bodies[ownership.body - 1U64]
+        val ownership = match MidOwnershipAnalysis.analyze(arena: inout c.mid, body: <MidParametricBody.input canonical=built.canonical />) {
+            Optional.Some(v: val analysis) => { give analysis }
+            Optional.None => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] /> /> }
+        }
+        val body = c.mid.bodies[ownership.canonical.body - 1U64]
         val reachable = canonicalMidReachable(c: c, body: body)
         mut val blockIndex = 0U64
         while blockIndex < body.blocks.len {
@@ -82,26 +87,34 @@ impl DeclarationAccessState {
                 self.graph.terminatorOperands(c: c, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
-                    // A missing or unfinished selection is a broken frontend
-                    // contract, not an unknown but valid runtime effect.
-                    if target.tag != 1U64 { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
-                    val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                    val template = c.callTemplateIndex(siteKey: key)
-                    if template >= c.decls.callTemplates.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
-                    match c.decls.callTemplates[template].kind {
-                        CallTemplateKind.Pending => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
-                        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                            if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
-                            if !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
-                                self.graph.edge(caller: index, callee: callee, term: block.terminator)
+                    if target.tag == 3U64 {
+                        if target.exprId >= c.arena.exprs.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                        self.obligations.append(<DeclarationAccessObligation.TryConversion body=index terminator=block.terminator expression=target.exprId />)
+                    } else if target.tag == 4U64 {
+                        if target.exprId >= c.arena.stmts.count() || (target.slot != 1U64 && target.slot != 2U64) { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                        self.obligations.append(<DeclarationAccessObligation.ForProtocol body=index terminator=block.terminator statement=target.exprId slot=target.slot />)
+                    } else {
+                        // A missing or unfinished selection is a broken frontend
+                        // contract, not an unknown but valid runtime effect.
+                        if target.tag != 1U64 { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                        val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                        val template = c.callTemplateIndex(siteKey: key)
+                        if template >= c.decls.callTemplates.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                        match c.decls.callTemplates[template].kind {
+                            CallTemplateKind.Pending => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                                if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                                if !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
+                                    self.graph.edge(caller: index, callee: callee, term: block.terminator)
+                                }
                             }
+                            _ => {}
                         }
-                        _ => {}
+                        // Preserve the selected sum (including proof, argument
+                        // conversions and dynamic target) by immutable table ID.
+                        // StaticMethod is not an edge to a guessed default body.
+                        self.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator template=template />)
                     }
-                    // Preserve the selected sum (including proof, argument
-                    // conversions and dynamic target) by immutable table ID.
-                    // StaticMethod is not an edge to a guessed default body.
-                    self.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator template=template />)
                 }
             }
             blockIndex += 1U64
@@ -131,30 +144,17 @@ impl DeclarationAccessState {
         while index < self.types.count() {
             val type = self.types[index]
             val node = self.nodes[index]
-            val shape = c.closedDestructionShape(typeRef: type)
-            if shape.destructorDeclaration != 0U64 {
-                self.graph.edge(caller: node, callee: shape.destructorDeclaration - 1U64)
+            val dependencies = try c.closedDestructionDependencies(typeRef: type)
+            if dependencies.destructorDeclaration != 0U64 {
+                self.graph.edge(caller: node, callee: dependencies.destructorDeclaration - 1U64)
             }
-            if shape.underlying != 0U64 {
-                self.destruction(c: c, caller: node, term: shape.underlying)
-            } else {
-                // Record fields are already semantic facts. No physical record
-                // layout or executable destructor instance is needed here.
-                if !c.arena.typeAt(index: type).isRecord {
-                    match (try c.arcClassOfRef(ref: type)) {
-                        ArcClass.BufferLike(elem: val element) => { self.destruction(c: c, caller: node, term: element) }
-                        ArcClass.RefCell(inst: val instance) => { self.destruction(c: c, caller: node, term: c.arena.typeAt(index: instance).args[0U64]) }
-                        ArcClass.AnyBox => { self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />) }
-                        ArcClass.ClosureVal => { self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />) }
-                        ArcClass.PromiseCell(inst: _) => { self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />) }
-                        _ => {}
-                    }
-                }
-                mut val field = 0U64
-                while field < shape.fieldTypes.count() {
-                    self.destruction(c: c, caller: node, term: shape.fieldTypes[field])
-                    field += 1U64
-                }
+            if dependencies.hasDynamicPayload {
+                self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />)
+            }
+            mut val child = 0U64
+            while child < dependencies.children.count() {
+                self.destruction(c: c, caller: node, term: dependencies.children[child])
+                child += 1U64
             }
             index += 1U64
         }

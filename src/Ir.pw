@@ -3146,6 +3146,15 @@ pub struct DestructionShape {
 }
 pub impl DestructionShape { factory }
 
+// Declaration dependencies of releasing a closed type, without executable
+// body identities or physical layouts. Dynamic payloads retain an obligation.
+pub struct DestructionDependencies {
+    pub val destructorDeclaration: U64 = 0U64
+    pub val children: Array[U64] = []
+    pub val hasDynamicPayload: Bool = false
+}
+pub impl DestructionDependencies { factory }
+
 pub struct FinalDestruction {
     // Nominal copyability is independent of whether releasing does any work.
     pub val isUnique: Bool = false

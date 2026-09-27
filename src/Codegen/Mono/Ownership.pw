@@ -229,6 +229,27 @@ pub impl Comp {
     // Requires a closed TypeTerm. Declaration checking must retain unresolved
     // terms/recipes as obligations rather than interpreting them as empty shapes.
     // No layout is collected and no executable body or destruction is enqueued.
+    inout fn closedDestructionDependencies(typeRef: U64) -> Result[DestructionDependencies, CompileDiagnostic] {
+        if typeRef == 0U64 || !self.typeTermIsClosed(ref: typeRef) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: destruction dependency query requires a closed type") />
+        }
+        val shape = self.closedDestructionShape(typeRef: typeRef)
+        mut val children = shape.fieldTypes
+        mut val dynamicPayload = false
+        if shape.underlying != 0U64 { children = [shape.underlying] }
+        else if !self.arena.typeAt(index: typeRef).isRecord {
+            match (try self.arcClassOfRef(ref: typeRef)) {
+                ArcClass.BufferLike(elem: val element) => { children.append(element) }
+                ArcClass.RefCell(inst: val instance) => { children.append(self.arena.typeAt(index: instance).args[0U64]) }
+                ArcClass.AnyBox => { dynamicPayload = true }
+                ArcClass.ClosureVal => { dynamicPayload = true }
+                ArcClass.PromiseCell(inst: _) => { dynamicPayload = true }
+                _ => {}
+            }
+        }
+        return <Result.Ok value=<DestructionDependencies destructorDeclaration=shape.destructorDeclaration children=children hasDynamicPayload=dynamicPayload /> />
+    }
+
     inout fn closedDestructionShape(typeRef: U64) -> DestructionShape {
         if typeRef == 0U64 { return <DestructionShape /> }
         val type = self.arena.typeAt(index: typeRef)

@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+mut val completed = 0I64
+fn step(ok: Bool) -> Result[I64, I64] {
+    if ok { return <Result.Ok value=2I64 /> }
+    return <Result.Err error=9I64 />
+}
+fn perform(ok: Bool) -> Result[I64, I64] {
+    val value = try step(ok: ok)
+    completed += 1I64
+    return <Result.Ok value=value />
+}
+fn main() {
+    print(perform(ok: true).unwrapOr(fallback: -1I64))
+    print(perform(ok: false).unwrapOr(fallback: -1I64))
+    print(completed)
+}

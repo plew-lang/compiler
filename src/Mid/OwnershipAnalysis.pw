@@ -1,0 +1,16 @@
+// Symbolic ownership analysis preserves recipes and structured branches.
+// This result is not executable admission and grants no conversion/access proof.
+import ./Ir with { MidCanonicalArena, MidCanonicalBody }
+import ./Prepare with { MidParametricBody }
+import ./Drop with { elaborateCanonicalMidDrops }
+
+pub struct MidOwnershipAnalysis {
+    pub val canonical: MidCanonicalBody
+}
+pub impl MidOwnershipAnalysis {
+    assoc fn analyze(arena: inout MidCanonicalArena, body: MidParametricBody) -> Optional[MidOwnershipAnalysis] {
+        val canonical = elaborateCanonicalMidDrops(arena: inout arena, canonical: body.canonical)
+        if canonical.body == 0U64 { return <Optional.None /> }
+        return <Optional.Some v=<MidOwnershipAnalysis canonical=canonical /> />
+    }
+}
