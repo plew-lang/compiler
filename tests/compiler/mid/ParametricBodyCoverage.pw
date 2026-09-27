@@ -1,17 +1,21 @@
 // Inspect declaration-time Mid without requesting LLVM or concrete instances.
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/Mid/Build with { MidFunctionTemplates, MidBuildError }
 import ../../../src/Mid/Drop with { elaborateCanonicalMidDrops }
 import ../../../src/Mid/Diagnostics with { reportMidBuildError }
 import @Std/Io with { print }
+import @Std/Core with { assert }
 import @Std/Process with { argAt, argCount }
 
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler,
+    analyzeFrontendDeclarations(c: inout compiler,
         input: <FrontendInput.File path=argAt(1I64) />,
         sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    val instances = compiler.arena.bodyInstanceCount()
     compiler.traceCodegen = true
     val allModules = argCount() > 3I64 && argAt(3I64) == "all"
     val ownership = argCount() > 4I64 && argAt(4I64) == "drops"
@@ -63,6 +67,9 @@ fn main() {
         }
         index += 1U64
     }
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    assert(compiler.arena.bodyInstanceCount() == instances)
     print("built")
     print(passed)
     print("failed")

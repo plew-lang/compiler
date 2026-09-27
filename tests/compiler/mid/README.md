@@ -1,7 +1,9 @@
 # Parametric Mid diagnostics
 
 `ParametricBodyCoverage.pw` enumerates authored function bodies after the real
-frontend has recorded declaration-time facts. It calls `MidFunctionTemplates`
+declaration-only frontend has recorded declaration-time facts, before executable
+finalization. The executable worklist and final destruction table must remain
+empty, and building Mid must not add semantic body identities. It calls `MidFunctionTemplates`
 without requesting a concrete body instance, executable Mid, or LLVM generation
 for those bodies. Each successful body must retain the same canonical identity
 when requested again.
