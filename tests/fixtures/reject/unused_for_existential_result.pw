@@ -1,0 +1,3 @@
+trait Maker { fn make() -> I64 }
+fn unused(item: any Maker) { for val value in item.make() { value } }
+fn main() {}

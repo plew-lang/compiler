@@ -1,0 +1,2 @@
+fn unused(producer: fn() -> I64) { for val value in producer() { value } }
+fn main() {}

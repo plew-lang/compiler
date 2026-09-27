@@ -1,6 +1,8 @@
 // Part of compile-time checks (root: _.pw): trait-bound and conformance
 // validation.
 
+import ../../Ir with { DynamicCallTemplateTarget }
+
 // The concrete type span that the conforming type `(recvStart,recvLen)` binds for
 // the associated type named `(nameStart,nameLen)` (spec/08 `type Item = Concrete`),
 // or the input name unchanged when it is not an associated type / has no binding.
@@ -1309,8 +1311,50 @@ pub impl Comp {
                 if result == 0U64 || !self.typeTermIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
                 return <Result.Ok value=result />
             }
-            _ => { return <Result.Ok value=0U64 /> }
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: val result) => {
+                mut val asynchronous = true
+                match resolution {
+                    StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIndex, reqIdx: val requirement) => {
+                        if traitIndex < self.decls.traitCount() {
+                            val requirements = self.decls.traitAt(index: traitIndex).reqs
+                            if requirement < requirements.count() { asynchronous = self.traitReqAt(reqs: requirements, index: requirement).isAsync }
+                        }
+                    }
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                        if callee < self.arena.functionCount() { asynchronous = self.arena.functionAt(index: callee).isAsync }
+                    }
+                    _ => {}
+                }
+                if !asynchronous && result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
+            }
+            CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: val target) => {
+                mut val result = 0U64
+                mut val signature = 0U64
+                match target {
+                    DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { signature = term }
+                    DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: val term) => { signature = term }
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
+                        if traitIndex < self.decls.traitCount() && slot != 0U64 {
+                            val requirements = self.decls.traitAt(index: traitIndex).reqs
+                            if slot <= requirements.count() {
+                                val requirement = self.traitReqAt(reqs: requirements, index: slot - 1U64)
+                                val receiverTerm = try self.closedProtocolReceiver(receiver: receiver)
+                                if !requirement.isAsync && receiverTerm != 0U64 && self.typeTermIsClosed(ref: receiverTerm) {
+                                    result = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
+                                }
+                            }
+                        }
+                    }
+                }
+                if signature != 0U64 && signature < self.arena.typeCount() && self.isFnType(ref: signature) {
+                    val arguments = self.arena.typeAt(index: signature).args
+                    if arguments.count() != 0U64 { result = arguments[0U64] }
+                }
+                if result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
+            }
+            _ => {}
         }
+        return <Result.Ok value=0U64 />
     }
 
     inout fn closedProtocolReceiver(receiver: CallTemplateReceiver) -> Result[U64, CompileDiagnostic] {
