@@ -1,0 +1,11 @@
+import ./Noise
+import ./Models
+import @Std/Io with { print }
+fn read[T](item: T) -> I64 where T: Models.Read { return item.read() }
+fn twice[T](item: T) -> I64 where T: Models.Twice { return item.twice() }
+fn main() {
+    val item = <Models.Item value=21I64 />
+    print(read(item: item))
+    print(twice(item: item))
+    print(item.twice())
+}

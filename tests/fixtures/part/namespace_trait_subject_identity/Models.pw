@@ -1,0 +1,6 @@
+pub trait Read { fn read() -> I64 }
+pub trait Twice { fn twice() -> I64 }
+pub impl Read as Twice { fn twice() -> I64 { return self.read() * 2I64 } }
+pub struct Item { pub val value: I64 }
+pub impl Item { factory }
+pub impl Item as Read { fn read() -> I64 { return self.value } }
