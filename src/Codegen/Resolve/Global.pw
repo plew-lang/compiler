@@ -98,9 +98,6 @@ pub impl Comp {
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         self.cur.globalInitializerTarget = <Optional.Some v=target />
-        val index: U64 = self.globalIndexForDeclarationTarget(target: target)
-        val init: U64 = self.globalInitExpr(g: self.arena.globals[index])
-        try self.seedGlobalLocals(useMod: self.moduleOf(offset: self.exprOffset(id: init)))
         return <Result.Ok value=() />
     }
 

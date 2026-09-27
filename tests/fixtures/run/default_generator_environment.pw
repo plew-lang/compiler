@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Bind, Expr, Func, Param, StaticConformanceProof, TraitDef, TraitOwner }
+import /Ir with { Bind, Expr, Func, Global, Param, StaticConformanceProof, TraitDef, TraitOwner }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -36,11 +36,14 @@ fn main() {
     c.prepareDefaultArgumentGenerators().unwrap()
     val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
-    if c.globalSeedModeFor(f: c.arena.functionAt(index: 0U64)).unwrap() == 7U64 { write(s: "source-module\n") }
-    val generatorModule = c.globalSeedModeFor(f: c.arena.functionAt(index: free)).unwrap()
+    if c.moduleOf(offset: c.fnAnchor(f: c.lexicalFunction(f: c.arena.functionAt(index: 0U64)).unwrap())) == 7U64 { write(s: "source-module\n") }
+    val generatorModule = c.moduleOf(offset: c.fnAnchor(f: c.lexicalFunction(f: c.arena.functionAt(index: free)).unwrap()))
     if generatorModule == 7U64 { write(s: "generator-module\n") }
-    if c.globalVisibleFrom(useMod: generatorModule, gMod: 7U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "private-global-visible\n") }
-    if !c.globalVisibleFrom(useMod: generatorModule, gMod: 8U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "foreign-private-hidden\n") }
+    c.arena.globals.append(<Global nameStart=name.nameStart nameLen=name.nameLen letStmt=0U64 mutable=false />)
+    if c.globalIndexAtUse(start: name.nameStart, len: name.nameLen) == 0U64 { write(s: "private-global-visible\n") }
+    val foreignUse = c.internTmpName(prefix: "declaration", n: 0U64)
+    c.modules.registerSourceFile(start: foreignUse.nameStart, length: foreignUse.nameLen, moduleId: 8U64, path: "<foreign>")
+    if c.globalIndexAtUse(start: foreignUse.nameStart, len: foreignUse.nameLen) == c.arena.globals.count() { write(s: "foreign-private-hidden\n") }
     val sourceEnv = c.bodyInstanceEnvironment(fnIdx: 0U64, args: [term], recvInstRef: 0U64).unwrap()
     val generatorEnv = c.bodyInstanceEnvironment(fnIdx: free, args: [term], recvInstRef: 0U64).unwrap()
     if c.sameInstanceEnvironment(a: sourceEnv, b: generatorEnv) { write(s: "free-binders\n") }

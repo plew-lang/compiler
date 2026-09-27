@@ -763,7 +763,11 @@ pub impl Comp {
             Expr.Ident(start: val start, len: val len) => {
                 val localIndex: U64 = self.localIndexByName(start: start, len: len)
                 if localIndex < self.cur.locals.count() {
-                    return <Result.Ok value=<CallArgumentSource.Local exprId=exprId localIndex=localIndex term=self.parametricExprTerm(exprId: exprId) /> />
+                    val local = (try self.typedLocal(index: localIndex))
+                    if local.isGlobal {
+                        return <Result.Ok value=<CallArgumentSource.Term exprId=exprId term=local.ty /> />
+                    }
+                    return <Result.Ok value=<CallArgumentSource.Local exprId=exprId declarationTarget=local.nameStart term=self.parametricExprTerm(exprId: exprId) /> />
                 }
             }
             Expr.Call(nameStart: _, nameLen: _, args: _) => {

@@ -2065,7 +2065,6 @@ pub impl Comp {
         if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
             tracePhaseProgress(c: inout self, label: "semantic-expression-record:body", count: fnIdx, stride: 64U64)
             self.cur.locals = []
-            try self.seedGlobalLocals(useMod: (try self.globalSeedModeFor(f: f)))
             self.cur.hasRecv = f.hasRecv
             self.cur.recvStart = f.recvStart
             self.cur.recvLen = f.recvLen

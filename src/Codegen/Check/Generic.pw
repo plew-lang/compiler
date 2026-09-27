@@ -81,7 +81,7 @@ pub impl Comp {
     // binding in ONE pass — the classification `code` (identValueCode / identFnCode /
     // identTypeQualCode / identUndefCode) and the backend-locate `target` together (see
     // Ir.IdentBinding). Categories: `self`, a local/parameter/global (all live in
-    // c.cur.locals during these passes — seedGlobalLocals folds globals in — so
+    // c.cur.locals during these passes — global declarations are installed on demand, so
     // localIndexByName finds them) = a VALUE; a bare free-function name = a callable
     // DECLARATION, not a value; a type / primitive / type-parameter of `tpFn` = a type
     // QUALIFIER, valid only as an assoc-fn receiver (`Buffer.new()` / `T.make()`), never a
@@ -1090,7 +1090,6 @@ pub impl Comp {
             try self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
             val noArgs: Array[U64] = []
             self.cur.locals = []
-            try self.seedGlobalLocals(useMod: (try self.globalSeedModeFor(f: f)))
             self.cur.hasRecv = f.hasRecv
             self.cur.recvStart = f.recvStart
             self.cur.recvLen = f.recvLen

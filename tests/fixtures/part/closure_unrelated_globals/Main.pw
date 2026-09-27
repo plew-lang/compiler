@@ -1,0 +1,6 @@
+import ./Noise
+import @Std/Io with { print }
+fn adder(base: I64) -> fn(value: I64) -> I64 {
+    return fn(value: I64) -> I64 { return base + value }
+}
+fn main() { val add = adder(base: 40I64) print(add(value: 2I64)) }

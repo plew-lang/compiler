@@ -31,76 +31,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // The "seed every global" sentinel for `seedGlobalLocals`: used when the referencing
-    // function has no reliable module offset (a method / assoc fn — its `nameStart` is
-    // re-interned to module 0), so gating would risk hiding a same-module global. Free
-    // functions get their real module and are gated; methods stay conservative (their own
-    // module's globals remain visible — the narrow residual is a method reading another
-    // module's private global, which needs a real per-Func decl offset to close).
-    inout fn globalSeedModeFor(f: Func) -> Result[U64, CompileDiagnostic] {
-        if f.lexicalOwnerFnId != 0U64 {
-            // A generated name has no source module. Its declaration owner
-            // does; do not reinterpret it as entry-module or ambient scope.
-            return <Result.Ok value=self.moduleOf(offset: self.fnAnchor(f: (try self.lexicalFunction(f: f)))) />
-        }
-        if f.hasRecv || f.isAssoc {
-            return <Result.Ok value=4000000000U64 />
-        }
-        return <Result.Ok value=self.moduleOf(offset: f.nameStart) />
-    }
-
-    // Is a top-level global defined in module `gMod` with name `(nameStart,nameLen)` visible
-    // from module `useMod` (spec/15)? Same module, or `export`ed by its own module and brought
-    // in by a `with { }` import that reaches that module directly or through a re-exporting
-    // barrel. Without this a non-`export` global was readable from any module (an ambient leak).
-    inout fn globalVisibleFrom(useMod: U64, gMod: U64, nameStart: U64, nameLen: U64) -> Bool {
-        if gMod == useMod {
-            return true
-        }
-        if self.isExportedName(nameStart: nameStart, nameLen: nameLen) {
-            if self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen) {
-                if self.hasImportEdge(useMod: useMod, targetMod: gMod) {
-                    return true
-                }
-                if self.importsBarrelForwarding(useMod: useMod, srcMod: gMod) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    // Seed the globals visible from `useMod` as locals so identifiers in a function body
-    // resolve (spec/15). `useMod == 4_000_000_000` (the sentinel from `globalSeedModeFor`)
-    // seeds every global (conservative, for a function with no reliable module). A global's
-    // own module is `moduleOf` of its initializer offset (a real source offset — its name is
-    // re-interned, so `nameStart` cannot serve `moduleOf`).
-    inout fn seedGlobalLocals(useMod: U64) -> Result[(), CompileDiagnostic] {
-        mut val gi: U64 = 0
-        while gi < self.arena.globals.count() {
-            match self.arena.stmts[self.arena.globals[gi].letStmt] {
-                Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                    mut val visible: Bool = useMod == 4000000000U64
-                    if !visible {
-                        val gMod: U64 = self.moduleOf(offset: self.exprOffset(id: init))
-                        visible = self.globalVisibleFrom(useMod: useMod, gMod: gMod, nameStart: nameStart, nameLen: nameLen)
-                    }
-                    if visible {
-                        if self.genMode && tyLen == 0U64 && !tyIsArray {
-                            self.cur.locals.append(<Local isGlobal=true globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=false ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
-                        } else {
-                            val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
-                            self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false, cnum: 0U64, isGlobal: true)
-                        }
-                    }
-                }
-                _ => {}
-            }
-            gi += 1
-        }
-        return <Result.Ok value=() />
-    }
-
     inout fn scopeMark() -> U64 {
         return self.cur.locals.count()
     }
@@ -173,7 +103,7 @@ pub impl Comp {
 
     // Whether an assignment-target identifier names a binding at all: `self` (an
     // inout receiver is replaceable), a closure capture, or a local / parameter /
-    // seeded global (seedGlobalLocals puts visible globals in cur.locals). A name
+    // resolved global declaration installed by localIndexByName. A name
     // that is none of these is undeclared — a fn or type name is not a place.
     inout fn identIsBinding(start: U64, len: U64) -> Bool {
         if self.isSelfRef(start: start, len: len) {
@@ -221,7 +151,7 @@ pub impl Comp {
     // Shadowing cliff (spec/03): a new binding's initializer is checked in the old
     // environment, but at commit the previous owned `unique` binding with the same
     // name stops being an accessible owner. Mark only such locals moved; copyable
-    // shadows remain ordinary locals until scope exit, and seeded globals / borrow
+    // shadows remain ordinary locals until scope exit, and global declarations / borrow
     // params are not owned by this scope.
     inout fn markShadowedUniqueMoved(nameStart: U64, nameLen: U64) {
         val idx: U64 = self.localIndexByName(start: nameStart, len: nameLen)

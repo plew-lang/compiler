@@ -2780,10 +2780,10 @@ pub enum CallArgumentSource {
     Term(exprId: U64, term: U64)
     // A lexical local can acquire a more precise concrete type while its body
     // instance is finalized (notably a `for` item from an Iterator proof).
-    // `localIndex` is recorded in the same body walk and is therefore an
-    // identity, not a later name lookup; `term` is the declaration-time
+    // `declarationTarget` is the declaration source offset, independent of
+    // on-demand global slots or lexical walk order; `term` is the declaration-time
     // fallback for synthetic/incomplete scopes.
-    Local(exprId: U64, localIndex: U64, term: U64)
+    Local(exprId: U64, declarationTarget: U64, term: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     Legacy(exprId: U64, info: TypeInfo)
 }
