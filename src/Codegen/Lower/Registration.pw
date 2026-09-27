@@ -505,27 +505,6 @@ pub impl Comp {
         return self.unifyPatterns(a: provider.subjectTy, aSide: 0U64, b: subject.subjectTy, bSide: 1U64, aParams: <PatternBindInput.Conformance range=provider.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)
     }
 
-    // Definition-time form of a bare conformance query.  Unlike instance
-    // lookup this proves coverage for an entire declared generic subject, as
-    // required by a trait's supertrait obligation.
-    inout fn bareConformanceCoversSubject(subject: Conform, traitStart: U64, traitLen: U64) -> Bool {
-        // TraitDef.supertraits still store a legacy source Bind rather than a
-        // canonical TraitInstanceKey.  Its owner migration belongs with that
-        // lowering representation; direct instance queries must not fall back
-        // to text, but this declaration-time compatibility input has not yet
-        // crossed the canonical boundary.
-        val traitId: U64 = intern(c: inout self, start: traitStart, len: traitLen)
-        mut val i: U64 = 0U64
-        while i < self.decls.conforms.count() {
-            val provider: Conform = self.decls.conforms[i]
-            if provider.extId == 0U64 && provider.traitId == traitId && self.conformanceSubjectCovers(provider: provider, subject: subject) {
-                return true
-            }
-            i += 1U64
-        }
-        return false
-    }
-
     inout fn receiverPatternsMayOverlap(a: Func, b: Func) -> Bool {
         if !(a.hasRecv || a.isAssoc) { return true }
         mut val binds: Array[UnifyBind] = []

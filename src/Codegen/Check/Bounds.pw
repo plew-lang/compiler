@@ -32,12 +32,13 @@ pub impl Comp {
         match source {
             DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
+            DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conforms.count() }
         }
     }
 
     // The caller supplies a validated authored reference. No lookup by names
     // or by a method that happens to implement the same trait is involved.
-    fn declarationBound(source: DeclarationBoundRef) -> TraitBound {
+    inout fn declarationBound(source: DeclarationBoundRef) -> TraitBound {
         match source {
             DeclarationBoundRef.Function(val index) => {
                 val bound = self.decls.funcBounds[index]
@@ -46,6 +47,11 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(val index) => {
                 val bound = self.decls.conformBoundPool[index]
                 return <TraitBound subject=bound.subject constraint=bound.constraint offset=bound.offset />
+            }
+            DeclarationBoundRef.TraitSubject(val index) => {
+                val conformance = self.decls.conforms[index]
+                val owner = self.canonicalTraitOwner(start: conformance.typeStart, len: conformance.typeLen)
+                return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
         }
     }
@@ -58,6 +64,9 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(index: val left) => {
                 match b { DeclarationBoundRef.Conformance(index: val right) => { return left == right } _ => { return false } }
             }
+            DeclarationBoundRef.TraitSubject(index: val left) => {
+                match b { DeclarationBoundRef.TraitSubject(index: val right) => { return left == right } _ => { return false } }
+            }
         }
     }
 
@@ -65,6 +74,7 @@ pub impl Comp {
         match source {
             DeclarationBoundRef.Function(index: _) => { return 0U64 }
             DeclarationBoundRef.Conformance(index: _) => { return 1U64 }
+            DeclarationBoundRef.TraitSubject(index: _) => { return 2U64 }
         }
     }
 
@@ -72,13 +82,15 @@ pub impl Comp {
         match source {
             DeclarationBoundRef.Function(val index) => { return index }
             DeclarationBoundRef.Conformance(val index) => { return index }
+            DeclarationBoundRef.TraitSubject(val index) => { return index }
         }
     }
 
     // The scalar proof reader validates kind before reconstructing evidence.
     fn thawDeclarationBound(kind: U64, index: U64) -> DeclarationBoundRef {
         if kind == 0U64 { return <DeclarationBoundRef.Function index=index /> }
-        return <DeclarationBoundRef.Conformance index=index />
+        if kind == 1U64 { return <DeclarationBoundRef.Conformance index=index /> }
+        return <DeclarationBoundRef.TraitSubject index=index />
     }
 
     // Form the semantic constraint carried by an existential once, at the
@@ -289,18 +301,18 @@ pub impl Comp {
     // closure.  Keep the declaration path as proof data: the body instance
     // later obtains the concrete target conformance, while Record never has
     // to reopen syntax or pretend that the user authored `T: Super`.
-    inout fn staticMemberInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[U64], depth: U64 = 0U64, requiredTraitOwner: U64 = 0U64, operatorArity: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+    inout fn staticMemberInSupertraits(boundRef: DeclarationBoundRef, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[SupertraitRef], depth: U64 = 0U64, requiredTraitOwner: U64 = 0U64, operatorArity: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
         if depth > 64U64 || traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
         mut val si: U64 = 0U64
         while si < traitDef.supertraits.count() {
-            val superBind: Bind = self.traitBindAt(binds: traitDef.supertraits, index: si)
-            val superOwner: U64 = self.traitOwnerForSelectorSpan(siteOffset: traitDef.nameStart, start: superBind.nameStart, len: superBind.nameLen)
+            val superConstraint = self.traitConstraintAt(constraints: traitDef.supertraits, index: si)
+            val superOwner: U64 = superConstraint.key.owner
             val nextTrait: U64 = self.decls.traitIndexByOffset(offset: superOwner)
             if nextTrait < self.decls.traitCount() {
-                mut val nextPath: Array[U64] = path
-                nextPath.append(nextTrait)
-                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedSupertraitPath source=boundRef traits=nextPath />
+                mut val nextPath: Array[SupertraitRef] = path
+                nextPath.append(<SupertraitRef traitIndex=traitIdx boundIndex=si />)
+                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedSupertraitPath source=boundRef steps=nextPath />
                 val target: TraitDef = self.decls.traitAt(index: nextTrait)
                 mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
                 if requiredTraitOwner == 0U64 || self.decls.traitAt(index: nextTrait).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: nextTrait, memberId: memberId, args: args, operatorArity: operatorArity)) }
@@ -567,6 +579,57 @@ pub impl Comp {
         return self.groundTermInEnvironment(ref: ref, params: params, values: values, selfRef: receiverRef)
     }
 
+    inout fn traitBoundTypeTerm(ref: U64, bound: TraitBound, traitIndex: U64) -> U64 {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        val reified = self.reifyBoundAssociatedTerms(ref: ref, traitDef: declaration, receiverRef: bound.subject, traitOwner: declaration.nameStart, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
+        return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: bound.subject, params: self.copyTraitBinds(binds: declaration.typeParams), args: bound.constraint.key.positionalArgs)
+    }
+
+    inout fn traitConstraintInBound(constraint: TraitConstraint, bound: TraitBound, traitIndex: U64) -> TraitConstraint {
+        mut val arguments: Array[U64] = []
+        for val argument in constraint.key.positionalArgs { arguments.append(self.traitBoundTypeTerm(ref: argument, bound: bound, traitIndex: traitIndex)) }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for val predicate in constraint.assocPredicates {
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.traitBoundTypeTerm(ref: predicate.value, bound: bound, traitIndex: traitIndex) span=predicate.span />)
+        }
+        return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
+    }
+
+    fn missingTraitBound() -> TraitBound {
+        return <TraitBound subject=0U64 constraint=<TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] /> offset=0U64 />
+    }
+
+    inout fn assumedSupertraitBound(source: DeclarationBoundRef, steps: Array[SupertraitRef]) -> TraitBound {
+        if !self.declarationBoundIsValid(source: source) { return self.missingTraitBound() }
+        mut val bound = self.declarationBound(source: source)
+        for val step in steps {
+            if step.traitIndex >= self.decls.traitCount() { return self.missingTraitBound() }
+            val declaration = self.decls.traitAt(index: step.traitIndex)
+            if declaration.nameStart != bound.constraint.key.owner || step.boundIndex >= declaration.supertraits.count() { return self.missingTraitBound() }
+            val required = self.traitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex)
+            bound = <TraitBound subject=bound.subject constraint=self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex) offset=declaration.nameStart />
+        }
+        return bound
+    }
+
+    inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {
+        mut val outputs: Array[TraitAssocPredicate] = []
+        mut val index = 0U64
+        while index < conformance.assocBindingIds.count() {
+            val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: conformance.assocBindingIds, index: index)]
+            outputs.append(<TraitAssocPredicate member=binding.nameId value=self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: conformance.subjectTy) span=binding.tyStart />)
+            index += 1U64
+        }
+        return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=conformance.traitStart positionalArgs=self.copyConformTypes(types: conformance.traitArgs) /> positionalArgsOpen=false assocPredicates=outputs /> offset=conformance.defOffset />
+    }
+
+    inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {
+        val conformance = self.decls.conforms[conformIndex]
+        mut val result = self.conformanceBoundAssumptions(bounds: conformance.bounds)
+        if self.canonicalTraitOwner(start: conformance.typeStart, len: conformance.typeLen) != 0U64 { result.append(<DeclarationBoundRef.TraitSubject index=conformIndex />) }
+        return result
+    }
+
     // The parameter type of one requirement selected by `resolution`.
     // The trait's binders are substituted with the bound's positional instance
     // arguments before returning to the enclosing function's symbolic scope.
@@ -588,17 +651,17 @@ pub impl Comp {
                         val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
                         return self.staticRequirementType(ref: param.ty, traitDef: traitDef, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                     }
-                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, traits: _) => {
+                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
                         if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
-                        // Supertrait declarations are currently bare names in
-                        // the grammar, so their member signature has no
-                        // inherited positional argument substitution.
-                        return self.staticRequirementType(ref: self.funcParamAt(params: req.params, index: paramIdx).ty, traitDef: traitDef, receiverRef: self.declarationBound(source: boundRef).subject, traitArgs: [])
+                        val bound = self.assumedSupertraitBound(source: boundRef, steps: steps)
+                        if bound.subject == 0U64 || bound.constraint.key.owner != traitDef.nameStart { return 0U64 }
+                        val term = self.reifyBoundAssociatedTerms(ref: self.funcParamAt(params: req.params, index: paramIdx).ty, traitDef: traitDef, receiverRef: bound.subject, traitOwner: traitDef.nameStart, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
+                        return self.staticRequirementType(ref: term, traitDef: traitDef, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return 0U64 }
@@ -733,13 +796,14 @@ pub impl Comp {
                         val bound: TraitBound = self.declarationBound(source: boundRef)
                         return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
                     }
-                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, traits: _) => {
+                    StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
                         if !self.declarationBoundIsValid(source: boundRef) || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
                         val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                        val bound: TraitBound = self.declarationBound(source: boundRef)
-                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.subject, traitArgs: [], predicates: []) />
+                        val bound = self.assumedSupertraitBound(source: boundRef, steps: steps)
+                        if bound.subject == 0U64 || bound.constraint.key.owner != traitDef.nameStart { return <Result.Ok value=0U64 /> }
+                        return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traitCount() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traitAt(index: traitIdx).reqs.count() { return <Result.Ok value=0U64 />}
@@ -1097,8 +1161,9 @@ pub impl Comp {
                 // each Super (a constraint, not auto-implemented).
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
-                    if !(self.bareConformanceCoversSubject(subject: cf, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
+                    val required = self.traitConstraintAt(constraints: t.supertraits, index: sti)
+                    val constraint = self.traitConstraintInBound(constraint: required, bound: self.conformanceTraitBound(conformance: cf), traitIndex: ti)
+                    if !(try self.viewedTypeConformsTraitConstraint(ref: cf.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))) {
                         return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") />
                     }
                     sti += 1

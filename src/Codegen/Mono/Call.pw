@@ -51,14 +51,14 @@ pub impl Comp {
                 }
                 self.arena.staticProofs.append(<StaticProofNode tag=3U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=edges.count() />)
             }
-            StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, traits: val traits) => {
-                val start: U64 = self.arena.staticProofU64Pool.count()
+            StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
+                val start: U64 = self.arena.staticProofSupertraitPool.count()
                 mut val i: U64 = 0U64
-                while i < traits.count() {
-                    self.arena.staticProofU64Pool.append(traits[i])
+                while i < steps.count() {
+                    self.arena.staticProofSupertraitPool.append(steps[i])
                     i += 1U64
                 }
-                self.arena.staticProofs.append(<StaticProofNode tag=4U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=traits.count() />)
+                self.arena.staticProofs.append(<StaticProofNode tag=4U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=steps.count() />)
             }
             StaticConformanceProof.TraitSelf(traitIdx: val traitIdx, receiverRef: val receiverRef, traitArgs: val traitArgs) => {
                 val start: U64 = self.arena.staticProofU64Pool.count()
@@ -140,7 +140,7 @@ pub impl Comp {
         if node.tag == 1U64 {
             return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
         }
-        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 1U64 { return <StaticConformanceProof.Missing /> }
+        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 2U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
         if node.tag == 3U64 {
             mut val edges: Array[WitnessMatch] = []
@@ -152,13 +152,13 @@ pub impl Comp {
             return <StaticConformanceProof.AssumedTraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) edges=edges />
         }
         if node.tag == 4U64 {
-            mut val traits: Array[U64] = []
+            mut val steps: Array[SupertraitRef] = []
             mut val i: U64 = 0U64
             while i < node.pathCount {
-                traits.append(self.arena.staticProofU64Pool[node.path + i])
+                steps.append(self.arena.staticProofSupertraitPool[node.path + i])
                 i += 1U64
             }
-            return <StaticConformanceProof.AssumedSupertraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) traits=traits />
+            return <StaticConformanceProof.AssumedSupertraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) steps=steps />
         }
         if node.tag == 5U64 {
             mut val traitArgs: Array[U64] = []
@@ -840,12 +840,12 @@ pub impl Comp {
                     _ => {}
                 }
             }
-            StaticConformanceProof.AssumedSupertraitPath(source: val leftBound, traits: val leftTraits) => {
+            StaticConformanceProof.AssumedSupertraitPath(source: val leftBound, steps: val leftTraits) => {
                 match b {
-                    StaticConformanceProof.AssumedSupertraitPath(source: val rightBound, traits: val rightTraits) => {
+                    StaticConformanceProof.AssumedSupertraitPath(source: val rightBound, steps: val rightTraits) => {
                         if !self.sameDeclarationBound(a: leftBound, b: rightBound) || leftTraits.count() != rightTraits.count() { return false }
                         mut val i: U64 = 0U64
-                        while i < leftTraits.count() { if leftTraits[i] != rightTraits[i] { return false } i += 1U64 }
+                        while i < leftTraits.count() { if leftTraits[i].traitIndex != rightTraits[i].traitIndex || leftTraits[i].boundIndex != rightTraits[i].boundIndex { return false } i += 1U64 }
                         return true
                     }
                     _ => {}

@@ -1,0 +1,6 @@
+trait Parent[T] {}
+trait Child[T]: Parent[T] {}
+struct Box[T] {}
+impl[T] Box[T] as Parent[T] {}
+impl[T] Box[T] as Child[T] {}
+fn main() {}

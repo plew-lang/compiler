@@ -33,8 +33,8 @@ pub impl Comp {
                 }
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
-                    val supOwner: U64 = self.traitOwnerForSelectorSpan(siteOffset: t.nameStart, start: sup.nameStart, len: sup.nameLen)
+                    val sup: TraitConstraint = self.traitConstraintAt(constraints: t.supertraits, index: sti)
+                    val supOwner: U64 = sup.key.owner
                     val sr: TypeInfo = self.traitMemberRetInfo(traitOwner: supOwner, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64, useMod: useMod)
                     if sr.nameLen != 0U64 {
                         return sr

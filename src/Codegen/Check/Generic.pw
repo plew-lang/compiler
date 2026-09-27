@@ -182,8 +182,8 @@ pub impl Comp {
                 // recurse into supertraits (`trait Sub: Super + ...`)
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
-                    val supOwner: U64 = self.traitOwnerForSelectorSpan(siteOffset: t.nameStart, start: sup.nameStart, len: sup.nameLen)
+                    val sup: TraitConstraint = self.traitConstraintAt(constraints: t.supertraits, index: sti)
+                    val supOwner: U64 = sup.key.owner
                     if self.traitProvidesMember(traitOwner: supOwner, traitArity: 4000000000U64, qName: qName, args: args, depth: depth + 1U64, useMod: useMod) {
                         return true
                     }

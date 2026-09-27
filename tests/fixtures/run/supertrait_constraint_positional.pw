@@ -1,0 +1,6 @@
+trait Parent[T] {}
+trait Child[T]: Parent[T] {}
+struct Item {}
+impl Item as Parent[I64] {}
+impl Item as Child[I64] {}
+fn main() {}

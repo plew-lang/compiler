@@ -23,7 +23,7 @@ pub impl Comp {
                 mut val symbolic = false
                 match proof {
                     StaticConformanceProof.AssumedBound(source: _) => { symbolic = true }
-                    StaticConformanceProof.AssumedSupertraitPath(source: _, traits: _) => { symbolic = true }
+                    StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => { symbolic = true }
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { symbolic = true }
                     _ => {}
                 }

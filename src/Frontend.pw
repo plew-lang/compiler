@@ -1,4 +1,4 @@
-import ./Ir with { TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+import ./Ir with { TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }
 import ./SourceAccess with { SourceAccess }
@@ -30,7 +30,7 @@ import @Plew/Syntax with { syntaxDeclParamCount, syntaxDeclParam, syntaxParam, s
 import @Plew/Syntax with { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam }
 import @Plew/Syntax with { ExternId, SyntaxExtern, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable }
 import @Plew/Syntax with { DirectiveId, SyntaxDirective, DeriveReqId, SyntaxDeriveReq, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxExternStructDirective }
-import @Plew/Syntax with { syntaxTraitSupertraitCount, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }
+import @Plew/Syntax with { syntaxTraitSupertraitCount, syntaxTraitSupertrait, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }
 import @Plew/Syntax with { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable }
 import @Plew/Syntax with { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
 import @Plew/Syntax with { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
@@ -309,6 +309,16 @@ pub impl Comp {
 
     fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
         return self.arena.matchArmPool[arms.start + index]
+    }
+
+    inout fn pushTraitConstraints(constraints: Array[TraitConstraint]) -> TraitConstraintRange {
+        val start = self.decls.traitConstraintPool.count()
+        for val constraint in constraints { self.decls.traitConstraintPool.append(constraint) }
+        return <TraitConstraintRange start=start len=constraints.count() />
+    }
+
+    fn traitConstraintAt(constraints: TraitConstraintRange, index: U64) -> TraitConstraint {
+        return self.decls.traitConstraintPool[constraints.start + index]
     }
 
     inout fn pushConformBounds(bounds: Array[ConformBound]) -> ConformBoundRange {

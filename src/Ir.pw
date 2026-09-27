@@ -960,6 +960,23 @@ pub struct Variant {
 // requirement's name (reuses Bind as a (start,len) pair); the parser still
 // consumes the full signature but labels/types are recovered later. Field/
 // associated-type/factory requirements are not parsed yet (additive).
+pub struct TraitConstraintRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TraitConstraintRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+// An inherited obligation identifies its owning declaration and exact clause,
+// since a trait can name different instances of the same supertrait.
+pub struct SupertraitRef {
+    pub val traitIndex: U64
+    pub val boundIndex: U64
+}
+pub impl SupertraitRef { factory }
+
 pub struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
@@ -975,10 +992,9 @@ pub struct TraitDef {
     // type-parameter name (`add(lhs: Self, rhs: Rhs)`); the completeness check
     // substitutes it with the conformance's matching `traitArgs` entry.
     pub val typeParams: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
-    // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
-    // requires conforming to each Super (a constraint, not auto-impl). Each entry
-    // reuses Bind as a (start,len) trait-name span.
-    pub val supertraits: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
+    // Canonical declared obligations, including all positional arguments and
+    // associated-output equalities. These are requirements, not automatic impls.
+    pub val supertraits: TraitConstraintRange = <TraitConstraintRange start=0U64 len=0U64 />
     // requirement signatures (spec/08): each a body-less Func carrying the
     // requirement's name, params (labels + types), return type, and isAssoc.
     // The abstract generic type-checker reads these to resolve `x.req(...)` on a
@@ -1346,6 +1362,7 @@ pub impl WitnessMatch { factory }
 pub enum DeclarationBoundRef {
     Function(index: U64)
     Conformance(index: U64)
+    TraitSubject(index: U64)
 }
 
 // Common read-only semantic view of an authored condition. Storage and source
@@ -1361,16 +1378,14 @@ pub enum StaticConformanceProof {
     Missing
     ConcreteWitness(witness: WitnessMatch)
     AssumedBound(source: DeclarationBoundRef)
-    // A declaration-time entailment from an authored bound. `edges` are
-    // zero-based Conform indices for trait-subject edges, ordered from the
-    // bound trait to the selected target trait. They are symbolic patterns;
-    // BodyInstance grounds/validates the receiver later.
+    // A declaration-time entailment retains each source witness and its
+    // binder substitution, ordered from the bound to the selected trait.
     AssumedTraitPath(source: DeclarationBoundRef, edges: Array[WitnessMatch])
-    // A generic bound also entails every declared supertrait. `traits` is
-    // the ordered TraitDef-index path after the authored bound's trait; it
+    // A generic bound also entails every declared supertrait. `steps` is
+    // the ordered exact-clause path after the authored bound's trait; it
     // makes that derivation explicit instead of mislabeling `T: Sub` as an
     // authored `T: Super` bound.
-    AssumedSupertraitPath(source: DeclarationBoundRef, traits: Array[U64])
+    AssumedSupertraitPath(source: DeclarationBoundRef, steps: Array[SupertraitRef])
     // Every trait-provided body is abstract over its receiver, but unlike an
     // ordinary generic function it has an implicit `Self: ThisTrait`
     // constraint.  Carry that declaration-time evidence explicitly so Record
@@ -2419,6 +2434,7 @@ pub struct Arena {
     pub mut val staticProofs: Array[StaticProofNode] = []
     pub mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     pub mut val staticProofU64Pool: Array[U64] = []
+    pub mut val staticProofSupertraitPool: Array[SupertraitRef] = []
     pub mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
     pub mut val conversionProofs: Array[ConversionProofNode] = []
     pub mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
@@ -2982,6 +2998,7 @@ pub struct Decls {
     mut val traitNameTails: Dictionary[U64, U64] = [:]
     mut val traitNameNext: Array[U64] = []
     pub mut val traitBindPool: Array[Bind] = []
+    pub mut val traitConstraintPool: Array[TraitConstraint] = []
     pub mut val conformBoundPool: Array[ConformBound] = []
     pub mut val traitAssociatedBoundPool: Array[TraitAssociatedBound] = []
     pub mut val traitReqPool: Array[Func] = []

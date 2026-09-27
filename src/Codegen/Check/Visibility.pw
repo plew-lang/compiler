@@ -713,11 +713,10 @@ pub impl Comp {
     inout fn checkTraitSurfaceInModule(surfaceMod: U64, td: TraitDef) -> Result[(), CompileDiagnostic] {
         mut val si: U64 = 0
         while si < td.supertraits.count() {
-            // Supertrait names are interned; resolve them from the owning trait's
-            // real declaration site rather than treating the interned span as a
-            // source location.
-            val supertrait: Bind = self.traitBindAt(binds: td.supertraits, index: si)
-            try self.checkSurfaceName(surfaceMod: surfaceMod, start: supertrait.nameStart, len: supertrait.nameLen, offset: td.nameStart)
+            val supertrait = self.traitConstraintAt(constraints: td.supertraits, index: si)
+            try self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: supertrait.key.owner, offset: td.nameStart)
+            for val argument in supertrait.key.positionalArgs { try self.checkSurfaceType(surfaceMod: surfaceMod, ref: argument, offset: td.nameStart) }
+            for val predicate in supertrait.assocPredicates { try self.checkSurfaceType(surfaceMod: surfaceMod, ref: predicate.value, offset: td.nameStart) }
             si += 1
         }
         mut val ri: U64 = 0

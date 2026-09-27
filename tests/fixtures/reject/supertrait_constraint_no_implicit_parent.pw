@@ -1,0 +1,5 @@
+trait Parent {}
+trait Child: Parent {}
+struct Item {}
+impl Item as Child {}
+fn main() {}

@@ -1134,12 +1134,6 @@ pub impl Comp {
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
-        mut val supertraits: Array[Bind] = []
-        mut val si: U64 = 0
-        while si < t.supertraits.count() {
-            supertraits.append(self.internBytes(s: t.supertraits[si]))
-            si += 1
-        }
         // collect the trait's binders BEFORE lowering reqs: its type params `[Rhs]` AND its
         // associated types `Item` are both in scope inside the requirement signatures (`-> Item`,
         // `(rhs: Rhs)`) and are binders, not module-scoped types — put them in the lowering-time
@@ -1181,8 +1175,14 @@ pub impl Comp {
                 associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound, whereTypes: [], whereTraits: [])))) offset=bound.span.start />)
             }
         }
+        mut val supertraits: Array[TraitConstraint] = []
+        for val declared in t.supertraits {
+            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared, whereTypes: [], whereTraits: []))))
+            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(constraint)
+        }
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
@@ -1190,16 +1190,10 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxTrait(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
-        mut val supertraits: Array[Bind] = []
         mut val assocTypes: Array[Bind] = []
         mut val paramSpans: Array[Span] = []
         mut val paramFlags: Array[Bool] = []
         mut val i: U64 = 0U64
-        while i < syntaxTraitSupertraitCount(file: self.syntax, trait: t) {
-            val span: Span = syntaxTraitSupertraitSpan(file: self.syntax, trait: t, index: i)
-            supertraits.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
-            i += 1U64
-        }
         i = 0U64
         while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
             val span: Span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: t, index: i)
@@ -1249,8 +1243,17 @@ pub impl Comp {
             }
             i += 1U64
         }
+        mut val supertraits: Array[TraitConstraint] = []
+        i = 0U64
+        while i < syntaxTraitSupertraitCount(file: self.syntax, trait: t) {
+            val declared = syntaxTraitSupertrait(file: self.syntax, trait: t, index: i)
+            val constraint = (try self.lowerSyntaxTraitConstraint(traitTy: declared))
+            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(constraint)
+            i += 1U64
+        }
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
         return <Result.Ok value=() />
     }

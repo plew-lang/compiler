@@ -1,6 +1,6 @@
 import @Std/Io with { print }
 import /Frontend with { Comp }
-import /Ir with { WitnessMatch, DeclarationBoundRef, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, FuncBound, ConformBound, StaticConformanceProof, StaticProofNode }
+import /Ir with { SupertraitRef, WitnessMatch, DeclarationBoundRef, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, FuncBound, ConformBound, StaticConformanceProof, StaticProofNode }
 
 fn main() {
     mut val compiler: Comp = <Comp />
@@ -20,8 +20,8 @@ fn main() {
         <StaticConformanceProof.AssumedBound source=conformance />,
         <StaticConformanceProof.AssumedTraitPath source=function edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
         <StaticConformanceProof.AssumedTraitPath source=conformance edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
-        <StaticConformanceProof.AssumedSupertraitPath source=function traits=[2U64, 4U64] />,
-        <StaticConformanceProof.AssumedSupertraitPath source=conformance traits=[2U64, 4U64] />
+        <StaticConformanceProof.AssumedSupertraitPath source=function steps=[<SupertraitRef traitIndex=2U64 boundIndex=0U64 />, <SupertraitRef traitIndex=4U64 boundIndex=1U64 />] />,
+        <StaticConformanceProof.AssumedSupertraitPath source=conformance steps=[<SupertraitRef traitIndex=2U64 boundIndex=0U64 />, <SupertraitRef traitIndex=4U64 boundIndex=1U64 />] />
     ]
     mut val ids: Array[U64] = []
     for val proof in proofs { ids.append(compiler.freezeStaticConformanceProof(proof: proof)) }

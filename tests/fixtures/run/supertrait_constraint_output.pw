@@ -1,0 +1,6 @@
+trait Parent { type Item }
+trait Child[T]: Parent[Item=T] {}
+struct Value {}
+impl Value as Parent { type Item=I64 }
+impl Value as Child[I64] {}
+fn main() {}
