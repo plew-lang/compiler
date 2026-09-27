@@ -994,6 +994,63 @@ pub impl Comp {
         return false
     }
 
+    // Substitute one trait declaration's associated-output and parameter
+    // environment using only bindings owned by the selected conformance.
+    inout fn conformanceAssociatedConstraintTerm(ref: U64, traitIndex: U64, conformance: Conform, outputs: Array[TraitAssocPredicate]) -> U64 {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        val arguments = self.copyConformTypes(types: conformance.traitArgs)
+        val reified = self.reifyBoundAssociatedTerms(ref: ref, traitDef: declaration, receiverRef: conformance.subjectTy, traitOwner: declaration.nameStart, traitArgs: arguments, predicates: outputs)
+        return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: conformance.subjectTy, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
+    }
+
+    inout fn checkClosedAssociatedBounds(conformance: Conform, traitIndex: U64) -> Result[(), CompileDiagnostic] {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        if declaration.assocBounds.len == 0U64 { return <Result.Ok value=() /> }
+        mut val outputs: Array[TraitAssocPredicate] = []
+        mut val index = 0U64
+        while index < conformance.assocBindingIds.count() {
+            val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: conformance.assocBindingIds, index: index)]
+            val term = self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: conformance.subjectTy)
+            outputs.append(<TraitAssocPredicate member=binding.nameId value=term span=binding.tyStart />)
+            index += 1U64
+        }
+        index = 0U64
+        while index < declaration.assocBounds.len {
+            val bound = self.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: index)
+            mut val subject = 0U64
+            mut val offset = conformance.defOffset
+            for val output in outputs {
+                if output.member == bound.member { subject = output.value offset = output.span }
+            }
+            if subject == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated type required by a trait constraint is not bound") />
+            }
+            mut val closed = self.typeTermIsClosed(ref: subject)
+            mut val arguments: Array[U64] = []
+            for val argument in bound.constraint.key.positionalArgs {
+                val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+                if !self.typeTermIsClosed(ref: term) { closed = false }
+                arguments.append(term)
+            }
+            mut val predicates: Array[TraitAssocPredicate] = []
+            for val predicate in bound.constraint.assocPredicates {
+                val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+                if !self.typeTermIsClosed(ref: term) { closed = false }
+                predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
+            }
+            if closed {
+                val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
+                if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint)) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
+                }
+            }
+            // Symbolic terms retain their declaration obligation. This does
+            // not authorize a whole-program checked result.
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
         mut val ci: U64 = 0
         while ci < self.decls.conforms.count() {
@@ -1012,6 +1069,7 @@ pub impl Comp {
                 if !self.confWitnessesAll(cf: cf, t: t) {
                     return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
                 }
+                try self.checkClosedAssociatedBounds(conformance: cf, traitIndex: ti)
                 // supertraits (spec/08): conforming to Sub requires conforming to
                 // each Super (a constraint, not auto-implemented).
                 mut val sti: U64 = 0

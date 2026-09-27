@@ -1,0 +1,9 @@
+trait Marker {}
+trait Container { type Element: Marker }
+trait Other { type Element }
+struct Good {}
+impl Good as Marker {}
+struct Box {}
+impl Box as Other { type Element = Good }
+impl Box as Container { type Element = I64 }
+fn main() {}

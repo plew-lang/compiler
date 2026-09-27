@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+trait Marker {}
+trait Cursor { type Item }
+trait Convert[T] {}
+trait Container[R] {
+    type Item
+    type Element: Marker
+    type Iter: Cursor[Item = Item]
+    type Source: Convert[R]
+    type SelfSource: Convert[Self]
+}
+trait Other { type Element }
+struct Good {}
+impl Good as Marker {}
+struct Iter {}
+impl Iter as Cursor { type Item = I64 }
+struct Text {}
+impl Text as Convert[String] {}
+struct Box {}
+impl Box as Convert[Box] {}
+impl Box as Other { type Element = I64 }
+impl Box as Container[String] {
+    type Item = I64
+    type Element = Good
+    type Iter = Iter
+    type Source = Text
+    type SelfSource = Box
+}
+fn main() { print("ok") }

@@ -1,0 +1,5 @@
+trait Marker {}
+trait Container { type Element: Marker }
+struct Box {}
+impl Box as Container {  }
+fn main() {}

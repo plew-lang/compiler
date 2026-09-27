@@ -1,0 +1,7 @@
+trait Cursor { type Item }
+trait Collection { type Item type Iter: Cursor[Item = Item] }
+struct Iter {}
+impl Iter as Cursor { type Item = I64 }
+struct List {}
+impl List as Collection { type Item = String type Iter = Iter }
+fn main() {}

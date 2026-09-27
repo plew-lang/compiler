@@ -1,0 +1,7 @@
+trait Convert[T] {}
+trait Container { type Element: Convert[String] }
+struct Element {}
+impl Element as Convert[I64] {}
+struct Box {}
+impl Box as Container { type Element = Element }
+fn main() {}
