@@ -1,0 +1,17 @@
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Box")
+    compiler.modules.registerSourceFile(start: 100U64, length: 10U64, moduleId: 1U64, path: "First.pw")
+    compiler.modules.registerSourceFile(start: 200U64, length: 10U64, moduleId: 2U64, path: "Second.pw")
+    val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    val unresolved = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    print(compiler.typeDefinitionModule(ref: first) == 1U64)
+    print(compiler.typeDefinitionModule(ref: second) == 2U64)
+    print(compiler.typeDefinitionModule(ref: unresolved) == 4000000000U64)
+    print(compiler.typeDefinitionModule(ref: 0U64) == 4000000000U64)
+}

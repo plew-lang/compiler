@@ -320,7 +320,7 @@ pub impl Comp {
         } else if mf.provTraitOwner != 0U64 {
             ownerModule = self.traitModuleByOwner(owner: mf.provTraitOwner)
         } else if mf.defOffset == 0U64 {
-            ownerModule = self.typeDeclModule(start: ownerStart, len: ownerLen)
+            ownerModule = self.typeDefinitionModule(ref: mf.recvTy)
         }
         if ownerModule == self.typeDeclModuleMissing() || ownerModule != self.moduleOf(offset: offset) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "method is private (callable only in its defining module; put it in a `pub impl`)") />
