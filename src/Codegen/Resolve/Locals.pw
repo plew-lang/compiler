@@ -271,25 +271,14 @@ pub impl Comp {
         return true
     }
 
-    inout fn fieldVis(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
-        val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
-        while si < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: si)
-            if s.nameId == qStruct {
-                val fs: Array[FieldDef] = s.fields
-                mut val fi: U64 = 0
-                while fi < fs.count() {
-                    val f: FieldDef = fs[fi]
-                    if f.nameId == qField {
-                        return f.vis
-                    }
-                    fi += 1
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
+    inout fn fieldVis(structIndex: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+        if structIndex >= self.arena.structCount() { return 3U64 }
+        val qField = intern(c: inout self, start: fieldStart, len: fieldLen)
+        val fields = self.arena.structAt(index: structIndex).fields
+        mut val index = 0U64
+        while index < fields.count() {
+            if fields[index].nameId == qField { return fields[index].vis }
+            index += 1U64
         }
         return 3U64
     }
@@ -312,31 +301,31 @@ pub impl Comp {
         return false
     }
 
-    inout fn inTypeDefinitionModule(ownerStart: U64, ownerLen: U64, offset: U64) -> Bool {
-        val owner = self.aliasReal(start: ownerStart, len: ownerLen)
-        val ownerModule = self.typeDeclModule(start: owner.nameStart, len: owner.nameLen)
-        return ownerModule != self.typeDeclModuleMissing() && ownerModule == self.moduleOf(offset: offset)
+    inout fn inTypeDefinitionModule(ownerRef: U64, offset: U64) -> Bool {
+        val index = self.structIndexForType(ref: ownerRef)
+        if index >= self.arena.structCount() { return false }
+        return self.moduleOf(offset: self.arena.structAt(index: index).nameStart) == self.moduleOf(offset: offset)
     }
 
-    inout fn checkFieldReadVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+    inout fn checkFieldReadVis(ownerRef: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val v: U64 = self.fieldVis(structIndex: self.structIndexForType(ref: ownerRef), fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
-            if !(self.inTypeDefinitionModule(ownerStart: ownerStart, ownerLen: ownerLen, offset: offset)) {
+            if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (visible only in its defining module)") />
             }
         }
         return <Result.Ok value=() />
     }
 
-    inout fn checkFieldWriteVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+    inout fn checkFieldWriteVis(ownerRef: U64, fieldStart: U64, fieldLen: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val v: U64 = self.fieldVis(structIndex: self.structIndexForType(ref: ownerRef), fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
-            if !(self.inTypeDefinitionModule(ownerStart: ownerStart, ownerLen: ownerLen, offset: offset)) {
+            if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is private (writable only in its defining module)") />
             }
         } else {
             if v == 1U64 {
-                if !(self.inTypeDefinitionModule(ownerStart: ownerStart, ownerLen: ownerLen, offset: offset)) {
+                if !(self.inTypeDefinitionModule(ownerRef: ownerRef, offset: offset)) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "field is `pub(get)` — readable but writable only in its defining module") />
                 }
             }

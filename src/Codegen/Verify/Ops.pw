@@ -388,17 +388,16 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)") />
                 return <Result.Ok value=() />
             }
-            if self.fieldVis(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
+            if self.fieldVis(structIndex: self.structIndexForType(ref: self.typedIrRefOfInfo(ti: bt)), fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
                     return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)") />
                 }
             }
             try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
-            try self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+            try self.checkFieldReadVis(ownerRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
-                val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-                try self.checkFieldReadVis(ownerStart: arrName.nameStart, ownerLen: arrName.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                try self.checkFieldReadVis(ownerRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             }
         }
         return <Result.Ok value=() />

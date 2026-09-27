@@ -1,0 +1,4 @@
+import ./Public
+import ./Hidden
+import @Std/Io with { print }
+fn main() { val item = <Hidden.Item value=42I64 /> print(item.value) }

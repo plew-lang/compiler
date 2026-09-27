@@ -55,10 +55,12 @@ pub impl Comp {
     }
 
     inout fn checkDirectiveArgsPublic(d: DeriveReq) -> Result[(), CompileDiagnostic] {
+        val owner = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: d.nameStart), start: d.nameStart, len: d.nameLen)
+        val structIndex = self.arena.structIndexByOffset(offset: owner.nameStart)
         mut val ai: U64 = 0
         while ai < d.args.count() {
             val mf: MakeField = d.args[ai]
-            val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            val v: U64 = self.fieldVis(structIndex: structIndex, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: mf.nameStart, msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)") />
             }
