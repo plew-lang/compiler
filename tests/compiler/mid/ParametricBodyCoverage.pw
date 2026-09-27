@@ -2,6 +2,7 @@
 import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/Mid/Build with { MidFunctionTemplates, MidBuildError }
+import ../../../src/Mid/Drop with { elaborateCanonicalMidDrops }
 import ../../../src/Mid/Diagnostics with { reportMidBuildError }
 import @Std/Io with { print }
 import @Std/Process with { argAt, argCount }
@@ -13,6 +14,9 @@ fn main() {
         sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
     compiler.traceCodegen = true
     val allModules = argCount() > 3I64 && argAt(3I64) == "all"
+    val ownership = argCount() > 4I64 && argAt(4I64) == "drops"
+    mut val ownershipPassed = 0U64
+    mut val ownershipFailed = 0U64
     mut val passed = 0U64
     mut val failed = 0U64
     mut val rootModule = 4000000000U64
@@ -35,6 +39,17 @@ fn main() {
                         panic("parametric body cache lost its canonical identity")
                     }
                     passed += 1U64
+                    if ownership {
+                        val analyzed = elaborateCanonicalMidDrops(arena: inout compiler.mid, canonical: built.canonical)
+                        if analyzed.body == 0U64 {
+                            ownershipFailed += 1U64
+                            print("ownership failure")
+                            print(index)
+                        } else {
+                            ownershipPassed += 1U64
+                            if !compiler.mid.isWellFormed(body: analyzed) { panic("malformed ownership analysis") }
+                        }
+                    }
                 }
                 MidBuildError.Frontend(diagnostic: val diagnostic) => { failed += 1U64
                     print(index)
@@ -52,4 +67,10 @@ fn main() {
     print(passed)
     print("failed")
     print(failed)
+    if ownership {
+        print("ownership-built")
+        print(ownershipPassed)
+        print("ownership-failed")
+        print(ownershipFailed)
+    }
 }

@@ -722,7 +722,8 @@ fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCano
 
 fn canonicalMidAppendRootPlace(arena: inout MidCanonicalArena, body: MidBodyNode, local: U64) -> U64 {
     if local >= body.locals.len { return 0U64 }
-    arena.places.append(<MidPlaceNode local=local typeTerm=arena.locals[body.locals.start + local].typeTerm />)
+    val declaration = arena.locals[body.locals.start + local]
+    arena.places.append(<MidPlaceNode local=local typeTerm=declaration.typeTerm typeRecipe=declaration.typeRecipe />)
     return arena.places.count()
 }
 
@@ -783,6 +784,10 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
         8U64 => { arena.terminators.append(<MidTerminatorNode tag=8U64 />) }
         9U64 => { arena.terminators.append(<MidTerminatorNode tag=9U64 />) }
         10U64 => { arena.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=term.resume exprId=term.exprId value=term.value destination=term.destination />) }
+        // Symbolic branch identity and both successors remain deferred.
+        // Ownership analysis needs their CFG edges, not their concrete tags.
+        11U64 => { arena.terminators.append(term) }
+        12U64 => { arena.terminators.append(term) }
         _ => { return 0U64 }
     }
     return arena.terminators.count()
@@ -791,7 +796,10 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
 // Drop elaboration reads the
 // frozen CFG, performs all ownership planning from scalar rows, and emits a
 // new frozen body.  In particular, no branch returns through MidBody or the
-// draft MidStatement/MidTerminator sums.
+// draft MidStatement/MidTerminator sums. Symbolic type recipes and branch
+// identities are preserved for declaration-time analysis. Such an output is
+// not executable: the typed preparation pipeline still requires instantiation,
+// access elaboration, and verification before issuing an executable token.
 pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalBody body=0U64 /> }
     val source: MidBodyNode = arena.bodies[canonical.body - 1U64]

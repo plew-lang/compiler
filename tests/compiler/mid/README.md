@@ -7,7 +7,8 @@ for those bodies. Each successful body must retain the same canonical identity
 when requested again.
 
 Arguments are an absolute source path, an absolute standard-library directory
-with a trailing slash, and optionally `all`. The default selects the module
+with a trailing slash, and optionally `all`. A fourth argument `drops` also
+runs the shared ownership rewrite on each parametric body. The default selects the module
 containing main; `all` includes every loaded module. Extern functions and
 bodyless declarations are not body requests. Closure bodies are reached through
 the production builder; this is not an independent closure completeness audit.
@@ -21,10 +22,17 @@ probe under `scripts/support/watch-command.py`.
 Stdout ends with `built`, the successful body count, `failed`, and the failed
 body count on separate lines. Frontend failures are printed and Mid failures
 are traced to stderr; trace output also contains normal builder diagnostics.
-A zero process exit alone is not a passing inventory: require `failed` to be
-zero. A cache-identity violation panics. Input-dependent counts are intentionally
+The `drops` mode also reports `ownership-built` and `ownership-failed`.
+A zero process exit alone is not a passing inventory: require both failure
+counts to be zero. A cache-identity violation panics. Input-dependent counts are intentionally
 not golden outputs.
 
 This is a manual diagnostic outside the normal fixture suite. Successful
 conversion does not prove whole-program type/borrow/effect checking, and must
 not be reported as completion of `plew check`.
+
+The ownership inventory checks canonical structure, not executable admission.
+It retains symbolic type recipes and `try`/`for` branches; implicit conversions,
+access materialization, and concrete destruction contracts still belong to
+later stages. `tests/fixtures/run/mid_symbolic_drops.pw` independently checks
+conditional cleanup and preservation of the immutable source snapshot.

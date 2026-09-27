@@ -1,0 +1,70 @@
+// Ownership rewriting preserves symbolic types and control flow. This does
+// not admit the result as executable Mid or resolve any deferred contract.
+import /Mid/Ir with { MidCanonicalArena, MidBody, MidBlock, MidLocalDecl, MidScope, MidPlace, MidOperand, MidConstant, MidStatement, MidTerminator }
+import /Mid/Drop with { elaborateCanonicalMidDrops }
+import @Std/Core with { assert }
+import @Std/Io with { print }
+
+fn condition() -> MidOperand {
+    return <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+}
+
+fn checkBranch(branch: MidTerminator, tag: U64, identity: U64, bothConsumed: Bool) {
+    mut val arena = <MidCanonicalArena />
+    val owner = <MidLocalDecl typeTerm=0U64 typeRecipe=37U64 sourceScope=0U64 isUnique=true isParameter=true ownsAtEntry=true />
+    val place = <MidPlace local=0U64 typeRecipe=37U64 />
+    val drop = <MidStatement.Drop place=place />
+    val join = <MidTerminator.Goto target=3U64 />
+    val other = if bothConsumed { give <MidBlock statements=[drop] terminator=join /> }
+        else { give <MidBlock terminator=join /> }
+    val body = <MidBody locals=[owner] scopes=[<MidScope localCount=1U64 />] blocks=[
+        <MidBlock terminator=branch />,
+        <MidBlock statements=[drop] terminator=join />,
+        other,
+        <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=<MidTerminator.Return /> />
+    ] />
+    val source = arena.store(body: body)
+    assert(arena.isWellFormed(body: source), message: "source CFG")
+    val rewritten = elaborateCanonicalMidDrops(arena: inout arena, canonical: source)
+    assert(rewritten.body != 0U64, message: "symbolic branch preserved")
+    assert(arena.isWellFormed(body: rewritten))
+    val result = arena.bodies[rewritten.body - 1U64]
+    val first = arena.terminators[arena.blocks[result.blocks.start].terminator - 1U64]
+    assert(first.tag == tag && first.exprId == identity)
+    assert(first.target == 1U64 && first.otherwise == 2U64)
+    mut val unconditional = 0U64
+    mut val conditional = 0U64
+    mut val index = 0U64
+    while index < result.blocks.len {
+        val block = arena.blocks[result.blocks.start + index]
+        mut val statementIndex = 0U64
+        while statementIndex < block.statements.len {
+            val statement = arena.statements[block.statements.start + statementIndex]
+            if statement.tag == 3U64 || statement.tag == 4U64 {
+                val destination = arena.places[statement.destination - 1U64]
+                assert(destination.typeTerm == 0U64 && destination.typeRecipe == 37U64, message: "symbolic destruction type preserved")
+                if statement.tag == 3U64 { unconditional += 1U64 }
+                else { conditional += 1U64 }
+            }
+            assert(statement.tag != 6U64)
+            statementIndex += 1U64
+        }
+        index += 1U64
+    }
+    if bothConsumed { assert(unconditional == 2U64 && conditional == 0U64) }
+    else { assert(unconditional == 1U64 && conditional == 1U64) }
+    // The original immutable snapshot still contains the source scope exit.
+    val original = arena.bodies[source.body - 1U64]
+    val cleanup = arena.blocks[original.blocks.start + 3U64]
+    assert(arena.statements[cleanup.statements.start].tag == 6U64)
+}
+
+fn main() {
+    val attempt = <MidTerminator.TryBranch discriminant=condition() exprId=42U64 okTarget=1U64 errTarget=2U64 />
+    val iteration = <MidTerminator.ForBranch discriminant=condition() stmtId=51U64 someTarget=1U64 noneTarget=2U64 />
+    checkBranch(branch: attempt, tag: 11U64, identity: 42U64, bothConsumed: false)
+    checkBranch(branch: iteration, tag: 12U64, identity: 51U64, bothConsumed: false)
+    checkBranch(branch: attempt, tag: 11U64, identity: 42U64, bothConsumed: true)
+    checkBranch(branch: iteration, tag: 12U64, identity: 51U64, bothConsumed: true)
+    print("symbolic-drops:ok")
+}
