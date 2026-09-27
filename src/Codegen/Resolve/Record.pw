@@ -482,6 +482,7 @@ pub impl Comp {
                     if templateIndex < self.decls.callTemplates.count() {
                         match self.decls.callTemplates[templateIndex].kind {
                             CallTemplateKind.Pending => {}
+                            CallTemplateKind.ExpectedValue => {}
                             _ => { selected = true }
                         }
                     }
@@ -1488,6 +1489,7 @@ pub impl Comp {
                     if templateIndex < self.decls.callTemplates.count() {
                         match self.decls.callTemplates[templateIndex].kind {
                             CallTemplateKind.Pending => {}
+                            CallTemplateKind.ExpectedValue => {}
                             _ => { selected = true }
                         }
                     }

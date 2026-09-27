@@ -1735,14 +1735,7 @@ fn midExprIsCall(c: Comp, exprId: U64) -> Bool {
     // not bypass Mid's Index projection by becoming a semantic call
     // terminator. The test is declaration-identity based, never name based.
     if midDirectArrayIndexExpr(c: c, exprId: exprId) < c.arena.exprs.count() { return false }
-    match c.arena.exprs[exprId] {
-        Expr.Call(nameStart: _, nameLen: _, args: _) => { return true }
-        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return true }
-        Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { return true }
-        Expr.Unary(op: _, operand: _) => { return true }
-        Expr.Binary(op: val op, lhs: _, rhs: _) => { return op != opAnd() && op != opOr() }
-        _ => { return false }
-    }
+    return c.sourceExprRequiresCallSelection(exprId: exprId)
 }
 
 fn midExprIsShortCircuit(c: Comp, exprId: U64) -> Bool {

@@ -619,6 +619,7 @@ pub impl Comp {
     fn recordedCallHasStorageArguments(kind: CallTemplateKind) -> Bool {
         mut val arguments = <CallTemplateArgumentRange start=0U64 len=0U64 />
         match kind {
+            CallTemplateKind.ExpectedValue => { return false }
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => {
                 if callee >= self.arena.functionCount() || self.signatureHasStorageParameters(function: self.arena.functionAt(index: callee)) { return true }
                 arguments = args
@@ -967,6 +968,20 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Source forms that own a call selection. Implicit calls are published
+    // under their own synthetic sites; a surrounding value only owns context.
+    fn sourceExprRequiresCallSelection(exprId: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => { return true }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return true }
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { return true }
+            Expr.Unary(op: _, operand: _) => { return true }
+            Expr.Binary(op: val op, lhs: _, rhs: _) => { return op != opAnd() && op != opOr() }
+            _ => { return false }
+        }
+    }
+
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         // Atomic values cannot select a call. Their contextual typing belongs
@@ -989,7 +1004,10 @@ pub impl Comp {
         // shared body: its concrete receiver is not selected until Mono, but
         // its source expected result is already a complete template input.
         if index >= self.decls.callTemplates.count() {
-            self.appendCallTemplate(template: <CallTemplate siteKey=siteKey expectedResultTerm=expectedTerm />)
+            val kind = if exprId >= self.arena.exprs.count() || self.sourceExprRequiresCallSelection(exprId: exprId) || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() {
+                give <CallTemplateKind.Pending />
+            } else { give <CallTemplateKind.ExpectedValue /> }
+            self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=expectedTerm />)
             return <Result.Ok value=() />
         }
         val prior: CallTemplate = self.decls.callTemplates[index]

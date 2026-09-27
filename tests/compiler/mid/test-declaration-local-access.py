@@ -33,6 +33,8 @@ for name in ('receiver_preparation', 'receiver_shared_access', 'generic_unique_a
 source = (fixtures / 'reject' / 'unused_borrow_inout_argument.pw').read_text()
 cases.append(('unused-closure', source.replace('fn unused() {', 'fn unused() { val action = fn() {')
               .replace('\nfn main() {}', '\n}\nfn main() {}'), 1))
+cases.append(('value-context', 'fn unused() -> I64 { val result: I64 = if true { give 1I64 } else { give 2I64 } return result }\nfn main() {}\n', 0))
+cases.append(('generic-value-context', 'fn unused[T](item: T) -> T { val result: T = if true { give item } else { give item } return result }\nfn main() {}\n', 0))
 rows = []
 for name, source, expected in cases:
     path = args.out / (name + '.pw')

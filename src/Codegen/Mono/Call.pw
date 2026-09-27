@@ -2809,14 +2809,17 @@ pub impl Comp {
 
     // A value boundary consumes the same Record-time type source as Mid.
     // A selected call owns a result dependency; its callee binder must not be
-    // substituted as though it belonged to the caller. Pending templates only
-    // record expected context for non-call expressions and own no call result.
+    // substituted as though it belonged to the caller. ExpectedValue records
+    // context without a call dependency; an absent template uses Pending.
     inout fn groundRecordedValueTypeForBody(bodyId: U64, exprId: U64, term: U64, selfRef: U64, itemRef: U64) -> Result[U64, CompileDiagnostic] {
         if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return <Result.Ok value=0U64 />}
         val body: BodyInstance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         val template = (try self.callTemplateForSourceBody(fnIdx: body.fnIdx, exprId: exprId))
         match template.kind {
             CallTemplateKind.Pending => {
+                return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: body.environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)) />
+            }
+            CallTemplateKind.ExpectedValue => {
                 return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: body.environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)) />
             }
             _ => {

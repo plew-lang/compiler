@@ -104,6 +104,7 @@ impl DeclarationAccessState {
                         if template >= c.decls.callTemplates.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                         match c.decls.callTemplates[template].kind {
                             CallTemplateKind.Pending => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                            CallTemplateKind.ExpectedValue => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                                 if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                                 if !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {

@@ -2840,6 +2840,9 @@ pub enum DynamicCallTemplateTarget {
 // mix an ordinary call's declared callee with an operator's symbolic proof or
 // a protocol receiver.  Finalization consumes exactly the selected variant.
 pub enum CallTemplateKind {
+    // Bidirectional context for a value expression, with no call selection.
+    ExpectedValue
+    // A call site without a completed selection; never a valid call target.
     Pending
     // Direct means the declaration is already selected.  It may still be a
     // provided trait copy, in which case `proof` is the declaration-time
