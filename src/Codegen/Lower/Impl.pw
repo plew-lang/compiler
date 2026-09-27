@@ -306,7 +306,7 @@ pub impl Comp {
         mut val associated: Array[Bind] = []
         mut val i: U64 = 0U64
         while i < t.assocTypes.count() {
-            associated.append(self.internBytes(s: t.assocTypes[i]))
+            associated.append(self.internBytes(s: t.assocTypes[i].name))
             i += 1U64
         }
         self.predeclareTraitIdentity(nameStart: t.nameSpan.start, nameLen: t.nameSpan.end - t.nameSpan.start, arity: t.typeParams.count(), associated: associated)
@@ -1115,7 +1115,7 @@ pub impl Comp {
         mut val assocTypes: Array[Bind] = []
         mut val ai: U64 = 0
         while ai < t.assocTypes.count() {
-            assocTypes.append(self.internBytes(s: t.assocTypes[ai]))
+            assocTypes.append(self.internBytes(s: t.assocTypes[ai].name))
             ai += 1
         }
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable))

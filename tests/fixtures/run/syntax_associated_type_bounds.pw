@@ -1,0 +1,57 @@
+import @Plew/Syntax as Syntax
+import @Std/Core with { assert }
+import @Std/Io with { print }
+fn check(file: Syntax.SyntaxFile, item: Syntax.TopItemId) {
+    val declaration = Syntax.syntaxTrait(file: file, id: <Syntax.TraitId raw=Syntax.syntaxTopItemPayload(file: file, item: item) />)
+    assert(Syntax.syntaxTraitAssocTypeCount(file: file, trait: declaration) == 2U64)
+    val unbounded = Syntax.syntaxTraitAssocType(file: file, trait: declaration, index: 0U64)
+    val bounded = Syntax.syntaxTraitAssocType(file: file, trait: declaration, index: 1U64)
+    assert(unbounded.bounds.count == 0U64)
+    assert(bounded.bounds.count == 2U64)
+    assert(bounded.name.start > 17U64)
+    val iterator = Syntax.syntaxType(file: file, id: Syntax.syntaxAssociatedTypeBound(file: file, associated: bounded, index: 0U64))
+    assert(Syntax.syntaxTypeArgCount(file: file, ty: iterator) == 1U64)
+    val label = Syntax.syntaxTypeArgLabel(file: file, ty: iterator, index: 0U64)
+    assert(label.end - label.start == 4U64)
+    val marker = Syntax.syntaxType(file: file, id: Syntax.syntaxAssociatedTypeBound(file: file, associated: bounded, index: 1U64))
+    assert(marker.name.end - marker.name.start == 6U64)
+}
+fn main() {
+    val source = "trait Collection { type Item type Iter: Iterator[Item = Item] + Marker fn iterator() -> Iter }"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=17U64 />
+    val file = Syntax.parseProgramSyntaxFile(p: inout parser)
+    check(file: file, item: Syntax.syntaxFileTopLevel(file: file, index: 0U64))
+    val ast = Syntax.parseItem(source: source, start: 17U64, end: 17U64 + source.bytes().count())
+    match ast {
+        Syntax.TopItemAst.Trait(t: val trait) => {
+            assert(trait.assocTypes[1U64].name == "Iter")
+            assert(trait.assocTypes[1U64].bounds.count() == 2U64)
+            assert(trait.assocTypes[1U64].bounds[0U64].name == "Iterator")
+            assert(trait.assocTypes[1U64].bounds[0U64].argLabels[0U64] == "Item")
+        }
+        _ => { panic "expected trait" }
+    }
+    mut val frozen = <Syntax.SyntaxFile.empty />
+    val root = frozen.freezeTopItem(ast: ast)
+    check(file: frozen, item: root)
+    mut val valueParser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=17U64 />
+    val values = Syntax.parseProgramAst(p: inout valueParser)
+    mut val legacyFrozen = <Syntax.SyntaxFile.empty />
+    val legacyRoot = legacyFrozen.freezeTopItem(ast: values[0U64])
+    check(file: legacyFrozen, item: legacyRoot)
+    val secondRoot = legacyFrozen.freezeTopItem(ast: values[0U64])
+    check(file: legacyFrozen, item: secondRoot)
+    for val invalid in ["trait Broken { type Item: }", "trait Broken { type Item: Marker + }"] {
+        mut val invalidLexer = <Syntax.Lexer bytes=invalid.bytes() pos=0U64 toks=[] depth=0I64 />
+        Syntax.lex(lx: inout invalidLexer)
+        mut val direct = <Syntax.P bytes=invalid.bytes() toks=invalidLexer.toks pos=0U64 base=0U64 />
+        Syntax.parseProgramSyntaxFile(p: inout direct)
+        assert(direct.hasErr)
+        mut val value = <Syntax.P bytes=invalid.bytes() toks=invalidLexer.toks pos=0U64 base=0U64 />
+        Syntax.parseProgramAst(p: inout value)
+        assert(value.hasErr)
+    }
+    print("ok")
+}
