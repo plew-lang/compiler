@@ -1,0 +1,28 @@
+import /Frontend with { Comp }
+import /Ir with { TraitDef, TraitOwner, Func, ArgRange }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val padding = compiler.internBytes(s: "padding")
+    val first = compiler.internBytes(s: "Read")
+    val second = compiler.arena.bytes.count()
+    compiler.arena.bytes.append('R')
+    compiler.arena.bytes.append('e')
+    compiler.arena.bytes.append('a')
+    compiler.arena.bytes.append('d')
+    val read = compiler.internBytes(s: "read")
+    val hidden = compiler.internBytes(s: "hidden")
+    val intType = compiler.internBytes(s: "I64")
+    val stringType = compiler.internBytes(s: "String")
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=1U64 nameStart=first.nameStart nameLen=4U64 nameId=first.nameId arity=0U64 />)
+    compiler.decls.registerTraitOwner(<TraitOwner sourceModule=2U64 nameStart=second nameLen=4U64 nameId=first.nameId arity=0U64 />)
+    compiler.decls.registerTrait(<TraitDef nameStart=first.nameStart nameLen=4U64 nameId=first.nameId reqs=compiler.pushTraitReqs(reqs: [<Func nameStart=read.nameStart nameLen=read.nameLen nameId=read.nameId retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRet=true retStart=intType.nameStart retLen=intType.nameLen />]) />)
+    compiler.decls.registerTrait(<TraitDef nameStart=second nameLen=4U64 nameId=first.nameId reqs=compiler.pushTraitReqs(reqs: [<Func nameStart=read.nameStart nameLen=read.nameLen nameId=read.nameId retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRet=true retStart=stringType.nameStart retLen=stringType.nameLen />]) />)
+    compiler.arena.registerFunction(<Func nameStart=hidden.nameStart nameLen=hidden.nameLen hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 recvStart=first.nameStart recvLen=first.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false hasRecv=true recvId=first.nameId provTraitOwner=first.nameStart nameId=hidden.nameId isPub=false />)
+    val args = <ArgRange start=0U64 len=0U64 />
+    print(compiler.traitProvidesMember(traitOwner: first.nameStart, traitArity: 0U64, qName: hidden.nameId, args: args, depth: 0U64, useMod: 1U64))
+    print(compiler.traitProvidesMember(traitOwner: second, traitArity: 0U64, qName: hidden.nameId, args: args, depth: 0U64, useMod: 1U64))
+    val result = compiler.traitMemberRetInfo(traitOwner: second, traitArity: 0U64, qName: read.nameId, args: args, tpStart: padding.nameStart, tpLen: padding.nameLen, depth: 0U64, useMod: 2U64)
+    print(result.nameStart == stringType.nameStart)
+}

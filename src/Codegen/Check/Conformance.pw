@@ -518,7 +518,7 @@ pub impl Comp {
         if cf.traitArgs.count() != 0U64 {
             return false
         }
-        val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.traitId, arity: 0U64)
+        val ownerMod: U64 = self.traitModuleByOwner(owner: cf.traitStart)
         if ownerMod == 4000000000U64 {
             return false
         }
