@@ -1,0 +1,23 @@
+import /Frontend with { Comp }
+import /Ir with { FieldDef, StructDef, TypeRef }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val box = compiler.internBytes(s: "Box")
+    val field = compiler.internBytes(s: "value")
+    val foreignRef = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val recursiveRef = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    val next = compiler.internBytes(s: "next")
+    val recursiveField = <FieldDef nameStart=next.nameStart nameLen=next.nameLen nameId=next.nameId tyStart=box.nameStart tyLen=box.nameLen ty=recursiveRef tyIsArray=false isMut=false hasDefault=false defaultVal=0U64 />
+    val selectedField = <FieldDef nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId tyStart=box.nameStart tyLen=box.nameLen ty=foreignRef tyIsArray=false isMut=false hasDefault=false defaultVal=0U64 />
+    compiler.arena.registerStruct(<StructDef nameStart=box.nameStart nameLen=box.nameLen nameId=box.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=100U64 />)
+    compiler.arena.registerStruct(<StructDef nameStart=box.nameStart nameLen=box.nameLen nameId=box.nameId typeParams=[] fields=[selectedField, recursiveField] isUnique=false isExtern=false defOffset=200U64 />)
+    match compiler.markBoxedFields() {
+        Result.Ok(value: _) => {
+            print(compiler.fieldIsBoxed(f: selectedField))
+            print(compiler.fieldIsBoxed(f: recursiveField))
+        }
+        Result.Err(error: _) => { print(-1I64) }
+    }
+}

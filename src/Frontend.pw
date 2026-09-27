@@ -1603,10 +1603,6 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     try c.instantiateProvidedMethods()
-    // recursive value types (spec/03): mark fields that close a containment cycle
-    // onto their owner; codegen stores them behind a heap pointer so the C type is
-    // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
-    try c.markBoxedFields()
     // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
     // enum's own explicit deinit body is v1-rejected; active payloads still drop.
     // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
@@ -1640,6 +1636,10 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     try c.checkUseVisibility()
     try c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
+    // recursive value types (spec/03): mark fields that close a containment cycle
+    // onto their owner; codegen stores them behind a heap pointer so the C type is
+    // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
+    try c.markBoxedFields()
     // Ownership is checked only after nominal declaration identities are resolved.
     try c.checkFieldContagion()
     try c.checkArrayElemsNotUnique()
