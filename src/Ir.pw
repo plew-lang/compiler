@@ -2899,7 +2899,7 @@ pub impl DestructureSite { factory }
 // `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
 // Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
 // type carries the resolved nominal identity. `assocBindings`: `type Item = Concrete` lines from
-// conformances. `pubFactories`: interned ids of types with a `pub factory`.
+// conformances. `pubFactoryTypes`: receiver TypeRefs of published default factories.
 // `importAliases`: `import …
 // with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
 // recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
@@ -2950,7 +2950,7 @@ pub struct Decls {
     pub mut val fieldDefaultGeneratorFunctions: Array[U64] = []
     pub mut val deinits: Array[U64] = []
     pub mut val assocBindings: Array[AssocBinding] = []
-    pub mut val pubFactories: Array[U64] = []
+    pub mut val pubFactoryTypes: Array[U64] = []
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
     pub mut val syntheticCallSites: Array[SyntheticCallSite] = []

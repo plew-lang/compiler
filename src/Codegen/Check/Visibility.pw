@@ -738,7 +738,7 @@ pub impl Comp {
     }
 
     inout fn checkStructSurfaceInModule(surfaceMod: U64, sd: StructDef) -> Result[(), CompileDiagnostic] {
-        val publishesFactory = self.structHasPubFactory(nameId: sd.nameId)
+        val publishesFactory = self.structHasPubFactory(structIndex: self.arena.structIndexByOffset(offset: sd.nameStart))
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
             val f: FieldDef = sd.fields[fi]

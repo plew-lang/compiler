@@ -881,10 +881,10 @@ pub impl Comp {
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory
-                    // (spec/05) — record T's name id so `<T …/>` is allowed outside
+                    // (spec/05) — record T's receiver type so `<T …/>` is allowed outside
                     // T's defining module.
                     if normalizedImpl.isPub {
-                        self.decls.pubFactories.append(intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
+                        self.decls.pubFactoryTypes.append(recvTy)
                     }
                 }
             }
@@ -1006,7 +1006,7 @@ pub impl Comp {
                 }
                 MemberKind.Factory => {
                     if normalizedImpl.isPub {
-                        self.decls.pubFactories.append(intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
+                        self.decls.pubFactoryTypes.append(recvTy)
                     }
                 }
             }

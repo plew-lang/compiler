@@ -301,8 +301,8 @@ pub impl Comp {
                         }
                     }
                 }
-                // field gate (spec/05): a non-`pub` field cannot be set from another module.
-                try self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
+                // Construction authority belongs to the selected type, independently of field visibility.
+                try self.checkConstructVis(typeRef: selectedMakeType, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
                 mut val i: U64 = 0
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)

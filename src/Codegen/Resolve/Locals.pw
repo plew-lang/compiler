@@ -351,32 +351,18 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) -> Result[(), CompileDiagnostic] {
-        if isEnum {
-            return <Result.Ok value=() />
-        }
-        if typeLen == 0U64 {
-            return <Result.Ok value=() />
-        }
-        // a record's canonical name begins '(' — its fields are structurally publiself.
-        if self.arena.bytes[typeStart] == '(' {
-            return <Result.Ok value=() />
-        }
-        mut val sidx: U64 = self.structIndexByName(start: typeStart, len: typeLen)
-        if sidx >= self.arena.structCount() {
-            sidx = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
-        }
-        if sidx >= self.arena.structCount() {
-            return <Result.Ok value=() />
-        }
+    inout fn checkConstructVis(typeRef: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) -> Result[(), CompileDiagnostic] {
+        if isEnum { return <Result.Ok value=() /> }
+        val sidx = self.structIndexForType(ref: typeRef)
+        if sidx >= self.arena.structCount() { return <Result.Ok value=() /> }
         val sd: StructDef = self.arena.structAt(index: sidx)
-        if sd.isExtern {
+        if sd.isExtern || sd.isStructuralLayout {
             return <Result.Ok value=() />
         }
         // Construction authority is independent of field read/write authority.
         // The default factory is always available in its declaration module;
         // explicitly publishing it exposes every field as an input parameter.
-        if self.moduleOf(offset: sd.defOffset) != self.moduleOf(offset: offset) && !(self.structHasPubFactory(nameId: sd.nameId)) {
+        if self.moduleOf(offset: sd.nameStart) != self.moduleOf(offset: offset) && !(self.structHasPubFactory(structIndex: sidx)) {
             mut val index: U64 = 0
             while index < fields.len {
                 val field = self.makeFieldAt(fields: fields, index: index)
@@ -392,10 +378,10 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn structHasPubFactory(nameId: U64) -> Bool {
+    inout fn structHasPubFactory(structIndex: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.decls.pubFactories.count() {
-            if self.decls.pubFactories[i] == nameId {
+        while i < self.decls.pubFactoryTypes.count() {
+            if self.structIndexForType(ref: self.decls.pubFactoryTypes[i]) == structIndex {
                 return true
             }
             i += 1U64
