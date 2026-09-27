@@ -1,0 +1,8 @@
+import @Std/Core with { Iterator }
+
+fn unused[T](values: any Iterator[Item=T]) {
+    for val value in values {
+        val invalid: I64 = value
+    }
+}
+fn main() {}

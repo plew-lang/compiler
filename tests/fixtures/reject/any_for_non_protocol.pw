@@ -1,0 +1,7 @@
+trait Iter2 { type Item inout fn next() -> Optional[Item] }
+
+// An unused body must obey the same nominal protocol as an executed loop.
+fn unused(values: any Iter2[Item=I64]) {
+    for val value in values {}
+}
+fn main() {}

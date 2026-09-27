@@ -140,6 +140,37 @@ pub impl Comp {
         return self.existentialTraitConstraintFor(t: self.arena.typeAt(index: ref))
     }
 
+    // Existential interfaces carry dynamic evidence, not a static generic
+    // conformance. Follow only their authored interface and supertraits.
+    inout fn existentialIterationItemInBound(bound: TraitBound, visited: Array[U64] = []) -> U64 {
+        val owner = bound.constraint.key.owner
+        for val prior in visited { if prior == owner { return 0U64 } }
+        if owner != 0U64 && (owner == self.coreTraitOwner(name: "Iterable") || owner == self.coreTraitOwner(name: "Iterator")) {
+            val item = self.internBytes(s: "Item")
+            for val predicate in bound.constraint.assocPredicates {
+                if predicate.member == item.nameId { return predicate.value }
+            }
+        }
+        val index = self.decls.traitIndexByOffset(offset: owner)
+        if index >= self.decls.traitCount() { return 0U64 }
+        val declaration = self.decls.traitAt(index: index)
+        mut val path = visited
+        path.append(owner)
+        mut val clause = 0U64
+        while clause < declaration.supertraits.count() {
+            val parent = self.traitConstraintInBound(constraint: self.traitConstraintAt(constraints: declaration.supertraits, index: clause), bound: bound, traitIndex: index)
+            val item = self.existentialIterationItemInBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, visited: path)
+            if item != 0U64 { return item }
+            clause += 1U64
+        }
+        return 0U64
+    }
+
+    inout fn existentialIterationItemTerm(receiver: U64) -> U64 {
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeAt(index: receiver).isAny { return 0U64 }
+        return self.existentialIterationItemInBound(bound: <TraitBound subject=receiver constraint=self.existentialTraitConstraint(ref: receiver) offset=self.arena.typeAt(index: receiver).siteOffset />)
+    }
+
     // Compatibility projection for existing bool consumers.  The input is
     // already canonical; this wrapper deliberately has no spelling fallback.
     // It is the migration bridge until each consumer receives the selected
@@ -1429,6 +1460,11 @@ pub impl Comp {
                 match template.kind {
                     CallTemplateKind.Protocol(receiver: val receiver) => {
                         val term = try self.closedProtocolReceiver(receiver: receiver)
+                        if term != 0U64 && self.arena.typeAt(index: term).isAny {
+                            if self.existentialIterationItemTerm(receiver: term) == 0U64 {
+                                return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
+                            }
+                        }
                         if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
                             val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
                             val nextName = self.kwSpan(kw: "next", kwLen: 4U64)

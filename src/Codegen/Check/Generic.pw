@@ -1070,7 +1070,11 @@ pub impl Comp {
     // supertrait paths and declaration owners retain their identities.
     inout fn checkAbstractIterationReceiver(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || receiver >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.typeTermIsClosed(ref: receiver) || self.arena.typeAt(index: receiver).isAny { return <Result.Ok value=() /> }
+        if self.arena.typeAt(index: receiver).isAny {
+            if self.existentialIterationItemTerm(receiver: receiver) != 0U64 { return <Result.Ok value=() /> }
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") />
+        }
+        if self.typeTermIsClosed(ref: receiver) { return <Result.Ok value=() /> }
         if (try self.symbolicIterationItemTerm(receiver: receiver)) != 0U64 { return <Result.Ok value=() /> }
         val arguments = self.pushArgs(args: [])
         val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
