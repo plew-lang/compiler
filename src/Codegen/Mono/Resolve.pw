@@ -80,8 +80,34 @@ pub impl Comp {
     fn sameTraitProofOrigin(a: TraitProofOrigin, b: TraitProofOrigin) -> Bool {
         match a {
             TraitProofOrigin.Witness => { match b { TraitProofOrigin.Witness => { return true } _ => { return false } } }
-            TraitProofOrigin.Assumption(val source) => { match b { TraitProofOrigin.Assumption(source: val other) => { return self.sameDeclarationBound(a: source, b: other) } _ => { return false } } }
+            TraitProofOrigin.Assumption(source: val source, steps: val steps) => { match b { TraitProofOrigin.Assumption(source: val other, steps: val otherSteps) => { return self.sameDeclarationBound(a: source, b: other) && self.sameSupertraitSteps(a: steps, b: otherSteps) } _ => { return false } } }
         }
+    }
+
+    // For inherited assumptions, derivation paths with the same complete
+    // constraint carry equivalent facts. Keep one path without conflating
+    // distinct associated equalities or roots.
+    inout fn assumedTraitInstanceSeen(states: Array[TraitProofState], candidate: TraitProofState, bound: TraitBound) -> Bool {
+        for val state in states {
+            if state.edges.count() == 0U64 && state.traitOwner == candidate.traitOwner && self.sameProofTraitArgs(a: state.traitArgs, b: candidate.traitArgs) {
+                match state.origin {
+                    TraitProofOrigin.Assumption(source: val source, steps: val steps) => {
+                        val existing = self.assumedSupertraitBound(source: source, steps: steps)
+                        if self.typeRefEq(a: existing.subject, b: bound.subject) && existing.constraint.assocPredicates.count() == bound.constraint.assocPredicates.count() {
+                            mut val equal = true
+                            for val predicate in bound.constraint.assocPredicates {
+                                mut val found = false
+                                for val other in existing.constraint.assocPredicates { if predicate.member == other.member && self.typeRefEq(a: predicate.value, b: other.value) { found = true } }
+                                if !found { equal = false }
+                            }
+                            if equal { return true }
+                        }
+                    }
+                    TraitProofOrigin.Witness => {}
+                }
+            }
+        }
+        return false
     }
 
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
@@ -112,9 +138,12 @@ pub impl Comp {
     // grounded by exactly the witness that owns it.
     inout fn traitProofStateEvidence(state: TraitProofState) -> StaticConformanceProof {
         match state.origin {
-            TraitProofOrigin.Assumption(val source) => {
-                if state.edges.count() == 0U64 { return <StaticConformanceProof.AssumedBound source=source /> }
-                return <StaticConformanceProof.AssumedTraitPath source=source edges=state.edges />
+            TraitProofOrigin.Assumption(source: val source, steps: val steps) => {
+                if state.edges.count() == 0U64 {
+                    if steps.count() == 0U64 { return <StaticConformanceProof.AssumedBound source=source /> }
+                    return <StaticConformanceProof.AssumedSupertraitPath source=source steps=steps />
+                }
+                return <StaticConformanceProof.AssumedTraitPath source=source steps=steps edges=state.edges />
             }
             TraitProofOrigin.Witness => {}
         }
@@ -192,7 +221,7 @@ pub impl Comp {
                 if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: baseRef)) {
                     val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
                     if traitIndex < self.decls.traitCount() {
-                        val start = <TraitProofState origin=<TraitProofOrigin.Assumption source=source /> traitOwner=bound.constraint.key.owner traitId=self.decls.traitAt(index: traitIndex).nameId traitArgs=bound.constraint.key.positionalArgs edges=[] />
+                        val start = <TraitProofState origin=<TraitProofOrigin.Assumption source=source steps=[] /> traitOwner=bound.constraint.key.owner traitId=self.decls.traitAt(index: traitIndex).nameId traitArgs=bound.constraint.key.positionalArgs edges=[] />
                         if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=start.traitArgs />)) && (try self.traitProofStateSatisfies(state: start, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: start) /> }
                         if !self.traitProofStateSeen(states: seen, candidate: start) { seen.append(start) pending.append(start) }
                     }
@@ -222,6 +251,33 @@ pub impl Comp {
         mut val cursor: U64 = 0U64
         while cursor < pending.count() {
             val state: TraitProofState = pending[cursor]
+            // Supertraits follow authored evidence only. A concrete impl may
+            // not discharge its own parent obligation by asserting its child.
+            if state.edges.count() == 0U64 {
+                match state.origin {
+                    TraitProofOrigin.Assumption(source: val source, steps: val steps) => {
+                        val bound = self.assumedSupertraitBound(source: source, steps: steps)
+                        val parentIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+                        if parentIndex < self.decls.traitCount() {
+                            val parent = self.decls.traitAt(index: parentIndex)
+                            mut val clause = 0U64
+                            while clause < parent.supertraits.count() {
+                                mut val nextSteps = steps
+                                nextSteps.append(<SupertraitRef traitIndex=parentIndex boundIndex=clause />)
+                                val inherited = self.assumedSupertraitBound(source: source, steps: nextSteps)
+                                val targetIndex = self.decls.traitIndexByOffset(offset: inherited.constraint.key.owner)
+                                if targetIndex < self.decls.traitCount() {
+                                    val next = <TraitProofState origin=<TraitProofOrigin.Assumption source=source steps=nextSteps /> traitOwner=inherited.constraint.key.owner traitId=self.decls.traitAt(index: targetIndex).nameId traitArgs=inherited.constraint.key.positionalArgs edges=[] />
+                                    if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) && (try self.traitProofStateSatisfies(state: next, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)) { return <Result.Ok value=self.traitProofStateEvidence(state: next) /> }
+                                    if !self.assumedTraitInstanceSeen(states: seen, candidate: next, bound: inherited) { seen.append(next) pending.append(next) }
+                                }
+                                clause += 1U64
+                            }
+                        }
+                    }
+                    TraitProofOrigin.Witness => {}
+                }
+            }
             ci = 0U64
             while ci < self.decls.conforms.count() {
                 val edge: Conform = self.decls.conforms[ci]

@@ -1,0 +1,66 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { StaticConformanceProof, PatternTypeInput, PatternBindInput, DeclarationBoundRef }
+
+fn facts(compiler: inout Comp, name: String) -> Array[DeclarationBoundRef] {
+    val identity = compiler.internBytes(s: name).nameId
+    for val conformance in compiler.decls.conforms {
+        if conformance.typeId == identity { return compiler.conformanceBoundAssumptions(bounds: conformance.bounds) }
+    }
+    panic "missing scope"
+}
+fn query(compiler: inout Comp, assumptions: Array[DeclarationBoundRef], target: String, argument: U64, output: U64) -> StaticConformanceProof {
+    val bound = compiler.declarationBound(source: assumptions[0U64])
+    val identity = compiler.internBytes(s: target).nameId
+    mut val index = 0U64
+    while index < compiler.decls.traitOwnerCount() {
+        val declaration = compiler.decls.traitOwnerAt(index: index)
+        if declaration.nameId == identity {
+            return compiler.traitPatternProof(baseRef: bound.subject, traitId: identity, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=[argument] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [compiler.internBytes(s: "Item").nameId], assocValues: [output], assumptions: assumptions).unwrap()
+        }
+        index += 1U64
+    }
+    panic "missing target"
+}
+fn main() {
+    val source = "struct Token {}\nstruct Other {}\ntrait Parent[T] { type Item }\ntrait Middle[T]: Parent[T, Item=T] {}\ntrait Child[T]: Middle[T] {}\ntrait Both: Parent[Token, Item=Token] + Parent[Other, Item=Other] {}\ntrait Target[T] { type Item }\nimpl[T] Parent[T] as Target[T] { type Item=T }\ntrait Scope {}\nstruct Context[A] {}\nimpl[A] Context[A] as Scope where A: Child[Token] {}\nstruct Alternative[A] {}\nimpl[A] Alternative[A] as Scope where A: Child[Other] {}\nstruct Double[A] {}\nimpl[A] Double[A] as Scope where A: Both {}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="supertrait-proof.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val context = facts(compiler: inout compiler, name: "Context")
+    val alternative = facts(compiler: inout compiler, name: "Alternative")
+    val double = facts(compiler: inout compiler, name: "Double")
+    val token = compiler.declarationBound(source: context[0U64]).constraint.key.positionalArgs[0U64]
+    val other = compiler.declarationBound(source: alternative[0U64]).constraint.key.positionalArgs[0U64]
+    val inherited = query(compiler: inout compiler, assumptions: context, target: "Parent", argument: token, output: token)
+    match inherited {
+        StaticConformanceProof.AssumedSupertraitPath(source: val origin, steps: val steps) => {
+            assert(compiler.sameDeclarationBound(a: origin, b: context[0U64]))
+            assert(steps.count() == 2U64)
+        }
+        _ => { panic "missing inherited constraint" }
+    }
+    val path = query(compiler: inout compiler, assumptions: context, target: "Target", argument: token, output: token)
+    match path {
+        StaticConformanceProof.AssumedTraitPath(source: val origin, steps: val steps, edges: val edges) => {
+            assert(compiler.sameDeclarationBound(a: origin, b: context[0U64]))
+            assert(steps.count() == 2U64 && edges.count() == 1U64)
+            assert(edges[0U64].binds.count() == 1U64)
+        }
+        _ => { panic "missing composed proof" }
+    }
+    val first = query(compiler: inout compiler, assumptions: double, target: "Parent", argument: token, output: token)
+    val second = query(compiler: inout compiler, assumptions: double, target: "Parent", argument: other, output: other)
+    assert(!compiler.sameStaticConformanceProof(a: first, b: second))
+    for val proof in [inherited, path, first, second] {
+        match proof { StaticConformanceProof.Missing => { panic "missing proof" } _ => {} }
+        val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: proof))
+        assert(compiler.sameStaticConformanceProof(a: proof, b: restored))
+    }
+    val invalid = query(compiler: inout compiler, assumptions: double, target: "Parent", argument: token, output: other)
+    match invalid { StaticConformanceProof.Missing => {} _ => { panic "mixed inherited instances" } }
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    print("ok")
+}

@@ -434,7 +434,7 @@ pub impl Comp {
                                 while ti < self.decls.traitCount() {
                                     val traitDef: TraitDef = self.decls.traitAt(index: ti)
                                     if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
-                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef edges=[selectedWitness] />
+                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath source=boundRef steps=[] edges=[selectedWitness] />
                                         mut val fi: U64 = 0U64
                                         while fi < self.arena.functionCount() {
                                             val candidate: Func = self.arena.functionAt(index: fi)

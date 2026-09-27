@@ -42,14 +42,16 @@ pub impl Comp {
             StaticConformanceProof.AssumedBound(source: val boundRef) => {
                 self.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) />)
             }
-            StaticConformanceProof.AssumedTraitPath(source: val boundRef, edges: val edges) => {
+            StaticConformanceProof.AssumedTraitPath(source: val boundRef, steps: val steps, edges: val edges) => {
                 val start: U64 = self.arena.staticProofWitnessPool.count()
                 mut val i: U64 = 0U64
                 while i < edges.count() {
                     self.arena.staticProofWitnessPool.append(self.freezeWitnessMatch(witness: edges[i]))
                     i += 1U64
                 }
-                self.arena.staticProofs.append(<StaticProofNode tag=3U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=edges.count() />)
+                val supertraits = self.arena.staticProofSupertraitPool.count()
+                for val step in steps { self.arena.staticProofSupertraitPool.append(step) }
+                self.arena.staticProofs.append(<StaticProofNode supertraits=supertraits supertraitCount=steps.count() tag=3U64 boundKind=self.declarationBoundKind(source: boundRef) boundIdx=self.declarationBoundIndex(source: boundRef) path=start pathCount=edges.count() />)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val boundRef, steps: val steps) => {
                 val start: U64 = self.arena.staticProofSupertraitPool.count()
@@ -149,7 +151,10 @@ pub impl Comp {
                 edges.append(self.thawFrozenWitnessMatch(witness: self.arena.staticProofWitnessPool[node.path + i]))
                 i += 1U64
             }
-            return <StaticConformanceProof.AssumedTraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) edges=edges />
+            mut val steps: Array[SupertraitRef] = []
+            i = 0U64
+            while i < node.supertraitCount { steps.append(self.arena.staticProofSupertraitPool[node.supertraits + i]) i += 1U64 }
+            return <StaticConformanceProof.AssumedTraitPath source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) steps=steps edges=edges />
         }
         if node.tag == 4U64 {
             mut val steps: Array[SupertraitRef] = []
@@ -824,15 +829,25 @@ pub impl Comp {
     // with different conformance paths can resolve `Self` projections and
     // nested requirements differently.  ABI receiver equality alone is not a
     // valid BodyInstance identity.
+    fn sameSupertraitSteps(a: Array[SupertraitRef], b: Array[SupertraitRef]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val index = 0U64
+        while index < a.count() {
+            if a[index].traitIndex != b[index].traitIndex || a[index].boundIndex != b[index].boundIndex { return false }
+            index += 1U64
+        }
+        return true
+    }
+
     inout fn sameStaticConformanceProof(a: StaticConformanceProof, b: StaticConformanceProof) -> Bool {
         match a {
             StaticConformanceProof.Missing => { match b { StaticConformanceProof.Missing => { return true } _ => {} } }
             StaticConformanceProof.ConcreteWitness(witness: val left) => { match b { StaticConformanceProof.ConcreteWitness(witness: val right) => { return self.sameWitnessMatch(a: left, b: right) } _ => {} } }
             StaticConformanceProof.AssumedBound(source: val left) => { match b { StaticConformanceProof.AssumedBound(source: val right) => { return self.sameDeclarationBound(a: left, b: right) } _ => {} } }
-            StaticConformanceProof.AssumedTraitPath(source: val leftBound, edges: val leftEdges) => {
+            StaticConformanceProof.AssumedTraitPath(source: val leftBound, steps: val leftSteps, edges: val leftEdges) => {
                 match b {
-                    StaticConformanceProof.AssumedTraitPath(source: val rightBound, edges: val rightEdges) => {
-                        if !self.sameDeclarationBound(a: leftBound, b: rightBound) || leftEdges.count() != rightEdges.count() { return false }
+                    StaticConformanceProof.AssumedTraitPath(source: val rightBound, steps: val rightSteps, edges: val rightEdges) => {
+                        if !self.sameDeclarationBound(a: leftBound, b: rightBound) || !self.sameSupertraitSteps(a: leftSteps, b: rightSteps) || leftEdges.count() != rightEdges.count() { return false }
                         mut val i: U64 = 0U64
                         while i < leftEdges.count() { if !self.sameWitnessMatch(a: leftEdges[i], b: rightEdges[i]) { return false } i += 1U64 }
                         return true

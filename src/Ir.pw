@@ -1380,7 +1380,7 @@ pub enum StaticConformanceProof {
     AssumedBound(source: DeclarationBoundRef)
     // A declaration-time entailment retains each source witness and its
     // binder substitution, ordered from the bound to the selected trait.
-    AssumedTraitPath(source: DeclarationBoundRef, edges: Array[WitnessMatch])
+    AssumedTraitPath(source: DeclarationBoundRef, steps: Array[SupertraitRef], edges: Array[WitnessMatch])
     // A generic bound also entails every declared supertrait. `steps` is
     // the ordered exact-clause path after the authored bound's trait; it
     // makes that derivation explicit instead of mislabeling `T: Sub` as an
@@ -1440,6 +1440,8 @@ pub struct StaticProofNode {
     pub val boundIdx: U64 = 0U64
     pub val path: U64 = 0U64
     pub val pathCount: U64 = 0U64
+    pub val supertraits: U64 = 0U64
+    pub val supertraitCount: U64 = 0U64
     pub val traitIdx: U64 = 0U64
     pub val receiverRef: U64 = 0U64
     pub val terminalConformIdx: U64 = 0U64
@@ -1481,7 +1483,7 @@ pub impl FrozenEnumPayloadConversion { factory }
 // the eventual canonical ConformanceProof DAG.
 pub enum TraitProofOrigin {
     Witness
-    Assumption(source: DeclarationBoundRef)
+    Assumption(source: DeclarationBoundRef, steps: Array[SupertraitRef])
 }
 
 pub struct TraitProofState {

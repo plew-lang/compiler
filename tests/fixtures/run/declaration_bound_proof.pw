@@ -18,8 +18,8 @@ fn main() {
     val proofs: Array[StaticConformanceProof] = [
         <StaticConformanceProof.AssumedBound source=function />,
         <StaticConformanceProof.AssumedBound source=conformance />,
-        <StaticConformanceProof.AssumedTraitPath source=function edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
-        <StaticConformanceProof.AssumedTraitPath source=conformance edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
+        <StaticConformanceProof.AssumedTraitPath source=function steps=[] edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
+        <StaticConformanceProof.AssumedTraitPath source=conformance steps=[] edges=[<WitnessMatch conformIdx=2U64 />, <WitnessMatch conformIdx=4U64 />] />,
         <StaticConformanceProof.AssumedSupertraitPath source=function steps=[<SupertraitRef traitIndex=2U64 boundIndex=0U64 />, <SupertraitRef traitIndex=4U64 boundIndex=1U64 />] />,
         <StaticConformanceProof.AssumedSupertraitPath source=conformance steps=[<SupertraitRef traitIndex=2U64 boundIndex=0U64 />, <SupertraitRef traitIndex=4U64 boundIndex=1U64 />] />
     ]

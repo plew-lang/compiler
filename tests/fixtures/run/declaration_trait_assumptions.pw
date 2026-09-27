@@ -47,7 +47,7 @@ fn main() {
     val item = compiler.internBytes(s: "Item").nameId
     val proof = compiler.traitPatternProof(baseRef: abstractBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: abstractFacts).unwrap()
     match proof {
-        StaticConformanceProof.AssumedTraitPath(source: val origin, edges: val edges) => {
+        StaticConformanceProof.AssumedTraitPath(source: val origin, steps: _, edges: val edges) => {
             assert(compiler.sameDeclarationBound(a: origin, b: abstractFacts[0U64]))
             assert(edges.count() == 2U64)
             assert(edges[0U64].binds.count() == 1U64 && edges[1U64].binds.count() == 1U64)
@@ -69,7 +69,7 @@ fn main() {
     val shrinkingBound = compiler.declarationBound(source: shrinkingFacts[0U64])
     val smaller = compiler.traitPatternProof(baseRef: shrinkingBound.subject, traitId: 0U64, traitOwner: shrinkingBound.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: shrinkingFacts).unwrap()
     match smaller {
-        StaticConformanceProof.AssumedTraitPath(source: _, edges: val edges) => {
+        StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
             assert(edges.count() == 4U64)
             assert(edges[0U64].conformIdx == edges[2U64].conformIdx)
             assert(!compiler.sameWitnessMatch(a: edges[0U64], b: edges[2U64]))
