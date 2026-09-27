@@ -1,0 +1,7 @@
+pub trait Read { fn value() -> String fn padding() -> I64 }
+pub struct Item {}
+pub impl Item { factory }
+pub impl Item as Read {
+    fn value() -> String { return "ok" }
+    fn padding() -> I64 { return 88I64 }
+}

@@ -868,18 +868,6 @@ pub impl Comp {
         return self.arena.firstConcreteStructNamed(nameId: qId)
     }
 
-    inout fn findTraitIdxByName(start: U64, len: U64) -> U64 {
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val ti: U64 = 0
-        while ti < self.decls.traitCount() {
-            if self.decls.traitAt(index: ti).nameId == qId {
-                return ti
-            }
-            ti += 1
-        }
-        return self.decls.traitCount()
-    }
-
     inout fn addFnThunk(fi: U64) {
         mut val i: U64 = 0
         while i < self.monoWork.fnThunks.count() {

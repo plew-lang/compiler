@@ -3714,22 +3714,7 @@ pub impl Comp {
     // requirement; verification has already established its argument types.
     // Keeping it in Mono makes that choice part of the final-callable record.
     inout fn finalAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
-        if anyRef == 0U64 || anyRef >= self.arena.typeCount() { return 0U64 }
-        val t: TypeRef = self.arena.typeAt(index: anyRef)
-        if !(t.isAny) { return 0U64 }
-        val traitIdx: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
-        if traitIdx >= self.decls.traitCount() { return 0U64 }
-        val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val tr: TraitDef = self.decls.traitAt(index: traitIdx)
-        mut val ri: U64 = 0U64
-        while ri < tr.reqs.count() {
-            val req: Func = self.traitReqAt(reqs: tr.reqs, index: ri)
-            if req.nameId == nameId && self.paramsLabelsOk(params: req.params, args: args) {
-                return ri + 1U64
-            }
-            ri += 1U64
-        }
-        return 0U64
+        return self.recordAnyRequirementSlot(anyRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args)
     }
 
     inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {

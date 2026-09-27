@@ -456,7 +456,7 @@ pub impl Comp {
             return <Result.Ok value=scalarInfo() />
         }
         val t: TypeRef = self.arena.typeAt(index: anyRef)
-        val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
+        val tri: U64 = self.recordAnyTraitIndex(anyRef: anyRef)
         if tri >= self.decls.traitCount() {
             return <Result.Ok value=scalarInfo() />
         }
