@@ -58,3 +58,11 @@ The result retains unresolved call, value, storage and symbolic destruction
 obligations. `clear` means no definite conflict in this analysis, not successful
 whole-program checking. Obligation discharge remains required before this can supply a checked-program
 token. Conflict identity refers to a result node, including synthetic bodies.
+
+Call obligations retain the selected CallTemplate table ID, so the later
+consumer has the original declaration, static proof, or dynamic target along
+with argument/conversion evidence. A missing template, Pending selection, or
+out-of-range direct callee is an analysis error, not a deferred runtime effect.
+The probe corrupts one reachable template after building Mid and requires the
+specific selection error. Trait-bound and closure-call cases cover legitimate
+non-Direct selections without guessing a concrete implementation.

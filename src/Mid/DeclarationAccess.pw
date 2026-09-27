@@ -18,7 +18,7 @@ pub enum DeclarationAccessNode {
 // body indexes the result's nodes array. Canonical instruction IDs are
 // one-based, including statement, so absence never aliases the first row.
 pub enum DeclarationAccessObligation {
-    Call(body: U64, terminator: U64)
+    Call(body: U64, terminator: U64, template: U64)
     Destruction(body: U64, typeTerm: U64, typeRecipe: U64)
     Value(body: U64, value: U64)
     Storage(body: U64, statement: U64)
@@ -26,6 +26,7 @@ pub enum DeclarationAccessObligation {
 pub enum DeclarationAccessError {
     Build(body: DeclarationAccessNode, error: MidBuildError)
     Ownership(body: DeclarationAccessNode)
+    CallSelection(body: DeclarationAccessNode, terminator: U64)
     Frontend(diagnostic: CompileDiagnostic)
 }
 pub struct DeclarationAccessAnalysis {
@@ -81,23 +82,26 @@ impl DeclarationAccessState {
                 self.graph.terminatorOperands(c: c, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
-                    if target.tag == 1U64 {
-                        val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                        val template = c.callTemplateIndex(siteKey: key)
-                        if template < c.decls.callTemplates.count() {
-                            match c.decls.callTemplates[template].kind {
-                                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                                    if callee < c.arena.functionCount() && !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
-                                        self.graph.edge(caller: index, callee: callee, term: block.terminator)
-                                    }
-                                }
-                                _ => {}
+                    // A missing or unfinished selection is a broken frontend
+                    // contract, not an unknown but valid runtime effect.
+                    if target.tag != 1U64 { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                    val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                    val template = c.callTemplateIndex(siteKey: key)
+                    if template >= c.decls.callTemplates.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                    match c.decls.callTemplates[template].kind {
+                        CallTemplateKind.Pending => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                            if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
+                            if !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
+                                self.graph.edge(caller: index, callee: callee, term: block.terminator)
                             }
                         }
+                        _ => {}
                     }
-                    // A known declaration edge does not discharge argument
-                    // conversions, generic substitutions, or access planning.
-                    self.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator />)
+                    // Preserve the selected sum (including proof, argument
+                    // conversions and dynamic target) by immutable table ID.
+                    // StaticMethod is not an edge to a guessed default body.
+                    self.obligations.append(<DeclarationAccessObligation.Call body=index terminator=block.terminator template=template />)
                 }
             }
             blockIndex += 1U64

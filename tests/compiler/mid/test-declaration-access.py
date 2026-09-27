@@ -32,6 +32,8 @@ generic_owner = generic_owner.replace('pub val unused: I64', 'pub val unused: T'
 generic_owner = generic_owner.replace('pub impl Observer {', 'pub impl Observer[T] {')
 generic_owner = generic_owner.replace('<Observer unused=', '<Observer[I64] unused=')
 cases = {
+    'trait-requirement': (source + '\ntrait Reader { fn read() -> I64 }\nfn apply[T](item: T) -> I64 where T: Reader { return item.read() }\n', 'conflict'),
+    'dynamic-call': (source + '\nfn apply(action: fn() -> I64) -> I64 { return action() }\n', 'conflict'),
     'closure-creation-only': (source.replace('val observer = <Observer unused=0I64 />', 'val action = fn() { print(value) }'), 'clear'),
     'nested-closure': (source.replace('fn unused[T]() {', 'fn unused() { val outer = fn() { val inner = fn() {').replace('    print(value)\n}', '    print(value)\n} } }'), 'conflict'),
     'unused-closure': (source.replace('fn unused[T]() {', 'fn unused() { val action = fn() {').replace('    print(value)\n}', '    print(value)\n} }'), 'conflict'),

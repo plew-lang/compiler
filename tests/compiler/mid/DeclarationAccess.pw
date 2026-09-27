@@ -1,7 +1,8 @@
 import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import ../../../src/Ir with { CallTemplate, CallTemplateKind }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/Mid/Build with { MidFunctionTemplates }
-import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode }
+import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode, DeclarationAccessObligation }
 import ../../../src/Mid/Diagnostics with { reportMidBuildError }
 import @Std/Core with { assert }
 import @Std/Process with { argAt }
@@ -25,6 +26,31 @@ fn main() {
             else { print("clear") }
             assert(analysis.obligations.count() > 0U64)
             print("pending")
+            // Corrupt a reachable selection only after Mid has been frozen.
+            // A missing selection must not become an ordinary deferred effect.
+            mut val testedSelection = false
+            mut val obligation = 0U64
+            while obligation < analysis.obligations.count() && !testedSelection {
+                match analysis.obligations[obligation] {
+                    DeclarationAccessObligation.Call(body: _, terminator: _, template: val template) => {
+                        mut val broken = compiler
+                        val selected = broken.decls.callTemplates[template]
+                        broken.decls.callTemplates.set(i: template, value: <CallTemplate siteKey=selected.siteKey resultTypeRecipe=selected.resultTypeRecipe kind=<CallTemplateKind.Pending /> expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm />)
+                        match analyzeDeclarationGlobalAccess(c: inout broken, templates: inout templates) {
+                            Result.Err(error: val error) => {
+                                match error {
+                                    DeclarationAccessError.CallSelection(body: _, terminator: _) => { testedSelection = true }
+                                    _ => { panic "wrong missing-selection diagnostic" }
+                                }
+                            }
+                            Result.Ok(value: _) => { panic "unfinished selection was accepted" }
+                        }
+                    }
+                    _ => {}
+                }
+                obligation += 1U64
+            }
+            assert(testedSelection)
         }
         Result.Err(error: val failure) => {
             match failure {
@@ -35,6 +61,7 @@ fn main() {
                         _ => { print("synthetic body build failed") }
                     }
                 }
+                DeclarationAccessError.CallSelection(body: _, terminator: _) => { print("missing call selection") }
                 DeclarationAccessError.Ownership(body: _) => { print("ownership rewrite failed") }
                 DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
             }
