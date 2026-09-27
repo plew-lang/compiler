@@ -2,13 +2,13 @@ import @Std/Core with { assert }
 import @Std/Io with { print }
 
 struct Cell {
-    pub val values: Array[I64]
+    pub mut val values: Array[I64]
 }
 
 pub impl Cell { factory }
 
 struct Shelf {
-    pub val cells: Array[Cell]
+    pub mut val cells: Array[Cell]
 }
 
 pub impl Shelf { factory }
