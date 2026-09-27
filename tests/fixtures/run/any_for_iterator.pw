@@ -1,13 +1,13 @@
 import @Std/Io with { print }
+import @Std/Core with { Iterator }
 
 // `for x in anyIter` over an existential iterator (spec/08): the for-loop
 // dynamically dispatches `next()` on the `any` value each iteration (the boxed
 // iterator's state advances in place), binding x to each Some payload until None —
 // the ergonomic form of the manual while+match in any_iterator.
-trait Iter2 { type Item  inout fn next() -> Optional[Item] }
 struct Range2 { pub mut val cur: I64  pub val end: I64 }
 pub impl Range2 { factory }
-pub impl Range2 as Iter2 {
+pub impl Range2 as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {
         if self.cur < self.end {
@@ -20,6 +20,6 @@ pub impl Range2 as Iter2 {
 }
 
 fn main() {
-    mut val it: any Iter2[Item=I64] = <Range2 cur=10 end=14 />
+    mut val it: any Iterator[Item=I64] = <Range2 cur=10 end=14 />
     for val x in it { print(x) }   // 10 11 12 13
 }
