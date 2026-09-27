@@ -990,7 +990,21 @@ pub struct TraitDef {
     // (`next() -> Optional[Item]`). The conformance's binding lives in
     // Comp.assocBindings. Default empty for traits without associated types.
     pub val assocTypes: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
+    pub val assocBounds: TraitAssociatedBoundRange = <TraitAssociatedBoundRange start=0U64 len=0U64 />
 }
+
+pub struct TraitAssociatedBound {
+    pub val member: U64
+    pub val constraint: TraitConstraint
+    pub val offset: U64
+}
+pub impl TraitAssociatedBound { factory }
+
+pub struct TraitAssociatedBoundRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TraitAssociatedBoundRange { factory }
 
 // Trait declarations are read throughout resolution and checking. Keep their
 // identity row scalar, just like Conform: each variable-length semantic child
@@ -2930,6 +2944,7 @@ pub struct Decls {
     mut val traitNameTails: Dictionary[U64, U64] = [:]
     mut val traitNameNext: Array[U64] = []
     pub mut val traitBindPool: Array[Bind] = []
+    pub mut val traitAssociatedBoundPool: Array[TraitAssociatedBound] = []
     pub mut val traitReqPool: Array[Func] = []
     mut val traitOwnerRows: Array[TraitOwner] = []
     mut val traitOwnerByOffset: Dictionary[U64, U64] = [:]

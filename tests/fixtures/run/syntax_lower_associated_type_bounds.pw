@@ -1,0 +1,57 @@
+import /Frontend with { Comp }
+import @Plew/Syntax as Syntax
+import @Std/Core with { assert }
+import @Std/Io with { print }
+fn check(compiler: inout Comp) {
+    assert(compiler.decls.traitCount() == 3U64)
+    val declaration = compiler.decls.traitAt(index: 2U64)
+    assert(declaration.assocBounds.len == 3U64)
+    val first = compiler.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: 0U64)
+    val second = compiler.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: 1U64)
+    val third = compiler.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: 2U64)
+    assert(first.member == compiler.internBytes(s: "Iter").nameId)
+    assert(second.member == first.member)
+    assert(third.member == compiler.internBytes(s: "Other").nameId)
+    assert(first.constraint.key.owner == compiler.decls.traitAt(index: 1U64).nameStart)
+    assert(second.constraint.key.owner == compiler.decls.traitAt(index: 0U64).nameStart)
+    assert(first.constraint.assocPredicates.count() == 1U64)
+    val predicate = first.constraint.assocPredicates[0U64]
+    assert(predicate.member == compiler.internBytes(s: "Item").nameId)
+    assert(compiler.arena.typeAt(index: predicate.value).nameId == predicate.member)
+    val parameter = compiler.traitBindAt(binds: declaration.typeParams, index: 0U64)
+    assert(compiler.arena.typeTerms[third.constraint.assocPredicates[0U64].value].paramId == parameter.paramId)
+    assert(first.constraint.key.positionalArgs.count() == 1U64)
+    assert(!first.constraint.positionalArgsOpen)
+    assert(compiler.arena.typeTerms[first.constraint.key.positionalArgs[0U64]].paramId == parameter.paramId)
+    assert(first.offset != 0U64)
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+}
+fn main() {
+    val source = "trait Marker {}\ntrait Cursor[Input] { type Item }\ntrait Collection[T] { type Item type Iter: Cursor[T, Item=Item] + Marker type Other: Cursor[T, Item=T] }\n"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = Syntax.parseProgramSyntaxFile(p: inout parser)
+    mut val compiler = <Comp />
+    compiler.appendSrc(from: source.bytes())
+    compiler.syntax = file
+    mut val index = 0U64
+    while index < 3U64 { compiler.predeclareSyntaxTraitItem(item: Syntax.syntaxFileTopLevel(file: file, index: index)) index += 1U64 }
+    index = 0U64
+    while index < 3U64 {
+        val item = Syntax.syntaxFileTopLevel(file: file, index: index)
+        compiler.lowerSyntaxTrait(t: Syntax.syntaxTrait(file: file, id: <Syntax.TraitId raw=Syntax.syntaxTopItemPayload(file: file, item: item) />)).unwrap()
+        index += 1U64
+    }
+    check(compiler: inout compiler)
+    mut val valueParser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val values = Syntax.parseProgramAst(p: inout valueParser)
+    mut val legacy = <Comp />
+    legacy.appendSrc(from: source.bytes())
+    for val item in values { legacy.predeclareTraitItem(item: item) }
+    for val item in values {
+        match item { Syntax.TopItemAst.Trait(t: val trait) => { legacy.lowerTrait(t: trait).unwrap() } _ => {} }
+    }
+    check(compiler: inout legacy)
+    print("ok")
+}

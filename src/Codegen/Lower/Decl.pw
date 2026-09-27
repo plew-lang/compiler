@@ -527,86 +527,79 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn lowerValueTraitConstraint(traitType: TypeAst, fnIdx: U64 = 18446744073709551615U64, types: Array[TypeAst] = [], traits: Array[String] = []) -> Result[TraitConstraint, CompileDiagnostic] {
+        val tn = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
+        mut val boundArgs: Array[U64] = []
+        mut val boundAssocNames: Array[U64] = []
+        mut val boundAssocValues: Array[U64] = []
+        mut val ai: U64 = 0U64
+        while ai < traitType.args.count() {
+            val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai], whereTypes: types, whereTraits: traits)))).ref
+            mut val label: U64 = 0U64
+            if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
+                val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
+                label = labelBind.nameId
+            }
+            if label == 0U64 { boundArgs.append(boundRef) }
+            else {
+                boundAssocNames.append(label)
+                boundAssocValues.append(boundRef)
+            }
+            ai += 1U64
+        }
+        // Resolve the trait spelling at its authored use once.  An import
+        // alias is a surface name, not the semantic trait identity stored
+        // in a bound: every later proof/query must see the declaration
+        // owner just as `impl … as Trait` does.
+        // Resolve at the authored span even when the convenience spelling
+        // was interned elsewhere: an alias must retain its declaration owner.
+        mut val traitUseStart: U64 = tn.nameStart
+        mut val traitUseLen: U64 = tn.nameLen
+        // Some synthesized bounds carry the semantic TypeAst but no
+        // source span.  A zero/empty span is not an authored lookup site;
+        // keep the caller's spelling in that case rather than resolving
+        // offset 0 in the entry module.
+        if traitType.nameSpan.end > traitType.nameSpan.start {
+            traitUseStart = traitType.nameSpan.start
+            traitUseLen = traitType.nameSpan.end - traitType.nameSpan.start
+        }
+        val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64)
+        mut val resolvedOwner: U64 = owner
+        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() {
+            resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId, arity: boundArgs.count())
+        }
+        // A bound with no written positional arguments is open, not
+        // necessarily an arity-zero trait (`where T: Add` means an
+        // unspecified `Add[Rhs]`).  Resolve its lexical declaration only
+        // when that surface is unique; a same-spelled ambiguity remains a
+        // source error rather than silently picking an arity.
+        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
+            resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        mut val pi: U64 = 0U64
+        while pi < boundAssocNames.count() && pi < boundAssocValues.count() {
+            predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=traitUseStart />)
+            pi += 1U64
+        }
+        // An omitted positional argument list remains open independently
+        // of the selected declaration's arity.
+        val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
+        return <Result.Ok value=constraint />
+    }
+
     inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
+        mut val i = 0U64
         while i < params.count() {
-            val pn: Bind = self.internBytes(s: params[i])
+            val pn = self.internBytes(s: params[i])
             mut val traitType = <TypeAst name=traits[i] args=[] span=<Span start=0 end=0 /> />
-            if i < traitTypes.count() {
-                traitType = (try self.normalizeProjectionType(t: traitTypes[i], whereTypes: types, whereTraits: traits))
-            }
-            val tn: Bind = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
-            mut val pty: U64 = 0
-            if i < types.count() {
-                pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref
-            } else {
-                pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen)
-            }
-            mut val boundArgs: Array[U64] = []
-            mut val boundAssocNames: Array[U64] = []
-            mut val boundAssocValues: Array[U64] = []
-            if i < traitTypes.count() {
-                mut val ai: U64 = 0U64
-                while ai < traitType.args.count() {
-                    val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai], whereTypes: types, whereTraits: traits)))).ref
-                    mut val label: U64 = 0U64
-                    if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
-                        val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
-                        label = labelBind.nameId
-                    }
-                    if label == 0U64 { boundArgs.append(boundRef) }
-                    else {
-                        boundAssocNames.append(label)
-                        boundAssocValues.append(boundRef)
-                    }
-                    ai += 1U64
-                }
-            }
-            // Resolve the trait spelling at its authored use once.  An import
-            // alias is a surface name, not the semantic trait identity stored
-            // in a bound: every later proof/query must see the declaration
-            // owner just as `impl … as Trait` does.
-            // `traits[i]` is a convenience spelling and may have been
-            // re-interned away from the authored `where` clause.  Trait
-            // identity is resolved at that use site: `where T: BP` must
-            // retain B.P rather than some same-spelled imported P.
-            mut val traitUseStart: U64 = tn.nameStart
-            mut val traitUseLen: U64 = tn.nameLen
-            // Some synthesized bounds carry the semantic TypeAst but no
-            // source span.  A zero/empty span is not an authored lookup site;
-            // keep the caller's spelling in that case rather than resolving
-            // offset 0 in the entry module.
-            if traitType.nameSpan.end > traitType.nameSpan.start {
-                traitUseStart = traitType.nameSpan.start
-                traitUseLen = traitType.nameSpan.end - traitType.nameSpan.start
-            }
-            val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64)
-            mut val resolvedOwner: U64 = owner
-            if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() {
-                resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId, arity: boundArgs.count())
-            }
-            // A bound with no written positional arguments is open, not
-            // necessarily an arity-zero trait (`where T: Add` means an
-            // unspecified `Add[Rhs]`).  Resolve its lexical declaration only
-            // when that surface is unique; a same-spelled ambiguity remains a
-            // source error rather than silently picking an arity.
-            if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
-                resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
-            }
-            mut val predicates: Array[TraitAssocPredicate] = []
-            mut val pi: U64 = 0U64
-            while pi < boundAssocNames.count() && pi < boundAssocValues.count() {
-                predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=traitUseStart />)
-                pi += 1U64
-            }
-            // An empty authored argument list is an open bound (`T: Add`),
-            // including when Add happens to have arity zero.  The latter has
-            // identical observable matching today, while retaining this bit
-            // makes the distinction available without reopening FuncBound's
-            // legacy arrays.
-            val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
+            if i < traitTypes.count() { traitType = try self.normalizeProjectionType(t: traitTypes[i], whereTypes: types, whereTraits: traits) }
+            mut val pty = 0U64
+            if i < types.count() { pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref }
+            else { pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen) }
+            val constraint = try self.lowerValueTraitConstraint(traitType: traitType, fnIdx: fnIdx, types: types, traits: traits)
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
-            i += 1
+            i += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -623,8 +616,7 @@ pub impl Comp {
     // One semantic sink for every SyntaxFile where-clause owner.  Declaration,
     // impl and member readers differ only in how they enumerate their typed
     // pools; trait identity and associated-predicate construction live here.
-    inout fn appendSyntaxBound(fnIdx: U64, param: Span, rawTrait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {
-        val pty: U64 = (try self.lowerSyntaxType(id: ty)).ref
+    inout fn lowerSyntaxTraitConstraint(traitTy: TypeId, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
         val traitType: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitTy)))
         val trait = traitType.name
         mut val args: Array[U64] = []
@@ -650,7 +642,13 @@ pub impl Comp {
             predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=trait.start />)
             ai += 1U64
         }
-        self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />)
+        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />
+    }
+
+    inout fn appendSyntaxBound(fnIdx: U64, param: Span, rawTrait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {
+        val pty = (try self.lowerSyntaxType(id: ty)).ref
+        val constraint = try self.lowerSyntaxTraitConstraint(traitTy: traitTy, fnIdx: fnIdx)
+        self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=constraint />)
         return <Result.Ok value=() />
     }
 }

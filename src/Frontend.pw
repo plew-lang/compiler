@@ -1,3 +1,5 @@
+import ./Ir with { TraitAssociatedBound, TraitAssociatedBoundRange }
+import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }
 import ./SourceAccess with { SourceAccess }
 import @Std/Set with { Set }
@@ -305,6 +307,16 @@ pub impl Comp {
 
     fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
         return self.arena.matchArmPool[arms.start + index]
+    }
+
+    inout fn pushTraitAssociatedBounds(bounds: Array[TraitAssociatedBound]) -> TraitAssociatedBoundRange {
+        val start = self.decls.traitAssociatedBoundPool.count()
+        for val bound in bounds { self.decls.traitAssociatedBoundPool.append(bound) }
+        return <TraitAssociatedBoundRange start=start len=bounds.count() />
+    }
+
+    fn traitAssociatedBoundAt(bounds: TraitAssociatedBoundRange, index: U64) -> TraitAssociatedBound {
+        return self.decls.traitAssociatedBoundPool[bounds.start + index]
     }
 
     inout fn pushTraitBinds(binds: Array[Bind]) -> TraitBindRange {

@@ -1142,8 +1142,15 @@ pub impl Comp {
             reqs.append((try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)))
             ri += 1
         }
+        mut val associatedBounds: Array[TraitAssociatedBound] = []
+        for val associated in t.assocTypes {
+            val member = self.internBytes(s: associated.name).nameId
+            for val bound in associated.bounds {
+                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound, whereTypes: [], whereTraits: [])))) offset=bound.span.start />)
+            }
+        }
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
+        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
@@ -1197,8 +1204,21 @@ pub impl Comp {
             reqs.append((try self.lowerSyntaxSigToFunc(sig: syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i)), isExtern: false, isCExtern: false)))
             i += 1U64
         }
+        mut val associatedBounds: Array[TraitAssociatedBound] = []
+        i = 0U64
+        while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
+            val associated = syntaxTraitAssocType(file: self.syntax, trait: t, index: i)
+            val member = intern(c: inout self, start: associated.name.start, len: associated.name.end - associated.name.start)
+            mut val boundIndex = 0U64
+            while boundIndex < associated.bounds.count {
+                val boundId = syntaxAssociatedTypeBound(file: self.syntax, associated: associated, index: boundIndex)
+                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerSyntaxTraitConstraint(traitTy: boundId)) offset=syntaxType(file: self.syntax, id: boundId).span.start />)
+                boundIndex += 1U64
+            }
+            i += 1U64
+        }
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
+        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
         return <Result.Ok value=() />
     }
