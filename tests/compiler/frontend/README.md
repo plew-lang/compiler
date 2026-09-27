@@ -77,3 +77,13 @@ closure, derive visibility, and parameter ownership modes. The gen failure mode
 sets the production gen option while preserving the same returning boundary. FrontendInputs also verifies that
 a missing source returns an error before independent valid requests succeed.
 This covers migrated boundaries; other frontend checks still terminate.
+
+`DestructionShape.pw` checks declaration-only destruction selection. Compile and
+link it with the same procedure as the other frontend probes, then pass
+`DestructionShapeInput.pw` and the trailing-slash standard-library path. Require
+exit 0, empty stderr, and `destruction-shape:ok` on stdout. It compares every
+available finalized contract with its declaration shape, verifies a destructor
+is discoverable, and asserts that shape queries add no executable body,
+final destruction contract, or record layout. The compiler source itself is
+also a valid input. Open TypeTerms are deliberately not passed to this
+closed-type API; their dependencies remain separate analysis obligations.

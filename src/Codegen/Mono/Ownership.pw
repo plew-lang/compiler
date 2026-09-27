@@ -220,6 +220,68 @@ pub impl Comp {
         return <Result.Ok value=needs[identity - 1U64 - start] />
     }
 
+    // Requires a closed TypeTerm. Declaration checking must retain unresolved
+    // terms/recipes as obligations rather than interpreting them as empty shapes.
+    // No layout is collected and no executable body or destruction is enqueued.
+    inout fn closedDestructionShape(typeRef: U64) -> DestructionShape {
+        if typeRef == 0U64 { return <DestructionShape /> }
+        val type = self.arena.typeAt(index: typeRef)
+        mut val fields: Array[U64] = []
+        mut val boxed: Array[Bool] = []
+        mut val variantStarts: Array[U64] = []
+        mut val structureDeclaration = 0U64
+        mut val destructorDeclaration = 0U64
+        mut val hasStructStorage = false
+        mut val underlying = 0U64
+        mut val isOpaquePointer = rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr")
+        if type.isRecord {
+            fields = type.recordFieldTerms
+            mut val field = 0U64
+            while field < fields.count() { boxed.append(false)
+                field += 1U64 }
+        } else {
+            underlying = self.newtypeUnderlying(ref: typeRef)
+            if underlying == typeRef { underlying = 0U64 }
+            if underlying == 0U64 {
+                val structure = self.structIndexForType(ref: typeRef)
+                if structure < self.arena.structCount() {
+                    val declaration = self.arena.structAt(index: structure)
+                    structureDeclaration = structure + 1U64
+                    isOpaquePointer = declaration.isCExtern || (declaration.isExtern && type.args.count() > 0U64)
+                    hasStructStorage = !declaration.isExtern && !declaration.isCExtern
+                    if declaration.isUnique {
+                        val function = self.structOwnDeinitFi(sidx: structure)
+                        if function < self.arena.functionCount() { destructorDeclaration = function + 1U64 }
+                    }
+                    mut val field = 0U64
+                    while field < declaration.fields.count() {
+                        fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                        boxed.append(self.fieldIsBoxed(f: declaration.fields[field]))
+                        field += 1U64
+                    }
+                } else {
+                    val enumeration = self.enumIndexForType(ref: typeRef)
+                    if enumeration < self.arena.enumCount() {
+                        val declaration = self.arena.enumAt(index: enumeration)
+                        variantStarts.append(fields.count())
+                        mut val variant = 0U64
+                        while variant < declaration.variants.count() {
+                            mut val field = 0U64
+                            while field < declaration.variants[variant].fields.count() {
+                                fields.append(self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
+                                boxed.append(self.fieldIsBoxed(f: declaration.variants[variant].fields[field]))
+                                field += 1U64
+                            }
+                            variantStarts.append(fields.count())
+                            variant += 1U64
+                        }
+                    }
+                }
+            }
+        }
+        return <DestructionShape structureDeclaration=structureDeclaration destructorDeclaration=destructorDeclaration hasStructStorage=hasStructStorage isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+    }
+
     inout fn collectFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
@@ -240,14 +302,9 @@ pub impl Comp {
         while self.arena.finalDestructionIds.count() <= typeRef { self.arena.finalDestructionIds.append(0U64) }
         self.arena.finalDestructionIds[typeRef] = contract
         val ownershipClass = (try self.arcClassOfRef(ref: typeRef))
-        mut val fields: Array[U64] = []
-        mut val boxed: Array[Bool] = []
-        mut val variantStarts: Array[U64] = []
+        val shape = self.closedDestructionShape(typeRef: typeRef)
         mut val destructor = 0U64
-        mut val underlying = 0U64
         mut val structLayout = 0U64
-        // CPtr is a builtin FFI type constructor without a StructDef.
-        mut val isOpaquePointer = rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "CPtr")
         if type.isRecord {
             try self.collectRecordLayout(ref: typeRef)
             val layout = self.recordStructIndex(ref: typeRef)
@@ -255,75 +312,28 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: finalized record has no physical layout") />
             }
             structLayout = layout + 1U64
-            fields = type.recordFieldTerms
-            mut val field = 0U64
-            while field < fields.count() {
-                boxed.append(false)
-                field += 1U64
-            }
+        } else if shape.underlying != 0U64 {
+            try self.collectFinalDestruction(typeRef: shape.underlying)
         } else {
-            underlying = self.newtypeUnderlying(ref: typeRef)
-            if underlying == typeRef { underlying = 0U64 }
-            if underlying != 0U64 {
-                try self.collectFinalDestruction(typeRef: underlying)
-            } else {
-                // Structural layout is independent of the specialized ARC
-                // action (String/Buffer/Ref/Promise). Freeze declared fields
-                // even when that action is not StructVal.
-                val structure = self.structIndexForType(ref: typeRef)
-                if structure < self.arena.structCount() {
-                    val declaration = self.arena.structAt(index: structure)
-                    isOpaquePointer = declaration.isCExtern || (declaration.isExtern && type.args.count() > 0U64)
-                    if !declaration.isExtern && !declaration.isCExtern { structLayout = structure + 1U64 }
-                    if declaration.isUnique {
-                        val function = self.structOwnDeinitFi(sidx: structure)
-                        if function < self.arena.functionCount() {
-                            destructor = (try self.enqueueFinalBody(fnIdx: function, args: type.args, recvInstRef: typeRef))
-                        }
-                    }
-                    mut val field = 0U64
-                    while field < declaration.fields.count() {
-                        fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
-                        boxed.append(self.fieldIsBoxed(f: declaration.fields[field]))
-                        field += 1U64
-                    }
-                }
-                match ownershipClass {
-                    ArcClass.StructVal(sidx: _) => {}
-                    ArcClass.EnumVal(eidx: val index) => {
-                        val declaration = self.arena.enumAt(index: index)
-                        variantStarts.append(fields.count())
-                        mut val variant = 0U64
-                        while variant < declaration.variants.count() {
-                            mut val field = 0U64
-                            while field < declaration.variants[variant].fields.count() {
-                                fields.append(self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
-                                boxed.append(self.fieldIsBoxed(f: declaration.variants[variant].fields[field]))
-                                field += 1U64
-                            }
-                            variantStarts.append(fields.count())
-                            variant += 1U64
-                        }
-                    }
-                    ArcClass.BufferLike(elem: val element) => { try self.collectFinalDestruction(typeRef: element) }
-                    ArcClass.RefCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
-                    ArcClass.PromiseCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
-                    // Weak references do not own their pointee. Erased values
-                    // close their concrete owners at construction instead.
-                    ArcClass.WeakCell(inst: _) => {}
-                    ArcClass.ClosureVal => {}
-                    ArcClass.AnyBox => {}
-                    ArcClass.StringLike => {}
-                    ArcClass.Scalar => {}
-                }
+            if shape.hasStructStorage { structLayout = shape.structureDeclaration }
+            if shape.destructorDeclaration != 0U64 {
+                destructor = try self.enqueueFinalBody(fnIdx: shape.destructorDeclaration - 1U64, args: type.args, recvInstRef: typeRef)
+            }
+            match ownershipClass {
+                ArcClass.BufferLike(elem: val element) => { try self.collectFinalDestruction(typeRef: element) }
+                ArcClass.RefCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                ArcClass.PromiseCell(inst: val instance) => { try self.collectFinalDestruction(typeRef: self.arena.typeAt(index: instance).args[0U64]) }
+                // Weak references do not own their pointee. Erased values
+                // close their concrete owners at construction instead.
+                _ => {}
             }
         }
         mut val field = 0U64
-        while field < fields.count() {
-            try self.collectFinalDestruction(typeRef: fields[field])
+        while field < shape.fieldTypes.count() {
+            try self.collectFinalDestruction(typeRef: shape.fieldTypes[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef isUnique=self.typeTermIsUnique(ref: typeRef) ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=isOpaquePointer underlying=underlying fieldTypes=fields fieldBoxed=boxed variantFieldStarts=variantStarts />
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef isUnique=self.typeTermIsUnique(ref: typeRef) ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=shape.isOpaquePointer underlying=shape.underlying fieldTypes=shape.fieldTypes fieldBoxed=shape.fieldBoxed variantFieldStarts=shape.variantFieldStarts />
         return <Result.Ok value=() />
     }
 }

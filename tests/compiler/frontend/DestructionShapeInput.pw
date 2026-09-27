@@ -1,0 +1,9 @@
+import @Std/Core with { Ref }
+import @Std/Io with { print }
+unique struct Observer {
+    val code: I64
+    deinit { print(self.code) }
+}
+struct Box[T] { val value: T }
+fn unused(value: Box[Ref[Observer]]) {}
+fn main() {}

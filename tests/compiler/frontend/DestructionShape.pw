@@ -1,0 +1,57 @@
+// Selecting destruction dependencies must not make their bodies executable.
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import @Std/Core with { assert }
+import @Std/Process with { argAt }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
+        sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    val instances = compiler.arena.bodyInstanceCount()
+    val bodies = compiler.monoWork.bodyInstances.count()
+    val destructions = compiler.arena.finalDestructions.count()
+    val structures = compiler.arena.structCount()
+    val types = compiler.arena.typeCount()
+    mut val destructors = 0U64
+    mut val compared = 0U64
+    mut val index = 1U64
+    while index < types {
+        if compiler.typeTermIsClosed(ref: index) {
+            val shape = compiler.closedDestructionShape(typeRef: index)
+            if shape.destructorDeclaration != 0U64 { destructors += 1U64 }
+            val contractId = compiler.finalDestructionIndex(typeRef: index)
+            if contractId != 0U64 {
+                compared += 1U64
+                val contract = compiler.arena.finalDestructions[contractId - 1U64]
+                assert(compiler.typeRefEq(a: shape.underlying, b: contract.underlying))
+                assert(shape.fieldTypes.count() == contract.fieldTypes.count())
+                assert(shape.fieldBoxed.count() == contract.fieldBoxed.count())
+                assert(shape.variantFieldStarts.count() == contract.variantFieldStarts.count())
+                assert(shape.isOpaquePointer == contract.isOpaquePointer)
+                mut val field = 0U64
+                while field < shape.fieldTypes.count() {
+                    assert(compiler.typeRefEq(a: shape.fieldTypes[field], b: contract.fieldTypes[field]))
+                    assert(shape.fieldBoxed[field] == contract.fieldBoxed[field])
+                    field += 1U64
+                }
+                field = 0U64
+                while field < shape.variantFieldStarts.count() {
+                    assert(shape.variantFieldStarts[field] == contract.variantFieldStarts[field])
+                    field += 1U64
+                }
+                if contract.deinitCall.bodyId != 0U64 {
+                    assert(shape.destructorDeclaration == compiler.arena.bodyInstanceAt(index: contract.deinitCall.bodyId - 1U64).fnIdx + 1U64)
+                } else { assert(shape.destructorDeclaration == 0U64) }
+            }
+        }
+        index += 1U64
+    }
+    assert(destructors > 0U64 && compared > 0U64)
+    assert(compiler.arena.bodyInstanceCount() == instances)
+    assert(compiler.monoWork.bodyInstances.count() == bodies)
+    assert(compiler.arena.finalDestructions.count() == destructions)
+    assert(compiler.arena.structCount() == structures)
+    print("destruction-shape:ok")
+}

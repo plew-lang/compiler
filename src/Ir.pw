@@ -3131,6 +3131,21 @@ pub struct FinalDestructorCall {
 }
 pub impl FinalDestructorCall { factory }
 
+// Declaration dependencies of destroying a closed type, before layout or
+// executable-body discovery. IDs below name source declarations, not instances.
+// Intrinsic ownership actions are classified separately by the shared ARC rule.
+pub struct DestructionShape {
+    pub val structureDeclaration: U64 = 0U64
+    pub val destructorDeclaration: U64 = 0U64
+    pub val hasStructStorage: Bool = false
+    pub val isOpaquePointer: Bool = false
+    pub val underlying: U64 = 0U64
+    pub val fieldTypes: Array[U64] = []
+    pub val fieldBoxed: Array[Bool] = []
+    pub val variantFieldStarts: Array[U64] = []
+}
+pub impl DestructionShape { factory }
+
 pub struct FinalDestruction {
     // Nominal copyability is independent of whether releasing does any work.
     pub val isUnique: Bool = false
