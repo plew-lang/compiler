@@ -1,4 +1,4 @@
-import ./Ir with { TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+import ./Ir with { DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }
 import ./SourceAccess with { SourceAccess }

@@ -1340,20 +1340,37 @@ pub impl WitnessMatch { factory }
 // any concrete witness exists; trait-to-trait entailment retains every edge
 // instantiation as a predecessor DAG. Runtime existential evidence is not a
 // member of this enum (it cannot prove a generic static bound).
+// A proof assumption names its authored declaration table. Equal numeric
+// indices from different tables are distinct evidence; neither needs a fake
+// function declaration to participate in generic checking.
+pub enum DeclarationBoundRef {
+    Function(index: U64)
+    Conformance(index: U64)
+}
+
+// Common read-only semantic view of an authored condition. Storage and source
+// ownership remain with FuncBound or the conformance's bound range.
+pub struct TraitBound {
+    pub val subject: U64
+    pub val constraint: TraitConstraint
+    pub val offset: U64
+}
+pub impl TraitBound { factory }
+
 pub enum StaticConformanceProof {
     Missing
     ConcreteWitness(witness: WitnessMatch)
-    AssumedBound(boundIdx: U64)
+    AssumedBound(source: DeclarationBoundRef)
     // A declaration-time entailment from an authored bound. `edges` are
     // zero-based Conform indices for trait-subject edges, ordered from the
     // bound trait to the selected target trait. They are symbolic patterns;
     // BodyInstance grounds/validates the receiver later.
-    AssumedTraitPath(boundIdx: U64, edges: Array[U64])
+    AssumedTraitPath(source: DeclarationBoundRef, edges: Array[U64])
     // A generic bound also entails every declared supertrait. `traits` is
     // the ordered TraitDef-index path after the authored bound's trait; it
     // makes that derivation explicit instead of mislabeling `T: Sub` as an
     // authored `T: Super` bound.
-    AssumedSupertraitPath(boundIdx: U64, traits: Array[U64])
+    AssumedSupertraitPath(source: DeclarationBoundRef, traits: Array[U64])
     // Every trait-provided body is abstract over its receiver, but unlike an
     // ordinary generic function it has an implicit `Self: ThisTrait`
     // constraint.  Carry that declaration-time evidence explicitly so Record
@@ -1404,6 +1421,7 @@ pub struct StaticProofNode {
     pub val witnessBinds: U64 = 0U64
     pub val witnessBindCount: U64 = 0U64
     pub val witnessSelfRef: U64 = 0U64
+    pub val boundKind: U64 = 0U64
     pub val boundIdx: U64 = 0U64
     pub val path: U64 = 0U64
     pub val pathCount: U64 = 0U64

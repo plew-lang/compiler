@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { ValueConversionProof, EnumPayloadConversion, StaticConformanceProof }
+import /Ir with { DeclarationBoundRef, ValueConversionProof, EnumPayloadConversion, StaticConformanceProof }
 
 fn describe(proof: ValueConversionProof) {
     match proof {
@@ -23,7 +23,7 @@ fn describe(proof: ValueConversionProof) {
 
 fn main() {
     mut val compiler: Comp = <Comp />
-    val leaf: ValueConversionProof = <ValueConversionProof.ExistentialBox sourceRef=11U64 targetRef=12U64 traitIdx=13U64 proof=<StaticConformanceProof.AssumedBound boundIdx=7U64 /> />
+    val leaf: ValueConversionProof = <ValueConversionProof.ExistentialBox sourceRef=11U64 targetRef=12U64 traitIdx=13U64 proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=7U64 /> /> />
     val inner: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=21U64 targetRef=22U64 enumIdx=23U64 payloads=[<EnumPayloadConversion sourceRef=31U64 targetRef=31U64 conversion=<ValueConversionProof.Identity /> />] />
     val tree: ValueConversionProof = <ValueConversionProof.EnumRepack sourceRef=41U64 targetRef=42U64 enumIdx=43U64 payloads=[
         <EnumPayloadConversion sourceRef=21U64 targetRef=22U64 conversion=inner />,

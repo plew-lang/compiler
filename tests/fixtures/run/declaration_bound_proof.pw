@@ -1,0 +1,41 @@
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { DeclarationBoundRef, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, FuncBound, ConformBound, StaticConformanceProof, StaticProofNode }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    val constraint = <TraitConstraint key=<TraitInstanceKey owner=17U64 positionalArgs=[19U64] /> positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=23U64 value=29U64 span=31U64 />] />
+    compiler.decls.funcBounds.append(<FuncBound fnIdx=3U64 paramStart=5U64 paramLen=1U64 paramTy=7U64 constraint=constraint />)
+    val range = compiler.pushConformBounds(bounds: [<ConformBound subject=11U64 constraint=constraint offset=13U64 />])
+    val function = <DeclarationBoundRef.Function index=0U64 />
+    val conformance = <DeclarationBoundRef.Conformance index=range.start />
+    if !compiler.declarationBoundIsValid(source: function) || !compiler.declarationBoundIsValid(source: conformance) { panic "missing declaration bound" }
+    if compiler.declarationBoundIsValid(source: <DeclarationBoundRef.Function index=1U64 />) || compiler.declarationBoundIsValid(source: <DeclarationBoundRef.Conformance index=range.start + range.len />) { panic "invalid declaration bound accepted" }
+    val first = compiler.declarationBound(source: function)
+    val second = compiler.declarationBound(source: conformance)
+    if first.subject != 7U64 || first.offset != 5U64 || second.subject != 11U64 || second.offset != 13U64 { panic "wrong declaration owner" }
+    if second.constraint.key.owner != 17U64 || second.constraint.key.positionalArgs[0U64] != 19U64 || second.constraint.assocPredicates[0U64].value != 29U64 { panic "lost constraint terms" }
+    val proofs: Array[StaticConformanceProof] = [
+        <StaticConformanceProof.AssumedBound source=function />,
+        <StaticConformanceProof.AssumedBound source=conformance />,
+        <StaticConformanceProof.AssumedTraitPath source=function edges=[2U64, 4U64] />,
+        <StaticConformanceProof.AssumedTraitPath source=conformance edges=[2U64, 4U64] />,
+        <StaticConformanceProof.AssumedSupertraitPath source=function traits=[2U64, 4U64] />,
+        <StaticConformanceProof.AssumedSupertraitPath source=conformance traits=[2U64, 4U64] />
+    ]
+    mut val ids: Array[U64] = []
+    for val proof in proofs { ids.append(compiler.freezeStaticConformanceProof(proof: proof)) }
+    mut val index = 0U64
+    while index < proofs.count() {
+        val restored = compiler.thawStaticConformanceProof(id: ids[index])
+        if !compiler.sameStaticConformanceProof(a: restored, b: proofs[index]) { panic "proof reference changed during roundtrip" }
+        if index % 2U64 == 0U64 && compiler.sameStaticConformanceProof(a: restored, b: proofs[index + 1U64]) { panic "different declaration tables alias" }
+        index += 1U64
+    }
+    compiler.arena.staticProofs.append(<StaticProofNode tag=2U64 boundKind=99U64 boundIdx=0U64 />)
+    match compiler.thawStaticConformanceProof(id: compiler.arena.staticProofs.count()) {
+        StaticConformanceProof.Missing => {}
+        _ => { panic "corrupt bound kind accepted" }
+    }
+    print("ok")
+}
