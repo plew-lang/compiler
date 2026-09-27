@@ -1,5 +1,5 @@
 // Cross-module shared-mutable state — module A: an exported struct with pub-mut
-// fields + pub factory, a nested-struct case, and a pub mutating method. Guards
+// fields + the factory, a nested-struct case, and a pub mutating method. Guards
 // that a DIFFERENT module can mutate these across an `inout` boundary (the path
 // the compiler's own module-split layout depends on).
 pub struct Counter {
