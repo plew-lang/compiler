@@ -372,11 +372,11 @@ pub impl Comp {
             }
         }
         mut val params: Array[Bind] = []
-        val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+        val si: U64 = self.structIndexForType(ref: ref)
         if si < self.arena.structCount() {
             params = self.arena.structAt(index: si).typeParams
         } else {
-            val ei: U64 = self.genericEnumIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+            val ei: U64 = self.enumIndexForType(ref: ref)
             if ei < self.arena.enumCount() { params = self.arena.enumAt(index: ei).typeParams }
         }
         if params.count() != recv.args.count() { return 0U64 }

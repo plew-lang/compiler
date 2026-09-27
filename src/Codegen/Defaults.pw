@@ -324,8 +324,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected construction instance") />
             return <Result.Ok value=self.arena.exprs.count() />
         }
-        val instanceType: TypeRef = self.arena.typeAt(index: instance)
-        val structIndex: U64 = self.anyStructIndex(nameStart: instanceType.nameStart, nameLen: instanceType.nameLen)
+        val structIndex: U64 = self.structIndexForType(ref: instance)
         val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
         if structIndex >= self.decls.fieldDefaultGeneratorRanges.count() {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration owner") />

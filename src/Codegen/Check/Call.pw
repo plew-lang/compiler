@@ -359,11 +359,12 @@ pub impl Comp {
     }
 
     inout fn recvOwnParamCount(rt: TypeInfo) -> U64 {
-        val si: U64 = self.genericStructIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
+        val receiver = self.typedIrRefOfInfo(ti: rt)
+        val si: U64 = self.structIndexForType(ref: receiver)
         if si < self.arena.structCount() {
             return self.arena.structAt(index: si).typeParams.count()
         }
-        val ei: U64 = self.genericEnumIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
+        val ei: U64 = self.enumIndexForType(ref: receiver)
         if ei < self.arena.enumCount() {
             return self.arena.enumAt(index: ei).typeParams.count()
         }

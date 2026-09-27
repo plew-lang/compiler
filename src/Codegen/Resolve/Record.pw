@@ -169,9 +169,9 @@ pub impl Comp {
         val storage = self.fieldStorageTypeRef(receiverRef: term)
         if storage == 0U64 { return <Result.Ok value=0U64 />}
         val type = self.arena.typeAt(index: storage)
-        val structIndex = self.genericStructIndex(nameStart: type.nameStart, nameLen: type.nameLen)
+        val structIndex = self.structIndexForType(ref: storage)
         if structIndex < self.arena.structCount() && self.arena.structAt(index: structIndex).typeParams.count() != type.args.count() { return <Result.Ok value=0U64 />}
-        val enumIndex = self.genericEnumIndex(nameStart: type.nameStart, nameLen: type.nameLen)
+        val enumIndex = self.enumIndexForType(ref: storage)
         if enumIndex < self.arena.enumCount() && self.arena.enumAt(index: enumIndex).typeParams.count() != type.args.count() { return <Result.Ok value=0U64 />}
         return <Result.Ok value=term />
     }
