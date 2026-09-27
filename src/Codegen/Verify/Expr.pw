@@ -860,7 +860,7 @@ pub impl Comp {
                 if st.ref != 0U64 {
                     ft = (try self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
                 } else {
-                    ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                    ft = (try self.genericFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: st), fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
                 }
                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: ownsPayload)
                 bi += 1

@@ -2901,7 +2901,7 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 // are frozen during that preparation; only immutable parametric snapshots
 // are shared. Grounded adapters and synthetic bodies remain instance-owned.
 pub struct MidFunctionTemplates {
-    val bodies: Array[U64] = []
+    mut val bodies: Array[U64] = []
 }
 pub impl MidFunctionTemplates {
     factory

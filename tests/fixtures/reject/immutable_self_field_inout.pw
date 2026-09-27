@@ -1,0 +1,5 @@
+struct Storage { val items: Array[I64] = [] }
+impl Storage {
+    inout fn add() { self.items.append(1I64) }
+}
+fn main() {}

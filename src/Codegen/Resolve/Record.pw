@@ -1622,22 +1622,8 @@ pub impl Comp {
                 i = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    mut val ctxRef: U64 = 0U64
-                    if instance == 0U64 {
-                        val fieldType = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
-                        ctxRef = self.typedIrRefOfInfo(ti: fieldType)
-                    }
-                    // a generic construction's field context is the DECLARED field type
-                    // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
-                    // instance so the literal records `Array[I64]`, and never store a
-                    // still-parametric context (a non-instance Make leaves it as-is).
-                    if instance != 0U64 {
-                        if isEnum {
-                            ctxRef = self.typedIrRefOfInfo(ti: (try self.genericEnumFieldTypeInfo(instRef: instance, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)))
-                        } else {
-                            ctxRef = (try self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen))
-                        }
-                    }
+                    val fieldType = (try self.makeFieldType(typeRef: instance, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                    val ctxRef = self.typedIrRefOfInfo(ti: fieldType)
                     mut val value: U64 = field.value
                     if self.recordsFieldDefault(field: field) {
                         value = (try self.recordFieldDefaultCall(field: field, instance: instance, resultTerm: ctxRef))

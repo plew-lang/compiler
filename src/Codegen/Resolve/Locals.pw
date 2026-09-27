@@ -176,55 +176,6 @@ pub impl Comp {
         return <Result.Ok value=self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
     }
 
-    inout fn fieldType(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-        // resolve an import alias (`with { Real as Alias }`) so a field access on a value
-        // typed by its alias finds the real struct's fields (spec/15).
-        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
-        mut val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
-        // a newtype inherits the underlying struct's fields (spec/10): resolve to the
-        // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
-        val underlying = self.newtypeUnderRef(start: structStart, len: structLen)
-        if underlying != 0U64 {
-            val type = self.arena.typeAt(index: underlying)
-            qStruct = type.nameId
-        }
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qStruct)
-        while si < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: si)
-            if s.nameId == qStruct {
-                val fs: Array[FieldDef] = s.fields
-                mut val fi: U64 = 0
-                while fi < fs.count() {
-                    val f: FieldDef = fs[fi]
-                    if f.nameId == qField {
-                        // a generic-instantiation field type (`Optional[Node]`) carries its
-                        // structured ref, so a match/dispatch on the field recovers the
-                        // mangled C name (`Optional_Node`) and substitutes payload types.
-                        if !(f.tyIsArray) {
-                            if self.isGenericInst(ref: f.ty) {
-                                return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
-                            }
-                            // an existential (`inner: any Drawable`) or view-typed
-                            // (`p: P#Ext`) field: the ref IS the identity facet
-                            // (spec/08,09) — name-only recovery would drop it and a
-                            // method on the field couldn't dispatch through it.
-                            if f.ty != 0U64 && f.ty < self.arena.typeCount() {
-                                if self.arena.typeAt(index: f.ty).isAny || self.arena.typeAt(index: f.ty).viewExtId != 0U64 || self.arena.typeAt(index: f.ty).viewIds.count() > 0U64 {
-                                    return self.typeInfoOfRef(ref: f.ty)
-                                }
-                            }
-                        }
-                        return self.typeInfoOfName(start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
-                    }
-                    fi += 1
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
-        }
-        return scalarInfo()
-    }
-
     inout fn fieldDeclaredMut(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> Bool {
         val storage = self.fieldStorageTypeRef(receiverRef: receiverRef)
         if storage == 0U64 || storage >= self.arena.typeCount() { return true }

@@ -482,30 +482,7 @@ pub impl Comp {
     }
 
     // Tag index of `Enum.Variant` (the variant's position in its enum declaration).
-    inout fn variantIndex(enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> U64 {
-        // an import alias (`with { Real as Alias }`) names the same enum as `Real`, so its
-        // variants share the real enum's tag indices (spec/15).
-        val arE: Bind = self.aliasReal(start: enumStart, len: enumLen)
-        val qEnum: U64 = intern(c: inout self, start: arE.nameStart, len: arE.nameLen)
-        val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
-        mut val ei: U64 = 0
-        while ei < self.arena.enumCount() {
-            val e: EnumDef = self.arena.enumAt(index: ei)
-            if e.nameId == qEnum {
-                val vars: Array[Variant] = e.variants
-                mut val vi: U64 = 0
-                while vi < vars.count() {
-                    val v: Variant = vars[vi]
-                    if v.nameId == qVar {
-                        return vi
-                    }
-                    vi += 1
-                }
-            }
-            ei += 1
-        }
-        return 0
-    }
+
 }
 
 pub impl Comp {

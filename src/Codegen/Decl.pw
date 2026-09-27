@@ -868,13 +868,6 @@ pub impl Comp {
         return self.arena.firstConcreteStructNamed(nameId: qId)
     }
 
-    inout fn enumIdxByName(start: U64, len: U64) -> U64 {
-        // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
-        val ar: Bind = self.aliasReal(start: start, len: len)
-        val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
-        return self.arena.firstEnumNamed(nameId: q)
-    }
-
     inout fn findTraitIdxByName(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ti: U64 = 0

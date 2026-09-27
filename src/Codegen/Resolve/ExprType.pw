@@ -868,7 +868,7 @@ pub impl Comp {
                     return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)) />
                 }
                 if bt.kind == 2 {
-                    return <Result.Ok value=self.fieldType(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) />
+                    return <Result.Ok value=(try self.genericFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen)) />
                 }
                 return <Result.Ok value=scalarInfo() />
             }
