@@ -1,0 +1,30 @@
+import /Frontend with { Comp }
+import /Ir with { Bind, FieldDef, StructDef, TypeRef }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val box = compiler.internBytes(s: "Box")
+    val parameter = compiler.internBytes(s: "T")
+    val field = compiler.internBytes(s: "value")
+    val integer = compiler.internBytes(s: "I64")
+    val boolean = compiler.internBytes(s: "Bool")
+    val function = compiler.internBytes(s: "fn")
+    val integerRef = compiler.pushType(t: <TypeRef nameStart=integer.nameStart nameLen=integer.nameLen args=[] />)
+    val booleanRef = compiler.pushType(t: <TypeRef nameStart=boolean.nameStart nameLen=boolean.nameLen args=[] />)
+    val functionRef = compiler.pushType(t: <TypeRef nameStart=function.nameStart nameLen=function.nameLen args=[integerRef] />)
+    val parameters = [<Bind nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=101U64 fieldStart=0U64 fieldLen=0U64 />]
+    val foreignField = <FieldDef nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId tyStart=function.nameStart tyLen=function.nameLen ty=functionRef tyIsArray=false isMut=false hasDefault=false defaultVal=0U64 />
+    val selectedField = <FieldDef nameStart=field.nameStart nameLen=field.nameLen nameId=field.nameId tyStart=boolean.nameStart tyLen=boolean.nameLen ty=booleanRef tyIsArray=false isMut=false hasDefault=false defaultVal=0U64 />
+    compiler.arena.registerStruct(<StructDef nameStart=box.nameStart nameLen=box.nameLen nameId=box.nameId typeParams=parameters fields=[foreignField] isUnique=false isExtern=false defOffset=100U64 />)
+    compiler.arena.registerStruct(<StructDef nameStart=box.nameStart nameLen=box.nameLen nameId=box.nameId typeParams=parameters fields=[selectedField] isUnique=false isExtern=false defOffset=200U64 />)
+    val selected = compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[integerRef] hasDecl=true declOffset=200U64 />)
+    match compiler.genericFieldTypeInfo(instRef: selected, fieldStart: field.nameStart, fieldLen: field.nameLen) {
+        Result.Ok(val value) => { print(value.nameStart == boolean.nameStart) }
+        Result.Err(error: _) => { print(false) }
+    }
+    match compiler.scanGenInstFields(instRef: selected) {
+        Result.Ok(value: _) => { print(compiler.monoWork.fnTypes.count() == 0U64) }
+        Result.Err(error: _) => { print(false) }
+    }
+}

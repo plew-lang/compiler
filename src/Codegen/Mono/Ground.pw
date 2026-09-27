@@ -1355,63 +1355,40 @@ pub impl Comp {
     }
 
     inout fn scanGenInstFields(instRef: U64) -> Result[(), CompileDiagnostic] {
-        val inst: TypeRef = self.arena.typeAt(index: instRef)
-        val qInst: U64 = intern(c: inout self, start: inst.nameStart, len: inst.nameLen)
-        mut val si: U64 = self.arena.firstStructNamed(nameId: qInst)
-        while si < self.arena.structCount() {
-            val sd: StructDef = self.arena.structAt(index: si)
-            if sd.nameId == qInst {
-                if sd.typeParams.count() == inst.args.count() {
-                    if sd.typeParams.count() > 0U64 {
-                        val savedP: Array[Bind] = self.cur.typeParams
-                        val savedA: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = sd.typeParams
-                        self.cur.typeArgs = inst.args
-                        val fs: Array[FieldDef] = sd.fields
-                        mut val k: U64 = 0
-                        while k < fs.count() {
-                            try self.scanType(ref: fs[k].ty)
-                            k += 1
-                        }
-                        // also scan this struct's methods' return/param types under the
-                        // env, so a method returning another generic type (an iterable's
-                        // `iterator() -> BoxIter[T]`) registers its grounded instantiation
-                        // (`BoxIter[I64]`), whose typedef/methods would else be missing. A
-                        // leftover (generic-method) param stays non-ground and is skipped.
-                        mut val mfi: U64 = 0
-                        while mfi < self.arena.functionCount() {
-                            val mf: Func = self.arena.functionAt(index: mfi)
-                            if mf.hasRecv {
-                                // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
-                                // their instances come from call sites, and expanding one here
-                                // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
-                                if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) {
-                                if mf.recvId == qInst {
-                                    // a non-generic method may still mention `Self`/`Item`
-                                    // (`fn iterator() -> Self`); resolve them to this inst.
-                                    try self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
-                                    if mf.hasRet {
-                                        try self.scanType(ref: mf.retTy)
-                                    }
-                                    val mps: Array[Param] = self.copyFuncParams(params: mf.params)
-                                    mut val mpi: U64 = 0
-                                    while mpi < mps.count() {
-                                        try self.scanType(ref: mps[mpi].ty)
-                                        mpi += 1
-                                    }
-                                    self.clearSelfItemEnv()
-                                }
-                                }
-                            }
-                            mfi += 1
-                        }
-                        self.cur.typeParams = savedP
-                        self.cur.typeArgs = savedA
-                    }
-                }
-            }
-            si = self.arena.nextStructNamed(index: si)
+        val structIndex = self.structIndexForType(ref: instRef)
+        if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
+        val inst = self.arena.typeAt(index: instRef)
+        val declaration = self.arena.structAt(index: structIndex)
+        if declaration.typeParams.count() == 0U64 || declaration.typeParams.count() != inst.args.count() { return <Result.Ok value=() /> }
+        val savedParams = self.cur.typeParams
+        val savedArgs = self.cur.typeArgs
+        self.cur.typeParams = declaration.typeParams
+        self.cur.typeArgs = inst.args
+        mut val index: U64 = 0U64
+        while index < declaration.fields.count() {
+            try self.scanType(ref: declaration.fields[index].ty)
+            index += 1U64
         }
+        // Methods can introduce further field layouts through their signatures.
+        // Provided bodies are collected at their call sites to avoid recursive
+        // template expansion. Other declarations with this spelling are unrelated.
+        index = 0U64
+        while index < self.arena.functionCount() {
+            val method = self.arena.functionAt(index: index)
+            if method.hasRecv && !method.isProvided && !self.methodRecvIsTrait(f: method) && method.recvId == declaration.nameId && self.receiverDeclarationMatches(f: method, receiverRef: instRef) {
+                try self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
+                if method.hasRet { try self.scanType(ref: method.retTy) }
+                mut val parameter: U64 = 0U64
+                while parameter < method.params.count() {
+                    try self.scanType(ref: self.funcParamAt(params: method.params, index: parameter).ty)
+                    parameter += 1U64
+                }
+                self.clearSelfItemEnv()
+            }
+            index += 1U64
+        }
+        self.cur.typeParams = savedParams
+        self.cur.typeArgs = savedArgs
         return <Result.Ok value=() />
     }
 

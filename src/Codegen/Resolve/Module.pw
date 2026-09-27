@@ -1078,7 +1078,7 @@ pub impl Comp {
     // Associated lookup precedes argument inference, so an authored bare
     // generic qualifier may have no arguments yet. Restrict the declaration
     // identity here; argument/pattern checking remains in its normal phase.
-    inout fn associatedReceiverHeadMatches(f: Func, receiverRef: U64) -> Bool {
+    inout fn receiverDeclarationMatches(f: Func, receiverRef: U64) -> Bool {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || f.recvTy == 0U64 || f.recvTy >= self.arena.typeCount() { return true }
         mut val receiver = receiverRef
         val underlying = self.newtypeUnderlying(ref: receiver)
@@ -1104,7 +1104,7 @@ pub impl Comp {
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
             if f.isAssoc && self.callableIsBare(c: cand) {
                 if f.nameId == qNameId {
-                    if f.recvId == qRecvId && self.associatedReceiverHeadMatches(f: f, receiverRef: recvRef) {
+                    if f.recvId == qRecvId && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) {
                         val matchRank: U64 = (try self.callableArgMatchRank(f: f, args: args))
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.functionCount() {

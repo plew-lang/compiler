@@ -179,31 +179,9 @@ pub impl Comp {
     // scalar TypeInfo intentionally has no TypeRef payload, so it cannot be the
     // carrier for an exact chained field type.
     inout fn genericFieldTypeInfo(instRef: U64, fieldStart: U64, fieldLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
-        val t: TypeRef = self.arena.typeAt(index: instRef)
-        val si: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if si >= self.arena.structCount() { return <Result.Ok value=scalarInfo() />}
-        val s: StructDef = self.arena.structAt(index: si)
-        val fields: Array[FieldDef] = s.fields
-        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val i: U64 = 0U64
-        while i < fields.count() {
-            val fd: FieldDef = fields[i]
-            if fd.nameId == qField {
-                val ftr: TypeRef = self.arena.typeAt(index: fd.ty)
-                mut val pi: U64 = 0U64
-                while pi < s.typeParams.count() {
-                    val p: Bind = s.typeParams[pi]
-                    if ftr.nameId == p.nameId { return <Result.Ok value=self.typeInfoOfRef(ref: t.args[pi]) />}
-                    pi += 1U64
-                }
-                if rangeEquals(bytes: self.arena.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") && ftr.args.count() > 0U64 {
-                    return <Result.Ok value=(try self.groundedArrayFieldInfo(params: s.typeParams, instArgs: t.args, arrayTyRef: fd.ty)) />
-                }
-                return <Result.Ok value=self.typeInfoOfRef(ref: (try self.groundUnderInst(instRef: instRef, tyRef: fd.ty))) />
-            }
-            i += 1U64
-        }
-        return <Result.Ok value=scalarInfo() />
+        val field = (try self.fieldTypeRefOfReceiver(receiverRef: instRef, fieldStart: fieldStart, fieldLen: fieldLen))
+        if field == 0U64 { return <Result.Ok value=scalarInfo() /> }
+        return <Result.Ok value=self.typeInfoOfRef(ref: field) />
     }
 
     // Newtypes inherit their underlying field layout without losing their
