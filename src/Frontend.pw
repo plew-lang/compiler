@@ -1607,9 +1607,6 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
     try c.markBoxedFields()
-    // ownership validity (spec/03): a struct owning a unique value must be
-    // `unique`; parameter access modes must match copyability. Both exit on error.
-    try c.checkFieldContagion()
     // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
     // enum's own explicit deinit body is v1-rejected; active payloads still drop.
     // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
@@ -1645,6 +1642,8 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     try c.checkUseVisibility()
     try c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
+    // Ownership is checked only after nominal declaration identities are resolved.
+    try c.checkFieldContagion()
     try c.checkAllParamModes()
     try c.checkDeinitOnlyOnUnique()
     try c.checkPublicApiClosure()

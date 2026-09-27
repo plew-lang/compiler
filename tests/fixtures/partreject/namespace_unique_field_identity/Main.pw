@@ -1,0 +1,4 @@
+import ./Copyable
+import ./Unique
+struct Holder { val item: Unique.Item }
+fn main() {}

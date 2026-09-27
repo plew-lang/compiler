@@ -5074,7 +5074,7 @@ pub impl Comp {
         if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
             return true
         }
-        val si: U64 = self.structIndexByName(start: lo.tyStart, len: lo.tyLen)
+        val si: U64 = self.structIndexForType(ref: lo.ty)
         if si < self.arena.structCount() {
             if self.arena.structAt(index: si).isUnique {
                 return false
