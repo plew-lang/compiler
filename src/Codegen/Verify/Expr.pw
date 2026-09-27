@@ -439,10 +439,7 @@ pub impl Comp {
                 // `unwrapOr` / `?.` / `match` instead.
                 val tti: TypeInfo = (try self.typeOf(id: expr))
                 if tti.nameLen > 0U64 {
-                    mut val isEnum: Bool = self.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < self.arena.enumCount()
-                    if !(isEnum) {
-                        isEnum = self.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < self.arena.enumCount()
-                    }
+                    val isEnum = self.enumIndexForType(ref: self.typedIrRefOfInfo(ti: tti)) < self.arena.enumCount()
                     if isEnum {
                         if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />

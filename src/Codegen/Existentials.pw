@@ -24,6 +24,16 @@ inout fn typeRefMentionsSelf(ref: U64) -> Bool {
         }
         i += 1
     }
+    // Semantic record fields remain authoritative even when their layout
+    // has not been materialized or still names a different generic template.
+    if t.isRecord {
+        mut val field: U64 = 0U64
+        while field < t.recordFieldTerms.count() {
+            if self.typeRefMentionsSelf(ref: t.recordFieldTerms[field]) { return true }
+            field += 1U64
+        }
+        return false
+    }
     // an anonymous record type (`(a: Self)`, name starting with '(') lowers to a synthesized
     // struct whose TypeRef carries NO args — its field types (where a captured `Self` hides)
     // live in the struct's FieldDefs. Descend into them so `Self` in a record position is seen
@@ -31,7 +41,7 @@ inout fn typeRefMentionsSelf(ref: U64) -> Bool {
     // structurally acyclic (no anonymous self-reference), so this recursion terminates without a
     // visited set; user structs never carry a captured `Self` in a field (that would be an
     // infinitely-sized type), so restricting the descent to records also avoids their cycles.
-    if self.arena.bytes[t.nameStart] == 40U8 {
+    if t.nameLen > 0U64 && self.arena.bytes[t.nameStart] == 40U8 {
         val sidx: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
         if sidx < self.arena.structCount() {
             mut val fi: U64 = 0

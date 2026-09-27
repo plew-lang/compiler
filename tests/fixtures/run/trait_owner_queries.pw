@@ -10,10 +10,11 @@ fn main() {
     if compiler.canonicalTraitOwner(start: 10U64, len: 3U64) != 0U64 { panic "incorrect length accepted" }
     if compiler.canonicalTraitOwner(start: 11U64, len: 4U64) != 0U64 { panic "noncanonical offset accepted" }
     if compiler.traitNameLenByOwner(owner: 20U64) != 4U64 || compiler.traitNameLenByOwner(owner: 21U64) != 0U64 { panic "owner length differs" }
-    if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 1U64) != 20U64 { panic "first arity match lost" }
-    if compiler.traitDeclOffsetByIdArity(traitId: 7U64, arity: 2U64) != 0U64 { panic "missing arity accepted" }
-    if compiler.traitDeclOffsetByIdArity(traitId: 8U64, arity: 0U64) != 0U64 { panic "missing name accepted" }
-    if compiler.traitModuleByIdArity(traitId: 7U64, arity: 1U64) != 3U64 { panic "stored module lost" }
+    if compiler.traitOwnerInScopeById(mod: 3U64, nameId: 7U64, arity: 1U64) != 20U64 { panic "first arity match lost" }
+    if compiler.traitOwnerInScopeById(mod: 3U64, nameId: 7U64, arity: 2U64) != 0U64 { panic "missing arity accepted" }
+    if compiler.traitOwnerInScopeById(mod: 3U64, nameId: 8U64, arity: 0U64) != 0U64 { panic "missing name accepted" }
+    if compiler.traitOwnerInScopeById(mod: 0U64, nameId: 7U64, arity: 1U64) != 30U64 { panic "module identity lost" }
+    if compiler.traitOwnerInScopeById(mod: 4U64, nameId: 7U64, arity: 1U64) != 0U64 { panic "foreign module leaked" }
     if compiler.traitModuleByOwner(owner: 20U64) != 3U64 { panic "canonical owner module lost" }
     if compiler.traitModuleByOwner(owner: 0U64) != 4000000000U64 || compiler.traitModuleByOwner(owner: 99U64) != 0U64 { panic "owner fallback changed" }
     write(s: "trait-owner-queries-ok\n")

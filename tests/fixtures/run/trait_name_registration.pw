@@ -12,9 +12,9 @@ fn main() {
     compiler.predeclareTraitIdentity(nameStart: first.nameStart, nameLen: first.nameLen, arity: 9U64)
     if compiler.decls.traitOwnerCount() != 2U64 { panic "predeclaration idempotence" }
     if !compiler.decls.hasTraitName(nameId: second.nameId) { panic "shared spelling missing" }
-    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 0U64) != first.nameStart { panic "zero arity owner changed" }
-    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 1U64) != second.nameStart { panic "one arity owner changed" }
-    if compiler.traitDeclOffsetByIdArity(traitId: first.nameId, arity: 9U64) != 0U64 { panic "duplicate changed arity" }
+    if compiler.traitOwnerInScopeById(mod: compiler.moduleOf(offset: first.nameStart), nameId: first.nameId, arity: 0U64) != first.nameStart { panic "zero arity owner changed" }
+    if compiler.traitOwnerInScopeById(mod: compiler.moduleOf(offset: first.nameStart), nameId: first.nameId, arity: 1U64) != second.nameStart { panic "one arity owner changed" }
+    if compiler.traitOwnerInScopeById(mod: compiler.moduleOf(offset: first.nameStart), nameId: first.nameId, arity: 9U64) != 0U64 { panic "duplicate changed arity" }
     if compiler.decls.hasTraitName(nameId: later.nameId) { panic "query created trait" }
     compiler.predeclareTraitIdentity(nameStart: later.nameStart, nameLen: later.nameLen, arity: 0U64)
     if !compiler.decls.hasTraitName(nameId: later.nameId) { panic "negative lookup remained stale" }

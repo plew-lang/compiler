@@ -33,32 +33,6 @@ pub impl Comp {
         return owner.nameId == f.recvId && owner.nameLen == f.recvLen && owner.arity == f.recvTraitArgs.count()
     }
 
-    inout fn traitModuleByIdArity(traitId: U64, arity: U64) -> U64 {
-        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: traitId)
-        while i < self.decls.traitOwnerCount() {
-            val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if t.nameId == traitId {
-                if t.arity == arity {
-                    return t.sourceModule
-                }
-            }
-            i = self.decls.nextTraitOwnerNamed(index: i)
-        }
-        return 4000000000U64
-    }
-
-    inout fn traitDeclOffsetByIdArity(traitId: U64, arity: U64) -> U64 {
-        mut val i: U64 = self.decls.firstTraitOwnerNamed(nameId: traitId)
-        while i < self.decls.traitOwnerCount() {
-            val t: TraitOwner = self.decls.traitOwnerAt(index: i)
-            if t.nameId == traitId && t.arity == arity {
-                return t.nameStart
-            }
-            i = self.decls.nextTraitOwnerNamed(index: i)
-        }
-        return 0U64
-    }
-
     // Operator syntax has a fixed semantic source: @Std/Core.  Do not recover
     // it by a bare spelling at an arbitrary later checker site, where a user
     // trait of the same name or an import alias would change the meaning.
