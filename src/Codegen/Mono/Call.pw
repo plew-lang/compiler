@@ -1046,11 +1046,7 @@ pub impl Comp {
         // here, before the instance becomes reachable by LLVM.
         val environment: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
         val declaration: Func = (try self.lexicalFunction(f: f))
-        if declaration.hasRecv && environment.receiverRef != 0U64 {
-            try self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: environment.receiverRef)
-        } else if f.typeParams.count() > 0U64 && args.count() == f.typeParams.count() && (try self.fnArgsAllGround(args: args)) {
-            try self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
-        }
+        try self.checkSelectedCallableBounds(fnIdx: fnIdx, args: args, receiver: environment.receiverRef)
         // A provided copy has no standalone semantic body: its `Self`,
         // associated outputs and nested requirements are defined by the
         // conformance that selected it.  Never materialize one with Missing

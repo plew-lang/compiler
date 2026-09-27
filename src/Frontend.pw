@@ -1734,7 +1734,10 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: default argument plans are incomplete") />
     }
     tracePhase(c: inout c, label: "default-call-completion:done")
-    if !c.genMode { try c.closeProgramCallTemplates() }
+    if !c.genMode {
+        try c.closeProgramCallTemplates()
+        try c.checkClosedCallTemplateBounds()
+    }
     try c.prepareDiscriminantType()
     return <Result.Ok value=() />
 }

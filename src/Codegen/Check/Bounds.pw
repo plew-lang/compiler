@@ -1253,6 +1253,64 @@ pub impl Comp {
     // invokes this before the instance enters the semantic worklist, so every
     // emitted generic body is checked by the same path regardless of whether
     // its substitutions came from arguments, a receiver, or an expected result.
+    // The same closed callable constraint is checked whether selected during
+    // declaration analysis or demanded later by executable discovery.
+    inout fn checkSelectedCallableBounds(fnIdx: U64, args: Array[U64], receiver: U64) -> Result[(), CompileDiagnostic] {
+        val function = self.arena.functionAt(index: fnIdx)
+        val declaration = try self.lexicalFunction(f: function)
+        if declaration.hasRecv && receiver != 0U64 {
+            return self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: receiver)
+        }
+        if function.typeParams.count() > 0U64 && args.count() == function.typeParams.count() && (try self.fnArgsAllGround(args: args)) {
+            return self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=receiver />)
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Unused source calls still impose constraints. Symbolic substitutions
+    // retain their bound-aware abstract checking and later instance obligations.
+    // This pass never registers an executable body or resolves a new callee.
+    inout fn checkClosedCallTemplateBounds() -> Result[(), CompileDiagnostic] {
+        if self.decls.funcBounds.count() == 0U64 { return <Result.Ok value=() /> }
+        mut val constrained: Array[Bool] = []
+        mut val index = 0U64
+        while index < self.arena.functionCount() { constrained.append(false)
+            index += 1U64 }
+        index = 0U64
+        while index < self.decls.funcBounds.count() {
+            val bound = self.decls.funcBounds[index]
+            if bound.fnIdx < constrained.count() { constrained.set(i: bound.fnIdx, value: true) }
+            index += 1U64
+        }
+        val count = self.decls.callTemplates.count()
+        index = 0U64
+        while index < count {
+            val template = self.decls.callTemplates[index]
+            match template.kind {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                    if callee < constrained.count() && constrained[callee] {
+                        val function = self.arena.functionAt(index: callee)
+                        val args = self.callTemplateTypeArgs(range: arguments)
+                        mut val closed = args.count() == function.typeParams.count()
+                        mut val argument = 0U64
+                        while argument < args.count() {
+                            if args[argument] == 0U64 || !self.typeTermIsClosed(ref: args[argument]) { closed = false }
+                            argument += 1U64
+                        }
+                        val receiver = template.receiverTypeTerm
+                        if function.hasRecv && (receiver == 0U64 || !self.typeTermIsClosed(ref: receiver)) { closed = false }
+                        if closed {
+                            try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver))
+                        }
+                    }
+                }
+                _ => {}
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkOneFnInstBounds(fin: FnInst) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fin.fnIdx)
         mut val bi: U64 = 0

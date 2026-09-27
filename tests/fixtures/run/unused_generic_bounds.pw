@@ -1,0 +1,22 @@
+// Closed constraints are checked even in unused declarations; valid calls
+// remain accepted, including result inference and receiver substitutions.
+trait Label {}
+struct Tagged {}
+impl Tagged { factory }
+impl Tagged as Label {}
+enum Token[T] { Mark }
+fn marker[T]() -> Token[T] where T: Label { return <Token.Mark /> }
+struct Holder[T] { val value: T }
+impl[T] Holder[T] {
+    factory
+    fn token() -> Token[T] where T: Label { return marker() }
+}
+fn unused() {
+    val token: Token[Tagged] = marker()
+    val holder = <Holder value=<Tagged /> />
+    val other = holder.token()
+}
+fn genericUnused[U](item: U) {
+    val token: Token[Tagged] = marker()
+}
+fn main() {}
