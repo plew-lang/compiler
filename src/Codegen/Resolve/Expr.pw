@@ -354,6 +354,23 @@ pub impl Comp {
             try self.closeCallTemplatesForBody(fnIdx: index)
             index += 1U64
         }
+        // Selection and expected-result completion are now stable. Compute
+        // access demand once, rather than rebuilding it at every Record update.
+        mut val required: Dictionary[U64, Bool] = [:]
+        index = 0U64
+        while index < self.decls.callTemplates.count() {
+            val template = self.decls.callTemplates[index]
+            if !required.getOr(key: template.siteKey.ownerFnIdx, fallback: false) {
+                if self.recordedCallHasStorageArguments(kind: template.kind) {
+                    required[template.siteKey.ownerFnIdx] = true
+                } else {
+                    self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=false />)
+                }
+            }
+            // Unexamined sites retain the conservative true default. Once an
+            // owner is required, further precision cannot remove its body.
+            index += 1U64
+        }
         self.globalCallTemplatesClosed = true
         return <Result.Ok value=() />
     }
@@ -632,14 +649,10 @@ pub impl Comp {
         return false
     }
 
-    fn withRecordedCallAccess(template: CallTemplate) -> CallTemplate {
-        return <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=self.recordedCallHasStorageArguments(kind: template.kind) />
-    }
-
     inout fn appendCallTemplate(template: CallTemplate) {
         self.ensureCallTemplateIndex(nextCount: self.decls.callTemplates.count() + 1U64)
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey />)
-        self.decls.callTemplates.append(self.withRecordedCallAccess(template: <CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />))
+        self.decls.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
         val capacity: U64 = self.decls.callTemplateIndexSlots.count()
         mut val slot: U64 = self.callTemplateHash(siteKey: template.siteKey) % capacity
         while self.decls.callTemplateIndexSlots[slot] != 0U64 {
@@ -762,7 +775,7 @@ pub impl Comp {
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm)
-            self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />))
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
             return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId /> receiverTypeTerm=receiverTerm />)
@@ -802,7 +815,7 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> expectedResultTerm=prior.expectedResultTerm />))
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> />)
@@ -819,7 +832,7 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />))
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> />)
@@ -832,7 +845,7 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: key)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Protocol receiver=receiver /> expectedResultTerm=prior.expectedResultTerm />))
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Protocol receiver=receiver /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Protocol receiver=receiver /> />)
@@ -943,7 +956,7 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />))
+            self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
             return <Result.Ok value=() />
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> />)
@@ -977,7 +990,7 @@ pub impl Comp {
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
         val kind = self.completeCallTemplateResult(kind: prior.kind, expectedTerm: expectedTerm)
-        self.decls.callTemplates.set(i: index, value: self.withRecordedCallAccess(template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=prior.receiverTypeTerm />))
+        self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=prior.receiverTypeTerm />)
         return <Result.Ok value=() />
     }
 
