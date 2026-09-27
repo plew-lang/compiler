@@ -264,10 +264,23 @@ fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built
 
 pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[(), DeclarationAccessError] {
     val count = c.arena.functionCount()
+    mut val needed: Dictionary[U64, Bool] = [:]
+    mut val site = 0U64
+    while site < c.decls.callTemplates.count() {
+        val template = c.decls.callTemplates[site]
+        if template.mayHaveStorageArguments { needed[template.siteKey.ownerFnIdx] = true }
+        site += 1U64
+    }
     mut val index = 0U64
     while index < count {
         val function = c.arena.functionAt(index: index)
         if function.body != 0U64 && !function.isExtern {
+            val owner = match c.semanticBodyOwner(fnIdx: index) {
+                Result.Ok(value: val owner) => { give owner }
+                Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+            }
+            if !needed.getOr(key: owner, fallback: false) { index += 1U64
+                continue }
             val built = templates.body(c: inout c, function: index)
             try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.Function function=index />, built: built)
         }

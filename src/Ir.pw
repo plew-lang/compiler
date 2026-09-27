@@ -2857,6 +2857,9 @@ pub enum CallTemplateKind {
 // the expression result TypeTerm remains in SemanticExprType for generic type
 // operations that are not calls.
 pub struct CallTemplate {
+    // Record proves false only for independent value arguments and a selected
+    // signature without storage parameters. Unknown/synthetic input stays true.
+    pub val mayHaveStorageArguments: Bool = true
     pub val siteKey: CallSiteKey = <CallSiteKey />
     // Record publishes the result dependency once. Mid consumes it under the
     // selected BodyInstance rather than grounding a callee binder as a caller term.

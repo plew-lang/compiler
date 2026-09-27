@@ -1,0 +1,56 @@
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Ir with { CallTemplate }
+import ../../../src/Mid/Build with { MidFunctionTemplates }
+import ../../../src/Mid/DeclarationAccess with { checkDeclarationLocalAccess, DeclarationAccessError }
+import ../../../src/Mid/Verify with { MidVerifyError }
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import @Std/Process with { argAt }
+
+fn classification(result: Result[(), DeclarationAccessError]) -> U64 {
+    match result {
+        Result.Ok(value: _) => { return 0U64 }
+        Result.Err(error: val error) => {
+            match error {
+                DeclarationAccessError.LocalAccess(body: _, error: val conflict) => {
+                    match conflict {
+                        MidVerifyError.ConflictingBorrowAccess => { return 1U64 }
+                        MidVerifyError.ConflictingReceiverAccess => { return 2U64 }
+                        _ => { return 3U64 }
+                    }
+                }
+                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) return 3U64 }
+                _ => { return 3U64 }
+            }
+        }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    val identities = compiler.arena.bodyInstanceCount()
+    mut val eager = compiler
+    mut val index = 0U64
+    while index < eager.decls.callTemplates.count() {
+        val template = eager.decls.callTemplates[index]
+        eager.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=template.siteKey resultTypeRecipe=template.resultTypeRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm mayHaveStorageArguments=true />)
+        index += 1U64
+    }
+    mut val demanded = <MidFunctionTemplates />
+    mut val full = <MidFunctionTemplates />
+    val result = classification(result: checkDeclarationLocalAccess(c: inout compiler, templates: inout demanded))
+    val reference = classification(result: checkDeclarationLocalAccess(c: inout eager, templates: inout full))
+    assert(result == reference)
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    assert(compiler.arena.bodyInstanceCount() == identities)
+    assert(eager.monoWork.bodyInstances.count() == 0U64)
+    assert(eager.arena.finalDestructions.count() == 0U64)
+    assert(eager.arena.bodyInstanceCount() == identities)
+    print(result)
+    print(compiler.mid.bodies.count())
+    print(eager.mid.bodies.count())
+}
