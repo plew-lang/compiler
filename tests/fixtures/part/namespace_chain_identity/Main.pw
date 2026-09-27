@@ -1,0 +1,31 @@
+import ./First
+import ./Second
+import @Std/Io with { print }
+struct Inner { pub val n: I64 }
+fn main() {
+    val first = <First.Slot[Inner, Bool].Full v=<Inner n=7I64 /> />
+    val second = <Second.Slot[Bool, Inner].Full v=<Inner n=42I64 /> />
+    val firstResult: First.Slot[I64, Bool] = first?.n
+    val secondResult: Second.Slot[Bool, I64] = second?.n
+    match firstResult {
+        First.Slot.Full(v: val value) => { print(value) }
+        First.Slot.Empty => { print(-1I64) }
+    }
+    match secondResult {
+        Second.Slot.Full(v: val value) => { print(value) }
+        Second.Slot.Empty => { print(-1I64) }
+    }
+    // Equal concrete arguments must not hide the Value binder's position.
+    val equal = <Second.Slot[Inner, Inner].Full v=<Inner n=99I64 /> />
+    val equalResult: Second.Slot[Inner, I64] = equal?.n
+    match equalResult {
+        Second.Slot.Full(v: val value) => { print(value) }
+        Second.Slot.Empty => { print(-1I64) }
+    }
+    val empty: Second.Slot[Bool, Inner] = <Second.Slot[Bool, Inner].Empty />
+    val emptyResult: Second.Slot[Bool, I64] = empty?.n
+    match emptyResult {
+        Second.Slot.Full(v: val value) => { print(value) }
+        Second.Slot.Empty => { print(-1I64) }
+    }
+}

@@ -728,7 +728,12 @@ pub impl Comp {
                     }
                     return <Result.Ok value=true />
                 }
-                if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
+                if et.hasDecl {
+                    val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+                    if identity.nameLen == 0U64 || identity.nameStart != et.declOffset {
+                        return <Result.Ok value=false />
+                    }
+                } else if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
                     return <Result.Ok value=false />
                 }
                 // Lang-item references do not have declaration fields, but
@@ -746,15 +751,15 @@ pub impl Comp {
                     return <Result.Ok value=true />
                 }
                 if isEnum {
-                    val ei: U64 = self.anyEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    val ei: U64 = self.enumIndexForType(ref: expectedRef)
                     if ei >= self.arena.enumCount() { return <Result.Ok value=false />}
                     if et.args.count() != self.arena.enumAt(index: ei).typeParams.count() { return <Result.Ok value=false />}
-                    val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    val vi: U64 = self.variantIndexInDeclaration(enumIndex: ei, nameStart: variantStart, nameLen: variantLen)
                     if vi >= self.arena.enumAt(index: ei).variants.count() { return <Result.Ok value=false />}
                     try self.genericCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields, makeFields: fields)
                     return <Result.Ok value=true />
                 }
-                val si: U64 = self.anyStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                val si: U64 = self.structIndexForType(ref: expectedRef)
                 if si >= self.arena.structCount() { return <Result.Ok value=false />}
                 if et.args.count() != self.arena.structAt(index: si).typeParams.count() { return <Result.Ok value=false />}
                 try self.genericCheckFieldsUnder(params: self.arena.structAt(index: si).typeParams, targs: et.args, defFields: self.arena.structAt(index: si).fields, makeFields: fields)

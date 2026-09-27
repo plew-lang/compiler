@@ -1401,7 +1401,7 @@ pub impl Comp {
                     if methodCallee >= self.arena.functionCount() {
                         val assocRecv: Bind = self.assocRecvName(recv: recv)
                         if assocRecv.nameLen != 0U64 {
-                            methodCallee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                            methodCallee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiverTerm))
                         }
                     }
                     // Some valid inherited surfaces (notably a newtype's
@@ -1794,7 +1794,7 @@ pub impl Comp {
                     // MatchExpr here, whose lexical arm binding cannot be
                     // re-derived outside the desugar.
                     baseInfo = self.typeInfoOfRef(ref: baseRef)
-                    val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
+                    val valueIndex: U64 = (try self.chainValueArgIndex(typeRef: baseRef))
                     if valueIndex < baseTerm.args.count() {
                         try self.recordExpr(exprId: cont, chainHoleRef: baseTerm.args[valueIndex])
                     }
@@ -1810,7 +1810,7 @@ pub impl Comp {
                         val stageRef: U64 = (try self.chainStageResultRef(baseRef: baseRef, cont: cont))
                         if stageRef != 0U64 {
                             val baseTerm: TypeRef = self.arena.typeAt(index: baseRef)
-                            val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
+                            val valueIndex: U64 = (try self.chainValueArgIndex(typeRef: baseRef))
                             if valueIndex < baseTerm.args.count() {
                                 self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=baseTerm.args[valueIndex] />)
                             }

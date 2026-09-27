@@ -1,0 +1,13 @@
+import @Std/Core with { Chain }
+pub enum Slot[T, Meta] { Empty Full(v: T) }
+pub impl[T, Meta] Slot[T, Meta] as Chain {
+    type Value = T
+    fn chain() -> Optional[T] {
+        match self {
+            Slot.Full(val v) => { return <Optional[T].Some v=v /> }
+            Slot.Empty => { return <Optional[T].None /> }
+        }
+    }
+    factory fromValue(value: T) { return <Slot[T, Meta].Full v=value /> }
+    factory empty() { return <Slot[T, Meta].Empty /> }
+}

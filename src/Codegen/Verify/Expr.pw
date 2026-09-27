@@ -219,7 +219,7 @@ pub impl Comp {
                         if !(vfound) {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "unknown enum variant in construction (this enum has no such variant)") />
                         }
-                        val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                        val cvi: U64 = self.variantIndexInDeclaration(enumIndex: cei, nameStart: variantStart, nameLen: variantLen)
                         if cvi < self.arena.enumAt(index: cei).variants.count() {
                             val cfs: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: cei, variantIndex: cvi).fields
                             // for a NON-generic enum, also category-check each provided

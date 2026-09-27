@@ -542,7 +542,7 @@ pub impl Comp {
         // (the value `S.make(n: true)` would otherwise reinterpret a Bool as I64).
         match self.arena.exprs[recv] {
             Expr.Ident(start: val rStart, len: val rLen) => {
-                val ai: U64 = (try self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                val ai: U64 = (try self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv))))
                 if ai < self.arena.functionCount() {
                     val af: Func = self.arena.functionAt(index: ai)
                     val aps: Array[Param] = self.copyFuncParams(params: af.params)

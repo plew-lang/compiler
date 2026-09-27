@@ -356,7 +356,12 @@ pub impl Comp {
         }
         match self.arena.exprs[makeId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
-                if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
+                if et.hasDecl {
+                    val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+                    if identity.nameLen == 0U64 || identity.nameStart != et.declOffset {
+                        return <Result.Ok value=() />
+                    }
+                } else if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
                     return <Result.Ok value=() />
                 }
                 // Ref[T] / WeakRef[T] are lang items (not registered generic structs), so
@@ -376,17 +381,17 @@ pub impl Comp {
                     return <Result.Ok value=() />
                 }
                 if isEnum {
-                    val ei: U64 = self.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    val ei: U64 = self.enumIndexForType(ref: expectedRef)
                     if ei >= self.arena.enumCount() {
                         return <Result.Ok value=() />
                     }
-                    val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    val vi: U64 = self.variantIndexInDeclaration(enumIndex: ei, nameStart: variantStart, nameLen: variantLen)
                     if vi >= self.arena.enumAt(index: ei).variants.count() {
                         return <Result.Ok value=() />
                     }
                     try self.tcCheckFieldsUnder(params: self.arena.enumAt(index: ei).typeParams, targs: et.args, defFields: self.arena.enumVariantAt(enumIndex: ei, variantIndex: vi).fields, makeFields: fields)
                 } else {
-                    val si: U64 = self.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    val si: U64 = self.structIndexForType(ref: expectedRef)
                     if si >= self.arena.structCount() {
                         return <Result.Ok value=() />
                     }

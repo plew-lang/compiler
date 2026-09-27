@@ -4285,7 +4285,7 @@ pub impl Comp {
                         val baseRef: U64 = (try self.groundedBodyReceiverRef(exprId: self.argAt(args: args, index: 0U64).expr))
                         if baseRef != 0U64 && baseRef < self.arena.typeCount() {
                             val baseTy: TypeRef = self.arena.typeAt(index: baseRef)
-                            callee = (try self.findAssoc(recvStart: baseTy.nameStart, recvLen: baseTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                            callee = (try self.findAssoc(recvStart: baseTy.nameStart, recvLen: baseTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: baseRef))
                         }
                     }
                 }
@@ -4303,7 +4303,7 @@ pub impl Comp {
                     // bare type name.  Preserve that selection through the
                     // same CallSiteSelection used by written methods.
                     resolvedReceiverRef = (try self.selectedCallReceiverRef(exprId: exprId))
-                    callee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                    callee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedReceiverRef))
                 } else {
                     val recvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
                     resolvedReceiverRef = recvRef
@@ -5332,7 +5332,7 @@ pub impl Comp {
         mut val valueRef: U64 = 0U64
         if stageRef != 0U64 && stageRef < self.arena.typeCount() {
             val stage: TypeRef = self.arena.typeAt(index: stageRef)
-            val valueIndex: U64 = self.chainValueArgIndex(headStart: stage.nameStart, headLen: stage.nameLen)
+            val valueIndex: U64 = (try self.chainValueArgIndex(typeRef: stageRef))
             if valueIndex < stage.args.count() {
                 valueRef = stage.args[valueIndex]
             }
@@ -5388,37 +5388,43 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Which type-argument position of a `Chain` conformer named (headStart,headLen) is
-    // its `Value` (spec/08 `type Value = <param>`)? An Optional-shaped conformer binds
-    // Value to its sole type parameter (index 0); a multi-parameter conformer
-    // (`enum Slot[Meta, T] as Chain { type Value = T }`) binds it elsewhere. Resolve the
-    // associated binding to the parameter name and find its declared position, so the
-    // desugar substitutes the RIGHT arg and preserves the others (a fixed args[0] both
-    // crashed — index out of range — and dropped the sibling parameters). Falls back to 0
-    // when the head is unregistered or the binding is not one of its type params.
-    inout fn chainValueArgIndex(headStart: U64, headLen: U64) -> U64 {
-        val valN: Bind = self.internBytes(s: "Value")
-        val vb: Bind = self.assocBindingSpan(recvStart: headStart, recvLen: headLen, nameStart: valN.nameStart, nameLen: valN.nameLen)
-        val si: U64 = self.structDefByNameAny(start: headStart, len: headLen)
-        if si < self.arena.structCount() {
-            return self.paramPos(tps: self.arena.structAt(index: si).typeParams, nameId: vb.nameId)
-        }
-        val ei: U64 = self.enumIdxByName(start: headStart, len: headLen)
-        if ei < self.arena.enumCount() {
-            return self.paramPos(tps: self.arena.enumAt(index: ei).typeParams, nameId: vb.nameId)
-        }
-        return 0U64
-    }
-
-    fn paramPos(tps: Array[Bind], nameId: U64) -> U64 {
-        mut val k: U64 = 0
-        while k < tps.count() {
-            if tps[k].nameId == nameId {
-                return k
+    // Ask the ordinary Chain proof for Value on the declaration's symbolic
+    // arguments. Equal concrete arguments must not erase which binder is Value.
+    // Both the nominal receiver and the associated output retain identity.
+    inout fn chainValueArgIndex(typeRef: U64) -> Result[U64, CompileDiagnostic] {
+        if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=0U64 /> }
+        val receiver = self.arena.typeAt(index: typeRef)
+        mut val parameters: Array[Bind] = []
+        val structIndex = self.structIndexForType(ref: typeRef)
+        if structIndex < self.arena.structCount() {
+            parameters = self.arena.structAt(index: structIndex).typeParams
+        } else {
+            val enumIndex = self.enumIndexForType(ref: typeRef)
+            if enumIndex < self.arena.enumCount() {
+                parameters = self.arena.enumAt(index: enumIndex).typeParams
             }
-            k += 1
         }
-        return 0U64
+        mut val arguments: Array[U64] = []
+        mut val index: U64 = 0U64
+        while index < parameters.count() {
+            val parameter = parameters[index]
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
+            index += 1U64
+        }
+        val symbolicReceiver = self.rebuildTypeTerm(t: receiver, args: arguments, assocTraitArgs: receiver.assocTraitArgs)
+        val valueName = self.internBytes(s: "Value")
+        val output = (try self.assocBindingFor(baseRef: symbolicReceiver, traitId: 0U64, traitOwner: self.coreTraitOwner(name: "Chain"), traitArgs: [], assocId: valueName.nameId))
+        if output != 0U64 && output < self.arena.typeCount() {
+            val value = self.arena.typeAt(index: output)
+            index = 0U64
+            while index < parameters.count() {
+                if value.paramId != 0U64 && value.paramId == parameters[index].paramId {
+                    return <Result.Ok value=index />
+                }
+                index += 1U64
+            }
+        }
+        return <Result.Ok value=parameters.count() />
     }
 
     // The result `Head[…U…]` of one desugared `?.` stage under the ACTIVE env: ground the
@@ -5441,7 +5447,7 @@ pub impl Comp {
         if gt.args.count() < 1 {
             return <Result.Ok value=0 />
         }
-        val vi: U64 = self.chainValueArgIndex(headStart: gt.nameStart, headLen: gt.nameLen)
+        val vi: U64 = (try self.chainValueArgIndex(typeRef: g))
         if vi >= gt.args.count() {
             return <Result.Ok value=0 />
         }
@@ -5466,7 +5472,7 @@ pub impl Comp {
             }
             ai += 1
         }
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=gt.nameStart nameLen=gt.nameLen args=oArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
+        return <Result.Ok value=self.rebuildTypeTerm(t: gt, args: oArgs, assocTraitArgs: gt.assocTraitArgs) />
     }
 
     // Register the instances a chain-rewritten `?.` stage needs, grounded under
@@ -5497,7 +5503,7 @@ pub impl Comp {
         }
         val headStart: U64 = ot.nameStart
         val headLen: U64 = ot.nameLen
-        val vi: U64 = self.chainValueArgIndex(headStart: headStart, headLen: headLen)
+        val vi: U64 = (try self.chainValueArgIndex(typeRef: oRef))
         if vi >= ot.args.count() {
             return <Result.Ok value=() />
         }

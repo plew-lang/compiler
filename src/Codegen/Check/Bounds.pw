@@ -743,22 +743,6 @@ pub impl Comp {
         return <Result.Ok value=false />
     }
 
-    inout fn assocBindingSpan(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
-        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < self.decls.assocBindings.count() {
-            val ab: AssocBinding = self.decls.assocBindings[i]
-            if ab.recvId == qRecv {
-                if ab.nameId == qName {
-                    return <Bind nameStart=ab.tyStart nameLen=ab.tyLen nameId=intern(c: inout self, start: ab.tyStart, len: ab.tyLen) fieldStart=ab.tyStart fieldLen=ab.tyLen />
-                }
-            }
-            i += 1
-        }
-        return <Bind nameStart=nameStart nameLen=nameLen nameId=qName fieldStart=nameStart fieldLen=nameLen />
-    }
-
     // Completeness belongs to one selected impl, not every same-named
     // associated type on its receiver (Add.Output and Pow.Output may differ).
     inout fn conformAssocBindingSpan(cf: Conform, nameStart: U64, nameLen: U64) -> Bind {

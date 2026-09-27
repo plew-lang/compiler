@@ -481,7 +481,7 @@ pub impl Comp {
         if arn.nameLen == 0U64 {
             return <Result.Ok value=false />
         }
-        val ai: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+        val ai: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: ctxRef))
         if ai >= self.arena.functionCount() {
             return <Result.Ok value=false />
         }

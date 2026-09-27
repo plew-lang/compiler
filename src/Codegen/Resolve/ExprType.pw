@@ -186,11 +186,11 @@ pub impl Comp {
         // their own receiver declaration, never by a witness's array position.
         val receiver = self.arena.typeAt(index: receiverRef)
         mut val nominalParams: Array[Bind] = []
-        val structIndex = self.genericStructIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+        val structIndex = self.structIndexForType(ref: receiverRef)
         if structIndex < self.arena.structCount() {
             nominalParams = self.arena.structAt(index: structIndex).typeParams
         } else {
-            val enumIndex = self.genericEnumIndex(nameStart: receiver.nameStart, nameLen: receiver.nameLen)
+            val enumIndex = self.enumIndexForType(ref: receiverRef)
             if enumIndex < self.arena.enumCount() { nominalParams = self.arena.enumAt(index: enumIndex).typeParams }
         }
         bi = 0U64
@@ -1064,7 +1064,7 @@ pub impl Comp {
                 // `Type.name(args)` assoc-fn call: return type from the assoc fn.
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {
-                    val afi: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                    val afi: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv))))
                     if afi == self.arena.functionCount() {
                         return <Result.Ok value=scalarInfo() />
                     }
