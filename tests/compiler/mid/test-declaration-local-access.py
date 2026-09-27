@@ -25,7 +25,8 @@ for path in sorted((fixtures / 'reject').glob('unused_*inout*.pw')):
         text = re.sub(r'fn unused(?:\[T\])?\(\)', replacement, source)
         cases.append((path.stem + ('-generic' if generic else '-ordinary'), text, expected))
 for name in ('receiver_preparation', 'receiver_shared_access', 'generic_unique_argument_temporary',
-             'unused_generic_bounds', 'global_access_try'):
+             'unused_generic_bounds', 'global_access_try', 'generic_operator_output_projection',
+             'mid_float_operand_context', 'operator_literal_nested', 'mid_operator_call_cfg_lowering'):
     source = (fixtures / 'run' / (name + '.pw')).read_text()
     cases.append((name, source, 0))
     cases.append((name + '-unused', source.replace('fn main()', 'fn uncalled[T]()') + '\nfn main() {}\n', 0))

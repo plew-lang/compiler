@@ -627,8 +627,12 @@ pub impl Comp {
                 if self.staticSelectionHasStorageParameters(resolution: resolution) { return true }
                 arguments = args
             }
-            CallTemplateKind.Operator(op: _, operands: val operands, resolution: val resolution, resultTerm: _) => {
-                if self.staticSelectionHasStorageParameters(resolution: resolution) { return true }
+            CallTemplateKind.Operator(op: _, operands: val operands, resolution: _, resultTerm: _) => {
+                // Operators have no separate receiver or implicit inout
+                // arguments in parametric Mid. Only the recorded operands can
+                // introduce a language storage borrow/move at this stage;
+                // a missing static witness is not itself a storage argument.
+                // Concrete passing and ownership are still verified later.
                 if operands.start + operands.len > self.decls.callTemplateOperandPool.count() { return true }
                 mut val index = 0U64
                 while index < operands.len {
