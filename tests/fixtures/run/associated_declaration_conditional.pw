@@ -1,0 +1,9 @@
+trait Source[T] {}
+trait Target {}
+struct Token {}
+impl[T] Source[T] as Target where Self: Source[T] {}
+trait Provider { type Item: Source[Token] }
+trait Container { type Item: Target }
+struct Box[T] {}
+impl[T] Box[T] as Container where T: Provider { type Item=T#Provider.Item }
+fn main() {}

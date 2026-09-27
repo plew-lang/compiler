@@ -212,6 +212,74 @@ pub impl Comp {
     // the proof state's positional arguments stay rigid. Exact trait
     // instance lookup is the `patternParams=[]` specialization below.
     inout fn traitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        if baseRef == 0U64 || baseRef >= self.arena.typeCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
+        for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) } }
+        self.activeProjectionProofs.append(baseRef)
+        val result = self.projectedTraitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
+        self.activeProjectionProofs.removeLast()
+        return result
+    }
+
+    inout fn projectedTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val projection = self.arena.typeAt(index: baseRef)
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        // The lowerer already canonicalizes the trait span. Declaration
+        // identity mirrors may not yet be published during declaration checks.
+        mut val owner = projection.assocTraitDeclOffset
+        if !projection.hasAssocTraitDecl { owner = self.canonicalTraitOwner(start: projection.assocTraitStart, len: projection.assocTraitLen) }
+        val declarationIndex = self.decls.traitIndexByOffset(offset: owner)
+        if declarationIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        val declaration = self.decls.traitAt(index: declarationIndex)
+        val prerequisite = (try self.traitPatternProof(baseRef: receiver, traitId: declaration.nameId, traitOwner: owner, traitArgs: <PatternTypeInput.Values values=projection.assocTraitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
+        match prerequisite { StaticConformanceProof.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> } _ => {} }
+        val output = (try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: projection.assocNameId))
+        if output != 0U64 && !self.typeRefEq(a: output, b: baseRef) {
+            return self.traitPatternProof(baseRef: output, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
+        }
+        // Only an abstract declaration assumption authorizes its schema's
+        // associated constraints. Concrete witnesses must validate the actual
+        // output above, never justify their own output from that schema.
+        match prerequisite {
+            StaticConformanceProof.AssumedBound(source: _) => {}
+            StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => {}
+            _ => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        mut val index = 0U64
+        while index < declaration.assocTypes.count() {
+            val member = self.traitBindAt(binds: declaration.assocTypes, index: index)
+            val value = (try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: member.nameId))
+            if value != 0U64 { predicates.append(<TraitAssocPredicate member=member.nameId value=value span=member.nameStart />) }
+            index += 1U64
+        }
+        val context = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs /> positionalArgsOpen=false assocPredicates=predicates /> offset=projection.siteOffset />
+        mut val facts = assumptions
+        index = 0U64
+        while index < declaration.assocBounds.len {
+            val clause = self.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: index)
+            if clause.member == projection.assocNameId {
+                val constraint = self.traitConstraintInBound(constraint: clause.constraint, bound: context, traitIndex: declarationIndex)
+                val evidence = <AssociatedBoundEvidence projection=baseRef clause=declaration.assocBounds.start + index prerequisite=prerequisite bound=<TraitBound subject=baseRef constraint=constraint offset=clause.offset /> />
+                facts.append(self.registerAssociatedBoundEvidence(evidence: evidence))
+            }
+            index += 1U64
+        }
+        return self.traitPatternProofFromFacts(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: facts)
+    }
+
+    inout fn registerAssociatedBoundEvidence(evidence: AssociatedBoundEvidence) -> DeclarationBoundRef {
+        mut val index = 0U64
+        while index < self.arena.associatedBoundEvidence.count() {
+            val existing = self.arena.associatedBoundEvidence[index]
+            if existing.clause == evidence.clause && self.typeRefEq(a: existing.projection, b: evidence.projection) && self.sameStaticConformanceProof(a: existing.prerequisite, b: evidence.prerequisite) { return <DeclarationBoundRef.AssociatedType index=index /> }
+            index += 1U64
+        }
+        self.arena.associatedBoundEvidence.append(evidence)
+        return <DeclarationBoundRef.AssociatedType index=index />
+    }
+
+    inout fn traitPatternProofFromFacts(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
         if baseRef >= self.arena.typeCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
         mut val pending: Array[TraitProofState] = []
         mut val seen: Array[TraitProofState] = []

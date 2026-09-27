@@ -142,7 +142,7 @@ pub impl Comp {
         if node.tag == 1U64 {
             return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
         }
-        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 2U64 { return <StaticConformanceProof.Missing /> }
+        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 3U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
         if node.tag == 3U64 {
             mut val edges: Array[WitnessMatch] = []

@@ -1,4 +1,4 @@
-import ./Ir with { TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
+import ./Ir with { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }
 import ./SourceAccess with { SourceAccess }
@@ -82,6 +82,7 @@ pub struct Comp {
     // from the name interner because same-spelled binders are not one term.
     pub mut val nextParamId: U64 = 1
     // Active conditional witnesses are query state, never proof assumptions.
+    pub mut val activeProjectionProofs: Array[U64] = []
     pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
     // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor

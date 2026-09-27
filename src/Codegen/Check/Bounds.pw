@@ -33,6 +33,7 @@ pub impl Comp {
             DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conforms.count() }
+            DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
         }
     }
 
@@ -53,6 +54,7 @@ pub impl Comp {
                 val owner = self.canonicalTraitOwner(start: conformance.typeStart, len: conformance.typeLen)
                 return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
+            DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidence[index].bound }
         }
     }
 
@@ -67,6 +69,9 @@ pub impl Comp {
             DeclarationBoundRef.TraitSubject(index: val left) => {
                 match b { DeclarationBoundRef.TraitSubject(index: val right) => { return left == right } _ => { return false } }
             }
+            DeclarationBoundRef.AssociatedType(index: val left) => {
+                match b { DeclarationBoundRef.AssociatedType(index: val right) => { return left == right } _ => { return false } }
+            }
         }
     }
 
@@ -75,6 +80,7 @@ pub impl Comp {
             DeclarationBoundRef.Function(index: _) => { return 0U64 }
             DeclarationBoundRef.Conformance(index: _) => { return 1U64 }
             DeclarationBoundRef.TraitSubject(index: _) => { return 2U64 }
+            DeclarationBoundRef.AssociatedType(index: _) => { return 3U64 }
         }
     }
 
@@ -83,6 +89,7 @@ pub impl Comp {
             DeclarationBoundRef.Function(val index) => { return index }
             DeclarationBoundRef.Conformance(val index) => { return index }
             DeclarationBoundRef.TraitSubject(val index) => { return index }
+            DeclarationBoundRef.AssociatedType(val index) => { return index }
         }
     }
 
@@ -90,7 +97,8 @@ pub impl Comp {
     fn thawDeclarationBound(kind: U64, index: U64) -> DeclarationBoundRef {
         if kind == 0U64 { return <DeclarationBoundRef.Function index=index /> }
         if kind == 1U64 { return <DeclarationBoundRef.Conformance index=index /> }
-        return <DeclarationBoundRef.TraitSubject index=index />
+        if kind == 2U64 { return <DeclarationBoundRef.TraitSubject index=index /> }
+        return <DeclarationBoundRef.AssociatedType index=index />
     }
 
     // Form the semantic constraint carried by an existential once, at the
@@ -1090,7 +1098,7 @@ pub impl Comp {
         return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: conformance.subjectTy, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
     }
 
-    inout fn checkClosedAssociatedBounds(conformance: Conform, traitIndex: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkAssociatedBounds(conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
         val declaration = self.decls.traitAt(index: traitIndex)
         if declaration.assocBounds.len == 0U64 { return <Result.Ok value=() /> }
         mut val outputs: Array[TraitAssocPredicate] = []
@@ -1112,27 +1120,20 @@ pub impl Comp {
             if subject == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated type required by a trait constraint is not bound") />
             }
-            mut val closed = self.typeTermIsClosed(ref: subject)
             mut val arguments: Array[U64] = []
             for val argument in bound.constraint.key.positionalArgs {
                 val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
-                if !self.typeTermIsClosed(ref: term) { closed = false }
                 arguments.append(term)
             }
             mut val predicates: Array[TraitAssocPredicate] = []
             for val predicate in bound.constraint.assocPredicates {
                 val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
-                if !self.typeTermIsClosed(ref: term) { closed = false }
                 predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
             }
-            if closed {
-                val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-                if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint)) {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
-                }
+            val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
+            if !(try self.viewedTypeConformsTraitConstraint(ref: subject, constraint: constraint, assumptions: assumptions)) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
-            // Symbolic terms retain their declaration obligation. This does
-            // not authorize a whole-program checked result.
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -1156,7 +1157,7 @@ pub impl Comp {
                 if !self.confWitnessesAll(cf: cf, t: t) {
                     return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
                 }
-                try self.checkClosedAssociatedBounds(conformance: cf, traitIndex: ti)
+                try self.checkAssociatedBounds(conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
                 // supertraits (spec/08): conforming to Sub requires conforming to
                 // each Super (a constraint, not auto-implemented).
                 mut val sti: U64 = 0

@@ -1363,6 +1363,7 @@ pub enum DeclarationBoundRef {
     Function(index: U64)
     Conformance(index: U64)
     TraitSubject(index: U64)
+    AssociatedType(index: U64)
 }
 
 // Common read-only semantic view of an authored condition. Storage and source
@@ -1373,6 +1374,16 @@ pub struct TraitBound {
     pub val offset: U64
 }
 pub impl TraitBound { factory }
+
+// A projected declaration constraint keeps both the exact clause and the
+// receiver evidence that makes its use valid. Rows are interned per arena.
+pub struct AssociatedBoundEvidence {
+    pub val projection: U64
+    pub val clause: U64
+    pub val prerequisite: StaticConformanceProof
+    pub val bound: TraitBound
+}
+pub impl AssociatedBoundEvidence { factory }
 
 pub enum StaticConformanceProof {
     Missing
@@ -2436,6 +2447,7 @@ pub struct Arena {
     pub mut val staticProofs: Array[StaticProofNode] = []
     pub mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     pub mut val staticProofU64Pool: Array[U64] = []
+    pub mut val associatedBoundEvidence: Array[AssociatedBoundEvidence] = []
     pub mut val staticProofSupertraitPool: Array[SupertraitRef] = []
     pub mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
     pub mut val conversionProofs: Array[ConversionProofNode] = []

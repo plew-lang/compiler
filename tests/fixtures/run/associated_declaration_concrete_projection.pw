@@ -1,0 +1,10 @@
+trait Required {}
+trait Source { type Item: Required }
+trait Container { type Item: Required }
+struct Token {}
+impl Token as Required {}
+struct Provider {}
+impl Provider as Source { type Item=Token }
+struct Holder {}
+impl Holder as Container { type Item=Provider#Source.Item }
+fn main() {}

@@ -1,0 +1,45 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
+fn main() {
+    val source = "trait Required {}\ntrait Source { type Item: Required }\ntrait Container { type Item }\nstruct Box[T] {}\nimpl[T] Box[T] as Container where T: Source { type Item=T#Source.Item }\n"
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="evidence.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val conform = compiler.decls.conforms[0U64]
+    val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: conform.assocBindingIds, index: 0U64)]
+    val assumptions = compiler.conformanceDeclarationAssumptions(conformIndex: 0U64)
+    val target = compiler.traitAssociatedBoundAt(bounds: compiler.decls.traitAt(index: 1U64).assocBounds, index: 0U64)
+    val proof = compiler.traitPatternProof(baseRef: binding.ty, traitId: 0U64, traitOwner: target.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions).unwrap()
+    match proof {
+        StaticConformanceProof.AssumedBound(source: val sourceRef) => {
+            match sourceRef {
+                DeclarationBoundRef.AssociatedType(val index) => {
+                    val evidence = compiler.arena.associatedBoundEvidence[index]
+                    assert(compiler.typeRefEq(a: evidence.projection, b: binding.ty))
+                    assert(compiler.typeRefEq(a: evidence.bound.subject, b: binding.ty))
+                    match evidence.prerequisite {
+                        StaticConformanceProof.AssumedBound(source: val origin) => { assert(compiler.sameDeclarationBound(a: origin, b: assumptions[0U64])) }
+                        _ => { panic "lost projection prerequisite" }
+                    }
+                }
+                _ => { panic "wrong evidence kind" }
+            }
+        }
+        _ => { panic "missing associated evidence" }
+    }
+    val count = compiler.arena.associatedBoundEvidence.count()
+    assert(count == 1U64)
+    val repeated = compiler.traitPatternProof(baseRef: binding.ty, traitId: 0U64, traitOwner: target.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions).unwrap()
+    assert(compiler.sameStaticConformanceProof(a: proof, b: repeated))
+    assert(compiler.arena.associatedBoundEvidence.count() == count)
+    val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: proof))
+    assert(compiler.sameStaticConformanceProof(a: proof, b: restored))
+    assert(!compiler.viewedTypeConformsTraitConstraint(ref: binding.ty, constraint: target.constraint).unwrap())
+    assert(compiler.activeProjectionProofs.count() == 0U64)
+    assert(compiler.activeConformanceConditions.count() == 0U64)
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.arena.finalDestructions.count() == 0U64)
+    print("ok")
+}

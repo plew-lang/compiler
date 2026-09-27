@@ -1,0 +1,7 @@
+trait Required {}
+trait Sub: Required {}
+trait Source { type Item: Sub }
+trait Container { type Item: Required }
+struct Box[T] {}
+impl[T] Box[T] as Container where T: Source { type Item=T#Source.Item }
+fn main() {}

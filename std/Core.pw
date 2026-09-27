@@ -216,7 +216,7 @@ pub trait Iterator {
 
 pub trait Iterable {
     type Item
-    type Iter
+    type Iter: Iterator[Item = Item]
     fn iterator() -> Iter
 }
 

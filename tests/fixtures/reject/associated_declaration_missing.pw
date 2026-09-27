@@ -1,0 +1,5 @@
+trait Required {}
+trait Container { type Item: Required }
+struct Box[T] {}
+impl[T] Box[T] as Container { type Item=T }
+fn main() {}
