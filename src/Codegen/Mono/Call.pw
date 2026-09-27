@@ -5570,84 +5570,13 @@ pub impl Comp {
         return self.arena.functionCount()
     }
 
-    // `?.` must call the factories that witness `impl Receiver as Chain`,
-    // rather than an unrelated inherent factory with the same spelling.
-    // `findAssoc` intentionally searches only the bare associated surface, so
-    // it cannot select a trait witness here.  This selector uses the same
-    // nominal trait identity as the conformance gate below.
-    inout fn chainAssocWitness(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> U64 {
-        val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        val chain: Bind = self.internBytes(s: "Chain")
-        mut val i: U64 = 0U64
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.isAssoc && f.recvId == recvId && f.nameId == nameId && f.originTraitId == chain.nameId {
-                return i
-            }
-            i += 1U64
-        }
-        return self.arena.functionCount()
-    }
-
-    // Does the type named (nameStart,nameLen) FULLY implement `Chain` (spec/12)? `?.`
-    // desugars to `match base.chain() { Some(v) => <O.fromValue value=v.… />; None =>
-    // <O.empty /> }`, so a conformer must supply ALL of: a `chain()` returning an
-    // `Optional`, plus `fromValue(value:)` and `empty()` factories. Testing only for a
-    // `chain` method (忖度) let a struct with an unrelated `chain()` — or one returning a
-    // non-Optional, or lacking the factories — desugar and then fail deep in the backend
-    // with an out-of-source line number. The Mono rewrite gate and the Verify survivor
-    // check share this predicate so they never disagree on what conforms.
+    // Declaration checking has already proved every Chain requirement,
+    // including associated Value and factory signatures. Desugaring asks
+    // only whether this exact receiver has that nominal conformance. A
+    // second name-based search could select another module's same-named type.
     inout fn typeConformsToChain(typeRef: U64) -> Result[Bool, CompileDiagnostic] {
-        // `?.` is the `Chain` trait's desugar (spec/12), and Plew traits are NOMINAL:
-        // a type is a `Chain` only if it declares `impl … as Chain`. Check that first —
-        // else a type that merely happens to expose `chain()`/`fromValue`/`empty` with
-        // the right arities would be duck-typed into `?.` (a hidden-meaning accept that
-        // contradicts "忖度はしない"). Only `Optional` conforms in std/Core.pw.
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=false /> }
-        val type = self.arena.typeAt(index: typeRef)
-        val nameStart = type.nameStart
-        val nameLen = type.nameLen
-        val chainOwner = self.coreTraitOwner(name: "Chain")
-        if !(self.conformExists(typeRef: typeRef, traitOwner: chainOwner)) {
-            return <Result.Ok value=false />
-        }
-        val chN: Bind = self.internBytes(s: "chain")
-        if !(self.typeHasMethodNamed(recvStart: nameStart, recvLen: nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen)) {
-            return <Result.Ok value=false />
-        }
-        val noArgs: Array[Arg] = []
-        val mi: U64 = (try self.findMethod(recvStart: nameStart, recvLen: nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen, args: self.pushArgs(args: noArgs)))
-        if mi >= self.arena.functionCount() {
-            return <Result.Ok value=false />
-        }
-        // `chain()` takes no argument and returns an `Optional` (spec/12).
-        if self.arena.functionAt(index: mi).params.count() != 0U64 {
-            return <Result.Ok value=false />
-        }
-        if !(rangeEquals(bytes: self.arena.bytes, start: self.arena.functionAt(index: mi).retStart, len: self.arena.functionAt(index: mi).retLen, kw: "Optional")) {
-            return <Result.Ok value=false />
-        }
-        // `fromValue(value:)` takes exactly one argument, `empty()` none — a wrong arity
-        // means the desugar's `<O.fromValue value=…/>` / `<O.empty/>` would fail to
-        // resolve deep in the backend (an out-of-source line number). Check them here.
-        val fvN: Bind = self.internBytes(s: "fromValue")
-        val fvIdx: U64 = self.chainAssocWitness(recvStart: nameStart, recvLen: nameLen, nameStart: fvN.nameStart, nameLen: fvN.nameLen)
-        if fvIdx >= self.arena.functionCount() {
-            return <Result.Ok value=false />
-        }
-        if self.arena.functionAt(index: fvIdx).params.count() != 1U64 {
-            return <Result.Ok value=false />
-        }
-        val emN: Bind = self.internBytes(s: "empty")
-        val emIdx: U64 = self.chainAssocWitness(recvStart: nameStart, recvLen: nameLen, nameStart: emN.nameStart, nameLen: emN.nameLen)
-        if emIdx >= self.arena.functionCount() {
-            return <Result.Ok value=false />
-        }
-        if self.arena.functionAt(index: emIdx).params.count() != 0U64 {
-            return <Result.Ok value=false />
-        }
-        return <Result.Ok value=true />
+        return <Result.Ok value=self.conformExists(typeRef: typeRef, traitOwner: self.coreTraitOwner(name: "Chain")) />
     }
 
     inout fn collectRecordedValueLayout(exprId: U64) -> Result[(), CompileDiagnostic] {

@@ -1201,11 +1201,11 @@ pub impl Comp {
         // terminates; rejecting that rare ambiguous case too is the accepted cost of a
         // simple, crash-proof rule (rename the colliding type).
         mut val params: Array[Bind] = []
-        val gsi: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        val gsi: U64 = self.structIndexForType(ref: instRef)
         if gsi < self.arena.structCount() {
             params = self.arena.structAt(index: gsi).typeParams
         } else {
-            val gei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            val gei: U64 = self.enumIndexForType(ref: instRef)
             if gei < self.arena.enumCount() {
                 params = self.arena.enumAt(index: gei).typeParams
             } else {

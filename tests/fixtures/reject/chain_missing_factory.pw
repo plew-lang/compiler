@@ -1,0 +1,13 @@
+import @Std/Core with { Chain }
+enum Missing[T] { Full(v: T) Empty }
+pub impl[T] Missing[T] as Chain {
+    type Value = T
+    fn chain() -> Optional[T] {
+        match self {
+            Missing.Full(val v) => { return <Optional[T].Some v=v /> }
+            Missing.Empty => { return <Optional[T].None /> }
+        }
+    }
+    factory fromValue(value: T) { return <Missing[T].Full v=value /> }
+}
+fn main() {}

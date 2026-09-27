@@ -1,0 +1,3 @@
+// An unrelated same-named declaration must not supply Chain's requirements.
+pub struct Slot[T] {}
+pub impl[T] Slot[T] { fn chain() -> I64 { return 0I64 } }

@@ -6,17 +6,13 @@
 
 pub impl Comp {
     inout fn isGenericInst(ref: U64) -> Bool {
-        if ref >= self.arena.typeCount() {
-            return false
+        if ref == 0U64 || ref >= self.arena.typeCount() || self.arena.typeTerms[ref].args.count() == 0U64 { return false }
+        val structIndex = self.structIndexForType(ref: ref)
+        if structIndex < self.arena.structCount() {
+            return self.arena.structAt(index: structIndex).typeParams.count() > 0U64
         }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.args.count() == 0 {
-            return false
-        }
-        if self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.structCount() {
-            return true
-        }
-        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enumCount()
+        val enumIndex = self.enumIndexForType(ref: ref)
+        return enumIndex < self.arena.enumCount() && self.arena.enumAt(index: enumIndex).typeParams.count() > 0U64
     }
 
     // Is `ref` a function type (head `fn`, args = [return, params...])?
