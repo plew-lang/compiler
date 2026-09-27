@@ -1,0 +1,55 @@
+// Inspect declaration-time Mid without requesting LLVM or concrete instances.
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Mid/Build with { MidFunctionTemplates, MidBuildError }
+import ../../../src/Mid/Diagnostics with { reportMidBuildError }
+import @Std/Io with { print }
+import @Std/Process with { argAt, argCount }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.File path=argAt(1I64) />,
+        sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    compiler.traceCodegen = true
+    val allModules = argCount() > 3I64 && argAt(3I64) == "all"
+    mut val passed = 0U64
+    mut val failed = 0U64
+    mut val rootModule = 4000000000U64
+    mut val index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if compiler.nameIsMain(f: function) { rootModule = compiler.moduleOf(offset: function.defOffset) }
+        index += 1U64
+    }
+    mut val templates = <MidFunctionTemplates />
+    index = 0U64
+    while index < compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.body != 0U64 && !function.isExtern && (allModules || compiler.moduleOf(offset: function.defOffset) == rootModule) {
+            val built = templates.body(c: inout compiler, function: index)
+            match built.error {
+                MidBuildError.None => {
+                    val cached = templates.body(c: inout compiler, function: index)
+                    if built.canonical.body == 0U64 || cached.canonical.body != built.canonical.body {
+                        panic("parametric body cache lost its canonical identity")
+                    }
+                    passed += 1U64
+                }
+                MidBuildError.Frontend(diagnostic: val diagnostic) => { failed += 1U64
+                    print(index)
+                    print(diagnostic.message) }
+                MidBuildError.StringLiteral(offset: val offset, message: val message) => { failed += 1U64
+                    print(offset)
+                    print(message) }
+                _ => { failed += 1U64
+                    reportMidBuildError(c: inout compiler, fnIdx: index, error: built.error) }
+            }
+        }
+        index += 1U64
+    }
+    print("built")
+    print(passed)
+    print("failed")
+    print(failed)
+}
