@@ -929,8 +929,9 @@ pub impl Comp {
             }
         }
         if canonicalRecv != 0U64 && canonicalRecv < self.arena.typeCount() {
-            val recv: TypeRef = self.arena.typeAt(index: self.fieldStorageTypeRef(receiverRef: canonicalRecv))
-            val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+            val storage = self.fieldStorageTypeRef(receiverRef: canonicalRecv)
+            val recv: TypeRef = self.arena.typeAt(index: storage)
+            val si: U64 = self.structIndexForType(ref: storage)
             if si < self.arena.structCount() {
                 val declared: Array[Bind] = self.arena.structAt(index: si).typeParams
                 mut val i: U64 = 0U64
@@ -940,7 +941,7 @@ pub impl Comp {
                     i += 1U64
                 }
             } else {
-                val ei: U64 = self.genericEnumIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+                val ei: U64 = self.enumIndexForType(ref: storage)
                 if ei < self.arena.enumCount() {
                     val declared: Array[Bind] = self.arena.enumAt(index: ei).typeParams
                     mut val i: U64 = 0U64
@@ -1387,7 +1388,7 @@ pub impl Comp {
             // those leading substitutions here so LLVM never reconstructs them
             // from an operand or expected type.
             if (f.hasRecv || f.isAssoc) && recvInst != 0U64 && recvInst < self.arena.typeCount() {
-                recvCount = self.recvParamCount(nameStart: self.arena.typeAt(index: recvInst).nameStart, nameLen: self.arena.typeAt(index: recvInst).nameLen)
+                recvCount = self.recvParamCount(ref: recvInst)
                 // `Pair.of(...)` is written against the generic head `Pair`,
                 // whose source TypeRef has no actual arguments.  In that form
                 // the call arguments (or expected result) determine *all*
@@ -1471,12 +1472,12 @@ pub impl Comp {
         if operandErr == 0U64 || returnErr == 0U64 || operandRef >= self.arena.typeCount() || returnRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val operandResult: TypeRef = self.arena.typeAt(index: operandRef)
         if operandResult.args.count() < 2U64 { return <Result.Ok value=() /> }
-        val enumIndex: U64 = self.genericEnumIndex(nameStart: operandResult.nameStart, nameLen: operandResult.nameLen)
+        val enumIndex: U64 = self.genericEnumIndexForType(ref: operandRef)
         if enumIndex >= self.arena.enumCount() { return <Result.Ok value=() /> }
         val okName: Bind = self.kwSpan(kw: "Ok", kwLen: 2U64)
         val errName: Bind = self.kwSpan(kw: "Err", kwLen: 3U64)
-        val okVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: okName.nameStart, variantLen: okName.nameLen)
-        val errVariant: U64 = self.variantIndex(enumStart: operandResult.nameStart, enumLen: operandResult.nameLen, variantStart: errName.nameStart, variantLen: errName.nameLen)
+        val okVariant: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: okName.nameStart, nameLen: okName.nameLen)
+        val errVariant: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: errName.nameStart, nameLen: errName.nameLen)
         if okVariant >= self.arena.enumAt(index: enumIndex).variants.count() || errVariant >= self.arena.enumAt(index: enumIndex).variants.count() { return <Result.Ok value=() /> }
         mut val hasConversion: Bool = !self.typeRefEq(a: operandErr, b: returnErr)
         mut val conversionResolution: U64 = 0U64
@@ -1516,12 +1517,12 @@ pub impl Comp {
         val optional: TypeRef = self.arena.typeAt(index: nextRef)
         if !rangeEquals(bytes: self.arena.bytes, start: optional.nameStart, len: optional.nameLen, kw: "Optional") || optional.args.count() != 1U64 { return <Result.Ok value=false />}
         if !self.typeRefEq(a: optional.args[0U64], b: itemRef) { return <Result.Ok value=false />}
-        val enumIndex: U64 = self.genericEnumIndex(nameStart: optional.nameStart, nameLen: optional.nameLen)
+        val enumIndex: U64 = self.genericEnumIndexForType(ref: nextRef)
         if enumIndex >= self.arena.enumCount() { return <Result.Ok value=false />}
         val someName: Bind = self.kwSpan(kw: "Some", kwLen: 4U64)
         val noneName: Bind = self.kwSpan(kw: "None", kwLen: 4U64)
-        val some: U64 = self.variantIndex(enumStart: optional.nameStart, enumLen: optional.nameLen, variantStart: someName.nameStart, variantLen: someName.nameLen)
-        val none: U64 = self.variantIndex(enumStart: optional.nameStart, enumLen: optional.nameLen, variantStart: noneName.nameStart, variantLen: noneName.nameLen)
+        val some: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: someName.nameStart, nameLen: someName.nameLen)
+        val none: U64 = self.variantIndexInDeclaration(enumIndex: enumIndex, nameStart: noneName.nameStart, nameLen: noneName.nameLen)
         val declaration: EnumDef = self.arena.enumAt(index: enumIndex)
         if some >= declaration.variants.count() || none >= declaration.variants.count() || some == none { return <Result.Ok value=false />}
         if declaration.variants[some].fields.count() != 1U64 || declaration.variants[none].fields.count() != 0U64 { return <Result.Ok value=false />}
@@ -2686,7 +2687,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: target.nameStart, len: target.nameLen, kw: "Array") && arguments.count() == 1U64 {
             return <Result.Ok value=<ValueConversionProof.ArrayRepack sourceRef=sourceRef targetRef=targetRef element=arguments[0U64] /> />
         }
-        val enumIdx: U64 = self.genericEnumIndex(nameStart: target.nameStart, nameLen: target.nameLen)
+        val enumIdx: U64 = self.genericEnumIndexForType(ref: targetRef)
         if enumIdx < self.arena.enumCount() {
             val payloads: Array[EnumPayloadConversion] = (try self.enumRepackPayloadConversions(sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, knownExistential: knownExistential))
             mut val payload: U64 = 0U64

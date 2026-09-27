@@ -224,7 +224,7 @@ pub impl Comp {
                 return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
             }
         }
-        return <Result.Ok value=(try self.compatNamed(te: te, tin: tin)) />
+        return <Result.Ok value=(try self.compatNamed(expectedRef: exp, te: te, tin: tin)) />
     }
 
     // Structural field-by-field compatibility of two Record TypeTerms.
@@ -255,7 +255,7 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
-    inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Result[Bool, CompileDiagnostic] {
+    inout fn compatNamed(expectedRef: U64, te: TypeRef, tin: TypeRef) -> Result[Bool, CompileDiagnostic] {
         if te.hasDecl && tin.hasDecl {
             if te.declOffset != tin.declOffset { return <Result.Ok value=false /> }
         } else {
@@ -277,12 +277,7 @@ pub impl Comp {
             // but no repack exists, so accepting it would silently miscompile — reject it here.
             mut val headErasable = rangeEquals(bytes: self.arena.bytes, start: te.nameStart, len: te.nameLen, kw: "Array")
             if !headErasable {
-                if te.hasDecl {
-                    val enumIndex = self.arena.enumIndexByOffset(offset: te.declOffset)
-                    headErasable = enumIndex < self.arena.enumCount() && self.arena.enumAt(index: enumIndex).typeParams.count() != 0U64
-                } else {
-                    headErasable = self.genericEnumIndex(nameStart: te.nameStart, nameLen: te.nameLen) < self.arena.enumCount()
-                }
+                headErasable = self.genericEnumIndexForType(ref: expectedRef) < self.arena.enumCount()
             }
             mut val i: U64 = 0
             while i < te.args.count() {

@@ -142,10 +142,9 @@ pub impl Comp {
                                 // construction then reports cleanly downstream.
                                 if eRef != 0 {
                                     if self.arena.typeAt(index: eRef).args.count() == 0U64 {
-                                        val eh: TypeRef = self.arena.typeAt(index: eRef)
-                                        if self.genericStructIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.structCount() {
+                                        if self.genericStructIndexForType(ref: eRef) < self.arena.structCount() {
                                             eRef = 0
-                                        } else if self.genericEnumIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.enumCount() {
+                                        } else if self.genericEnumIndexForType(ref: eRef) < self.arena.enumCount() {
                                             eRef = 0
                                         }
                                     }

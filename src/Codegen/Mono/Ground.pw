@@ -1413,7 +1413,7 @@ pub impl Comp {
                 skipProvidedTemplate = true
             }
             if f.isProvided {
-                if self.genericStructIndex(nameStart: f.recvStart, nameLen: f.recvLen) < self.arena.structCount() {
+                if self.genericStructIndexForType(ref: f.recvTy) < self.arena.structCount() {
                     skipProvidedTemplate = true
                 }
             }

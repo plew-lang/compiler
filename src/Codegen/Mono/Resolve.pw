@@ -241,7 +241,7 @@ pub impl Comp {
         if t.paramId == 0U64 && t.args.count() == 0U64 {
             return false
         }
-        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enumCount()
+        return self.genericEnumIndexForType(ref: ref) < self.arena.enumCount()
     }
 
     inout fn typeRefEq(a: U64, b: U64) -> Bool {

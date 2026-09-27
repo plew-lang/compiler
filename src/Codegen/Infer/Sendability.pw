@@ -69,10 +69,7 @@ pub impl Comp {
             }
             return <Result.Ok value=(try self.fieldsAreSendable(params: sd.typeParams, targs: t.args, fields: sd.fields, depth: depth - 1U64)) />
         }
-        mut val ei: U64 = self.concreteEnumIndex(nStart: t.nameStart, nLen: t.nameLen)
-        if ei >= self.arena.enumCount() {
-            ei = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        }
+        val ei = self.enumIndexForType(ref: rr)
         if ei < self.arena.enumCount() {
             val ed: EnumDef = self.arena.enumAt(index: ei)
             if ed.isNonsendable {

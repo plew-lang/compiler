@@ -550,7 +550,7 @@ pub impl Comp {
         mut val rcount: U64 = 0
         mut val recvInst: U64 = 0
         if genericRecv {
-            rcount = self.recvParamCount(nameStart: rt.nameStart, nameLen: rt.nameLen)
+            rcount = self.recvParamCount(ref: concreteRecvRef)
             recvInst = concreteRecvRef
             if mf.typeParams.count() <= rcount {
                 return <Result.Ok value=() />
@@ -587,12 +587,12 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recvParamCount(nameStart: U64, nameLen: U64) -> U64 {
-        val gsi: U64 = self.genericStructIndex(nameStart: nameStart, nameLen: nameLen)
+    inout fn recvParamCount(ref: U64) -> U64 {
+        val gsi: U64 = self.structIndexForType(ref: ref)
         if gsi < self.arena.structCount() {
             return self.arena.structAt(index: gsi).typeParams.count()
         }
-        val gei: U64 = self.genericEnumIndex(nameStart: nameStart, nameLen: nameLen)
+        val gei: U64 = self.enumIndexForType(ref: ref)
         if gei < self.arena.enumCount() {
             return self.arena.enumAt(index: gei).typeParams.count()
         }

@@ -105,7 +105,7 @@ inout fn retTySelfErasable(ref: U64) -> Bool {
     // `Self` is nested: the head must be one eraseCovariantToAny rebuilds — `Array` or a
     // generic enum. Every arg that itself mentions `Self` must be erasable too.
     val isArr: Bool = rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
-    val isEnum: Bool = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enumCount()
+    val isEnum: Bool = self.genericEnumIndexForType(ref: ref) < self.arena.enumCount()
     if !(isArr) && !(isEnum) {
         return false
     }

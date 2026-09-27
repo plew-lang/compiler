@@ -1,0 +1,25 @@
+import /Frontend with { Comp }
+import /Ir with { Bind, StructDef, EnumDef, TypeRef }
+import @Std/Io with { print }
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Item")
+    val parameter = compiler.internBytes(s: "T")
+    val bind = <Bind nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=1U64 fieldStart=0U64 fieldLen=0U64 />
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[bind] fields=[] isUnique=false isExtern=false defOffset=100U64 />)
+    compiler.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] fields=[] isUnique=false isExtern=false defOffset=200U64 />)
+    compiler.arena.registerEnum(<EnumDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[bind] variants=[] defOffset=300U64 />)
+    compiler.arena.registerEnum(<EnumDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId typeParams=[] variants=[] defOffset=400U64 />)
+    val genericStruct = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val concreteStruct = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
+    val genericEnum = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=300U64 />)
+    val concreteEnum = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=400U64 />)
+    print(compiler.genericStructIndexForType(ref: genericStruct) == 0U64)
+    print(compiler.genericStructIndexForType(ref: concreteStruct) == compiler.arena.structCount())
+    print(compiler.genericEnumIndexForType(ref: genericEnum) == 0U64)
+    print(compiler.genericEnumIndexForType(ref: concreteEnum) == compiler.arena.enumCount())
+    print(compiler.genericEnumIndexForType(ref: genericStruct) == compiler.arena.enumCount())
+    print(compiler.recvParamCount(ref: concreteStruct) == 0U64)
+    print(compiler.recvParamCount(ref: genericEnum) == 1U64)
+}
