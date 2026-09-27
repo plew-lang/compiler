@@ -39,14 +39,18 @@ conditional cleanup and preservation of the immutable source snapshot.
 
 ## Declaration-time global effects
 
-`DeclarationAccess.pw` runs the shared global-effect graph over source function, closure and global-initializer
+`DeclarationAccess.pw` uses `analyzeFrontendDeclarations` before executable
+finalization and runs the shared global-effect graph over source function, closure and global-initializer
 bodies without requesting executable instances for unused declarations.
 Compile and link it as above, then run `test-declaration-access.py --probe PATH
 --std PATH --out NEW_DIRECTORY`. The cases distinguish unused ordinary
 and generic conflicts, transitive calls, nested/generic destruction, disjoint
 globals, ownership returned beyond the borrow lifetime, nested closures and
 global initialization. Creating a closure alone must not propagate its body effects. The probe also
-checks that concrete body, layout, and destruction inventories remain unchanged.
+checks that executable queues and finalized destruction contracts start empty
+and remain empty, and that body identity/layout inventories remain unchanged.
+Semantic body identities (including the global initializer) may already exist;
+identity interning is not executable discovery.
 
 The result retains unresolved call, value, storage and symbolic destruction
 obligations. `clear` means no definite conflict in this analysis, not successful

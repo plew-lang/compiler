@@ -18,18 +18,24 @@ pub impl Comp {
 
     // Synthetic control-flow values need the same finalized ownership facts
     // as authored values, before Mid starts constructing bodies.
-    inout fn finalizeDiscriminantType() -> Result[(), CompileDiagnostic] {
+    inout fn prepareDiscriminantType() -> Result[(), CompileDiagnostic] {
         self.arena.loweringDiscriminantType = 0U64
         val name = self.internBytes(s: "I64")
         val term = self.simpleTypeRef(nameStart: name.nameStart, nameLen: name.nameLen)
         match (try self.arcClassOfRef(ref: term)) {
             ArcClass.Scalar => {
-                try self.enqueueFinalDestruction(typeRef: term)
                 self.arena.loweringDiscriminantType = term
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: name.nameStart, msg: "internal error: discriminant requires a primitive scalar type") /> }
         }
         return <Result.Ok value=() />
+    }
+
+    // Primitive semantic identity is available before executable discovery.
+    // Its finalized ownership contract belongs to the executable phase only.
+    inout fn finalizeDiscriminantType() -> Result[(), CompileDiagnostic] {
+        try self.prepareDiscriminantType()
+        return self.enqueueFinalDestruction(typeRef: self.arena.loweringDiscriminantType)
     }
 
     inout fn finalDestructorCallIsValid(call: FinalDestructorCall) -> Bool {

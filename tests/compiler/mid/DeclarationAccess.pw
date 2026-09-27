@@ -1,4 +1,4 @@
-import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/Mid/Build with { MidFunctionTemplates }
 import ../../../src/Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, DeclarationAccessError, DeclarationAccessNode }
@@ -9,12 +9,15 @@ import @Std/Io with { print }
 
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
         sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
     val instances = compiler.arena.bodyInstanceCount()
     val bodies = compiler.monoWork.bodyInstances.count()
     val destructions = compiler.arena.finalDestructions.count()
     val structures = compiler.arena.structCount()
+    // Semantic identity interning is distinct from executable discovery.
+    assert(bodies == 0U64)
+    assert(destructions == 0U64)
     mut val templates = <MidFunctionTemplates />
     match analyzeDeclarationGlobalAccess(c: inout compiler, templates: inout templates) {
         Result.Ok(value: val analysis) => {
