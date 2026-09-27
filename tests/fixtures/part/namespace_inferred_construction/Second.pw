@@ -1,0 +1,2 @@
+pub struct Item[T] { pub val other: T }
+pub impl[T] Item[T] { factory }

@@ -1615,7 +1615,7 @@ pub impl Comp {
                 // Constructions without sufficient declared context infer
                 // from the collected field terms, independent of field order.
                 if !isEnum && !self.isGenericInst(ref: instance) {
-                    val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields))
+                    val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, fields: fields))
                     if inferred != 0U64 { instance = inferred }
                 }
                 mut val completedFields: Array[MakeField] = []

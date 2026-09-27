@@ -1522,7 +1522,7 @@ pub impl Comp {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                     if !isEnum {
                         if !(self.isGenericInst(ref: ty)) {
-                            val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields))
+                            val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: ty, fields: fields))
                             if inferred != 0U64 {
                                 self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
                             }
@@ -1579,10 +1579,16 @@ pub impl Comp {
     // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
     // be inferred: not a generic struct, a parameter no bare field pins, or a field value
     // that is untyped / an array element / conflicts with another field's binding.
-    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
-        // generic structs are excluded from structIndexByName, so resolve the template
-        // through genericStructIndex (a 0-arg / non-generic head is not our case).
-        val sidx: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
+    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
+        // Argument inference refines the selected declaration; it cannot
+        // replace it with a same-spelled generic from another module.
+        mut val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        if typeRef != 0U64 && typeRef < self.arena.typeCount() {
+            val term = self.arena.typeTerms[typeRef]
+            if term.hasDecl { declaration = <Bind nameStart=term.declOffset nameLen=1U64 fieldStart=0U64 fieldLen=0U64 /> }
+        }
+        if declaration.nameLen == 0U64 { return <Result.Ok value=0U64 /> }
+        val sidx = self.arena.structIndexByOffset(offset: declaration.nameStart)
         if sidx >= self.arena.structCount() {
             return <Result.Ok value=0U64 />
         }

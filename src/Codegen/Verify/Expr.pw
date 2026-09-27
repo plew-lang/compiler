@@ -281,7 +281,10 @@ pub impl Comp {
                 // Let/return/argument. Check generic field values here too.
                 val selectedMakeType = self.parametricExprTerm(exprId: id)
                 if !isEnum && (selectedMakeType == 0U64 || self.arena.typeAt(index: selectedMakeType).args.count() == 0U64) {
-                    if self.genericStructIndex(nameStart: typeStart, nameLen: typeLen) < self.arena.structCount() {
+                    mut val receiver = selectedMakeType
+                    if receiver == 0U64 { receiver = ty }
+                    val declaration = self.structIndexForType(ref: receiver)
+                    if declaration < self.arena.structCount() && self.arena.structAt(index: declaration).typeParams.count() != 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)") />
                     }
                 }

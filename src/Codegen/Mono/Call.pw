@@ -5784,7 +5784,7 @@ pub impl Comp {
                 mut val gty: U64 = ty
                 if !isEnum {
                     if !(self.isGenericInst(ref: gty)) {
-                        val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields))
+                        val inferred: U64 = (try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: gty, fields: fields))
                         if inferred != 0U64 {
                             self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
                             gty = inferred
