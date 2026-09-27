@@ -916,66 +916,20 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // The module that DEFINES the name (start,len): a free function's own module, or a
-    // type declaration's module (via defOffset / nameStart, since type nameStart is
-    // re-interned). importCycleSentinel() if no such declaration is loaded. Used to turn an
-    // `import … with { name }` record into a module→module dependency edge.
-    inout fn definingModuleOfName(start: U64, len: U64) -> U64 {
-        val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
-        if fi < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: fi)
-            return self.moduleOf(offset: f.nameStart)
-        }
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.arena.firstStructNamed(nameId: qId)
-        while i < self.arena.structCount() {
-            val sd: StructDef = self.arena.structAt(index: i)
-            if sd.nameId == qId {
-                if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
-            }
-            i = self.arena.nextStructNamed(index: i)
-        }
-        i = 0
-        while i < self.arena.enumCount() {
-            val ed: EnumDef = self.arena.enumAt(index: i)
-            if ed.nameId == qId {
-                if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
-            }
-            i += 1
-        }
-        i = 0
-        while i < self.decls.traitCount() {
-            val td: TraitDef = self.decls.traitAt(index: i)
-            if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
-            i += 1
-        }
-        i = 0
-        while i < self.arena.newtypeCount() {
-            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
-            if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
-                if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
-            }
-            i += 1
-        }
-        return importCycleSentinel()
-    }
-}
-
-pub impl Comp {
-
     // DFS over the module import graph (colors: 0=white, 1=gray/on-stack, 2=black). A gray
     // target is a back edge → a circular import; report it at the offending import.
-    inout fn dfsImportCycle(node: U64, color: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) -> Result[(), CompileDiagnostic] {
+    inout fn dfsImportCycle(node: U64, color: inout Array[U64], parents: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) -> Result[(), CompileDiagnostic] {
         color[node] = 1U64
         mut val k: U64 = 0
         while k < ef.count() {
             if ef[k] == node {
                 val w: U64 = et[k]
                 if color[w] == 1U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: eo[k], msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.") />
+                    return <Result.Err error=self.diagnosticAt(offset: eo[k], msg: self.importCycleMessage(node: node, target: w, parents: parents)) />
                 }
                 if color[w] == 0U64 {
-                    try self.dfsImportCycle(node: w, color: inout color, ef: ef, et: et, eo: eo)
+                    parents[w] = node
+                    try self.dfsImportCycle(node: w, color: inout color, parents: inout parents, ef: ef, et: et, eo: eo)
                 }
             }
             k += 1
@@ -984,10 +938,35 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Enforce the DAG rule (spec/15): the module `import` graph must have no cycle. Each
-    // `import … with { name }` becomes an edge importing-module → defining-module-of-name;
-    // a cycle among them is a compile error (parts share a module id, so they never form an
-    // inter-module edge).
+    fn importModulePath(module: U64) -> String {
+        mut val index = 0U64
+        while index < self.modules.sourceFileCount() {
+            if self.modules.sourceFileRange(index: index).moduleId == module {
+                return self.modules.sourceFilePath(index: index)
+            }
+            index += 1U64
+        }
+        return "<unknown module>"
+    }
+
+    fn importCycleMessage(node: U64, target: U64, parents: Array[U64]) -> String {
+        mut val reverse: Array[U64] = []
+        mut val current = node
+        while current != target {
+            reverse.append(current)
+            current = parents[current]
+        }
+        mut val message = "circular import: " + self.importModulePath(module: target)
+        mut val index = reverse.count()
+        while index > 0U64 {
+            index -= 1U64
+            message = message + " -> " + self.importModulePath(module: reverse[index])
+        }
+        return message + " -> " + self.importModulePath(module: target) + ". The module import graph must be acyclic (spec/15)."
+    }
+
+    // Every resolved import contributes an edge, independently of selected names,
+    // aliases or re-exports. Parts themselves do not contribute import edges.
     inout fn detectImportCycles() -> Result[(), CompileDiagnostic] {
         mut val maxId: U64 = 0
         mut val ri: U64 = 0
@@ -1001,29 +980,25 @@ pub impl Comp {
         mut val et: Array[U64] = []
         mut val eo: Array[U64] = []
         mut val ii: U64 = 0
-        while ii < self.modules.imports.count() {
-            val im: Bind = self.modules.imports[ii]
-            val from: U64 = im.fieldStart
-            val to: U64 = self.definingModuleOfName(start: im.nameStart, len: im.nameLen)
-            if to != importCycleSentinel() {
-                if to != from {
-                    ef.append(from)
-                    et.append(to)
-                    eo.append(im.nameStart)
-                }
-            }
-            ii += 1
+        while ii < self.modules.importEdges.count() {
+            val edge = self.modules.importEdges[ii]
+            ef.append(edge.fieldStart)
+            et.append(edge.fieldLen)
+            eo.append(edge.nameStart)
+            ii += 1U64
         }
         mut val color: Array[U64] = []
+        mut val parents: Array[U64] = []
         mut val ci: U64 = 0
         while ci < n {
             color.append(0U64)
+            parents.append(0U64)
             ci += 1
         }
         mut val s: U64 = 0
         while s < n {
             if color[s] == 0U64 {
-                try self.dfsImportCycle(node: s, color: inout color, ef: ef, et: et, eo: eo)
+                try self.dfsImportCycle(node: s, color: inout color, parents: inout parents, ef: ef, et: et, eo: eo)
             }
             s += 1
         }

@@ -988,7 +988,6 @@ fn idInSet(set: Array[U64], id: U64) -> Bool {
 }
 
 // Sentinel for "no defining module found" (a value no real module id takes).
-fn importCycleSentinel() -> U64 { return 4000000000U64 }
 
 // Shared pipeline observation boundary. Backend imports this through the
 // existing Frontend dependency rather than duplicating the CLI flag or
@@ -1466,7 +1465,7 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
                             if imp.isImport {
                                 val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
                                 if tgt != 4000000000U64 {
-                                    c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
+                                    c.modules.importEdges.append(<Bind nameStart=imp.path.start nameLen=imp.path.end - imp.path.start fieldStart=moduleId fieldLen=tgt />)
                                     c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: tgt, reExport: false)
                                     if imp.isPublic {
                                         c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)

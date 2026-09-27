@@ -1,0 +1,2 @@
+import ./Second
+pub fn first() {}

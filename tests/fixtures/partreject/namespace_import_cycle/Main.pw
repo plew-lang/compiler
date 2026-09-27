@@ -1,0 +1,2 @@
+import ./First
+fn main() {}

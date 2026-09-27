@@ -3033,16 +3033,12 @@ pub struct Modules {
     mut val syntaxRootModules: Set[U64] = Set.new()
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
-    // import EDGES (fieldStart = importing module, fieldLen = the module the import
-    // resolved to). Recorded by the loader for each `import` (with-list or namespace).
-    // Used to disambiguate same-named exports across COEXISTING package versions: when
-    // several loaded modules export the same name, a use prefers the candidate whose
-    // module the use's own module directly imported (so two `import @Leaf` resolving to
-    // different versions bind their own `leafval`). A single candidate is unaffected
-    // (re-exports / normal cross-module use stay name-based).
+    // Resolved import edges: fieldStart is importer, fieldLen is target module;
+    // nameStart/nameLen retain the import path span for diagnostics. Includes
+    // selected-name, namespace and public imports, independent of declarations.
     pub mut val importEdges: Array[Bind] = []
     // re-export EDGES (fieldStart = the re-exporting module, fieldLen = the source module it
-    // forwards from). Recorded by the loader for each `export <path> with { … }` (spec/15).
+    // forwards from). Recorded by the loader for each `pub import <path>` (spec/15).
     // Composed with an import edge for visibility: a name defined+exported in the source
     // module is visible to a consumer that imported the re-exporting module (the barrel) and
     // brought the name into scope — the barrel need not be the name's defining module.
