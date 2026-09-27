@@ -1,0 +1,2 @@
+pub struct Item { pub val number: I64 }
+pub impl Item { factory }

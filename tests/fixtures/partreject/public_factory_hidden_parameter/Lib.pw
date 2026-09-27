@@ -1,0 +1,3 @@
+struct Hidden { val value: I64 }
+pub struct Container { val hidden: Hidden }
+pub impl Container { factory }

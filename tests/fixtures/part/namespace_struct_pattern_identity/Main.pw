@@ -1,0 +1,7 @@
+import ./Alpha
+import ./Beta
+import @Std/Io with { print }
+fn main() {
+    val value = <Beta.Item text="beta" extra=42I64 />
+    match value { Beta.Item { val text, val extra } => { print(text) print(extra) } }
+}

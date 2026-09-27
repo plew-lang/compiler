@@ -675,29 +675,32 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn destructureSubjectType(info: TypeInfo, isElement: Bool) -> Result[U64, CompileDiagnostic] {
+        val term = self.typedIrRefOfInfo(ti: info)
+        if !isElement { return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: term) /> }
+        if info.kind == 3 && term != 0U64 && term < self.arena.typeCount() {
+            val array = self.arena.typeAt(index: term)
+            if array.args.count() != 0U64 { return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: array.args[0]) /> }
+        }
+        val item = (try self.iterableItemInfo(et: info))
+        return <Result.Ok value=self.lexicalLayoutReceiver(receiverTerm: self.typedIrRefOfInfo(ti: item)) />
+    }
+
+    inout fn structPatternMatches(typeStart: U64, typeLen: U64, subjectRef: U64) -> Bool {
+        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
+        val index = self.structIndexForType(ref: subjectRef)
+        if identity.nameLen == 0U64 || index >= self.arena.structCount() { return false }
+        return identity.nameStart == self.arena.structAt(index: index).defOffset
+    }
+
     inout fn checkDestructureSiteBinds(site: DestructureSite) -> Result[(), CompileDiagnostic] {
         val ti: TypeInfo = (try self.typeOf(id: site.initId))
-        mut val tnStart: U64 = ti.nameStart
-        mut val tnLen: U64 = ti.nameLen
-        if site.isElem {
-            // the loop-source case: the record is the array's ELEMENT — a kind-3
-            // TypeInfo's name span already names the element.
-            if ti.kind != 3 {
-                val item: TypeInfo = (try self.iterableItemInfo(et: ti))
-                tnStart = item.nameStart
-                tnLen = item.nameLen
-            }
-        } else {
-            if ti.ref != 0U64 && ti.ref < self.arena.typeCount() {
-                tnStart = self.arena.typeAt(index: ti.ref).nameStart
-                tnLen = self.arena.typeAt(index: ti.ref).nameLen
-            }
-        }
+        val subjectRef = (try self.destructureSubjectType(info: ti, isElement: site.isElem))
         // the struct form (`P { val x } = e`) declares the type it destructures —
         // the initializer must actually BE that struct (another type silently
         // binding same-named fields would hide a type error, spec/03).
         if site.typeLen > 0U64 {
-            if !(spansEqual(c: inout self, aStart: site.typeStart, aLen: site.typeLen, bStart: tnStart, bLen: tnLen)) {
+            if !self.structPatternMatches(typeStart: site.typeStart, typeLen: site.typeLen, subjectRef: subjectRef) {
                 if site.isElem {
                     return <Result.Err error=self.diagnosticAt(offset: site.offset, msg: "for-loop destructure pattern type does not match the element type") />
                 } else {
@@ -706,7 +709,7 @@ pub impl Comp {
                 return <Result.Ok value=() />
             }
         }
-        val sidx: U64 = self.structIndexByName(start: tnStart, len: tnLen)
+        val sidx: U64 = self.structIndexForType(ref: subjectRef)
         if sidx >= self.arena.structCount() {
             return <Result.Ok value=() />
         }
@@ -762,10 +765,8 @@ pub impl Comp {
             di += 1
         }
         if a.isStruct {
-            mut val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
-            if si >= self.arena.structCount() {
-                si = self.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
-            }
+            val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: a.enumStart), start: a.enumStart, len: a.enumLen)
+            val si = self.arena.structIndexByOffset(offset: identity.nameStart)
             if si < self.arena.structCount() {
                 val sd: StructDef = self.arena.structAt(index: si)
                 mut val fi: U64 = 0
@@ -827,7 +828,7 @@ pub impl Comp {
             // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
             val st: TypeInfo = (try self.typeOf(id: scrut))
             if st.nameLen > 0U64 {
-                if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
+                if !self.structPatternMatches(typeStart: a.enumStart, typeLen: a.enumLen, subjectRef: (try self.destructureSubjectType(info: st, isElement: false))) {
                     return <Result.Err error=self.diagnosticAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type") />
                 }
             }

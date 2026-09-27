@@ -1,0 +1,2 @@
+pub struct Item { pub val text: String pub val extra: I64 }
+pub impl Item { factory }
