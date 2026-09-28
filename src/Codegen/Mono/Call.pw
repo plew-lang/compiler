@@ -4594,7 +4594,16 @@ pub impl Comp {
                 try self.prepareLexicalBody(fnIdx: instance.fnIdx)
             }
         }
-        return self.scanFinalBodyInstance(bodyId: bodyId)
+        try self.scanFinalBodyInstance(bodyId: bodyId)
+        val signature = self.arena.bodySignature(bodyId: bodyId)
+        try self.enqueueFinalDestruction(typeRef: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef)
+        try self.enqueueFinalDestruction(typeRef: signature.resultType)
+        mut val parameter = 0U64
+        while parameter < signature.parameterTypes.count() {
+            try self.enqueueFinalDestruction(typeRef: signature.parameterTypes[parameter])
+            parameter += 1U64
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn scanFinalBodyInstance(bodyId: U64) -> Result[(), CompileDiagnostic] {
@@ -5068,10 +5077,26 @@ pub impl Comp {
         return self.freezeFinalAccesses(start: calls)
     }
 
-    inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
-        try self.initializeFinalCallables()
-        mut val publication = <FinalizationPublication />
-        mut val requests = <FinalBodyRequests />
+    inout fn prepareFinalInitializers(state: inout FinalDependencies) -> Result[(), CompileDiagnostic] {
+        match state.failure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        if state.initializersPrepared { return <Result.Ok value=() /> }
+        val saved = self.cur
+        val collecting = self.inCollection
+        self.inCollection = true
+        val result = self.prepareFinalInitializersInContext()
+        self.cur = saved
+        self.inCollection = collecting
+        match result {
+            Result.Ok(value: _) => { state.initializersPrepared = true }
+            Result.Err(error: val diagnostic) => { state.failure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
+    inout fn prepareFinalInitializersInContext() -> Result[(), CompileDiagnostic] {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // Global initializers are an anonymous body instance.  They can reach
@@ -5092,6 +5117,87 @@ pub impl Comp {
             try self.scanStmtInsts(stmtId: self.arena.globals[gi].letStmt)
             gi += 1U64
         }
+        return <Result.Ok value=() />
+    }
+
+    fn hasFinalDependencies(state: FinalDependencies) -> Bool {
+        return state.globals < self.selectedGlobalTargets.count() || state.aggregates < self.arena.finalAggregates.count() || state.calls < self.finalCalleeCount() || state.storages < self.arena.finalStorages.count()
+    }
+
+    // One wave preserves AOT worklist order. A lazy driver drains these waves
+    // without scanning the bodies merely registered by their signatures.
+    inout fn advanceFinalDependencies(state: inout FinalDependencies) -> Result[(), CompileDiagnostic] {
+        match state.failure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        val saved = self.cur
+        val collecting = self.inCollection
+        self.inCollection = true
+        val result = self.advanceFinalDependenciesInContext(state: inout state)
+        self.cur = saved
+        self.inCollection = collecting
+        match result {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { state.failure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
+    inout fn closeFinalDependencies(state: inout FinalDependencies) -> Result[(), CompileDiagnostic] {
+        // Always enter once so a terminal failure cannot look like an empty
+        // successful worklist on a repeated request.
+        try self.advanceFinalDependencies(state: inout state)
+        while self.hasFinalDependencies(state: state) {
+            try self.advanceFinalDependencies(state: inout state)
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn advanceFinalDependenciesInContext(state: inout FinalDependencies) -> Result[(), CompileDiagnostic] {
+        if state.globals < self.selectedGlobalTargets.count() {
+            val target: U64 = self.selectedGlobalTargets[state.globals]
+            try self.prepareGlobalInitializer(target: target)
+            try self.enterGlobalInitializer(target: target)
+            val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+            try self.scanStmtInsts(stmtId: self.arena.globals[index].letStmt)
+            self.cur.globalInitializerTarget = <Optional.None />
+            state.globals += 1U64
+        }
+        // Destructors can call ordinary functions and construct further
+        // values. Both queues must close together, before the freeze.
+        while state.aggregates < self.arena.finalAggregates.count() {
+            try self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[state.aggregates].resultTypeRef)
+            state.aggregates += 1U64
+        }
+        while state.calls < self.finalCalleeCount() {
+            val call = self.arena.finalCallees[state.calls]
+            try self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
+            try self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
+            mut val parameter = 0U64
+            while parameter < call.parameterTypeRefs.len {
+                try self.enqueueFinalDestruction(typeRef: self.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter))
+                parameter += 1U64
+            }
+            state.calls += 1U64
+        }
+        while state.storages < self.arena.finalStorages.count() {
+            val storage = self.arena.finalStorages[state.storages]
+            try self.enqueueFinalDestruction(typeRef: storage.sourceTypeRef)
+            try self.enqueueFinalDestruction(typeRef: storage.targetTypeRef)
+            state.storages += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
+        try self.initializeFinalCallables()
+        mut val publication = <FinalizationPublication />
+        mut val requests = <FinalBodyRequests />
+        val noParams: Array[Bind] = []
+        val noArgs: Array[U64] = []
+        mut val dependencies = <FinalDependencies />
+        try self.prepareFinalInitializers(state: inout dependencies)
         // Only the selected entry is a root. Sync and async callees both
         // join the executable closure through their finalized call sites.
         mut val fi: U64 = 0U64
@@ -5125,63 +5231,13 @@ pub impl Comp {
         // finalized call or proof below.  Mixing the two made every method on
         // every discovered type executable and reintroduced imported macro
         // parser bodies through their incidental collection-time layouts.
-        mut val globalI: U64 = 0U64
-        mut val bodyI: U64 = 0U64
-        // Scanning a body can append its selected callee body. This one worklist
-        // reaches a fixed point without a second `(Func,args)` queue, so a
-        // generic free function cannot be reopened under a different identity
-        // after its CallResolution has been frozen.
-        mut val aggregateI: U64 = 0U64
-        mut val callI: U64 = 0U64
-        mut val storageI: U64 = 0U64
-        while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() || storageI < self.arena.finalStorages.count() {
+        mut val bodyI = 0U64
+        while bodyI < self.monoWork.bodyInstances.count() || self.hasFinalDependencies(state: dependencies) {
             if bodyI < self.monoWork.bodyInstances.count() {
-                val bodyId = self.monoWork.bodyInstances[bodyI]
-                try self.requestFinalBody(bodyId: bodyId, requests: inout requests)
-                val signature = self.arena.bodySignature(bodyId: bodyId)
-                // The selected body's receiver can carry a different view
-                // from the caller's value and is not an explicit parameter.
-                try self.enqueueFinalDestruction(typeRef: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment.receiverRef)
-                try self.enqueueFinalDestruction(typeRef: signature.resultType)
-                mut val parameter = 0U64
-                while parameter < signature.parameterTypes.count() {
-                    try self.enqueueFinalDestruction(typeRef: signature.parameterTypes[parameter])
-                    parameter += 1U64
-                }
+                try self.requestFinalBody(bodyId: self.monoWork.bodyInstances[bodyI], requests: inout requests)
                 bodyI += 1U64
             }
-            if globalI < self.selectedGlobalTargets.count() {
-                val target: U64 = self.selectedGlobalTargets[globalI]
-                try self.prepareGlobalInitializer(target: target)
-                try self.enterGlobalInitializer(target: target)
-                val index: U64 = self.globalIndexForDeclarationTarget(target: target)
-                try self.scanStmtInsts(stmtId: self.arena.globals[index].letStmt)
-                self.cur.globalInitializerTarget = <Optional.None />
-                globalI += 1U64
-            }
-            // Destructors can call ordinary functions and construct further
-            // values. Both queues must close together, before the freeze.
-            while aggregateI < self.arena.finalAggregates.count() {
-                try self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[aggregateI].resultTypeRef)
-                aggregateI += 1U64
-            }
-            while callI < self.finalCalleeCount() {
-                val call = self.arena.finalCallees[callI]
-                try self.enqueueFinalDestruction(typeRef: call.resultTypeRef)
-                try self.enqueueFinalDestruction(typeRef: call.recvTypeRef)
-                mut val parameter = 0U64
-                while parameter < call.parameterTypeRefs.len {
-                    try self.enqueueFinalDestruction(typeRef: self.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter))
-                    parameter += 1U64
-                }
-                callI += 1U64
-            }
-            while storageI < self.arena.finalStorages.count() {
-                val storage = self.arena.finalStorages[storageI]
-                try self.enqueueFinalDestruction(typeRef: storage.sourceTypeRef)
-                try self.enqueueFinalDestruction(typeRef: storage.targetTypeRef)
-                storageI += 1U64
-            }
+            try self.advanceFinalDependencies(state: inout dependencies)
         }
         if self.genMode {
             self.retainSelectedGlobals()

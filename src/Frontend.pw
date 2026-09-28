@@ -66,6 +66,17 @@ pub struct FinalBodyRequests {
 }
 pub impl FinalBodyRequests { factory }
 
+// Monotonic dependency frontiers belong to the same finalization arena.
+pub struct FinalDependencies {
+    mut val initializersPrepared: Bool = false
+    mut val globals: U64 = 0U64
+    mut val aggregates: U64 = 0U64
+    mut val calls: U64 = 0U64
+    mut val storages: U64 = 0U64
+    mut val failure: Optional[CompileDiagnostic] = <Optional.None />
+}
+pub impl FinalDependencies { factory }
+
 pub struct Comp {
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
