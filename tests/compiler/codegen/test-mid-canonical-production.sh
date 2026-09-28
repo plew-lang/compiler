@@ -170,8 +170,14 @@ entry = Path('src/Backend.pw').read_text().split('pub fn emitLlvm(', 1)[1]
 assert entry.index('PreparedProgram.prepare(') < entry.index('LLVMContextCreate()')
 analysis = Path('src/PreparedProgram.pw').read_text()
 assert analysis.index('MidExecutableProgram.prepareWithTemplates(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
-assert analysis.index('analyzeDeclarationGlobalAccess(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
-assert 'analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates)' in analysis
+assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
+assert 'prepareDeclarationProgram(c: inout c, templates: inout templates)' in analysis
+declarations = Path('src/DeclarationProgram.pw').read_text()
+assert declarations.index('checkDeclarationLocalAccess(') < declarations.index('analyzeDeclarationGlobalAccess(')
+assert 'analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates)' in declarations
+assert 'checkDeclarationLocalAccess(c: inout c, templates: inout templates)' in declarations
+for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreate(', 'import ./Backend', 'exit(', 'c.errorAt(']:
+    assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'
 assert 'MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)' in analysis
 assert 'import ./Backend' not in analysis and 'LLVMContextCreate(' not in analysis
 assert 'midProgram=prepared.executable' in entry and 'ambientProgram=prepared.ambient' in entry
