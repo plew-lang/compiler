@@ -108,7 +108,12 @@ impl DeclarationAccessState {
                             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                                 if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                                 if !c.arena.functionAt(index: callee).isAsync && !c.arena.functionAt(index: callee).isExtern {
-                                    self.graph.edge(caller: index, callee: callee, term: block.terminator)
+                                    val function = c.arena.functionAt(index: callee)
+                                    mut val receiverTag = 0U64
+                                    if function.hasRecv {
+                                        receiverTag = if function.selfInout { give 4U64 } else if function.selfMove { give 2U64 } else { give 3U64 }
+                                    }
+                                    self.graph.edge(caller: index, callee: callee, term: block.terminator, receiverTag: receiverTag)
                                 }
                             }
                             _ => {}

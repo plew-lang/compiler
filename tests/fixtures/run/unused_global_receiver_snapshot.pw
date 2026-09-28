@@ -1,0 +1,9 @@
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory
+    fn read() -> I64 { change() return self.value }
+}
+mut val counter = <Counter value=1I64 />
+fn change() { counter.value = 2I64 }
+fn unused() { val snapshot = counter snapshot.read() }
+
+fn main() {}

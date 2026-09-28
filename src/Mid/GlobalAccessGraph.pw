@@ -17,6 +17,7 @@ struct GlobalAccessCall {
     pub val caller: U64
     pub val callee: U64
     pub val term: U64
+    pub val receiverTag: U64
     pub val next: U64
 }
 pub impl GlobalAccessCall { factory }
@@ -66,8 +67,8 @@ pub impl GlobalAccessGraph {
         self.incoming.append(0U64)
         return index
     }
-    inout fn edge(caller: U64, callee: U64, term: U64 = 0U64) {
-        self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term next=self.incoming[callee] />)
+    inout fn edge(caller: U64, callee: U64, term: U64 = 0U64, receiverTag: U64 = 0U64) {
+        self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term receiverTag=receiverTag next=self.incoming[callee] />)
         self.incoming[callee] = self.calls.count()
     }
     inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
@@ -116,15 +117,16 @@ pub impl GlobalAccessGraph {
         }
     }
 
-    fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool) -> Bool {
-        if operand.tag != 4U64 && !(operand.tag == 3U64 && (receiver || operand.borrowsStorage)) { return false }
+    fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool, receiverTag: U64 = 0U64) -> Bool {
+        val mode = if receiverTag == 0U64 { give operand.tag } else { give receiverTag }
+        if mode != 4U64 && !(mode == 3U64 && (receiver || operand.borrowsStorage)) { return false }
         mut val place = operand.place
         if operand.accessPlace != 0U64 { place = operand.accessPlace }
         if !globalPlace(c: c, placeId: place) { return false }
         mut val entry = self.heads[callee]
         while entry != 0U64 {
             val effect = self.effects[entry - 1U64]
-            if (operand.tag == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(c: c, leftId: place, rightId: effect.place) { return true }
+            if (mode == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(c: c, leftId: place, rightId: effect.place) { return true }
             entry = effect.next
         }
         return false
@@ -153,7 +155,7 @@ pub impl GlobalAccessGraph {
             val term = c.mid.terminators[call.term - 1U64]
             if term.callReceiver != 0U64 {
                 val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
-                if receiver.operand != 0U64 && self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[receiver.operand - 1U64], receiver: true) { return call.caller + 1U64 }
+                if receiver.operand != 0U64 && self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[receiver.operand - 1U64], receiver: true, receiverTag: call.receiverTag) { return call.caller + 1U64 }
             }
             mut val argument = 0U64
             while argument < term.args.len {
