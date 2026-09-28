@@ -1,0 +1,3 @@
+import @Std/Core
+fn unused() -> Result[I64, String] { val result = try [1I64] return <Result.Ok value=1I64 /> }
+fn main() {}

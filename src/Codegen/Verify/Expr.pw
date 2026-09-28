@@ -461,13 +461,17 @@ pub impl Comp {
                 // registered enum (notably `Optional`) used to crash the backend (it
                 // assumed Ok/Err variants and indexed out of bounds). An Optional uses
                 // `unwrapOr` / `?.` / `match` instead.
+                val operandTerm = self.parametricExprTerm(exprId: expr)
+                if operandTerm != 0U64 {
+                    val operandType = self.arena.typeAt(index: operandTerm)
+                    if !rangeEquals(bytes: self.arena.bytes, start: operandType.nameStart, len: operandType.nameLen, kw: "Result") {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
+                    }
+                }
                 val tti: TypeInfo = (try self.typeOf(id: expr))
                 if tti.nameLen > 0U64 {
-                    val isEnum = self.enumIndexForType(ref: self.typedIrRefOfInfo(ti: tti)) < self.arena.enumCount()
-                    if isEnum {
-                        if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
-                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
-                        }
+                    if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)") />
                     }
                     // the operand's error type E' must either match the enclosing
                     // function's error type E, or E must own a `from` factory accepting
