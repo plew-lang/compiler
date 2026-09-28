@@ -3,7 +3,7 @@
 // is covered by default_eval_order.pw and default_eval_order_generic_method.pw.
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
+import /Ir with { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, CallTemplate, CallSiteKey, SemanticClosure }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -95,4 +95,48 @@ fn main() {
         }
         _ => {}
     }
+    // Request-local completion includes closure sites and excludes unrelated
+    // owners, even when the rows interleave and completion appends new calls.
+    val closureKey = c.closureBodyKey(closureId: expression)
+    c.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=0U64 exprId=expression bodyKey=closureKey />).unwrap()
+    val emptyArguments = c.publishCallTemplateArguments(args: [])
+    val emptyTypes = c.publishCallTemplateTypeArgs(args: [])
+    val missingIndex = c.decls.callTemplates.count()
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=0U64 originKind=2U64 originSerial=900U64 />
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=emptyArguments calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+    // Two explicit arguments cannot complete a one-parameter call. These
+    // deliberately incomplete internal rows do not claim source acceptance.
+    val excess = c.publishCallTemplateArguments(args: [explicitArgs[0U64], explicitArgs[0U64]])
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=2U64 originSerial=901U64 />
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=2U64 originSerial=902U64 />
+        kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=excess calleeTypeArgs=emptyTypes proofId=0U64 /> />)
+    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("lexical completion lost closure or included another owner") }
+    match c.decls.callTemplates[missingIndex].kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val arguments, calleeTypeArgs: _, proofId: _) => {
+            if arguments.len != 1U64 { panic("requested default was not completed") }
+        }
+        _ => { panic("requested direct call changed kind") }
+    }
+    val completedCount = c.decls.callTemplates.count()
+    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 || c.decls.callTemplates.count() != completedCount { panic("lexical completion is not idempotent") }
+    if c.completeRecordedDefaultCalls().unwrap() != 2U64 { panic("batch completion lost unrelated failure") }
+    c.rebuildCallTemplateIndex(capacity: 128U64)
+    if c.completeRecordedBodyDefaultCalls(owner: 0U64).unwrap() != 1U64 { panic("rebuilt request index changed membership") }
+
+    c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=generator originKind=3U64 originSerial=1U64 slot=1U64 />
+        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)
+    c.checkRecordedBodyCallConstraints(owner: 0U64).unwrap()
+    match c.checkRecordedBodyCallConstraints(owner: generator) {
+        Result.Ok(value: _) => { panic("requested invalid iteration was not checked") }
+        Result.Err(error: _) => {}
+    }
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closureKey originKind=3U64 originSerial=1U64 slot=1U64 />
+        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)
+    match c.checkRecordedBodyCallConstraints(owner: 0U64) {
+        Result.Ok(value: _) => { panic("closure iteration was not checked") }
+        Result.Err(error: _) => {}
+    }
+
 }

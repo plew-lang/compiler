@@ -3093,6 +3093,12 @@ pub struct Decls {
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is
     // lookup structure, never a second semantic source.
     pub mut val callTemplateIndexSlots: Array[U64] = []
+    // Source-request membership, including nested closure bodies. Site keys
+    // retain their exact owner; these derived lists only select request work.
+    pub mut val callTemplateLexicalRoots: Dictionary[U64, U64] = [:]
+    pub mut val callTemplateBodyHeads: Dictionary[U64, U64] = [:]
+    pub mut val callTemplateBodyTails: Dictionary[U64, U64] = [:]
+    pub mut val callTemplateBodyNext: Array[U64] = []
     pub mut val destructureSites: Array[DestructureSite] = []
     pub mut val forTypeRecipes: Array[ForTypeRecipe] = []
     // Semantic lowering requirement, not a source-language restriction.  A

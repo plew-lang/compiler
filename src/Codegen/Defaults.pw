@@ -29,6 +29,26 @@ pub impl Comp {
         return <Result.Ok value=incomplete />
     }
 
+    // Complete one lexical request, including its closure calls. Freeze the
+    // frontier: newly published zero-argument default calls are already whole.
+    inout fn completeRecordedBodyDefaultCalls(owner: U64) -> Result[U64, CompileDiagnostic] {
+        val limit = self.decls.callTemplates.count()
+        mut val incomplete = 0U64
+        mut val row = self.firstLexicalCallTemplate(owner: owner)
+        while row != 0U64 && row <= limit {
+            val index = row - 1U64
+            val template = self.decls.callTemplates[index]
+            match template.kind {
+                CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                    if !(try self.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
+                }
+                _ => {}
+            }
+            row = self.decls.callTemplateBodyNext[index]
+        }
+        return <Result.Ok value=incomplete />
+    }
+
     // Complete an already selected call after Record has joined its argument
     // and expected-result evidence. `receiverTerm` is the recorded receiver
     // recipe's result in the caller environment, never a fresh name lookup.

@@ -5205,6 +5205,7 @@ pub impl Comp {
         }
         self.ensureSemanticClosureIndex(nextCount: self.decls.semanticClosures.count() + 1U64)
         self.decls.semanticClosures.append(closure)
+        self.decls.callTemplateLexicalRoots[closure.bodyKey] = self.decls.callTemplateLexicalRoots.getOr(key: closure.ownerFnIdx, fallback: closure.ownerFnIdx)
         val capacity: U64 = self.decls.semanticClosureIndexSlots.count()
         mut val slot: U64 = self.semanticClosureHash(ownerFnIdx: closure.ownerFnIdx, exprId: closure.exprId) % capacity
         while self.decls.semanticClosureIndexSlots[slot] != 0U64 {

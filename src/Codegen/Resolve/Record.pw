@@ -2138,7 +2138,7 @@ pub impl Comp {
         try self.verifyFunctionDeclaration(fnIdx: owner)
         try self.recordParametricFunction(fnIdx: owner, recordCallTemplates: true)
         self.cur.recordCallTemplates = false
-        if (try self.completeRecordedDefaultCalls()) != 0U64 {
+        if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }
         try self.closeCallTemplatesForBody(fnIdx: owner)

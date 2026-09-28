@@ -554,6 +554,10 @@ pub impl Comp {
 
     inout fn rebuildCallTemplateIndex(capacity: U64) {
         self.decls.callTemplateIndexSlots = []
+        val emptyOwners: Dictionary[U64, U64] = [:]
+        self.decls.callTemplateBodyHeads = emptyOwners
+        self.decls.callTemplateBodyTails = emptyOwners
+        self.decls.callTemplateBodyNext = []
         mut val zeroI: U64 = 0U64
         while zeroI < capacity {
             self.decls.callTemplateIndexSlots.append(0U64)
@@ -567,6 +571,7 @@ pub impl Comp {
                 slot = (slot + 1U64) % capacity
             }
             self.decls.callTemplateIndexSlots.set(i: slot, value: entry + 1U64)
+            self.indexLexicalCallTemplate(templateIndex: entry)
             entry += 1U64
         }
     }
@@ -675,6 +680,27 @@ pub impl Comp {
             slot = (slot + 1U64) % capacity
         }
         self.decls.callTemplateIndexSlots.set(i: slot, value: self.decls.callTemplates.count())
+        self.indexLexicalCallTemplate(templateIndex: self.decls.callTemplates.count() - 1U64)
+    }
+
+    // Lists hold one-based rows, with zero as the end sentinel. Closure facts
+    // are published before their calls, so grouping never depends on Cursor.
+    inout fn indexLexicalCallTemplate(templateIndex: U64) {
+        val owner = self.decls.callTemplates[templateIndex].siteKey.ownerFnIdx
+        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        val tail = self.decls.callTemplateBodyTails.getOr(key: root, fallback: 0U64)
+        self.decls.callTemplateBodyNext.append(0U64)
+        if tail == 0U64 {
+            self.decls.callTemplateBodyHeads[root] = templateIndex + 1U64
+        } else {
+            self.decls.callTemplateBodyNext.set(i: tail - 1U64, value: templateIndex + 1U64)
+        }
+        self.decls.callTemplateBodyTails[root] = templateIndex + 1U64
+    }
+
+    fn firstLexicalCallTemplate(owner: U64) -> U64 {
+        val root = self.decls.callTemplateLexicalRoots.getOr(key: owner, fallback: owner)
+        return self.decls.callTemplateBodyHeads.getOr(key: root, fallback: 0U64)
     }
 
     inout fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
