@@ -63,7 +63,7 @@ fn main() {
                 }
                 DeclarationAccessError.CallSelection(body: _, terminator: _) => { print("missing call selection") }
                 DeclarationAccessError.LocalAccess(body: _, error: _) => { print("local access conflict") }
-                DeclarationAccessError.Ownership(body: _) => { print("ownership rewrite failed") }
+                DeclarationAccessError.Ownership(body: _, verification: _) => { print("ownership rewrite failed") }
                 DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
             }
             panic "declaration analysis failed"

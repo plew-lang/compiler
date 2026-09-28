@@ -2,9 +2,11 @@
 // Remaining obligations are explicit; success is not a whole-target check token.
 import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
-import ./Mid/Build with { MidBuildError, MidFunctionTemplates }
-import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, checkDeclarationLocalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/Build with { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, checkDeclarationLocalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 import ./Mid/Verify with { MidVerifyError }
+import ./Mid/OwnershipAnalysis with { MidOwnershipRequests }
+import ./Mid/Prepare with { MidParametricBody }
 import ./Mid/Diagnostics with { reportMidBuildError }
 
 pub enum DeclarationProgramError {
@@ -14,11 +16,16 @@ pub enum DeclarationProgramError {
 
 // The caller retains templates so execution preparation reuses the same bodies.
 pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
+    mut val requests = <MidOwnershipRequests />
+    match checkDeclarationOwnership(c: inout c, templates: inout templates, requests: inout requests) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+    }
     match checkDeclarationLocalAccess(c: inout c, templates: inout templates) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
-    val analysis = match analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates) {
+    val analysis = match analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests) {
         Result.Ok(value: val analysis) => { give analysis }
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
@@ -26,6 +33,43 @@ pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemp
         return <Result.Err error=<DeclarationProgramError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: analysis.nodes[analysis.conflictingNode - 1U64]) /> />
     }
     return <Result.Ok value=analysis />
+}
+
+fn checkDeclarationOwnershipBody(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
+    match built.error {
+        MidBuildError.None => {}
+        _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> }
+    }
+    match requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />) {
+        Result.Ok(value: _) => { return <Result.Ok value=() /> }
+        Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=owner verification=verification /> /> }
+    }
+}
+
+fn checkDeclarationOwnership(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
+    val functions = c.arena.functionCount()
+    mut val index = 0U64
+    while index < functions {
+        val function = c.arena.functionAt(index: index)
+        if function.body != 0U64 && !function.isExtern {
+            val built = templates.body(c: inout c, function: index)
+            try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.Function function=index />, built: built, requests: inout requests)
+        }
+        index += 1U64
+    }
+    val closures = c.decls.semanticClosures.count()
+    index = 0U64
+    while index < closures {
+        val closure = c.decls.semanticClosures[index]
+        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
+        try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built, requests: inout requests)
+        index += 1U64
+    }
+    if c.arena.globals.count() != 0U64 {
+        val built = templates.globalInitializer(c: inout c)
+        try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built, requests: inout requests)
+    }
+    return <Result.Ok value=() />
 }
 
 fn declarationAccessOffset(c: inout Comp, owner: DeclarationAccessNode) -> U64 {
@@ -72,7 +116,14 @@ pub fn declarationProgramDiagnostic(c: inout Comp, error: DeclarationProgramErro
                         _ => { return c.diagnosticAt(offset: offset, msg: "internal error: invalid declaration access result") }
                     }
                 }
-                DeclarationAccessError.Ownership(body: val owner) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration ownership analysis failed") }
+                DeclarationAccessError.Ownership(body: val owner, verification: val verification) => {
+                    val offset = declarationAccessOffset(c: inout c, owner: owner)
+                    match verification.error {
+                        MidVerifyError.UniqueCopy => { return c.diagnosticAt(offset: offset, msg: "unique value cannot be copied") }
+                        MidVerifyError.MoveUnavailable => { return c.diagnosticAt(offset: offset, msg: "value is no longer owned at this access") }
+                        _ => { return c.diagnosticAt(offset: offset, msg: "internal error: declaration ownership verification failed") }
+                    }
+                }
                 DeclarationAccessError.CallSelection(body: val owner, terminator: _) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration call selection is missing") }
             }
         }

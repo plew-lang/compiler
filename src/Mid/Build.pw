@@ -2957,9 +2957,21 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 // are shared. Grounded adapters and synthetic bodies remain instance-owned.
 pub struct MidFunctionTemplates {
     mut val bodies: Array[U64] = []
+    mut val globalBody: U64 = 0U64
 }
 pub impl MidFunctionTemplates {
     factory
+    inout fn globalInitializer(c: inout Comp) -> MidBodyBuild {
+        if self.globalBody != 0U64 {
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) canonical=<MidCanonicalBody body=self.globalBody /> />
+        }
+        val built = buildParametricMidGlobalInit(c: inout c)
+        match built.error {
+            MidBuildError.None => { self.globalBody = built.canonical.body }
+            _ => {}
+        }
+        return built
+    }
     inout fn body(c: inout Comp, function: U64) -> MidBodyBuild {
         if function >= c.arena.functionCount() { return buildParametricMidBody(c: inout c, fnIdx: function) }
         if function < self.bodies.count() && self.bodies[function] != 0U64 {

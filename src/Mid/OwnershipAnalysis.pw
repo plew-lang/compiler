@@ -1,16 +1,42 @@
-// Symbolic ownership analysis preserves recipes and structured branches.
-// This result is not executable admission and grants no conversion/access proof.
-import ./Ir with { MidCanonicalArena, MidCanonicalBody }
+// Session-scoped declaration ownership requests. Immutable input body identity
+// is the key; this cache must remain with the Comp that owns that arena.
+import ../Frontend with { Comp }
+import ./Ir with { MidCanonicalBody }
 import ./Prepare with { MidParametricBody }
 import ./Drop with { elaborateCanonicalMidDrops }
+import ./Verify with { MidVerification, MidVerifyError, verifyDeclarationMidOwnership }
 
-pub struct MidOwnershipAnalysis {
+// No public factory: only a successful declaration verification issues this
+// token. It does not prove conversion eligibility, access effects or executable
+// admission, and must not be substituted for MidExecutableBody.
+pub struct MidDeclarationOwnership {
     pub val canonical: MidCanonicalBody
 }
-pub impl MidOwnershipAnalysis {
-    assoc fn analyze(arena: inout MidCanonicalArena, body: MidParametricBody) -> Optional[MidOwnershipAnalysis] {
-        val canonical = elaborateCanonicalMidDrops(arena: inout arena, canonical: body.canonical)
-        if canonical.body == 0U64 { return <Optional.None /> }
-        return <Optional.Some v=<MidOwnershipAnalysis canonical=canonical /> />
+
+pub struct MidOwnershipRequests {
+    mut val results: Dictionary[U64, Result[MidDeclarationOwnership, MidVerification]] = [:]
+}
+pub impl MidOwnershipRequests {
+    factory
+
+    inout fn request(c: inout Comp, body: MidParametricBody) -> Result[MidDeclarationOwnership, MidVerification] {
+        val key = body.canonical.body
+        if key == 0U64 || key > c.mid.bodies.count() {
+            return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidTarget /> /> />
+        }
+        match self.results.get(key: key) {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        // This local dataflow request has no recursive request edges. Store
+        // either outcome so a repeated demand neither rewrites nor rechecks it.
+        val canonical = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: body.canonical)
+        val verification = verifyDeclarationMidOwnership(c: inout c, canonical: canonical)
+        val result: Result[MidDeclarationOwnership, MidVerification] = match verification.error {
+            MidVerifyError.None => { give <Result.Ok value=<MidDeclarationOwnership canonical=canonical /> /> }
+            _ => { give <Result.Err error=verification /> }
+        }
+        self.results[key] = result
+        return result
     }
 }

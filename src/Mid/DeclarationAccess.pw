@@ -4,12 +4,12 @@
 import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
 import ../Ir with { CallSiteKey, CallTemplateKind }
-import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
+import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
 import ./Ir with { MidTerminatorNode }
 import ./Prepare with { MidParametricBody }
-import ./OwnershipAnalysis with { MidOwnershipAnalysis }
+import ./OwnershipAnalysis with { MidOwnershipRequests }
 import ./GlobalAccessGraph with { GlobalAccessGraph }
-import ./Verify with { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError }
+import ./Verify with { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError, MidVerification }
 
 pub enum DeclarationAccessNode {
     Function(function: U64)
@@ -28,7 +28,7 @@ pub enum DeclarationAccessObligation {
 }
 pub enum DeclarationAccessError {
     Build(body: DeclarationAccessNode, error: MidBuildError)
-    Ownership(body: DeclarationAccessNode)
+    Ownership(body: DeclarationAccessNode, verification: MidVerification)
     LocalAccess(body: DeclarationAccessNode, error: MidVerifyError)
     CallSelection(body: DeclarationAccessNode, terminator: U64)
     Frontend(diagnostic: CompileDiagnostic)
@@ -51,14 +51,14 @@ struct DeclarationAccessState {
     mut val typeNodes: Dictionary[U64, U64] = [:]
 }
 impl DeclarationAccessState {
-    inout fn body(c: inout Comp, index: U64, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
+    inout fn body(c: inout Comp, index: U64, built: MidBodyBuild, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
         match built.error {
             MidBuildError.None => {}
             _ => { return <Result.Err error=<DeclarationAccessError.Build body=self.owners[index] error=built.error /> /> }
         }
-        val ownership = match MidOwnershipAnalysis.analyze(arena: inout c.mid, body: <MidParametricBody.input canonical=built.canonical />) {
-            Optional.Some(v: val analysis) => { give analysis }
-            Optional.None => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] /> /> }
+        val ownership = match requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />) {
+            Result.Ok(value: val verified) => { give verified }
+            Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] verification=verification /> /> }
         }
         val body = c.mid.bodies[ownership.canonical.body - 1U64]
         val reachable = canonicalMidReachable(c: c, body: body)
@@ -169,6 +169,11 @@ impl DeclarationAccessState {
 }
 
 pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[DeclarationAccessAnalysis, DeclarationAccessError] {
+    mut val requests = <MidOwnershipRequests />
+    return analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests)
+}
+
+pub fn analyzeDeclarationGlobalAccessWithRequests(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[DeclarationAccessAnalysis, DeclarationAccessError] {
     mut val mutableGlobals = false
     mut val index = 0U64
     while index < c.arena.globals.count() {
@@ -187,7 +192,7 @@ pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctio
         val function = c.arena.functionAt(index: index)
         if function.body != 0U64 && !function.isExtern {
             val built = templates.body(c: inout c, function: index)
-            try state.body(c: inout c, index: index, built: built)
+            try state.body(c: inout c, index: index, built: built, requests: inout requests)
         }
         index += 1U64
     }
@@ -199,14 +204,14 @@ pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctio
         val node = state.graph.node()
         state.owners.append(<DeclarationAccessNode.Closure bodyKey=closure.bodyKey />)
         val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
-        try state.body(c: inout c, index: node, built: built)
+        try state.body(c: inout c, index: node, built: built, requests: inout requests)
         index += 1U64
     }
     if c.arena.globals.count() != 0U64 {
         val node = state.graph.node()
         state.owners.append(<DeclarationAccessNode.GlobalInitializer />)
-        val built = buildParametricMidGlobalInit(c: inout c)
-        try state.body(c: inout c, index: node, built: built)
+        val built = templates.globalInitializer(c: inout c)
+        try state.body(c: inout c, index: node, built: built, requests: inout requests)
     }
     match state.closeDestructions(c: inout c) {
         Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
@@ -298,7 +303,7 @@ pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTe
         index += 1U64
     }
     if c.arena.globals.count() != 0U64 {
-        val built = buildParametricMidGlobalInit(c: inout c)
+        val built = templates.globalInitializer(c: inout c)
         try checkDeclarationBodyAccess(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built)
     }
     return <Result.Ok value=() />

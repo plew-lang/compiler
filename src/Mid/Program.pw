@@ -2,7 +2,7 @@
 // BodyInstance identity, rather than emission order, indexes the result.
 import ../Frontend with { Comp, tracePhaseProgress }
 import ../Ir with { InstanceEnvironment }
-import ./Build with { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, buildParametricMidGlobalInit, ensureParametricMidClosureBody }
+import ./Build with { MidFunctionTemplates, MidBodyBuild, MidBuildError, buildMidBodyForInstance, ensureParametricMidClosureBody }
 import ./Prepare with { MidParametricBody, MidExecutableBody, MidPreparationError }
 
 pub enum MidProgramError {
@@ -73,7 +73,7 @@ pub impl MidExecutableProgram {
                 if closure == 0U64 { return <Result.Err error=<MidProgramError.MissingClosure bodyId=bodyId /> /> }
                 give ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[closure - 1U64])
             } else if instance.fnIdx == 18446744073709551615U64 {
-                give buildParametricMidGlobalInit(c: inout c)
+                give templates.globalInitializer(c: inout c)
             } else {
                 give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId, templates: inout templates)
             }

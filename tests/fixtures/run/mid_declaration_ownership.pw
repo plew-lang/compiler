@@ -6,16 +6,19 @@ import /Ir with { StructDef, TypeRef, AccessCandidate, CallSiteKey }
 import /Mid/Ir with { MidRange, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
 import /Mid/Build with { MidFunctionTemplates, MidBuildError }
 import /Mid/Drop with { elaborateCanonicalMidDrops }
+import /Mid/Prepare with { MidParametricBody }
+import /Mid/OwnershipAnalysis with { MidOwnershipRequests }
 import /Mid/Verify with { verifyDeclarationMidOwnership, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody, MidVerifyError }
 import @Std/Io with { print }
 
 fn checkSource() {
     mut val c = <Comp />
-    val text = "unique struct Resource {} impl Resource { fn inspect() {} } fn shadow() { val resource = <Resource /> resource.inspect() val resource = <Resource /> resource.inspect() } unique enum Outcome { Ready(resource: Resource) Empty } fn consume(value: move Outcome) { match move value { Outcome.Ready(val resource) => {} Outcome.Empty => {} } } fn identity[T](value: T) -> T { val local: T = value return local } fn widen(value: I32) -> I64 { return value as I64 } struct Number {} impl Number { assoc fn value() -> Self { mut val result: Self = <Number /> result = <Number /> return result } } fn main() {}"
+    val text = "val global = 1I64 unique struct Resource {} impl Resource { fn inspect() {} } fn shadow() { val resource = <Resource /> resource.inspect() val resource = <Resource /> resource.inspect() } unique enum Outcome { Ready(resource: Resource) Empty } fn consume(value: move Outcome) { match move value { Outcome.Ready(val resource) => {} Outcome.Empty => {} } } fn identity[T](value: T) -> T { val local: T = value return local } fn widen(value: I32) -> I64 { return value as I64 } struct Number {} impl Number { assoc fn value() -> Self { mut val result: Self = <Number /> result = <Number /> return result } } fn main() {}"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=text path="ownership.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val instances = c.arena.bodyInstanceCount()
     val destructions = c.arena.finalDestructions.count()
     mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidOwnershipRequests />
     val count = c.arena.functionCount()
     mut val index = 0U64
     mut val strictRejections = 0U64
@@ -24,11 +27,11 @@ fn checkSource() {
         if function.body != 0U64 && !function.isExtern {
             val built = templates.body(c: inout c, function: index)
             match built.error { MidBuildError.None => {} _ => { panic("declaration Mid failed") } }
-            val analyzed = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: built.canonical)
-            match verifyDeclarationMidOwnership(c: inout c, canonical: analyzed).error {
-                MidVerifyError.None => {}
-                _ => { panic("valid declaration ownership rejected") }
-            }
+            val verified = requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+            val analyzed = verified.canonical
+            val bodyCount = c.mid.bodies.count()
+            val repeated = requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+            if repeated.canonical.body != analyzed.body || c.mid.bodies.count() != bodyCount { panic("ownership request was recomputed") }
             match verifyCanonicalMidBody(c: inout c, canonical: analyzed).error {
                 MidVerifyError.None => {}
                 _ => { strictRejections += 1U64 }
@@ -36,6 +39,12 @@ fn checkSource() {
         }
         index += 1U64
     }
+    val globals = templates.globalInitializer(c: inout c)
+    match globals.error { MidBuildError.None => {} _ => { panic("global declaration build failed") } }
+    val globalCount = c.mid.bodies.count()
+    val sameGlobals = templates.globalInitializer(c: inout c)
+    if globals.canonical.body != sameGlobals.canonical.body || c.mid.bodies.count() != globalCount { panic("global initializer was rebuilt") }
+    requests.request(c: inout c, body: <MidParametricBody.input canonical=globals.canonical />).unwrap()
     if c.decls.semanticMatches.count() == 0U64 { panic("missing consuming match fixture") }
     val owner = c.decls.semanticMatches[0U64].ownerFnIdx
     val consuming = templates.body(c: inout c, function: owner)
@@ -96,6 +105,17 @@ fn checkInvalidOwnership() {
             }
         }
     }
+    mut val requests = <MidOwnershipRequests />
+    match requests.request(c: inout c, body: <MidParametricBody.input canonical=invalidCopy />) {
+        Result.Err(error: val failure) => { match failure.error { MidVerifyError.UniqueCopy => {} _ => { panic("wrong cached failure") } } }
+        _ => { panic("invalid request accepted") }
+    }
+    val failedBodyCount = c.mid.bodies.count()
+    match requests.request(c: inout c, body: <MidParametricBody.input canonical=invalidCopy />) {
+        Result.Err(error: val failure) => { match failure.error { MidVerifyError.UniqueCopy => {} _ => { panic("cached failure changed") } } }
+        _ => { panic("failed request became successful") }
+    }
+    if c.mid.bodies.count() != failedBodyCount { panic("failed ownership request was recomputed") }
     match verifyExecutableCanonicalMidBody(c: inout c, canonical: invalidCopy).error {
         MidVerifyError.MissingOwnershipContract => {}
         _ => { panic("executable contract weakened") }
