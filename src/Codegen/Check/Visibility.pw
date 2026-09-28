@@ -338,10 +338,27 @@ pub impl Comp {
     // left to enumerate by hand. Generic arguments need no special recursion: each is itself a
     // TypeRef in the arena, visited by the same loop. siteOffset 0 marks a synthetic TypeRef
     // (compiler-built) or a type-parameter head — both skipped.
+    // Projection membership depends on the selected trait declaration, not
+    // on the eventual receiver substitution or conformance witness.
+    inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
+        if type.assocNameId == 0U64 || type.assocTraitId == 0U64 { return <Result.Ok value=() /> }
+        val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+        val index = self.decls.traitIndexByOffset(offset: owner)
+        if index >= self.decls.traitCount() { return <Result.Ok value=() /> }
+        val trait = self.decls.traitAt(index: index)
+        mut val member = 0U64
+        while member < trait.assocTypes.count() {
+            if self.traitBindAt(binds: trait.assocTypes, index: member).nameId == type.assocNameId { return <Result.Ok value=() /> }
+            member += 1U64
+        }
+        return <Result.Err error=self.diagnosticAt(offset: type.siteOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") />
+    }
+
     inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.typeCount() {
             val t: TypeRef = self.arena.typeAt(index: i)
+            try self.checkProjectionMember(type: t)
             if t.siteOffset != 0U64 {
                 if self.offsetIsLoaded(offset: t.siteOffset) {
                     try self.checkTypeName(siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
