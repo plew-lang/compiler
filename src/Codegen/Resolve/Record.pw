@@ -438,6 +438,8 @@ pub impl Comp {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
             val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
+                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+                try self.checkExistentialRequirementCall(req: requirement, offset: self.exprOffset(id: exprId))
                 try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
             }
             return <Result.Ok value=() />

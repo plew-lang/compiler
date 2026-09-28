@@ -1,6 +1,19 @@
 // Shared existential member availability; frontend and LLVM use one rule.
 
 pub impl Comp {
+
+// Availability is a property of the selected source signature. It does not
+// depend on instantiating an executable body or choosing a concrete witness.
+inout fn checkExistentialRequirementCall(req: Func, offset: U64) -> Result[(), CompileDiagnostic] {
+    if self.reqUsesSelfInInput(req: req) {
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)") />
+    }
+    if !self.reqRetSelfErasable(req: req) {
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)") />
+    }
+    return <Result.Ok value=() />
+}
+
 // Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
 // Such a member is NOT callable through `any` (spec/08: two `any P` values need not
 // share a concrete type, so a `Self` argument cannot be supplied).
