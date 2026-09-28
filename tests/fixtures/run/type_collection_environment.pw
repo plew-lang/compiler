@@ -47,5 +47,18 @@ fn main() {
     if compiler.cur.typeArgs.count() != 1U64 || compiler.cur.typeArgs[0U64] != argument { panic "diagnostic changed caller arguments" }
     if compiler.cur.selfRef != argument { panic "diagnostic changed caller Self" }
     if compiler.cur.itemRef != instance { panic "diagnostic changed caller Item" }
+    // A body-local collection request restores permission on success and error,
+    // including a request nested inside an already active collection scope.
+    for val enabled in [false, true] {
+        compiler.inCollection = enabled
+        compiler.collectRecordedType(ref: instance).unwrap()
+        if compiler.inCollection != enabled { panic "success changed collection permission" }
+        match compiler.collectRecordedType(ref: rejected) {
+            Result.Ok(value: _) => { panic "expected collection diagnostic" }
+            Result.Err(error: _) => {}
+        }
+        if compiler.inCollection != enabled { panic "diagnostic changed collection permission" }
+    }
+    compiler.inCollection = false
     print("ok")
 }

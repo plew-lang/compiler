@@ -1431,7 +1431,18 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn collectGenInsts() -> Result[(), CompileDiagnostic] {
+    // Only this narrow collection scope may publish physical type layouts.
+    // The surrounding lexical body walk retains its semantic environment.
+    inout fn collectRecordedType(ref: U64) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 { return <Result.Ok value=() /> }
+        val savedCollection = self.inCollection
+        self.inCollection = true
+        val result = self.scanType(ref: ref)
+        self.inCollection = savedCollection
+        return result
+    }
+
+    inout fn collectDeclarationTypes() -> Result[(), CompileDiagnostic] {
         mut val fi: U64 = 0
         while fi < self.arena.functionCount() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:function", count: fi, stride: 64U64)
@@ -1513,6 +1524,12 @@ pub impl Comp {
             }
             ei += 1
         }
+        return <Result.Ok value=() />
+    }
+
+    // Generation is an independent pipeline and retains its whole-input scan.
+    // Ordinary compilation registers these types during lexical body recording.
+    inout fn collectGenerationBodyTypes() -> Result[(), CompileDiagnostic] {
         mut val sti: U64 = 0
         while sti < self.arena.stmts.count() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:statement", count: sti, stride: 256U64)

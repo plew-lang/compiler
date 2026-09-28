@@ -144,8 +144,8 @@ pub struct Comp {
     // sanitize_address attribute — clang's asan pass then skips every function, which is
     // why the old gate only caught the interceptor layer). Off in a normal build.
     pub mut val asan: Bool = false
-    // collection phase (mono): set ONLY while the collection passes run (collectGenInsts /
-    // collectFnInsts). Grounding an anonymous record to a concrete instance is otherwise
+    // Layout publication is enabled only by explicit collection scopes
+    // (declaration types, collectRecordedType, and collectFnInsts). Grounding an anonymous record to a concrete instance is otherwise
     // PURE — it just names the grounded record. The one place that may REGISTER a new
     // grounded-record StructDef (so registerFinalStructBodies later gives it an LLVM body) is the
     // collection pass, which deterministically reaches every record instance via scanType.
@@ -1697,21 +1697,18 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     if c.genMode {
         try c.synthGenMain()
     }
-    // discover concrete generic instantiations to monomorphize. The collection passes are
-    // the one phase allowed to REGISTER a grounded-record StructDef (grounding is pure
-    // elsewhere); they reach every record instance via scanType. See inCollection.
-    // bottom-up type-argument inference (spec/06): ground an un-annotated generic
-    // construction `<Box v=1I32 />` from its field value types before instance discovery,
-    // so collectGenInsts (which scans Make.ty) reaches the inferred instance. Runs after
-    // top-down grounding (done during lowering) and before collection.
+    // Prepare declaration signatures independently of lexical body checks.
+    // Ordinary bodies infer constructions and register Let/Cast/Make types
+    // during Record. The independent gen pipeline retains its full-input scan.
     tracePhase(c: inout c, label: "instantiation-collection:start")
     c.traceExprInstScans = 0U64
     tracePhase(c: inout c, label: "instantiation-collection:infer-construct:start")
-    try c.inferConstructTypeArgs()
+    if c.genMode { try c.inferConstructTypeArgs() }
     tracePhase(c: inout c, label: "instantiation-collection:infer-construct:done")
     c.inCollection = true
     tracePhase(c: inout c, label: "instantiation-collection:collect-generic:start")
-    try c.collectGenInsts()
+    try c.collectDeclarationTypes()
+    if c.genMode { try c.collectGenerationBodyTypes() }
     tracePhase(c: inout c, label: "instantiation-collection:collect-generic:done")
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "instantiation-collection:scan-exprs", count: c.traceExprInstScans)

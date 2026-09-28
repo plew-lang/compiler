@@ -1652,8 +1652,8 @@ pub impl Comp {
 
     // Bottom-up type-argument inference for a generic construction whose head was NOT
     // grounded top-down during lowering (`val b = <Box v=1I32 />` — no annotation /
-    // return / field context). Runs once before collectGenInsts so a successfully
-    // inferred instance is discovered and monomorphized (collectGenInsts scans Make.ty).
+    // return / field context). The independent gen pipeline uses this flat walk
+    // before collectGenerationBodyTypes. Ordinary bodies infer during Record.
     // For each un-grounded generic-struct Make, bind every type parameter from a field
     // whose declared type IS that bare parameter, using the field value's concrete type;
     // if every parameter is pinned consistently, rewrite Make.ty to the grounded instance.

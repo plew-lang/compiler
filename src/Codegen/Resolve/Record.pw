@@ -1663,6 +1663,7 @@ pub impl Comp {
                 // Aggregate finalization and body instances consume this
                 // selected TypeTerm and the completed per-occurrence operands.
                 if instance != 0U64 {
+                    try self.collectRecordedType(ref: instance)
                     self.recordSemanticExprTerm(exprId: exprId, term: instance)
                 }
                 try self.recordSemanticAggregate(exprId: exprId)
@@ -1725,6 +1726,7 @@ pub impl Comp {
                 try self.recordIndexCall(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)))
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
+                try self.collectRecordedType(ref: ty)
                 val operandContext: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: ty)
                 try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 // `as Target` is an explicit source-level type boundary; Lower
@@ -1942,6 +1944,7 @@ pub impl Comp {
     inout fn recordStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                try self.collectRecordedType(ref: ty)
                 try self.recordExpr(exprId: init, expectedTerm: ty)
                 try self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
