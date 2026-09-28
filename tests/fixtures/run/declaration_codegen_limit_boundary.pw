@@ -1,0 +1,42 @@
+// Internal pipeline contract: static checking must not demand concrete bodies.
+// Concrete implementation limits remain build/run diagnostics, not language bans.
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import /SourceAccess with { SourceAccess }
+import /DeclarationProgram with { prepareDeclarationProgram }
+import /Mid/Build with { MidFunctionTemplates }
+import @Std/Io with { print }
+
+fn checkBoundary(source: String, expected: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler,
+        input: <FrontendInput.Text text=source path="limit.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    prepareDeclarationProgram(c: inout compiler, templates: inout templates).unwrap()
+    if compiler.monoWork.bodyInstances.count() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 {
+        panic "static checking discovered executable bodies"
+    }
+    match finalizeFrontendExecutables(c: inout compiler) {
+        Result.Ok(value: _) => { panic "concrete implementation limit was not diagnosed" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != expected { panic diagnostic.message }
+        }
+    }
+}
+
+fn main() {
+    checkBoundary(source: "enum Value { Item(value: I64) } fn captured[T](value: T) -> fn() -> T { return fn() -> T { return value } } fn main() { val scalar = captured(value: 1I64) val unsupported = captured(value: <Value.Item value=2I64 />) }",
+        expected: "v1 rejects closure capture of unique, generic-instantiated, enum, or function-typed values")
+    checkBoundary(source: "struct Box[T] { pub val v: T } fn deep[T](v: T) { deep(v: <Box[T] v=v />) } fn main() { deep(v: 1I64) }",
+        expected: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
+
+    // A static type error must still fail before concrete execution preparation.
+    mut val invalid = <Comp />
+    match analyzeFrontendDeclarations(c: inout invalid,
+        input: <FrontendInput.Text text="fn unused[T](value: T) -> I64 { return value } fn main() {}" path="invalid.pw" />,
+        sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic "unused generic type error accepted" }
+        Result.Err(error: _) => {}
+    }
+    print("ok")
+}
