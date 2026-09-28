@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { assert }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { ArcClass, CallTemplateKind }
+fn main() {
+    mut val c = <Comp />
+    val source = "async fn task() {}\nfn caller() { val promise = task() }\n"
+    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="async-result.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val declaration = c.arena.functionAt(index: 0U64)
+    val result = c.semanticCallableReturnTerm(function: declaration)
+    assert(result != 0U64)
+    val promise = c.arena.typeAt(index: result)
+    assert(promise.args.count() == 1U64)
+    assert(promise.args[0U64] == 0U64)
+    assert(c.semanticBodyReturnTerm(fnIdx: 0U64) == 0U64)
+    match c.arcClassOfRef(ref: result).unwrap() {
+        ArcClass.PromiseCell(inst: _) => {}
+        _ => { assert(false) }
+    }
+    mut val found = false
+    mut val index = 0U64
+    while index < c.decls.callTemplates.count() {
+        val template = c.decls.callTemplates[index]
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if callee == 0U64 {
+                    assert(c.typeRefEq(a: c.closedSelectedCallResult(siteKey: template.siteKey).unwrap(), b: result))
+                    found = true
+                }
+            }
+            _ => {}
+        }
+        index += 1U64
+    }
+    assert(found)
+    assert(c.monoWork.bodyInstances.count() == 0U64)
+    assert(c.arena.finalDestructions.count() == 0U64)
+    print("ok")
+}

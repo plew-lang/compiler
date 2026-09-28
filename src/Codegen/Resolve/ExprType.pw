@@ -86,6 +86,7 @@ pub impl Comp {
     // lost `Ref[Cell]` elements and the body could not resolve `c->v`. A parametric
     // retTy (un-grounded generic) falls back to the bare name span, as before.
     inout fn declaredRetInfo(f: Func) -> Result[TypeInfo, CompileDiagnostic] {
+        if f.isAsync && !f.hasRet { return <Result.Ok value=self.typeInfoOfRef(ref: self.semanticCallableReturnTerm(function: f)) /> }
         if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
             if (try self.tyRefIsGround(ref: f.retTy)) {
                 return <Result.Ok value=self.typeInfoOfRef(ref: f.retTy) />
@@ -326,6 +327,7 @@ pub impl Comp {
     }
 
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
+        if f.isAsync && !f.hasRet { return self.typeInfoOfRef(ref: self.semanticCallableReturnTerm(function: f)) }
         if !(f.hasRet) {
             return scalarInfo()
         }
@@ -452,6 +454,7 @@ pub impl Comp {
     }
 
     inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> Result[TypeInfo, CompileDiagnostic] {
+        if req.isAsync && !req.hasRet { return self.declaredRetInfo(f: req) }
         if !(req.hasRet) || req.retTy == 0U64 {
             return <Result.Ok value=scalarInfo() />
         }
@@ -780,6 +783,7 @@ pub impl Comp {
                 }
                 if fi < self.arena.functionCount() {
                     val f: Func = self.arena.functionAt(index: fi)
+                    if f.isAsync && !f.hasRet { return self.declaredRetInfo(f: f) }
                     if f.hasRet {
                         // a generic free function: ground its declared return type under the
                         // type args inferred from THIS call, uniformly for a bare type
@@ -1008,6 +1012,7 @@ pub impl Comp {
                 val mfi: U64 = (try self.resolvedCallee(id: id))
                 if mfi < self.arena.functionCount() {
                     val mf: Func = self.arena.functionAt(index: mfi)
+                    if mf.isAsync && !mf.hasRet { return self.declaredRetInfo(f: mf) }
                     if mf.hasRet {
                         val grounded: U64 = (try self.groundFinalMethodReturn(f: mf, recvTy: (try self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)), args: args))
                         if grounded != 0U64 {
@@ -1045,6 +1050,7 @@ pub impl Comp {
                         return <Result.Ok value=scalarInfo() />
                     }
                     val af: Func = self.arena.functionAt(index: afi)
+                    if af.isAsync && !af.hasRet { return self.declaredRetInfo(f: af) }
                     if af.hasRet {
                         val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                         if qualifier != 0U64 {
@@ -1143,6 +1149,7 @@ pub impl Comp {
                         return <Result.Ok value=(try self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen)) />
                     }
                     val mf: Func = self.arena.functionAt(index: mi)
+                    if mf.isAsync && !mf.hasRet { return self.declaredRetInfo(f: mf) }
                     if mf.hasRet {
                         val receiverGrounded: U64 = (try self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args))
                         if receiverGrounded != 0U64 {
@@ -1222,6 +1229,7 @@ pub impl Comp {
                         return <Result.Ok value=scalarInfo() />
                     }
                     val mf: Func = self.arena.functionAt(index: mi)
+                    if mf.isAsync && !mf.hasRet { return self.declaredRetInfo(f: mf) }
                     if mf.hasRet {
                         // an ARRAY return (`-> Array[T]`) grounds through the same
                         // structured path — its retTy is the {Array, [T]} ref.

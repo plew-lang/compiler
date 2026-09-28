@@ -794,6 +794,7 @@ pub impl Comp {
     // trait parameters ground first; then associated outputs reify recursively
     // through the selected proof's constraint.
     inout fn staticRequirementResultTypeForProof(traitDef: TraitDef, req: Func, receiverRef: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
+        if req.isAsync && !req.hasRet { return self.semanticCallableReturnTerm(function: req) }
         if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.typeCount() { return 0U64 }
         // This is a declaration-time proof query, not a body-instance read.
         // Ground only the selected trait instance's binders; consulting Cursor
@@ -1376,7 +1377,7 @@ pub impl Comp {
     // signature still needs its implicit result term; never substitute the
     // logical body return for the call result.
     fn hasDeclaredCallResult(function: Func) -> Bool {
-        if !function.isAsync { return true }
+        if !function.isAsync || !function.hasRet { return true }
         if function.retTy == 0U64 || function.retTy >= self.arena.typeCount() { return false }
         val result = self.arena.typeAt(index: function.retTy)
         return rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise")

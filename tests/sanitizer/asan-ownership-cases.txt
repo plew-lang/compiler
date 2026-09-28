@@ -29,3 +29,4 @@ tests/fixtures/run/async_generic_deinit.pw
 tests/fixtures/run/async_capture_frame.pw
 tests/fixtures/run/async_view_receiver_argument.pw
 tests/fixtures/run/consuming_receiver_owned_sources.pw
+tests/fixtures/run/async_implicit_promise.pw

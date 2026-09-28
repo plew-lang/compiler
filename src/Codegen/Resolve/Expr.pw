@@ -385,6 +385,17 @@ pub impl Comp {
         return 18446744073709551615U64
     }
 
+    // The source annotation may be absent while the callable still returns a
+    // value: an async declaration without an annotation returns a value-less
+    // Promise. Keep this separate from semanticBodyReturnTerm's Unit result.
+    inout fn semanticCallableReturnTerm(function: Func) -> U64 {
+        if function.isAsync && !function.hasRet {
+            val promise = self.internBytes(s: "Promise")
+            return self.pushType(t: <TypeRef nameStart=promise.nameStart nameLen=promise.nameLen args=[0U64] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        }
+        return function.retTy
+    }
+
     // Source bodies expose their logical result, distinct from the async
     // callable boundary. Promise wrapping belongs to entry/completion lowering.
     // Closure facts are published before walking the nested body in Record.

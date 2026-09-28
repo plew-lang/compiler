@@ -1,0 +1,3 @@
+async fn task() {}
+fn unused[T](value: T) { for val item in task() {} }
+fn main() {}

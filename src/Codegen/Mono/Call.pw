@@ -699,6 +699,7 @@ pub impl Comp {
     inout fn groundedSelectedCalleeReturn(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         val f: Func = self.arena.functionAt(index: callee)
+        if f.isAsync && !f.hasRet { return <Result.Ok value=self.semanticCallableReturnTerm(function: f) /> }
         if !(f.hasRet) { return <Result.Ok value=0U64 />}
         if f.retTy == 0U64 {
             if f.retStart != 0U64 && f.retLen != 0U64 && !(f.retIsArray) {
@@ -3605,7 +3606,7 @@ pub impl Comp {
         val carrierResult: U64 = (try self.groundedSelectedCalleeReturn(callee: callee, environment: environment))
         mut val result: U64 = (try self.finalSelectedSourceResult(resultRef: resultRef, carrierRef: carrierResult))
         val f: Func = self.arena.functionAt(index: callee)
-        if !(f.hasRet) {
+        if !f.hasRet && !f.isAsync {
             // Calls without a returned value have neither an ABI carrier nor a
             // source-observed result.  They may not carry a value projection:
             // a projection is a relationship between those two value types.
@@ -4554,8 +4555,8 @@ pub impl Comp {
             pi += 1U64
         }
         mut val signatureResult: U64 = 0U64
-        if f.hasRet {
-            signatureResult = (try self.groundAndRecordBodyType(ref: f.retTy, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
+        if f.hasRet || f.isAsync {
+            signatureResult = (try self.groundAndRecordBodyType(ref: self.semanticCallableReturnTerm(function: f), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
             try self.scanType(ref: signatureResult)
         }
         val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
@@ -4640,7 +4641,7 @@ pub impl Comp {
         if (f.hasRecv || f.isAssoc) && e.recvTypeRef == 0U64 {
             return <Result.Ok value=false />
         }
-        if f.hasRet && e.resultTypeRef == 0U64 {
+        if (f.hasRet || f.isAsync) && e.resultTypeRef == 0U64 {
             return <Result.Ok value=false />
         }
         return <Result.Ok value=true />
