@@ -1,0 +1,53 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+import /SourceAccess with { SourceAccess }
+import /Mid/Build with { MidFunctionTemplates }
+import /Mid/OwnershipAnalysis with { MidOwnershipRequests }
+import /Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessRoots, DeclarationAccessNode }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing source declaration"
+}
+
+fn check(source: String, conflict: Bool, functions: U64) {
+    mut val c = <Comp />
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="effects.pw" text=source />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val root = owner(c: inout c, name: "root")
+    val broken = owner(c: inout c, name: "broken")
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidOwnershipRequests />
+    // Deliberate duplicate roots must share one node; declaration IDs must
+    // not be mistaken for graph IDs when root is not the first declaration.
+    val roots = [<DeclarationAccessNode.Function function=root />, <DeclarationAccessNode.Function function=root />]
+    val analysis = analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests, roots: roots).unwrap()
+    if (analysis.conflictingNode != 0U64) != conflict { panic "wrong global effect classification" }
+    mut val count = 0U64
+    for node in analysis.nodes {
+        match node {
+            DeclarationAccessNode.Function(function: val function) => {
+                if function == broken { panic "unrelated invalid body requested" }
+                count += 1U64
+            }
+            _ => {}
+        }
+    }
+    if count != functions || c.lexicalBodyPreparations.count() != functions { panic "incorrect static dependency closure" }
+    val bodies = c.mid.bodies.count()
+    val repeated = analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests, roots: roots).unwrap()
+    if repeated.conflictingNode != analysis.conflictingNode || repeated.nodes.count() != analysis.nodes.count() || c.mid.bodies.count() != bodies { panic "effect request changed cached body snapshots" }
+    if c.monoWork.bodyInstances.count() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "effect request discovered executable code" }
+}
+
+fn main() {
+    check(source: "mut val value = 1I64 fn broken() { missing() } fn leaf() -> I64 { return value } fn root() -> I64 { return leaf() } fn main() {}", conflict: false, functions: 2U64)
+    check(source: "mut val value = 1I64 fn broken() { missing() } fn first(target: inout I64) { second(target: inout target) } fn second(target: inout I64) { target = value first(target: inout target) } fn root() { first(target: inout value) } fn main() {}", conflict: true, functions: 3U64)
+    check(source: "mut val value = 1I64 unique struct Resource {} impl Resource { deinit { val observed = value } } fn broken() { missing() } fn release(target: inout I64) { val item = <Resource /> } fn root() { release(target: inout value) } fn main() {}", conflict: true, functions: 3U64)
+    print("ok")
+}

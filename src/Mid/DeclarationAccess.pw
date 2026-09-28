@@ -46,11 +46,33 @@ struct DeclarationAccessState {
     mut val graph: GlobalAccessGraph = <GlobalAccessGraph.empty />
     mut val obligations: Array[DeclarationAccessObligation] = []
     mut val owners: Array[DeclarationAccessNode] = []
-    mut val types: Array[U64] = []
-    mut val nodes: Array[U64] = []
+    mut val functionNodes: Dictionary[U64, U64] = [:]
+    mut val closureNodes: Dictionary[U64, U64] = [:]
+    mut val globalNode: U64 = 0U64
     mut val typeNodes: Dictionary[U64, U64] = [:]
 }
 impl DeclarationAccessState {
+    // Graph IDs are independent of declaration IDs. Publishing a node before
+    // examining its body closes recursive edges without recursive evaluation.
+    inout fn demand(owner: DeclarationAccessNode) -> U64 {
+        val existing = match owner {
+            DeclarationAccessNode.Function(function: val function) => { give self.functionNodes.getOr(key: function, fallback: 0U64) }
+            DeclarationAccessNode.Closure(bodyKey: val key) => { give self.closureNodes.getOr(key: key, fallback: 0U64) }
+            DeclarationAccessNode.GlobalInitializer => { give self.globalNode }
+            DeclarationAccessNode.Destruction(typeTerm: val term) => { give self.typeNodes.getOr(key: term, fallback: 0U64) }
+        }
+        if existing != 0U64 { return existing - 1U64 }
+        val node = self.graph.node()
+        self.owners.append(owner)
+        match owner {
+            DeclarationAccessNode.Function(function: val function) => { self.functionNodes[function] = node + 1U64 }
+            DeclarationAccessNode.Closure(bodyKey: val key) => { self.closureNodes[key] = node + 1U64 }
+            DeclarationAccessNode.GlobalInitializer => { self.globalNode = node + 1U64 }
+            DeclarationAccessNode.Destruction(typeTerm: val term) => { self.typeNodes[term] = node + 1U64 }
+        }
+        return node
+    }
+
     inout fn body(c: inout Comp, index: U64, built: MidBodyBuild, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
         match built.error {
             MidBuildError.None => {}
@@ -115,7 +137,8 @@ impl DeclarationAccessState {
                                     if function.hasRecv {
                                         receiverTag = if function.selfInout { give 4U64 } else if function.selfMove { give 2U64 } else { give 3U64 }
                                     }
-                                    self.graph.edge(caller: index, callee: callee, term: block.terminator, receiverTag: receiverTag)
+                                    val dependency = self.demand(owner: <DeclarationAccessNode.Function function=callee />)
+                                    self.graph.edge(caller: index, callee: dependency, term: block.terminator, receiverTag: receiverTag)
                                 }
                             }
                             _ => {}
@@ -138,33 +161,72 @@ impl DeclarationAccessState {
             return
         }
         if term == 0U64 { return }
-        mut val node = self.typeNodes.getOr(key: term, fallback: 0U64)
-        if node == 0U64 {
-            node = self.graph.node() + 1U64
-            self.typeNodes[term] = node
-            self.owners.append(<DeclarationAccessNode.Destruction typeTerm=term />)
-            self.types.append(term)
-            self.nodes.append(node - 1U64)
-        }
-        self.graph.edge(caller: caller, callee: node - 1U64)
+        val node = self.demand(owner: <DeclarationAccessNode.Destruction typeTerm=term />)
+        self.graph.edge(caller: caller, callee: node)
     }
 
-    inout fn closeDestructions(c: inout Comp) -> Result[(), CompileDiagnostic] {
+    inout fn destructionDependencies(c: inout Comp, node: U64, type: U64) -> Result[(), CompileDiagnostic] {
+        val dependencies = try c.closedDestructionDependencies(typeRef: type)
+        if dependencies.destructorDeclaration != 0U64 {
+            val callee = self.demand(owner: <DeclarationAccessNode.Function function=dependencies.destructorDeclaration - 1U64 />)
+            self.graph.edge(caller: node, callee: callee)
+        }
+        if dependencies.hasDynamicPayload {
+            self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />)
+        }
+        mut val child = 0U64
+        while child < dependencies.children.count() {
+            self.destruction(c: c, caller: node, term: dependencies.children[child])
+            child += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn close(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
+        mut val closureIndices: Dictionary[U64, U64] = [:]
+        mut val closureFrontier = 0U64
         mut val index = 0U64
-        while index < self.types.count() {
-            val type = self.types[index]
-            val node = self.nodes[index]
-            val dependencies = try c.closedDestructionDependencies(typeRef: type)
-            if dependencies.destructorDeclaration != 0U64 {
-                self.graph.edge(caller: node, callee: dependencies.destructorDeclaration - 1U64)
-            }
-            if dependencies.hasDynamicPayload {
-                self.obligations.append(<DeclarationAccessObligation.Destruction body=node typeTerm=type typeRecipe=0U64 />)
-            }
-            mut val child = 0U64
-            while child < dependencies.children.count() {
-                self.destruction(c: c, caller: node, term: dependencies.children[child])
-                child += 1U64
+        while index < self.owners.count() {
+            val owner = self.owners[index]
+            match owner {
+                DeclarationAccessNode.Function(function: val function) => {
+                    if function >= c.arena.functionCount() {
+                        return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: effect request has no function declaration") /> />
+                    }
+                    val declaration = c.arena.functionAt(index: function)
+                    if declaration.body != 0U64 && !declaration.isExtern {
+                        match c.prepareLexicalBody(fnIdx: function) {
+                            Result.Ok(value: _) => {}
+                            Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+                        }
+                        val built = templates.body(c: inout c, function: function)
+                        try self.body(c: inout c, index: index, built: built, requests: inout requests)
+                    }
+                }
+                DeclarationAccessNode.Closure(bodyKey: val key) => {
+                    // Lexical requests may have registered new closures since
+                    // the previous root. Index each metadata row only once.
+                    while closureFrontier < c.decls.semanticClosures.count() {
+                        closureIndices[c.decls.semanticClosures[closureFrontier].bodyKey] = closureFrontier + 1U64
+                        closureFrontier += 1U64
+                    }
+                    val row = closureIndices.getOr(key: key, fallback: 0U64)
+                    if row == 0U64 {
+                        return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: effect request has no lexical closure") /> />
+                    }
+                    val built = ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[row - 1U64])
+                    try self.body(c: inout c, index: index, built: built, requests: inout requests)
+                }
+                DeclarationAccessNode.GlobalInitializer => {
+                    val built = templates.globalInitializer(c: inout c)
+                    try self.body(c: inout c, index: index, built: built, requests: inout requests)
+                }
+                DeclarationAccessNode.Destruction(typeTerm: val type) => {
+                    match self.destructionDependencies(c: inout c, node: index, type: type) {
+                        Result.Ok(value: _) => {}
+                        Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+                    }
+                }
             }
             index += 1U64
         }
@@ -177,50 +239,43 @@ pub fn analyzeDeclarationGlobalAccess(c: inout Comp, templates: inout MidFunctio
     return analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests)
 }
 
-pub fn analyzeDeclarationGlobalAccessWithRequests(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[DeclarationAccessAnalysis, DeclarationAccessError] {
-    mut val mutableGlobals = false
+fn hasMutableGlobals(c: Comp) -> Bool {
     mut val index = 0U64
     while index < c.arena.globals.count() {
-        if c.arena.globals[index].mutable { mutableGlobals = true }
+        if c.arena.globals[index].mutable { return true }
         index += 1U64
     }
-    if !mutableGlobals { return <Result.Ok value=<DeclarationAccessAnalysis /> /> }
-    mut val state = <DeclarationAccessState />
-    val functions = c.arena.functionCount()
-    index = 0U64
-    while index < functions { state.graph.node()
-        state.owners.append(<DeclarationAccessNode.Function function=index />)
-        index += 1U64 }
-    index = 0U64
-    while index < functions {
-        val function = c.arena.functionAt(index: index)
-        if function.body != 0U64 && !function.isExtern {
-            val built = templates.body(c: inout c, function: index)
-            try state.body(c: inout c, index: index, built: built, requests: inout requests)
-        }
+    return false
+}
+
+pub fn analyzeDeclarationGlobalAccessWithRequests(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[DeclarationAccessAnalysis, DeclarationAccessError] {
+    if !hasMutableGlobals(c: c) { return <Result.Ok value=<DeclarationAccessAnalysis /> /> }
+    mut val roots: Array[DeclarationAccessNode] = []
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        roots.append(<DeclarationAccessNode.Function function=index />)
         index += 1U64
     }
-    // Closures have independent lexical execution. Creating a closure does
-    // not execute its body, so no effect edge is added from the enclosing body.
+    // Closure creation is not execution: closures are separate roots, never
+    // implicit effect edges from the containing function.
     index = 0U64
     while index < c.decls.semanticClosures.count() {
-        val closure = c.decls.semanticClosures[index]
-        val node = state.graph.node()
-        state.owners.append(<DeclarationAccessNode.Closure bodyKey=closure.bodyKey />)
-        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
-        try state.body(c: inout c, index: node, built: built, requests: inout requests)
+        roots.append(<DeclarationAccessNode.Closure bodyKey=c.decls.semanticClosures[index].bodyKey />)
         index += 1U64
     }
-    if c.arena.globals.count() != 0U64 {
-        val node = state.graph.node()
-        state.owners.append(<DeclarationAccessNode.GlobalInitializer />)
-        val built = templates.globalInitializer(c: inout c)
-        try state.body(c: inout c, index: node, built: built, requests: inout requests)
-    }
-    match state.closeDestructions(c: inout c) {
-        Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
-        Result.Ok(value: _) => {}
-    }
+    if c.arena.globals.count() != 0U64 { roots.append(<DeclarationAccessNode.GlobalInitializer />) }
+    return analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests, roots: roots)
+}
+
+// This closes only known static global-effect dependencies of the roots.
+// It neither proves whole-target checking nor discharges dynamic obligations.
+pub fn analyzeDeclarationGlobalAccessRoots(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests, roots: Array[DeclarationAccessNode]) -> Result[DeclarationAccessAnalysis, DeclarationAccessError] {
+    if !hasMutableGlobals(c: c) { return <Result.Ok value=<DeclarationAccessAnalysis /> /> }
+    mut val state = <DeclarationAccessState />
+    mut val index = 0U64
+    while index < roots.count() { state.demand(owner: roots[index])
+        index += 1U64 }
+    try state.close(c: inout c, templates: inout templates, requests: inout requests)
     return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(c: c) obligations=state.obligations /> />
 }
 
