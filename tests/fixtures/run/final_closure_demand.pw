@@ -1,0 +1,50 @@
+import /Frontend with { Comp, FrontendInput, FinalBodyRequests, FinalDependencies, FinalizationPublication, analyzeFrontendForRequests }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn main() {
+    mut val c = <Comp />
+    val source = "fn main() { maker(item: 1I64) } fn maker[T](item: T) { val get = fn() -> T { return identity(value: item) } } fn identity[T](value: T) -> T { return value }"
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="closure.pw" text=source />, sources: <SourceAccess />).unwrap()
+    c.initializeFinalCallables().unwrap()
+    mut val requests = <FinalBodyRequests />
+    mut val dependencies = <FinalDependencies />
+    mut val publication = <FinalizationPublication />
+    val root = c.enqueueFinalBody(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
+    c.requestFinalBody(bodyId: root, requests: inout requests).unwrap()
+    val maker = c.monoWork.bodyInstances[1U64]
+    c.requestFinalBody(bodyId: maker, requests: inout requests).unwrap()
+    mut val closure = 0U64
+    for bodyId in c.monoWork.bodyInstances {
+        if c.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64 { closure = bodyId }
+    }
+    if closure == 0U64 { panic "closure signature not registered" }
+    val abi = c.arena.closureSignature(bodyId: closure)
+    if abi.captures.count() != 1U64 || !abi.templatesClosed { panic "closure lost checked capture metadata" }
+    val expected = c.arena.bodySignature(bodyId: maker).parameterTypes[0U64]
+    if !c.typeRefEq(a: abi.captures[0U64].typeTerm, b: expected) || !c.typeRefEq(a: c.arena.bodySignature(bodyId: closure).resultType, b: expected) { panic "closure lost generic environment" }
+    for call in c.arena.finalCallees {
+        if call.bodyId == closure { panic "closure creation requested body descriptors" }
+    }
+    c.closeFinalDependencies(state: inout dependencies).unwrap()
+    c.publishFinalCallables(state: inout publication).unwrap()
+    c.cur.checkFn = 77U64
+    c.cur.bodyId = 88U64
+    c.inCollection = false
+    match c.requestFinalBody(bodyId: closure, requests: inout requests) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic diagnostic.message }
+    }
+    if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "closure request leaked context" }
+    mut val calls = 0U64
+    for call in c.arena.finalCallees {
+        if call.bodyId == closure { calls += 1U64 }
+    }
+    if calls != 1U64 { panic "closure request did not prepare its call" }
+    val count = c.finalCalleeCount()
+    c.requestFinalBody(bodyId: closure, requests: inout requests).unwrap()
+    c.closeFinalDependencies(state: inout dependencies).unwrap()
+    c.publishFinalCallables(state: inout publication).unwrap()
+    if c.finalCalleeCount() != count { panic "closure request repeated body scan" }
+    print("ok")
+}

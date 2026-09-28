@@ -434,6 +434,7 @@ pub enum SemanticClosureCaptureMode {
 }
 
 pub struct SemanticClosureCapture {
+    pub val nameLen: U64 = 0U64
     pub val bindingTarget: U64 = 0U64
     pub val typeTerm: U64 = 0U64
     pub val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
@@ -2075,6 +2076,8 @@ pub impl CallSiteSelection { factory }
 // to the actual conformer.
 // Final ABI types belong to a body, but do not participate in its identity.
 pub struct ClosureSignature {
+    pub val declarationIndex: U64 = 0U64
+    pub val templatesClosed: Bool = false
     pub val environmentDropBodyId: U64 = 0U64
     pub val functionTypeTerm: U64 = 0U64
     pub val captures: Array[SemanticClosureCapture] = []

@@ -4585,7 +4585,7 @@ pub impl Comp {
     }
 
     inout fn prepareFinalBodyRequest(bodyId: U64) -> Result[(), CompileDiagnostic] {
-        if self.arena.bodyIsCallable(bodyId: bodyId) {
+        if self.arena.bodyIsCallable(bodyId: bodyId) && self.arena.bodySignature(bodyId: bodyId).closureSignatureId == 0U64 {
             val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
             if instance.fnIdx >= self.arena.functionCount() {
                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: body request is not a source callable") />
@@ -4607,6 +4607,9 @@ pub impl Comp {
     }
 
     inout fn scanFinalBodyInstance(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        if self.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64 {
+            return self.scanFinalClosureBody(bodyId: bodyId)
+        }
         match self.arena.bodyOrigin(bodyId: bodyId) {
             BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return <Result.Ok value=() /> }
             BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
@@ -5431,7 +5434,7 @@ pub impl Comp {
         }
         val boxed = try self.checkedCaptureCell(lo: local)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
-        captures.append(<SemanticClosureCapture bindingTarget=local.nameStart typeTerm=local.ty mode=mode />)
+        captures.append(<SemanticClosureCapture bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
         self.decls.semanticClosures.set(i: index, value: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
     }
@@ -5467,7 +5470,7 @@ pub impl Comp {
             val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
             val local = <Local nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
             val boxed = try self.checkedCaptureCell(lo: local)
-            captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget typeTerm=type mode=capture.mode />)
+            captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget nameLen=capture.nameLen typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }
         val closureBodyId = self.currentBodyInstanceId()
@@ -5495,12 +5498,59 @@ pub impl Comp {
             else { passings.append(<CallArgumentPassing.Borrow />) }
             parameterIndex += 1U64
         }
-        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, passings: passings, result: signature.args[0U64], closure: <ClosureSignature environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
+        self.arena.setClosureSignature(bodyId: closureBodyId, parameters: parameters, passings: passings, result: signature.args[0U64], closure: <ClosureSignature declarationIndex=index + 1U64 templatesClosed=(try self.callTemplatesClosedForBody(fnIdx: ownerFnIdx)) environmentDropBodyId=dropBodyId functionTypeTerm=functionType captures=captures />)
         typeI = 0U64
         while typeI < signature.args.count() { try self.scanType(ref: signature.args[typeI]) typeI += 1U64 }
         captureI = 0U64
         while captureI < captures.count() { try self.scanType(ref: captures[captureI].typeTerm) captureI += 1U64 }
         return <Result.Ok value=() />
+    }
+
+    // Reconstruct a closure's concrete lexical environment from its instance
+    // and checked capture metadata, never from a suspended enclosing Cursor.
+    inout fn scanFinalClosureBody(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        val abi = self.arena.closureSignature(bodyId: bodyId)
+        if abi.declarationIndex == 0U64 || abi.declarationIndex > self.decls.semanticClosures.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure request has no lexical declaration") />
+        }
+        val closure = self.decls.semanticClosures[abi.declarationIndex - 1U64]
+        if !abi.templatesClosed {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closure.exprId), msg: "internal error: closure finalization requires closed lexical call templates") />
+        }
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if closure.ownerFnIdx < self.arena.functionCount() {
+            try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: self.arena.functionAt(index: closure.ownerFnIdx))
+        } else {
+            self.cur.locals = []
+            self.cur.hasRecv = false
+            self.cur.selfRef = 0U64
+            self.cur.itemRef = 0U64
+            self.cur.bodySelfRef = 0U64
+            self.cur.bodyItemRef = 0U64
+            self.cur.bodyFnIdx = closure.bodyKey
+            self.cur.bodyId = bodyId
+            self.cur.bodyEnvironment = instance.environment
+            self.cur.typeParams = instance.environment.params
+            self.cur.typeArgs = instance.environment.args
+        }
+        self.cur.inClosure = true
+        self.cur.closureId = closure.exprId
+        self.cur.closureCallTemplatesClosed = true
+        for capture in abi.captures {
+            val info = self.typeInfoOfRef(ref: capture.typeTerm)
+            val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
+            self.addLocal(nameStart: capture.bindingTarget, nameLen: capture.nameLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: capture.typeTerm, isInout: false, isMut: mutable, owned: false)
+        }
+        self.cur.captureMark = self.scopeMark()
+        match self.arena.exprs[closure.exprId] {
+            Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+                for parameter in parameters {
+                    self.addLocal(nameStart: parameter.nameStart, nameLen: parameter.nameLen, tyStart: parameter.tyStart, tyLen: parameter.tyLen, isArray: parameter.tyIsArray, ty: parameter.ty, isInout: parameter.isInout, isMut: false, owned: false)
+                }
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: closure declaration lost its expression") /> }
+        }
+        return self.scanBlockInsts(blkId: closure.bodyBlock)
     }
 
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
@@ -5831,58 +5881,23 @@ pub impl Comp {
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Ident(val start, val len) => { try self.scanBindingInsts(exprId: exprId, start: start, len: len) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
-                // a closure literal lexically inside another closure body: the inner
-                // env construction would have to reach the outer env, which is not
-                // wired yet — reject loudly rather than miscompile.
                 if self.cur.inClosure {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary") />
                 }
-                // walk the body with the closure's own scope so enclosing references
-                // become captures. Save/restore the capture context (single-level;
-                // nested closures keep their own mark).
-                val savedId: U64 = self.cur.closureId
-                val savedIn: Bool = self.cur.inClosure
-                val savedMark: U64 = self.cur.captureMark
-                val savedBodyFn: U64 = self.cur.bodyFnIdx
-                val savedBodyEnvironment: InstanceEnvironment = self.cur.bodyEnvironment
-                val savedClosureReadiness: Bool = self.cur.closureCallTemplatesClosed
-                val lexicalReadiness: Bool = (try self.callTemplatesClosedForBody(fnIdx: savedBodyFn))
-                val enclMark: U64 = self.scopeMark()
-                self.cur.closureCallTemplatesClosed = lexicalReadiness
-                self.cur.closureId = exprId
-                self.cur.inClosure = true
-                self.cur.captureMark = enclMark
+                // Captures and the ABI come from the checked lexical record.
+                // Creating a closure does not request its executable body.
+                val saved = self.cur
                 self.cur.bodyFnIdx = self.closureBodyKey(closureId: exprId)
-                // The closure has its own synthetic body identity, but its
-                // type terms remain lexically nested in this body. Dropping
-                // the enclosing BodyInstance environment here made `T` in a
-                // closure inside `fn f[T]` appear ungrounded while finalizing
-                // its calls. Rust monomorphizes a closure with its enclosing
-                // substitution and Swift carries the generic context through
-                // the closure function; preserve the same semantic fact.
-                self.cur.bodyEnvironment = savedBodyEnvironment
                 self.cur.bodyId = 0U64
-                // A closure body is a genuine semantic body, not merely an
-                // AST region revisited by LLVM. Intern its synthetic identity
-                // before scanning so every CallTemplate written below belongs
-                // to the same BodyInstance that the Mid body key denotes.
-                self.cur.bodyId = self.currentBodyInstanceId()
-                mut val pi: U64 = 0
-                while pi < params.count() {
-                    val p: Param = params[pi]
-                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-                    pi += 1
+                val closureBodyId = self.currentBodyInstanceId()
+                self.cur.bodyId = closureBodyId
+                val ready = self.arena.bodySignature(bodyId: closureBodyId).ready
+                val result = self.finalizeClosureSignature(ownerFnIdx: saved.bodyFnIdx, closureId: exprId)
+                self.cur = saved
+                try result
+                if !ready && self.arena.bodySignature(bodyId: closureBodyId).ready {
+                    self.monoWork.bodyInstances.append(closureBodyId)
                 }
-                try self.scanBlockInsts(blkId: body)
-                try self.finalizeClosureSignature(ownerFnIdx: savedBodyFn, closureId: exprId)
-                self.popLocals(mark: enclMark)
-                self.cur.closureCallTemplatesClosed = savedClosureReadiness
-                self.cur.closureId = savedId
-                self.cur.inClosure = savedIn
-                self.cur.captureMark = savedMark
-                self.cur.bodyFnIdx = savedBodyFn
-                self.cur.bodyEnvironment = savedBodyEnvironment
-                self.cur.bodyId = 0U64
             }
             Expr.Unary(val op, val operand) => {
                 try self.scanExprInsts(exprId: operand)
