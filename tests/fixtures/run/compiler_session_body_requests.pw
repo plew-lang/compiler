@@ -1,0 +1,86 @@
+import /CheckedProgram with { CompilerSession, CompilerSessionResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import /Mid/DeclarationAccess with { DeclarationAccessNode }
+import @Std/Io with { print }
+
+fn allBodies() {
+    val source = "fn main() { val item = 1I64 val get = fn() -> I64 { return identity(value: item) } val erased: any Value = <Box item=2I64 /> } fn identity(value: I64) -> I64 { return value } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { return self.item } }"
+    match CompilerSession.open(input: <FrontendInput.Text path="bodies.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            match session.prepareFunction(function: 0U64) {
+                Result.Ok(value: _) => {}
+                Result.Err(error: val diagnostic) => { panic diagnostic.message }
+            }
+            mut val index = 0U64
+            mut val closures = 0U64
+            mut val destructions = 0U64
+            mut val functions = 0U64
+            while index < session.registeredBodies().count() {
+                val body = session.registeredBodies()[index]
+                val prepared = match session.prepareBody(bodyId: body) {
+                    Result.Ok(value: val prepared) => { give prepared }
+                    Result.Err(error: val diagnostic) => { panic diagnostic.message }
+                }
+                if prepared.bodyId != body { panic "request changed body identity" }
+                for declaration in prepared.declarations {
+                    match declaration.root {
+                        DeclarationAccessNode.Closure(bodyKey: _) => { closures += 1U64 }
+                        DeclarationAccessNode.Destruction(typeTerm: _) => { destructions += 1U64 }
+                        DeclarationAccessNode.Function(function: _) => { functions += 1U64 }
+                        DeclarationAccessNode.GlobalInitializer => {}
+                    }
+                }
+                val before = session.registeredBodies().count()
+                val repeated = session.prepareBody(bodyId: body).unwrap()
+                if repeated.bodyId != body || repeated.declarations.count() != prepared.declarations.count() || session.registeredBodies().count() != before { panic "repeat body request changed preparation" }
+                index += 1U64
+            }
+            if closures != 1U64 || destructions != 1U64 || functions != 4U64 { panic "body origins lost their declaration effects" }
+        }
+    }
+}
+
+fn dropDoesNotInvokeClosure() {
+    val source = "fn main() { val held = 1I64 val get = fn() -> I64 { mut val counter = <Counter value=held /> counter.read(other: inout counter, token: 0I64) return held } } struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } }"
+    match CompilerSession.open(input: <FrontendInput.Text path="drop.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val root = match session.prepareFunction(function: 0U64) {
+                Result.Ok(value: val prepared) => { give prepared }
+                Result.Err(error: val diagnostic) => { panic diagnostic.message }
+            }
+            mut val dropChecked = false
+            mut val rejected = false
+            for body in session.registeredBodies() {
+                if body != root.bodyId {
+                    match session.prepareBody(bodyId: body) {
+                        Result.Ok(value: val prepared) => {
+                            for declaration in prepared.declarations {
+                                match declaration.root {
+                                    DeclarationAccessNode.Destruction(typeTerm: _) => { dropChecked = true }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Result.Err(error: val diagnostic) => {
+                            if !dropChecked { panic "environment destruction checked the closure body" }
+                            if diagnostic.message != "read-only receiver overlaps an inout or move argument in the same call" { panic diagnostic.message }
+                            rejected = true
+                        }
+                    }
+                }
+            }
+            if !dropChecked || !rejected { panic "closure access checks were bypassed" }
+        }
+    }
+}
+
+fn main() {
+    allBodies()
+    dropDoesNotInvokeClosure()
+    print("ok")
+}

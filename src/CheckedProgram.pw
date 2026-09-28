@@ -1,7 +1,7 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-import ./Ir with { StaticConformanceProof }
+import ./Ir with { StaticConformanceProof, BodyOrigin }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation }
 import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
@@ -9,21 +9,27 @@ import ./Mid/Build with { MidFunctionTemplates }
 import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAccessNode }
 import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
 
-// The admitted source and every cache belong to one session. No mutable Comp
-// escapes; later requests cannot reload edited files or borrow another arena.
 // Observation of prepared descriptors. Remaining declaration obligations are
 // retained; this value cannot be passed to LLVM as execution permission.
-pub struct FunctionDescriptors {
-    pub val bodyId: U64
-    pub val declarationAccess: DeclarationAccessAnalysis
+pub struct BodyDeclarationAnalysis {
+    pub val root: DeclarationAccessNode
+    pub val analysis: DeclarationAccessAnalysis
 }
 
+pub struct BodyDescriptors {
+    pub val bodyId: U64
+    pub val declarations: Array[BodyDeclarationAnalysis]
+}
+
+// The admitted source and every cache belong to one session. No mutable Comp
+// escapes; later requests cannot reload edited files or borrow another arena.
 pub unique struct CompilerSession {
     mut val compiler: Comp
     mut val finalizationStarted: Bool = false
     mut val finalBodies: FinalBodyRequests = <FinalBodyRequests />
     mut val finalDependencies: FinalDependencies = <FinalDependencies />
     mut val finalPublication: FinalizationPublication = <FinalizationPublication />
+    mut val descriptorResults: Dictionary[U64, BodyDescriptors] = [:]
     mut val executionFailure: Optional[CompileDiagnostic] = <Optional.None />
     mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
     mut val requests: DeclarationBodyRequests = <DeclarationBodyRequests />
@@ -49,12 +55,30 @@ pub impl CompilerSession {
     }
 
     // Only this session can combine source checking with its concrete arena.
-    inout fn prepareFunction(function: U64, arguments: Array[U64] = [], receiver: U64 = 0U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[FunctionDescriptors, CompileDiagnostic] {
+    inout fn prepareFunction(function: U64, arguments: Array[U64] = [], receiver: U64 = 0U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[BodyDescriptors, CompileDiagnostic] {
         match self.executionFailure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
         }
         val result = self.prepareFunctionInSession(function: function, arguments: arguments, receiver: receiver, proof: proof)
+        match result {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { self.executionFailure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
+    // Registration is a signature/identity snapshot, not an execution grant.
+    // IDs are meaningful only in this session. Global startup is separate from
+    // this callable worklist and is checked by every preparation request.
+    fn registeredBodies() -> Array[U64] { return self.compiler.monoWork.bodyInstances }
+
+    inout fn prepareBody(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
+        match self.executionFailure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        val result = self.prepareBodyInSession(bodyId: bodyId)
         match result {
             Result.Ok(value: _) => {}
             Result.Err(error: val diagnostic) => { self.executionFailure = <Optional.Some v=diagnostic /> }
@@ -97,21 +121,68 @@ impl CompilerSession {
         return <Result.Ok value=() />
     }
 
-    inout fn prepareFunctionInSession(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof) -> Result[FunctionDescriptors, CompileDiagnostic] {
+    inout fn prepareFunctionInSession(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof) -> Result[BodyDescriptors, CompileDiagnostic] {
         // Globals are mandatory startup roots. Keep their analysis in the
         // session cache even though this result describes one function.
         (try self.request(root: <DeclarationAccessNode.GlobalInitializer />))
-        val analysis = (try self.request(root: <DeclarationAccessNode.Function function=function />))
+        (try self.request(root: <DeclarationAccessNode.Function function=function />))
         try self.startFinalization()
         try self.compiler.prepareFinalInitializers(state: inout self.finalDependencies)
         val bodyId = (try self.compiler.enqueueFinalBody(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof))
         if bodyId == 0U64 {
             return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "internal error: function request has no concrete callable body") />
         }
-        try self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
+        return self.prepareBodyInSession(bodyId: bodyId)
+    }
+
+    inout fn prepareBodyInSession(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
+        if !self.finalizationStarted || bodyId == 0U64 || bodyId > self.compiler.arena.bodyInstanceCount() || !self.compiler.arena.bodySignature(bodyId: bodyId).ready {
+            return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "internal error: body request requires a registered signature in this session") />
+        }
+        match self.descriptorResults.get(key: bodyId) {
+            Optional.Some(v: val prepared) => { return <Result.Ok value=prepared /> }
+            Optional.None => {}
+        }
+        val roots = self.declarationRootsForBody(bodyId: bodyId)
+        mut val declarations: Array[BodyDeclarationAnalysis] = []
+        for root in roots {
+            declarations.append(<BodyDeclarationAnalysis root=root analysis=(try self.request(root: root)) />)
+        }
+        val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if instance.fnIdx != 18446744073709551615U64 {
+            try self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
+        }
         try self.compiler.closeFinalDependencies(state: inout self.finalDependencies)
         try self.compiler.publishFinalCallables(state: inout self.finalPublication)
-        return <Result.Ok value=<FunctionDescriptors bodyId=bodyId declarationAccess=analysis /> />
+        val prepared = <BodyDescriptors bodyId=bodyId declarations=declarations />
+        self.descriptorResults[bodyId] = prepared
+        return <Result.Ok value=prepared />
+    }
+
+    // Synthetic code inherits the effects of the operations it actually
+    // performs. Dropping a closure environment never executes its closure body.
+    inout fn declarationRootsForBody(bodyId: U64) -> Array[DeclarationAccessNode] {
+        mut val roots: Array[DeclarationAccessNode] = [<DeclarationAccessNode.GlobalInitializer />]
+        val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
+        match self.compiler.arena.bodyOrigin(bodyId: bodyId) {
+            BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
+                val target = self.compiler.arena.finalExistentials[resolution].members[member].bodyId
+                roots.append(<DeclarationAccessNode.Function function=self.compiler.arena.bodyInstanceAt(index: target - 1U64).fnIdx />)
+            }
+            BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val closure) => {
+                for capture in self.compiler.arena.closureSignature(bodyId: closure).captures {
+                    roots.append(<DeclarationAccessNode.Destruction typeTerm=capture.typeTerm />)
+                }
+            }
+            BodyOrigin.Callable => {
+                if self.compiler.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64 {
+                    roots.append(<DeclarationAccessNode.Closure bodyKey=instance.fnIdx />)
+                } else if instance.fnIdx != 18446744073709551615U64 {
+                    roots.append(<DeclarationAccessNode.Function function=instance.fnIdx />)
+                }
+            }
+        }
+        return roots
     }
 
 }
