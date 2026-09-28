@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+fn captured[T](value: T) -> fn() -> T {
+    return fn() -> T { return value }
+}
+fn main() {
+    val scalar = captured(value: 1I64)
+    print(scalar())
+    val text = captured(value: "hello")
+    print(text())
+}

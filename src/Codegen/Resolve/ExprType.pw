@@ -579,24 +579,6 @@ pub impl Comp {
                     }
                     return <Result.Ok value=self.typeInfoOfName(start: self.cur.recvStart, len: self.cur.recvLen, isArray: false) />
                 }
-                // inside a closure body a captured name is not a local; recover its
-                // type from the capture entry (so field/index dispatch on it works).
-                if self.cur.inClosure {
-                    mut val ci: U64 = 0
-                    while ci < self.monoWork.captures.count() {
-                        val ce: CaptureEntry = self.monoWork.captures[ci]
-                        if ce.closureId == self.cur.closureId {
-                            if spansEqual(c: inout self, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
-                                if self.isStrongRefInst(ref: ce.ty) || self.isWeakRefLikeInst(ref: ce.ty) {
-                                    val rt2: TypeRef = self.arena.typeAt(index: ce.ty)
-                                    return <Result.Ok value=<TypeInfo kind=2 nameStart=rt2.nameStart nameLen=rt2.nameLen ref=ce.ty /> />
-                                }
-                                return <Result.Ok value=self.typeInfoOfName(start: ce.tyStart, len: ce.tyLen, isArray: ce.isArray) />
-                            }
-                        }
-                        ci += 1
-                    }
-                }
                 val i = self.localIndexByName(start: start, len: len)
                 if i < self.cur.locals.count() {
                         val lo: Local = (try self.typedLocal(index: i))

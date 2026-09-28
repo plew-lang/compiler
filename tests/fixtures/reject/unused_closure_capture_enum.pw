@@ -1,0 +1,16 @@
+enum Maybe {
+    Some(value: I64)
+    None
+}
+
+fn auditUnused() {
+    val maybe: Maybe = <Maybe.Some value=1 />
+    val f: fn() -> I64 = fn() -> I64 {
+        match maybe {
+            Maybe.Some(value: val value) => { return value }
+            Maybe.None => { return 0 }
+        }
+    }
+}
+
+fn main() {}

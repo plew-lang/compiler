@@ -30,3 +30,9 @@ tests/fixtures/run/async_capture_frame.pw
 tests/fixtures/run/async_view_receiver_argument.pw
 tests/fixtures/run/consuming_receiver_owned_sources.pw
 tests/fixtures/run/async_implicit_promise.pw
+tests/fixtures/run/closure_capture_heap.pw
+tests/fixtures/run/closure_mut_capture.pw
+tests/fixtures/run/closure_shadow_capture.pw
+tests/fixtures/run/closure_write_capture.pw
+tests/fixtures/run/closure_capture_receiver_arc.pw
+tests/fixtures/run/closure_generic_capture_identity.pw

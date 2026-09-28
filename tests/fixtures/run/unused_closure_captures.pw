@@ -1,0 +1,26 @@
+// Declaration checking must know capture bindings without executable discovery.
+fn scalar() {
+    val value: I64 = 1I64
+    val closure = fn() -> I64 { return value }
+}
+fn mutableScalar() {
+    mut val value: I64 = 1I64
+    val closure = fn() -> I64 { value += 1I64 return value }
+}
+fn heap() {
+    val values: Array[I64] = [1I64]
+    val closure = fn() -> I64 { return values[0] }
+}
+fn shadow() {
+    val value: I64 = 1I64
+    val closure = fn(value: I64) -> I64 { return value }
+}
+fn writeOnly() {
+    mut val value: I64 = 1I64
+    val closure = fn() { value = 2I64 }
+}
+fn receiver() {
+    val value: String = "hello"
+    val closure = fn() -> U64 { return value.bytes().count() }
+}
+fn main() {}

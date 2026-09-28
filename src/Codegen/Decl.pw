@@ -834,33 +834,4 @@ pub impl Comp {
         self.monoWork.fnThunks.append(fi)
     }
 
-    inout fn isBoxedCaptureOf(closureId: U64, start: U64, len: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.monoWork.captures.count() {
-            val e: CaptureEntry = self.monoWork.captures[i]
-            if e.closureId == closureId {
-                if e.boxed {
-                    if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
-                        return true
-                    }
-                }
-            }
-            i += 1
-        }
-        return false
-    }
-
-    inout fn isCaptureOf(closureId: U64, start: U64, len: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.monoWork.captures.count() {
-            val e: CaptureEntry = self.monoWork.captures[i]
-            if e.closureId == closureId {
-                if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
-                    return true
-                }
-            }
-            i += 1
-        }
-        return false
-    }
 }

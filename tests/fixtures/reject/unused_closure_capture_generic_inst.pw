@@ -1,0 +1,14 @@
+struct Box[T] {
+    pub val value: T
+}
+
+pub impl Box { factory }
+
+fn auditUnused() {
+    val box: Box[I64] = <Box value=1 />
+    val f: fn() -> I64 = fn() -> I64 {
+        return box.value
+    }
+}
+
+fn main() {}

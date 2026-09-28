@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+unique struct Handle { pub val id: I32 }
+pub impl Handle { factory }
+
+fn auditUnused() {
+    val h: Handle = <Handle id=1 />
+    val f: fn() -> I32 = fn() -> I32 { return h.id }
+    print(f())
+}
+
+fn main() {}

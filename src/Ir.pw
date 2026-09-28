@@ -3202,7 +3202,6 @@ pub struct MonoWork {
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []
     pub mut val fnThunks: Array[U64] = []
-    pub mut val captures: Array[CaptureEntry] = []
     pub mut val arrayElems: Array[Bind] = []
     pub mut val boxedFields: Array[U64] = []
     // Concrete bodies reachable from program roots.  The frontend closes this
@@ -3417,6 +3416,9 @@ pub struct Cursor {
     pub mut val closureId: U64 = 0
     pub mut val inClosure: Bool = false
     pub mut val captureMark: U64 = 0
+    // Declaration capture recording uses a 1-based SemanticClosure row.
+    pub mut val recordClosureIndex: U64 = 0U64
+    pub mut val recordCaptureMark: U64 = 0U64
     pub mut val verifyLoopDepth: U64 = 0
     pub mut val verifyMovedIdx: Array[U64] = []
     pub mut val branchBase: U64 = 0

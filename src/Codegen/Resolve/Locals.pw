@@ -55,13 +55,6 @@ pub impl Comp {
             // `self` is assignable only through an `inout fn` receiver.
             return self.cur.selfInout
         }
-        // inside a closure, a capture is assignable only if it is a boxed (`mut val`)
-        // reference capture; a by-value (`val`) capture is immutable.
-        if self.cur.inClosure {
-            if self.isCaptureOf(closureId: self.cur.closureId, start: start, len: len) {
-                return self.isBoxedCaptureOf(closureId: self.cur.closureId, start: start, len: len)
-            }
-        }
         val index = self.localIndexByName(start: start, len: len)
         if index < self.cur.locals.count() {
             val local = self.cur.locals[index]
@@ -85,11 +78,6 @@ pub impl Comp {
     inout fn identIsBinding(start: U64, len: U64) -> Bool {
         if self.isSelfRef(start: start, len: len) {
             return true
-        }
-        if self.cur.inClosure {
-            if self.isCaptureOf(closureId: self.cur.closureId, start: start, len: len) {
-                return true
-            }
         }
         return self.localIndexByName(start: start, len: len) < self.cur.locals.count()
     }

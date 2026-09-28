@@ -1,0 +1,1 @@
+v1 rejects closure capture of unique, generic-instantiated, enum, or function-typed values

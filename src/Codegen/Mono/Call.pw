@@ -5111,17 +5111,14 @@ pub impl Comp {
         return false
     }
 
-    inout fn recordCapture(closureId: U64, localIdx: U64) -> Result[(), CompileDiagnostic] {
-        val lo: Local = self.cur.locals[localIdx]
-        mut val i: U64 = 0
-        while i < self.monoWork.captures.count() {
-            val e: CaptureEntry = self.monoWork.captures[i]
-            if e.closureId == closureId {
-                if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: lo.nameStart, bLen: lo.nameLen) {
-                    return <Result.Ok value=() />
-                }
+    // Capture mode follows lexical mutability; representation restrictions are
+    // checked as soon as the type shape is known and again after substitution.
+    inout fn checkedCaptureCell(lo: Local) -> Result[Bool, CompileDiagnostic] {
+        if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
+            val type = self.arena.typeAt(index: lo.ty)
+            if type.assocNameId != 0U64 || (type.paramId != 0U64 && type.args.count() == 0U64) {
+                return <Result.Ok value=lo.isMut />
             }
-            i += 1
         }
         mut val boxed: Bool = false
         if lo.isMut {
@@ -5142,14 +5139,11 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "v1 rejects closure capture of unique, generic-instantiated, enum, or function-typed values") />
             }
         }
-        self.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
-        return <Result.Ok value=() />
+        return <Result.Ok value=boxed />
     }
 
-    // Mono discovers capture modes while walking the lexical closure body.
-    // Freeze that one result into Decls before Mid sees the literal: later
-    // stages receive declaration identities and TypeTerms, never local-stack
-    // positions, type spellings, or an invitation to repeat this walk.
+    // Declaration recording owns capture identities and modes. Executable
+    // preparation only substitutes their TypeTerms into the closure ABI.
     fn semanticClosureHash(ownerFnIdx: U64, exprId: U64) -> U64 {
         val modulus: U64 = 4294967291U64
         mut val h: U64 = ownerFnIdx % modulus
@@ -5221,17 +5215,7 @@ pub impl Comp {
     }
 
     inout fn publishSemanticClosure(ownerFnIdx: U64, closureId: U64, parameters: Array[Param], hasReturn: Bool, returnTypeTerm: U64, bodyBlock: U64) -> Result[(), CompileDiagnostic] {
-        mut val captures: Array[SemanticClosureCapture] = []
-        mut val i: U64 = 0U64
-        while i < self.monoWork.captures.count() {
-            val capture: CaptureEntry = self.monoWork.captures[i]
-            if capture.closureId == closureId {
-                mut val mode: SemanticClosureCaptureMode = <SemanticClosureCaptureMode.ValueCopy />
-                if capture.boxed { mode = <SemanticClosureCaptureMode.CellBorrow /> }
-                captures.append(<SemanticClosureCapture bindingTarget=capture.nameStart typeTerm=capture.ty mode=mode />)
-            }
-            i += 1U64
-        }
+        val captures: Array[SemanticClosureCapture] = []
         mut val frozenParameters: Array[SemanticClosureParameter] = []
         mut val parameterI: U64 = 0U64
         while parameterI < parameters.count() {
@@ -5240,6 +5224,25 @@ pub impl Comp {
             parameterI += 1U64
         }
         try self.putSemanticClosure(closure: <SemanticClosure ownerFnIdx=(try self.semanticBodyOwner(fnIdx: ownerFnIdx)) exprId=closureId bodyKey=self.closureBodyKey(closureId: closureId) functionTypeTerm=self.semanticExprTerm(exprId: closureId) bodyBlock=bodyBlock parameters=frozenParameters hasReturn=hasReturn returnTypeTerm=returnTypeTerm captures=captures />)
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordDeclarationCapture(localIndex: U64) -> Result[(), CompileDiagnostic] {
+        if self.cur.recordClosureIndex == 0U64 || localIndex >= self.cur.recordCaptureMark || localIndex >= self.cur.locals.count() { return <Result.Ok value=() /> }
+        val local = try self.typedLocal(index: localIndex)
+        if local.isGlobal { return <Result.Ok value=() /> }
+        val index = self.cur.recordClosureIndex - 1U64
+        val closure = self.decls.semanticClosures[index]
+        mut val captures = closure.captures
+        mut val i = 0U64
+        while i < captures.count() {
+            if captures[i].bindingTarget == local.nameStart { return <Result.Ok value=() /> }
+            i += 1U64
+        }
+        val boxed = try self.checkedCaptureCell(lo: local)
+        val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
+        captures.append(<SemanticClosureCapture bindingTarget=local.nameStart typeTerm=local.ty mode=mode />)
+        self.decls.semanticClosures.set(i: index, value: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
     }
 
@@ -5270,6 +5273,10 @@ pub impl Comp {
             val capture = closure.captures[captureI]
             val type = (try self.groundAndRecordBodyType(ref: capture.typeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
             if type == 0U64 || !(try self.tyRefIsGround(ref: type)) { return <Result.Ok value=() /> }
+            val info = self.typeInfoOfRef(ref: type)
+            val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
+            val local = <Local nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
+            val boxed = try self.checkedCaptureCell(lo: local)
             captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }
@@ -5616,18 +5623,6 @@ pub impl Comp {
     // is shared so assignment indexes are never rewritten as value reads.
     inout fn scanBindingInsts(exprId: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
         self.selectReferencedGlobal(exprId: exprId)
-        // capture detection: inside a closure, an identifier that resolves to
-        // a local below the closure's entry mark is an enclosing capture.
-        if self.cur.inClosure {
-            val li: U64 = self.localIndexByName(start: start, len: len)
-            if li < self.cur.captureMark {
-                // Global declaration slots may be installed at any point in
-                // lexical lookup; their storage is never a closure capture.
-                if !self.cur.locals[li].isGlobal {
-                    try self.recordCapture(closureId: self.cur.closureId, localIdx: li)
-                }
-            }
-        }
         return <Result.Ok value=() />
     }
 
@@ -5689,7 +5684,6 @@ pub impl Comp {
                     pi += 1
                 }
                 try self.scanBlockInsts(blkId: body)
-                try self.publishSemanticClosure(ownerFnIdx: savedBodyFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
                 try self.finalizeClosureSignature(ownerFnIdx: savedBodyFn, closureId: exprId)
                 self.popLocals(mark: enclMark)
                 self.cur.closureCallTemplatesClosed = savedClosureReadiness

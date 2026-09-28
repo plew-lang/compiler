@@ -1,0 +1,8 @@
+enum Value { Item(value: I64) }
+fn captured[T](value: T) -> fn() -> T {
+    return fn() -> T { return value }
+}
+fn main() {
+    val scalar = captured(value: 1I64)
+    val unsupported = captured(value: <Value.Item value=2I64 />)
+}

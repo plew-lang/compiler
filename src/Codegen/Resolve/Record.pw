@@ -368,6 +368,7 @@ pub impl Comp {
     inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         val localIndex: U64 = self.localIndexByName(start: nameStart, len: nameLen)
         if localIndex >= self.cur.locals.count() { return <Result.Ok value=() /> }
+        try self.recordDeclarationCapture(localIndex: localIndex)
         val local: Local = self.cur.locals[localIndex]
         if !(self.isFnType(ref: local.ty)) { return <Result.Ok value=() /> }
         try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
@@ -1276,6 +1277,7 @@ pub impl Comp {
                 }
                 val localIdx: U64 = self.localIndexByName(start: start, len: len)
                 if localIdx < self.cur.locals.count() {
+                    try self.recordDeclarationCapture(localIndex: localIdx)
                     val local: Local = (try self.typedLocal(index: localIdx))
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
@@ -1882,6 +1884,10 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: self.closureFnTypeRef(params: params, retTy: retTy))
                 try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, hasReturn: hasRet, returnTypeTerm: retTy, bodyBlock: body)
                 val mark: U64 = self.scopeMark()
+                val savedClosureIndex = self.cur.recordClosureIndex
+                val savedCaptureMark = self.cur.recordCaptureMark
+                self.cur.recordClosureIndex = (try self.semanticClosureIndex(ownerFnIdx: self.cur.checkFn, exprId: exprId)) + 1U64
+                self.cur.recordCaptureMark = mark
                 // A closure owns a distinct Mono body key.  Its CallTemplates
                 // must use the same owner while retaining the enclosing lexical
                 // locals for capture typing; otherwise finalization searches the
@@ -1897,6 +1903,8 @@ pub impl Comp {
                 }
                 try self.recordBlock(blkId: body)
                 self.cur.checkFn = savedCheckFn
+                self.cur.recordClosureIndex = savedClosureIndex
+                self.cur.recordCaptureMark = savedCaptureMark
                 self.popLocals(mark: mark)
             }
             _ => {}
