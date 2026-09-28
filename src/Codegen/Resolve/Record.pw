@@ -1734,6 +1734,8 @@ pub impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: ty)
             }
             Expr.MatchExpr(val scrut, val arms) => {
+                // Validate labels before publishing lexical pattern bindings.
+                try self.checkMatchArmBinds(arms: arms)
                 try self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
                 try self.recordSemanticMatch(matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
@@ -2018,6 +2020,8 @@ pub impl Comp {
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
+                // Validate labels before publishing lexical pattern bindings.
+                try self.checkMatchArmBinds(arms: arms)
                 try self.recordExpr(exprId: scrut)
                 try self.recordSemanticMatch(matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0

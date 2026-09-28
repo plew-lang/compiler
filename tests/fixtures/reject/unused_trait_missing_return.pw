@@ -1,0 +1,4 @@
+// A provided trait body must be checked even with no conforming type.
+trait Getter { fn get() -> I64 }
+impl Getter { fn get() -> I64 { val value = 1I64 } }
+fn main() {}

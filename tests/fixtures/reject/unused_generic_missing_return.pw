@@ -1,0 +1,3 @@
+// The abstract checker must validate return paths without any instance.
+fn unused[T](value: T) -> T { val copy = value }
+fn main() {}

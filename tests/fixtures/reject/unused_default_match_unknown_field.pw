@@ -1,0 +1,6 @@
+// Default-expression patterns belong to the declaration checker even when unused.
+enum Choice { Item(value: I64) }
+fn unused(value: I64 = match <Choice.Item value=1I64 /> {
+    Choice.Item(val absent) => { give absent }
+}) {}
+fn main() {}

@@ -22,6 +22,7 @@ pub impl Comp {
     }
 
     inout fn verifyFunc(f: Func, abstract: Bool = false) -> Result[(), CompileDiagnostic] {
+        try self.checkFunctionReturns(f: f)
         if f.hasRet {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart

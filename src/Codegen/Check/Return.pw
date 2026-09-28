@@ -66,7 +66,7 @@ pub impl Comp {
                 return false
             }
             Stmt.Match(val scrut, val arms) => {
-                // match is exhaustive (checkMatchBinds / structural exhaustiveness), so
+                // match is exhaustive (the body verifier checks exhaustiveness), so
                 // it diverges iff every arm's block diverges.
                 if arms.len == 0U64 {
                     return false
@@ -104,26 +104,25 @@ pub impl Comp {
         }
     }
 
+    inout fn checkFunctionReturns(f: Func) -> Result[(), CompileDiagnostic] {
+        // Preserve the existing exemptions: implicit Unit, extern/abstract,
+        // async state machines, and the special main entry convention.
+        if !f.hasRet || f.isExtern || f.isAsync || f.body == 0U64 || self.nameIsMain(f: f) {
+            return <Result.Ok value=() />
+        }
+        if !self.blockDiverges(blkId: f.body) {
+            return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    // The independent generation pipeline retains its existing whole-input
+    // structural checks. Ordinary body checking uses the individual entry.
     inout fn checkReturns() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
-            // body), provided/abstract (body 0), and async (state-machine return).
-            if f.hasRet {
-                if !(f.isExtern) {
-                    if !(f.isAsync) {
-                        if f.body != 0 {
-                            if !(self.nameIsMain(f: f)) {
-                                if !(self.blockDiverges(blkId: f.body)) {
-                                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)") />
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i += 1
+        mut val index = 0U64
+        while index < self.arena.functionCount() {
+            try self.checkFunctionReturns(f: self.arena.functionAt(index: index))
+            index += 1U64
         }
         return <Result.Ok value=() />
     }

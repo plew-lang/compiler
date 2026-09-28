@@ -1652,13 +1652,12 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     // before impl++method lists merge.)
     try c.checkFieldDefaults()
     try c.checkParamDefaults()
-    // match pattern soundness (spec/11): a variant/struct pattern must name real
-    // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
-    try c.checkMatchBinds()
-    // missing-return (spec/11): a non-`()` function must return/panic/diverge on
-    // every path — Plew does not implicitly return the tail expression, so falling
-    // off the end would silently yield uninitialized memory.
-    try c.checkReturns()
+    // Generation retains its independent whole-input structural checks.
+    // Ordinary compilation validates returns and patterns within each body.
+    if c.genMode {
+        try c.checkMatchBinds()
+        try c.checkReturns()
+    }
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
     try c.checkConformances()
