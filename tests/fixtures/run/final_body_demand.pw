@@ -1,0 +1,54 @@
+import /Frontend with { Comp, FrontendInput, FinalBodyRequests, analyzeFrontendForRequests, spansEqual }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing declaration"
+}
+
+fn main() {
+    mut val c = <Comp />
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="demand.pw" text="fn later() { missing() } fn recurse() { recurse() later() } fn main() {}" />, sources: <SourceAccess />).unwrap()
+    c.initializeFinalCallables().unwrap()
+    mut val requests = <FinalBodyRequests />
+    val root = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "recurse"), args: [], recvInstRef: 0U64).unwrap()
+    if !c.arena.bodySignature(bodyId: root).ready || c.lexicalBodyPreparations.count() != 0U64 { panic "registration requested a body" }
+    c.cur.checkFn = 77U64
+    c.cur.bodyId = 88U64
+    c.inCollection = false
+    c.requestFinalBody(bodyId: root, requests: inout requests).unwrap()
+    if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "request leaked its context" }
+    if c.monoWork.bodyInstances.count() != 2U64 { panic "recursive registration duplicated bodies" }
+    val callee = c.monoWork.bodyInstances[1U64]
+    if !c.arena.bodySignature(bodyId: callee).ready { panic "callee signature was deferred with body" }
+    if c.lexicalBodyPreparations.count() != 1U64 { panic "caller demanded callee body" }
+    val calls = c.finalCalleeCount()
+    if calls != 2U64 { panic "requested body has incomplete calls" }
+    c.requestFinalBody(bodyId: root, requests: inout requests).unwrap()
+    if c.finalCalleeCount() != calls { panic "repeated request rescanned body" }
+    mut val message = ""
+    mut val attempt = 0U64
+    while attempt < 2U64 {
+        match c.requestFinalBody(bodyId: callee, requests: inout requests) {
+            Result.Ok(value: _) => { panic "invalid callee was accepted" }
+            Result.Err(error: val diagnostic) => {
+                if attempt == 0U64 { message = diagnostic.message }
+                else if diagnostic.message != message { panic "diagnostic changed" }
+            }
+        }
+        if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection || c.finalCalleeCount() != calls { panic "failed request leaked state" }
+        attempt += 1U64
+    }
+    match c.requestFinalBody(bodyId: root, requests: inout requests) {
+        Result.Ok(value: _) => { panic "failed session resumed successful preparation" }
+        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic "terminal diagnostic changed" } }
+    }
+    print("ok")
+}

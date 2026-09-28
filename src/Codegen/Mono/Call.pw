@@ -1092,6 +1092,7 @@ pub impl Comp {
             i += 1U64
         }
         self.monoWork.bodyInstances.append(bodyId)
+        try self.prepareFinalCallableSignature(bodyId: bodyId)
         return <Result.Ok value=bodyId />
     }
 
@@ -4479,6 +4480,7 @@ pub impl Comp {
         if !self.arena.bodyIsCallable(bodyId: bodyId) || instance.fnIdx >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: signature request is not a source callable") />
         }
+        if self.arena.bodySignature(bodyId: bodyId).ready { return <Result.Ok value=() /> }
         val saved = self.cur
         val collecting = self.inCollection
         self.inCollection = true
@@ -4551,6 +4553,50 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Calls register the callee's signature, not its body. AOT enumerates all
+    // registered bodies; a lazy driver can request individual descriptors.
+    // A failed scan poisons this request state because partial arena rows are
+    // diagnostic-only and must never be reused as executable preparation.
+    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests) -> Result[(), CompileDiagnostic] {
+        match requests.failure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: body request has no instance") />
+        }
+        while requests.outcomes.count() < bodyId { requests.outcomes.append(<Optional.None />) }
+        match requests.outcomes[bodyId - 1U64] {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        val saved = self.cur
+        val collecting = self.inCollection
+        self.inCollection = true
+        val result = self.prepareFinalBodyRequest(bodyId: bodyId)
+        self.cur = saved
+        self.inCollection = collecting
+        requests.outcomes[bodyId - 1U64] = <Optional.Some v=result />
+        match result {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { requests.failure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
+    inout fn prepareFinalBodyRequest(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        if self.arena.bodyIsCallable(bodyId: bodyId) {
+            val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+            if instance.fnIdx >= self.arena.functionCount() {
+                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: body request is not a source callable") />
+            }
+            if !(try self.callTemplatesClosedForBody(fnIdx: instance.fnIdx)) {
+                try self.prepareLexicalBody(fnIdx: instance.fnIdx)
+            }
+        }
+        return self.scanFinalBodyInstance(bodyId: bodyId)
+    }
+
     inout fn scanFinalBodyInstance(bodyId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.bodyOrigin(bodyId: bodyId) {
             BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return <Result.Ok value=() /> }
@@ -4592,7 +4638,9 @@ pub impl Comp {
             eprint(text: "\n")
         }
         try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: f)
-        try self.recordFinalCallableSignature(bodyId: bodyId, instance: instance, function: f)
+        if !self.arena.bodySignature(bodyId: bodyId).ready {
+            try self.recordFinalCallableSignature(bodyId: bodyId, instance: instance, function: f)
+        }
         mut val parameter = 0U64
         while parameter < f.params.count() {
             val p = self.funcParamAt(params: f.params, index: parameter)
@@ -5023,6 +5071,7 @@ pub impl Comp {
     inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
         try self.initializeFinalCallables()
         mut val publication = <FinalizationPublication />
+        mut val requests = <FinalBodyRequests />
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // Global initializers are an anonymous body instance.  They can reach
@@ -5088,7 +5137,7 @@ pub impl Comp {
         while globalI < self.selectedGlobalTargets.count() || bodyI < self.monoWork.bodyInstances.count() || aggregateI < self.arena.finalAggregates.count() || callI < self.finalCalleeCount() || storageI < self.arena.finalStorages.count() {
             if bodyI < self.monoWork.bodyInstances.count() {
                 val bodyId = self.monoWork.bodyInstances[bodyI]
-                try self.scanFinalBodyInstance(bodyId: bodyId)
+                try self.requestFinalBody(bodyId: bodyId, requests: inout requests)
                 val signature = self.arena.bodySignature(bodyId: bodyId)
                 // The selected body's receiver can carry a different view
                 // from the caller's value and is not an explicit parameter.

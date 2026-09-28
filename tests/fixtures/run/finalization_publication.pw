@@ -39,7 +39,7 @@ fn main() {
     c.publishFinalCallables(state: inout publication).unwrap()
     if c.finalCalleeCount() != total || c.arena.semanticAccesses.count() != accesses * 2U64 || c.arena.semanticAccessInputs.count() != inputs * 2U64 { panic "empty publication changed tables" }
 
-    // A new destructor contract cannot be published before its ABI is ready.
+    // A malformed destructor ABI must not be published, even when ready.
     // The same publisher keeps that diagnostic and does not repeat partial work.
     mut val structure = 0U64
     while structure < c.arena.structCount() {
@@ -47,6 +47,8 @@ fn main() {
         if declaration.isUnique {
             val term = c.simpleTypeRef(nameStart: declaration.nameStart, nameLen: declaration.nameLen)
             c.enqueueFinalDestruction(typeRef: term).unwrap()
+            val contract = c.arena.finalDestructions[c.finalDestructionIndex(typeRef: term) - 1U64]
+            c.arena.setBodySignature(bodyId: contract.deinitCall.bodyId, parameters: [], passings: [], result: term)
             break
         }
         structure += 1U64
@@ -56,7 +58,7 @@ fn main() {
     mut val repeat = 0U64
     while repeat < 2U64 {
         match c.publishFinalCallables(state: inout publication) {
-            Result.Ok(value: _) => { panic "unready destructor published" }
+            Result.Ok(value: _) => { panic "invalid destructor published" }
             Result.Err(error: val diagnostic) => {
                 if repeat == 0U64 { message = diagnostic.message }
                 else if diagnostic.message != message { panic "publication diagnostic changed" }

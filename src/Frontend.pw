@@ -58,6 +58,14 @@ pub struct FinalizationPublication {
 }
 pub impl FinalizationPublication { factory }
 
+// Concrete descriptor requests share one arena and never reopen a completed
+// body. This is preparation state, not a proof that execution is permitted.
+pub struct FinalBodyRequests {
+    mut val outcomes: Array[Optional[Result[(), CompileDiagnostic]]] = []
+    mut val failure: Optional[CompileDiagnostic] = <Optional.None />
+}
+pub impl FinalBodyRequests { factory }
+
 pub struct Comp {
     // Source bytes are append-only within a session. Only successfully decoded
     // literals are published; Mid and LLVM share this immutable value by offset.
