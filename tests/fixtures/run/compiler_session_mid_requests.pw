@@ -1,0 +1,73 @@
+import /CheckedProgram with { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn reuseInBuild() {
+    val source = "fn main() { val item = 1I64 val get = fn() -> I64 { return identity(value: item) } val erased: any Value = <Box item=2I64 /> val resource = <Resource /> } fn identity(value: I64) -> I64 { return value } trait Value { fn get() -> I64 } struct Box { val item: I64 } impl Box as Value { fn get() -> I64 { return self.item } } unique struct Resource {} impl Resource { deinit {} }"
+    match CompilerSession.open(input: <FrontendInput.Text path="mid.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            session.prepareFunction(function: 0U64).unwrap()
+            mut val expected: Dictionary[U64, U64] = [:]
+            mut val index = 0U64
+            while index < session.registeredBodies().count() {
+                val body = session.registeredBodies()[index]
+                val prepared = match session.prepareMidBody(bodyId: body) {
+                    Result.Ok(value: val prepared) => { give prepared }
+                    Result.Err(error: val diagnostic) => { panic diagnostic.message }
+                }
+                if prepared.descriptors.bodyId != body || prepared.executable.canonical.body == 0U64 { panic "wrong Mid body preparation" }
+                val repeated = session.prepareMidBody(bodyId: body).unwrap()
+                if repeated.executable.canonical.body != prepared.executable.canonical.body { panic "Mid request rebuilt passes" }
+                expected[body] = prepared.executable.canonical.body
+                index += 1U64
+            }
+            val bodies = session.registeredBodies()
+            if bodies.count() < 6U64 { panic "synthetic body coverage missing" }
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                ProgramCheckResult.Success(program: val checked) => {
+                    match prepareCheckedProgram(checked: move checked) {
+                        ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        ExecutableCompilationResult.Success(compilation: val compilation) => {
+                            for body in bodies {
+                                match compilation.prepared.executable.body(bodyId: body) {
+                                    Optional.None => { panic "whole preparation lost requested body" }
+                                    Optional.Some(v: val prepared) => { if prepared.canonical.body != expected.getOr(key: body, fallback: 0U64) { panic "whole preparation rebuilt requested Mid" } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn deferCallee() {
+    match CompilerSession.open(input: <FrontendInput.Text path="defer.pw" text="fn main() { later() } fn later() { missing() }" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val root = session.prepareFunction(function: 0U64).unwrap()
+            session.prepareMidBody(bodyId: root.bodyId).unwrap()
+            val callee = session.registeredBodies()[1U64]
+            val diagnostic = match session.prepareMidBody(bodyId: callee) {
+                Result.Ok(value: _) => { panic "invalid callee became executable Mid" }
+                Result.Err(error: val diagnostic) => { give diagnostic.message }
+            }
+            match session.prepareMidBody(bodyId: root.bodyId) {
+                Result.Ok(value: _) => { panic "failed session resumed Mid preparation" }
+                Result.Err(error: val repeated) => { if repeated.message != diagnostic { panic "terminal diagnostic changed" } }
+            }
+        }
+    }
+}
+
+fn main() {
+    reuseInBuild()
+    deferCallee()
+    print("ok")
+}

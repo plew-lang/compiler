@@ -88,13 +88,17 @@ pub impl MidExecutableProgram {
     }
 
     assoc fn prepareWithTemplates(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[MidExecutableProgram, MidProgramError] {
+        mut val requests = <MidExecutableRequests />
+        return MidExecutableProgram.prepareWithRequests(c: inout c, templates: inout templates, requests: inout requests)
+    }
+
+    assoc fn prepareWithRequests(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidExecutableRequests) -> Result[MidExecutableProgram, MidProgramError] {
         mut val bodies: Array[Optional[MidExecutableBody]] = []
         mut val index = 0U64
         while index <= c.arena.bodyInstanceCount() {
             bodies.append(<Optional.None />)
             index += 1U64
         }
-        mut val requests = <MidExecutableRequests />
         // Named bodies and synthetic adapters are in the executable worklist.
         // Global initialization and finalized closure signatures are separate
         // frontend roots, not source declarations guessed to be reachable.

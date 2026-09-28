@@ -4,7 +4,7 @@ import ./Mid/Build with { MidBuildError, MidFunctionTemplates }
 // not yet constitute a whole-target checked-program token.
 import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
-import ./Mid/Program with { MidExecutableProgram, MidProgramError }
+import ./Mid/Program with { MidExecutableProgram, MidExecutableRequests, MidProgramError }
 import ./Mid/Ambient with { MidAmbientProgram }
 import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis }
 import ./DeclarationProgram with { prepareDeclarationProgram, DeclarationProgramError, declarationProgramDiagnostic }
@@ -40,7 +40,13 @@ pub impl PreparedProgram {
     // This entry does not repeat declaration checking or create a check token.
     assoc fn prepareWithDeclarations(c: inout Comp, templates: inout MidFunctionTemplates,
                                     declarationAccess: DeclarationAccessAnalysis) -> Result[Self, ProgramPreparationError] {
-        val preparation = MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)
+        mut val requests = <MidExecutableRequests />
+        return PreparedProgram.prepareWithRequests(c: inout c, templates: inout templates, declarationAccess: declarationAccess, requests: inout requests)
+    }
+
+    assoc fn prepareWithRequests(c: inout Comp, templates: inout MidFunctionTemplates,
+                                declarationAccess: DeclarationAccessAnalysis, requests: inout MidExecutableRequests) -> Result[Self, ProgramPreparationError] {
+        val preparation = MidExecutableProgram.prepareWithRequests(c: inout c, templates: inout templates, requests: inout requests)
         val ambient: Result[MidAmbientProgram, CompileDiagnostic] = match preparation {
             Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }
             Result.Err(error: _) => { give <Result.Ok value=<MidAmbientProgram.empty /> /> }

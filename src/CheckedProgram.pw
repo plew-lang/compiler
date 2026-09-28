@@ -7,7 +7,9 @@ import ./Diag with { CompileDiagnostic, DiagnosticLocation }
 import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
 import ./Mid/Build with { MidFunctionTemplates }
 import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAccessNode }
-import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
+import ./PreparedProgram with { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
+import ./Mid/Program with { MidExecutableRequests }
+import ./Mid/Prepare with { MidExecutableBody }
 
 // Observation of prepared descriptors. Remaining declaration obligations are
 // retained; this value cannot be passed to LLVM as execution permission.
@@ -21,6 +23,13 @@ pub struct BodyDescriptors {
     pub val declarations: Array[BodyDeclarationAnalysis]
 }
 
+// All per-body Mid passes succeeded. Interprocedural effect preparation and
+// the runtime enforcement plan remain separate obligations before execution.
+pub struct MidBodyPreparation {
+    pub val descriptors: BodyDescriptors
+    pub val executable: MidExecutableBody
+}
+
 // The admitted source and every cache belong to one session. No mutable Comp
 // escapes; later requests cannot reload edited files or borrow another arena.
 pub unique struct CompilerSession {
@@ -30,6 +39,7 @@ pub unique struct CompilerSession {
     mut val finalDependencies: FinalDependencies = <FinalDependencies />
     mut val finalPublication: FinalizationPublication = <FinalizationPublication />
     mut val descriptorResults: Dictionary[U64, BodyDescriptors] = [:]
+    mut val midRequests: MidExecutableRequests = <MidExecutableRequests />
     mut val executionFailure: Optional[CompileDiagnostic] = <Optional.None />
     mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
     mut val requests: DeclarationBodyRequests = <DeclarationBodyRequests />
@@ -84,6 +94,20 @@ pub impl CompilerSession {
             Result.Err(error: val diagnostic) => { self.executionFailure = <Optional.Some v=diagnostic /> }
         }
         return result
+    }
+
+    inout fn prepareMidBody(bodyId: U64) -> Result[MidBodyPreparation, CompileDiagnostic] {
+        val descriptors = (try self.prepareBody(bodyId: bodyId))
+        match self.midRequests.request(c: inout self.compiler, templates: inout self.templates, bodyId: bodyId) {
+            Result.Ok(value: val executable) => {
+                return <Result.Ok value=<MidBodyPreparation descriptors=descriptors executable=executable /> />
+            }
+            Result.Err(error: val error) => {
+                val diagnostic = programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.Mid error=error />)
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <Result.Err error=diagnostic />
+            }
+        }
     }
 
     // Declaration IDs are local to this admitted input. The returned analysis
@@ -259,8 +283,8 @@ pub fn prepareCheckedProgram(checked: move CheckedProgram) -> ExecutableCompilat
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
     }
-    val prepared = match PreparedProgram.prepareWithDeclarations(c: inout program.session.compiler,
-        templates: inout program.session.templates, declarationAccess: program.declarationAccess) {
+    val prepared = match PreparedProgram.prepareWithRequests(c: inout program.session.compiler,
+        templates: inout program.session.templates, declarationAccess: program.declarationAccess, requests: inout program.session.midRequests) {
         Result.Ok(value: val prepared) => { give prepared }
         Result.Err(error: val error) => {
             return <ExecutableCompilationResult.Failure diagnostic=programPreparationDiagnostic(c: inout program.session.compiler, error: error) />

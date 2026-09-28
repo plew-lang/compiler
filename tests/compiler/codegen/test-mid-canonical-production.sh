@@ -173,8 +173,8 @@ assert 'buildMidBodyForInstance(' in program
 entry = Path('src/Backend.pw').read_text().split('pub fn emitLlvm(', 1)[1]
 assert entry.index('PreparedProgram.prepare(') < entry.index('LLVMContextCreate()')
 analysis = Path('src/PreparedProgram.pw').read_text()
-assert analysis.index('MidExecutableProgram.prepareWithTemplates(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
-assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
+assert analysis.index('MidExecutableProgram.prepareWithRequests(') < analysis.index('MidAmbientProgram.prepare(') < analysis.index('conflictingMidGlobalAccess(')
+assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecutableProgram.prepareWithRequests(')
 assert 'prepareDeclarationProgram(c: inout c, templates: inout templates)' in analysis
 declarations = Path('src/DeclarationProgram.pw').read_text()
 local = declarations.split('inout fn checkBody(', 1)[1].split('// Whole-target checking', 1)[0]
@@ -187,7 +187,7 @@ assert 'requests.closure(c: inout c, closure: c.decls.semanticClosures[index])' 
 assert 'requests.globalInitializer(c: inout c, templates: inout templates)' in declarations
 for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreate(', 'import ./Backend', 'exit(', 'c.errorAt(']:
     assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'
-assert 'MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)' in analysis
+assert 'MidExecutableProgram.prepareWithRequests(c: inout c, templates: inout templates, requests: inout requests)' in analysis
 assert 'import ./Backend' not in analysis and 'LLVMContextCreate(' not in analysis
 assert 'midProgram=prepared.executable' in entry and 'ambientProgram=prepared.ambient' in entry
 for path in Path('src/Backend').rglob('*.pw'):
