@@ -8,6 +8,7 @@
 #
 #   plew <file.pw> [-o <out>]        compile to a binary (default: ./<basename>)
 #   plew build <file.pw> [-o <out>]  same as above (explicit verb)
+#   plew check <file.pw>            check without machine code or app execution
 #   plew run <file.pw> [args...]     compile to a temp binary and run it
 #   plew gen <file.pw> [<file.pw>…]  run @[…] derive macros -> <file>.gen.pw (spec/16)
 #
@@ -31,6 +32,7 @@ CC=${CC:-clang}
 usage() {
     echo "usage: plew <file.pw> [-o <out>]   |   plew build <file.pw> [-o <out>]" >&2
     echo "       plew run <file.pw> [args...] |   plew gen <file.pw> [<file.pw>…]" >&2
+    echo "       plew check <file.pw>         (static checks only)" >&2
     echo "       plew resolve [dir|file]      (resolve deps -> Plew.lock)" >&2
     exit 1
 }
@@ -41,6 +43,7 @@ mode=build
 case "$1" in
     run)     mode=run;     shift ;;
     build)   mode=build;   shift ;;
+    check)   mode=check;   shift ;;
     gen)     mode=gen;     shift ;;
     resolve) mode=resolve; shift ;;
 esac
@@ -118,6 +121,14 @@ fi
 src=$1; shift
 case "$src" in *.pw) ;; *) echo "plew: not a .pw file: $src" >&2; exit 1 ;; esac
 [ -f "$src" ] || { echo "plew: no such file: $src" >&2; exit 1; }
+
+# Checking reads already resolved dependencies and never compiles a resolver.
+# A missing lock is diagnosed by the common loader; resolution is explicit.
+if [ "$mode" = check ]; then
+    [ "$#" -eq 0 ] || usage
+    "$PLEWC" --check "$src"
+    exit 0
+fi
 
 # Auto-resolve once when the package declares git dependencies but has no lock
 # (spec/17: the lock is required to back git `@dep` imports). Announced on stderr —

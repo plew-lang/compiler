@@ -3,7 +3,7 @@
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Io with { print }
 import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
-import ../src/Compiler with { runCompiler, compileObject }
+import ../src/Compiler with { runCompiler, compileObject, runCheck }
 import ../src/SourceAccess with { SourceAccess, SourceResource }
 import ../resolve/Resolver with { runResolver, needsResolution }
 
@@ -34,6 +34,11 @@ fn embeddedSources() -> SourceAccess {
 
 fn main() {
     if argCount() > 1I64 {
+        if argAt(1I64) == "check" {
+            if argCount() != 3I64 { exit(code: 1I64) }
+            runCheck(sources: embeddedSources(), firstArgument: 2I64)
+            return
+        }
         if argAt(1I64) == "--compile-object" {
             if argCount() < 4I64 { exit(code: 1I64) }
             val status = compileObject(sources: embeddedSources(), firstArgument: 3I64,

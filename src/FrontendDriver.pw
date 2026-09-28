@@ -6,7 +6,13 @@ import ./Diag with { emitDiagnostic }
 import ./SourceAccess with { SourceAccess }
 import ./Path with { computeStdRoot }
 
-pub fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
+pub struct FrontendRequest {
+    pub val input: FrontendInput
+    pub val sources: SourceAccess
+    pub val options: FrontendOptions
+}
+
+pub fn frontendRequest(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) -> FrontendRequest {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false
@@ -64,8 +70,13 @@ pub fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firs
     val configuredSources = <SourceAccess
         stdRoot=if sources.stdRoot.count() != 0U64 { give sources.stdRoot } else { give computeStdRoot(arg0: argAt(0).bytes()) }
         resources=sources.resources />
-    val analysis = analyzeFrontend(c: inout c, input: input, sources: configuredSources,
-        options: <FrontendOptions genMode=genMode tcLog=tcLog asan=asan traceCodegen=traceCodegen tracePhases=tracePhases emitMidCoverage=emitMidCoverage requireMid=requireMid />)
+    return <FrontendRequest input=input sources=configuredSources
+        options=<FrontendOptions genMode=genMode tcLog=tcLog asan=asan traceCodegen=traceCodegen tracePhases=tracePhases emitMidCoverage=emitMidCoverage requireMid=requireMid /> />
+}
+
+pub fn runFrontend(c: inout Comp, sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
+    val request = frontendRequest(sources: sources, firstArgument: firstArgument)
+    val analysis = analyzeFrontend(c: inout c, input: request.input, sources: request.sources, options: request.options)
     match analysis {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => {

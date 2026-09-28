@@ -1,0 +1,75 @@
+// A whole-target static-check result owns the exact compiler snapshot it proves.
+// No public factory or mutable arena accessor can attach it to another input.
+import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import ./SourceAccess with { SourceAccess }
+import ./Diag with { CompileDiagnostic, DiagnosticLocation }
+import ./DeclarationProgram with { prepareDeclarationProgram, declarationProgramDiagnostic }
+import ./Mid/Build with { MidFunctionTemplates }
+import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis }
+import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
+
+pub unique struct CheckedProgram {
+    mut val compiler: Comp
+    mut val templates: MidFunctionTemplates
+    val declarationAccess: DeclarationAccessAnalysis
+}
+
+pub unique enum ProgramCheckResult {
+    Success(program: CheckedProgram)
+    Failure(diagnostic: CompileDiagnostic)
+}
+
+// These fields belong together; lowering must consume this compilation's arena.
+pub unique struct ExecutableCompilation {
+    pub mut val compiler: Comp
+    pub val prepared: PreparedProgram
+}
+
+pub unique enum ExecutableCompilationResult {
+    Success(compilation: ExecutableCompilation)
+    Failure(diagnostic: CompileDiagnostic)
+}
+
+pub impl CheckedProgram {
+    assoc fn check(input: FrontendInput, sources: SourceAccess,
+                   options: FrontendOptions = <FrontendOptions />) -> ProgramCheckResult {
+        // gen deliberately checks a different target; it cannot issue this proof.
+        if options.genMode {
+            return <ProgramCheckResult.Failure diagnostic=<CompileDiagnostic
+                location=<DiagnosticLocation.Unpositioned />
+                message="whole-target check cannot use generator mode" /> />
+        }
+        mut val compiler = <Comp />
+        match analyzeFrontendDeclarations(c: inout compiler, input: input, sources: sources, options: options) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+        }
+        mut val templates = <MidFunctionTemplates />
+        val analysis = match prepareDeclarationProgram(c: inout compiler, templates: inout templates) {
+            Result.Ok(value: val analysis) => { give analysis }
+            Result.Err(error: val error) => {
+                return <ProgramCheckResult.Failure diagnostic=declarationProgramDiagnostic(c: inout compiler, error: error) />
+            }
+        }
+        return <ProgramCheckResult.Success program=<CheckedProgram compiler=compiler templates=templates declarationAccess=analysis /> />
+    }
+
+}
+
+// Static success need not imply concrete implementation support. Consume the
+// checked snapshot once, retaining the same templates and all deferred effects.
+pub fn prepareCheckedProgram(checked: move CheckedProgram) -> ExecutableCompilationResult {
+    mut val program = move checked
+    match finalizeFrontendExecutables(c: inout program.compiler) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
+    }
+    val prepared = match PreparedProgram.prepareWithDeclarations(c: inout program.compiler,
+        templates: inout program.templates, declarationAccess: program.declarationAccess) {
+        Result.Ok(value: val prepared) => { give prepared }
+        Result.Err(error: val error) => {
+            return <ExecutableCompilationResult.Failure diagnostic=programPreparationDiagnostic(c: inout program.compiler, error: error) />
+        }
+    }
+    return <ExecutableCompilationResult.Success compilation=<ExecutableCompilation compiler=program.compiler prepared=prepared /> />
+}

@@ -33,6 +33,13 @@ pub impl PreparedProgram {
                 Result.Err(error: val error) => { return <Result.Err error=<ProgramPreparationError.Declaration error=error /> /> }
             }
         }
+        return PreparedProgram.prepareWithDeclarations(c: inout c, templates: inout templates, declarationAccess: declarationAccess)
+    }
+
+    // Caller owns a successfully checked declaration snapshot and its templates.
+    // This entry does not repeat declaration checking or create a check token.
+    assoc fn prepareWithDeclarations(c: inout Comp, templates: inout MidFunctionTemplates,
+                                    declarationAccess: DeclarationAccessAnalysis) -> Result[Self, ProgramPreparationError] {
         val preparation = MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)
         val ambient: Result[MidAmbientProgram, CompileDiagnostic] = match preparation {
             Result.Ok(value: val program) => { give MidAmbientProgram.prepare(c: inout c, program: program) }

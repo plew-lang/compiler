@@ -15,6 +15,16 @@ entry = analysis.split('// Whether the literal', 1)[0]
 assert '-> Result[(), CompileDiagnostic]' in entry
 assert 'c.errorAt(' not in entry and 'exit(' not in entry
 assert 'match analysis {' in driver and 'emitDiagnostic(diagnostic: diagnostic)' in driver
-assert 'analyzeFrontend(c: inout c, input: input, sources: configuredSources' in driver
+assert 'return <FrontendRequest input=input sources=configuredSources' in driver
+assert 'analyzeFrontend(c: inout c, input: request.input, sources: request.sources, options: request.options)' in driver
+compiler = (root / 'src/Compiler.pw').read_text()
+assert 'CheckedProgram.check(input: request.input, sources: request.sources, options: request.options)' in compiler
+checked = (root / 'src/CheckedProgram.pw').read_text()
+checking = checked.split('assoc fn check(', 1)[1].split('pub fn prepareCheckedProgram(', 1)[0]
+assert checking.index('analyzeFrontendDeclarations(') < checking.index('prepareDeclarationProgram(') < checking.index('<ProgramCheckResult.Success')
+for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'argCount(', 'readStdin(', 'exit(', 'emitDiagnostic('):
+    assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
+assert 'import ./Backend' not in checked
+assert 'pub mut val compiler' not in checked.split('pub unique struct CheckedProgram {', 1)[1].split('}', 1)[0]
 assert 'readStdin()' in driver and 'computeStdRoot(arg0:' in driver
 print('PASS explicit frontend inputs and CLI ownership')

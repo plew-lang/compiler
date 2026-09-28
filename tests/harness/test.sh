@@ -171,6 +171,12 @@ else
     fail=$((fail + 1)); failed="$failed direct-object"
 fi
 
+if python3 -B ./tests/tooling/test-check-command.py --compiler "$PLEWC"; then
+    echo "PASS check-command"
+else
+    fail=$((fail + 1)); failed="$failed check-command"
+fi
+
 if sh ./tests/tooling/test-cli-options.sh; then
     :
 else
