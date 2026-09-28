@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+
+fn unused() {
+    val values: Array[I64] = [1, 2, 3]
+    print(values.count)
+}
+
+fn main() {}
