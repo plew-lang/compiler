@@ -5020,6 +5020,14 @@ pub impl Comp {
     // pass adds the missing invariant: every emitted body instance has resolved
     // every static call exactly once in its own concrete environment.
     inout fn initializeFinalCallables() -> Result[(), CompileDiagnostic] {
+        val collecting = self.inCollection
+        self.inCollection = true
+        val result = self.initializeFinalCallablesInContext()
+        self.inCollection = collecting
+        return result
+    }
+
+    inout fn initializeFinalCallablesInContext() -> Result[(), CompileDiagnostic] {
         self.arena.finalDestructions = []
         self.arena.finalDestructionIds = []
         val noDestructionHeads: Dictionary[U64, U64] = [:]
@@ -5194,9 +5202,13 @@ pub impl Comp {
         try self.initializeFinalCallables()
         mut val publication = <FinalizationPublication />
         mut val requests = <FinalBodyRequests />
+        mut val dependencies = <FinalDependencies />
+        return self.completeFinalCallables(requests: inout requests, dependencies: inout dependencies, publication: inout publication)
+    }
+
+    inout fn completeFinalCallables(requests: inout FinalBodyRequests, dependencies: inout FinalDependencies, publication: inout FinalizationPublication) -> Result[(), CompileDiagnostic] {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
-        mut val dependencies = <FinalDependencies />
         try self.prepareFinalInitializers(state: inout dependencies)
         // Only the selected entry is a root. Sync and async callees both
         // join the executable closure through their finalized call sites.

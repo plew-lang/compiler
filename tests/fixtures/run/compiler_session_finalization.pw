@@ -1,0 +1,61 @@
+import /CheckedProgram with { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn partialFailure() {
+    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() { later() } fn later() { missing() }" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val first = match session.prepareFunction(function: 0U64) { Result.Ok(value: val prepared) => { give prepared } Result.Err(error: val diagnostic) => { panic diagnostic.message } }
+            val repeated = match session.prepareFunction(function: 0U64) { Result.Ok(value: val prepared) => { give prepared } Result.Err(error: val diagnostic) => { panic diagnostic.message } }
+            if first.bodyId == 0U64 || first.bodyId != repeated.bodyId { panic "instance identity changed" }
+            val message = match session.prepareFunction(function: 1U64) {
+                Result.Ok(value: _) => { panic "invalid source body accepted" }
+                Result.Err(error: val diagnostic) => { give diagnostic.message }
+            }
+            match session.prepareFunction(function: 0U64) {
+                Result.Ok(value: _) => { panic "failed preparation resumed" }
+                Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic "terminal diagnostic changed" } }
+            }
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Success(program: val program) => { panic "failed preparation became a checked program" }
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if diagnostic.message != message { panic "check lost preparation failure" } }
+            }
+        }
+    }
+}
+
+fn complete() {
+    match CompilerSession.open(input: <FrontendInput.Text path="complete.pw" text="fn main() { val value = identity(value: 2I64) } fn identity(value: I64) -> I64 { return value }" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val root = match session.prepareFunction(function: 0U64) { Result.Ok(value: val prepared) => { give prepared } Result.Err(error: val diagnostic) => { panic diagnostic.message } }
+            val callee = match session.prepareFunction(function: 1U64) { Result.Ok(value: val prepared) => { give prepared } Result.Err(error: val diagnostic) => { panic diagnostic.message } }
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                ProgramCheckResult.Success(program: val checked) => {
+                    match prepareCheckedProgram(checked: move checked) {
+                        ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        ExecutableCompilationResult.Success(compilation: val compilation) => {
+                            if compilation.compiler.arena.bodyInstanceAt(index: root.bodyId - 1U64).fnIdx != 0U64 || compilation.compiler.arena.bodyInstanceAt(index: callee.bodyId - 1U64).fnIdx != 1U64 { panic "whole preparation reset identities" }
+                            mut val calls = 0U64
+                            for call in compilation.compiler.arena.finalCallees {
+                                if call.bodyId == root.bodyId { calls += 1U64 }
+                            }
+                            if calls != 1U64 { panic "whole preparation rescanned requested body" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn main() {
+    partialFailure()
+    complete()
+    print("ok")
+}
