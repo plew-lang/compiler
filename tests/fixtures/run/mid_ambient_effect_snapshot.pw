@@ -1,0 +1,43 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import /SourceAccess with { SourceAccess }
+import /Ir with { CallTarget }
+import /Mid/Program with { MidExecutableProgram }
+import /Mid/AmbientEffects with { MidAmbientEffects }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="snapshot.pw" text="fn main() { helper() } fn helper() {}" />, sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    MidExecutableProgram.prepare(c: inout compiler).unwrap()
+    mut val tested = false
+    for term in compiler.mid.terminators {
+        if term.tag == 4U64 {
+            val target = compiler.arena.finalCallees[compiler.mid.callTargets[term.callTarget - 1U64].resolution]
+            match target.target {
+                CallTarget.Direct => {
+                    if target.calleeBodyId != 0U64 {
+                        // The later body occupies a slot used by a destruction
+                        // node in the old snapshot. Its false bit is not purity.
+                        mut val older = <MidAmbientEffects bodyCount=target.calleeBodyId - 1U64 />
+                        mut val current = <MidAmbientEffects bodyCount=target.calleeBodyId />
+                        mut val index = 0U64
+                        while index <= target.calleeBodyId {
+                            older.affected.append(false)
+                            current.affected.append(false)
+                            index += 1U64
+                        }
+                        if !older.callMayAccess(c: compiler, term: term) { panic "later body read destruction effect" }
+                        if current.callMayAccess(c: compiler, term: term) { panic "known pure boundary body became unknown" }
+                        current.mark(node: target.calleeBodyId)
+                        if !current.callMayAccess(c: compiler, term: term) { panic "known effect lost" }
+                        tested = true
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if !tested { panic "missing direct call" }
+    print("ok")
+}

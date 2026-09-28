@@ -45,7 +45,9 @@ pub impl MidAmbientEffects {
         val target = c.arena.finalCallees[c.mid.callTargets[term.callTarget - 1U64].resolution]
         match target.target {
             CallTarget.Direct => {
-                if target.calleeBodyId != 0U64 && target.calleeBodyId < self.affected.count() { return self.affected[target.calleeBodyId] }
+                // Later body IDs can overlap this snapshot's destruction nodes.
+                // Only body IDs admitted to this graph have known effects.
+                if target.calleeBodyId != 0U64 && target.calleeBodyId <= self.bodyCount { return self.affected[target.calleeBodyId] }
             }
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                 match intrinsic { RuntimeIntrinsic.Numeric(intrinsic: _) => { return false } _ => {} }
