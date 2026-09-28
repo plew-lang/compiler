@@ -22,6 +22,24 @@ pub struct MidExecutableRequests {
 pub impl MidExecutableRequests {
     factory
 
+    // Observe only completed requests. Missing bodies stay unknown to effect
+    // analysis; taking a snapshot never requests another body or hides errors.
+    fn snapshot() -> Result[MidExecutableProgram, MidProgramError] {
+        mut val bodies: Array[Optional[MidExecutableBody]] = []
+        for outcome in self.outcomes {
+            match outcome {
+                Optional.None => { bodies.append(<Optional.None />) }
+                Optional.Some(v: val result) => {
+                    match result {
+                        Result.Ok(value: val body) => { bodies.append(<Optional.Some v=body />) }
+                        Result.Err(error: val error) => { return <Result.Err error=error /> }
+                    }
+                }
+            }
+        }
+        return <Result.Ok value=<MidExecutableProgram bodies=bodies /> />
+    }
+
     inout fn request(c: inout Comp, templates: inout MidFunctionTemplates, bodyId: U64) -> Result[MidExecutableBody, MidProgramError] {
         // Readiness is an admission precondition, not a failed pass result.
         // An unpublished signature may become ready in a later frontend request.

@@ -1,7 +1,8 @@
 import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
 import /SourceAccess with { SourceAccess }
 import /Ir with { CallTarget }
-import /Mid/Program with { MidExecutableProgram }
+import /Mid/Program with { MidExecutableRequests }
+import /Mid/Build with { MidFunctionTemplates }
 import /Mid/AmbientEffects with { MidAmbientEffects }
 import @Std/Io with { print }
 
@@ -9,7 +10,14 @@ fn main() {
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="snapshot.pw" text="fn main() { helper() } fn helper() {}" />, sources: <SourceAccess />).unwrap()
     finalizeFrontendExecutables(c: inout compiler).unwrap()
-    MidExecutableProgram.prepare(c: inout compiler).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    val main = compiler.monoWork.bodyInstances[0U64]
+    requests.request(c: inout compiler, templates: inout templates, bodyId: main).unwrap()
+    val before = compiler.mid.bodies.count()
+    val snapshot = requests.snapshot().unwrap()
+    val effects = MidAmbientEffects.prepare(c: inout compiler, program: snapshot, ambientBodies: []).unwrap()
+    if compiler.mid.bodies.count() != before { panic "effect snapshot prepared missing body" }
     mut val tested = false
     for term in compiler.mid.terminators {
         if term.tag == 4U64 {
@@ -17,6 +25,11 @@ fn main() {
             match target.target {
                 CallTarget.Direct => {
                     if target.calleeBodyId != 0U64 {
+                        match snapshot.body(bodyId: target.calleeBodyId) {
+                            Optional.Some(v: _) => { panic "snapshot contains unrequested callee" }
+                            Optional.None => {}
+                        }
+                        if !effects.callMayAccess(c: compiler, term: term) { panic "unrequested callee considered pure" }
                         // The later body occupies a slot used by a destruction
                         // node in the old snapshot. Its false bit is not purity.
                         mut val older = <MidAmbientEffects bodyCount=target.calleeBodyId - 1U64 />
