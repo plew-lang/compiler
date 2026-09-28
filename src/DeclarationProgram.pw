@@ -1,0 +1,80 @@
+// Declaration-only Mid preparation. No executable discovery or LLVM work.
+// Remaining obligations are explicit; success is not a whole-target check token.
+import ./Frontend with { Comp }
+import ./Diag with { CompileDiagnostic }
+import ./Mid/Build with { MidBuildError, MidFunctionTemplates }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccess, checkDeclarationLocalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/Verify with { MidVerifyError }
+import ./Mid/Diagnostics with { reportMidBuildError }
+
+pub enum DeclarationProgramError {
+    Analysis(error: DeclarationAccessError)
+    GlobalAccess(offset: U64)
+}
+
+// The caller retains templates so execution preparation reuses the same bodies.
+pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
+    match checkDeclarationLocalAccess(c: inout c, templates: inout templates) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+    }
+    val analysis = match analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates) {
+        Result.Ok(value: val analysis) => { give analysis }
+        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+    }
+    if analysis.conflictingNode != 0U64 {
+        return <Result.Err error=<DeclarationProgramError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: analysis.nodes[analysis.conflictingNode - 1U64]) /> />
+    }
+    return <Result.Ok value=analysis />
+}
+
+fn declarationAccessOffset(c: inout Comp, owner: DeclarationAccessNode) -> U64 {
+    match owner {
+        DeclarationAccessNode.Function(function: val function) => { if function < c.arena.functionCount() { return c.arena.functionAt(index: function).defOffset } }
+        DeclarationAccessNode.Closure(bodyKey: val key) => {
+            mut val index = 0U64
+            while index < c.decls.semanticClosures.count() {
+                val closure = c.decls.semanticClosures[index]
+                if closure.bodyKey == key { return c.exprOffset(id: closure.exprId) }
+                index += 1U64
+            }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+
+pub fn declarationProgramDiagnostic(c: inout Comp, error: DeclarationProgramError) -> CompileDiagnostic {
+    match error {
+        DeclarationProgramError.GlobalAccess(offset: val offset) => {
+            return c.diagnosticAt(offset: offset, msg: "borrowed global storage overlaps an access in the called body")
+        }
+        DeclarationProgramError.Analysis(error: val failure) => {
+            match failure {
+                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
+                DeclarationAccessError.Build(body: val owner, error: val error) => {
+                    match error {
+                        MidBuildError.Frontend(diagnostic: val diagnostic) => { return diagnostic }
+                        MidBuildError.StringLiteral(val offset, val message) => { return c.diagnosticAt(offset: offset, msg: message) }
+                        _ => {}
+                    }
+                    match owner {
+                        DeclarationAccessNode.Function(function: val function) => { reportMidBuildError(c: inout c, fnIdx: function, error: error) }
+                        _ => {}
+                    }
+                    return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration Mid construction failed")
+                }
+                DeclarationAccessError.LocalAccess(body: val owner, error: val error) => {
+                    val offset = declarationAccessOffset(c: inout c, owner: owner)
+                    match error {
+                        MidVerifyError.ConflictingBorrowAccess => { return c.diagnosticAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call") }
+                        MidVerifyError.ConflictingReceiverAccess => { return c.diagnosticAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call") }
+                        _ => { return c.diagnosticAt(offset: offset, msg: "internal error: invalid declaration access result") }
+                    }
+                }
+                DeclarationAccessError.Ownership(body: val owner) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration ownership analysis failed") }
+                DeclarationAccessError.CallSelection(body: val owner, terminator: _) => { return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration call selection is missing") }
+            }
+        }
+    }
+}

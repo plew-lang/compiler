@@ -1,0 +1,39 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /DeclarationProgram with { prepareDeclarationProgram, DeclarationProgramError }
+import /Mid/Build with { MidFunctionTemplates }
+import @Std/Io with { print }
+
+fn main() {
+    mut val c = <Comp />
+    val source = "mut val value = 1I64 fn read() -> I64 { return value } fn unused[T](input: T) -> T { val observed = read() return input } fn main() {}"
+    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="declarations.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val instances = c.arena.bodyInstanceCount()
+    mut val templates = <MidFunctionTemplates />
+    val analysis = prepareDeclarationProgram(c: inout c, templates: inout templates).unwrap()
+    if !(analysis.nodes.count() > 0U64) { panic "boundary condition 15" }
+    if !(analysis.obligations.count() > 0U64) { panic "boundary condition 16" }
+    if !(c.mid.bodies.count() > 0U64) { panic "boundary condition 17" }
+    if !(c.arena.bodyInstanceCount() == instances) { panic "boundary condition 18" }
+    if !(c.monoWork.bodyInstances.count() == 0U64) { panic "boundary condition 19" }
+    if !(c.arena.finalDestructions.count() == 0U64) { panic "boundary condition 20" }
+
+    mut val conflict = <Comp />
+    val invalid = "mut val value = 1I64 fn update(target: inout I64) { target = value } fn unused() { update(target: inout value) } fn main() {}"
+    analyzeFrontendDeclarations(c: inout conflict, input: <FrontendInput.Text text=invalid path="conflict.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val conflictInstances = conflict.arena.bodyInstanceCount()
+    mut val conflictTemplates = <MidFunctionTemplates />
+    match prepareDeclarationProgram(c: inout conflict, templates: inout conflictTemplates) {
+        Result.Err(error: val error) => {
+            match error {
+                DeclarationProgramError.GlobalAccess(offset: _) => {}
+                _ => { panic "wrong declaration diagnostic" }
+            }
+        }
+        Result.Ok(value: _) => { panic "unused global conflict accepted" }
+    }
+    if !(conflict.arena.bodyInstanceCount() == conflictInstances) { panic "boundary condition 36" }
+    if !(conflict.monoWork.bodyInstances.count() == 0U64) { panic "boundary condition 37" }
+    if !(conflict.arena.finalDestructions.count() == 0U64) { panic "boundary condition 38" }
+    print("ok")
+}
