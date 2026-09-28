@@ -1,0 +1,55 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, analyzeFrontendDeclarations, spansEqual }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing source declaration"
+}
+
+fn check(source: String) {
+    val input = <FrontendInput.Text path="defaults.pw" text=source />
+    mut val demanded = <Comp />
+    analyzeFrontendForRequests(c: inout demanded, input: input, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val good = owner(c: inout demanded, name: "main")
+    demanded.prepareLexicalBody(fnIdx: good).unwrap()
+    if demanded.lexicalBodyPreparations.count() != 1U64 { panic "admission checked unused default" }
+    mut val generator = demanded.arena.functionCount()
+    mut val index = 0U64
+    while index < demanded.arena.functionCount() {
+        match demanded.decls.defaultGeneratorOrigins.get(key: index) {
+            Optional.Some(v: _) => { generator = index }
+            Optional.None => {}
+        }
+        index += 1U64
+    }
+    if generator == demanded.arena.functionCount() { panic "default generator missing" }
+    val diagnostic = match demanded.prepareLexicalBody(fnIdx: generator) {
+        Result.Ok(value: _) => { panic "invalid default accepted" give "" }
+        Result.Err(error: val error) => { give error.message }
+    }
+    match demanded.prepareLexicalBody(fnIdx: generator) {
+        Result.Ok(value: _) => { panic "failed default became successful" }
+        Result.Err(error: val error) => { if error.message != diagnostic { panic "default diagnostic changed" } }
+    }
+    mut val whole = <Comp />
+    match analyzeFrontendDeclarations(c: inout whole, input: input, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic "whole target accepted invalid default" }
+        Result.Err(error: val error) => { if error.message != diagnostic { panic "demand and whole target disagree" } }
+    }
+    if demanded.monoWork.bodyInstances.count() != 0U64 || demanded.arena.finalDestructions.count() != 0U64 { panic "default request discovered executable code" }
+}
+fn main() {
+    check(source: "struct Left {} struct Right {} struct P { val value: Left = <Right /> } fn main() {}")
+    check(source: "struct P { val first: I64 val second: I64 = first } fn main() {}")
+    check(source: "fn unused(first: I64, second: I64 = first) {} fn main() {}")
+    check(source: "struct Left {} struct Right {} fn unused(value: Left = <Right />) {} fn main() {}")
+    check(source: "fn unused(value: I64 = await missing()) {} fn main() {}")
+    print("ok")
+}

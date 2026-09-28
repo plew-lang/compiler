@@ -1029,7 +1029,11 @@ pub impl Comp {
         while exprId < limit {
             match self.arena.exprs[exprId] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                    if !isEnum && typeLen != 0U64 {
+                    // Structural records own their written fields. Their
+                    // synthetic layout identity is not a nominal declaration
+                    // from which omitted memberwise defaults may be inherited.
+                    val structuralRecord = ty != 0U64 && ty < self.arena.typeCount() && self.arena.typeTerms[ty].isRecord
+                    if !isEnum && typeLen != 0U64 && !structuralRecord {
                         mut val values: Array[MakeField] = []
                         mut val i: U64 = 0U64
                         while i < fields.len {

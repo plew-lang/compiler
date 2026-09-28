@@ -323,6 +323,7 @@ pub impl Comp {
                         hasRecv=false recvStart=0U64 recvLen=0U64
                         selfInout=false selfMove=false isAssoc=false
                         isAsync=false isExtern=false defOffset=source.defOffset />)
+                    self.decls.defaultGeneratorOrigins[functionIndex] = <DefaultGeneratorOrigin.Field structure=structIndex field=fieldIndex />
                     functionId = functionIndex + 1U64
                 }
                 self.decls.fieldDefaultGeneratorFunctions.append(functionId)
@@ -354,6 +355,15 @@ pub impl Comp {
         }
         val range: DefaultGeneratorRange = self.decls.fieldDefaultGeneratorRanges[structIndex]
         if fieldIndex >= range.len {
+            if self.traceCodegen {
+                eprint(text: "[trace-codegen] field default slot receiver=")
+                eprint(text: self.tcRefName(ref: instance))
+                eprint(text: " name-offset=")
+                traceU64(n: field.nameStart)
+                eprint(text: " owner=")
+                traceU64(n: self.cur.checkFn)
+                eprint(text: "\n")
+            }
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no declaration slot") />
             return <Result.Ok value=self.arena.exprs.count() />
         }
@@ -377,7 +387,8 @@ pub impl Comp {
         return <Result.Ok value=(try self.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.None />, calleeTypeArgs: arguments, resultTerm: resultTerm, existingExpr: existing)) />
     }
 
-    // Prepare before semantic recording, after checking the authored defaults.
+    // Prepare declarations before recording; source default checks belong to
+    // the generator request, using its original declaration/slot identity.
     // The caller must transfer default-expression ownership to these bodies
     // when enabling this phase; recording the same expression as both a parent
     // default and a generator body would give it conflicting local identities.
@@ -398,6 +409,7 @@ pub impl Comp {
                 mut val functionId: U64 = 0U64
                 if parameter.hasDefault && lexicalOwner == owner {
                     val generator: U64 = self.createDefaultArgumentGenerator(ownerFnIdx: owner, parameter: parameter)
+                    self.decls.defaultGeneratorOrigins[generator] = <DefaultGeneratorOrigin.Parameter function=owner parameter=parameterIndex />
                     functionId = generator + 1U64
                 }
                 self.decls.defaultGeneratorFunctions.append(functionId)

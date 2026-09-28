@@ -1075,6 +1075,10 @@ pub struct DefaultGeneratorRange {
     pub val len: U64 = 0U64
 }
 pub impl DefaultGeneratorRange { factory }
+pub enum DefaultGeneratorOrigin {
+    Parameter(function: U64, parameter: U64)
+    Field(structure: U64, field: U64)
+}
 // The selected declaration's parameter order, before values/type conversions
 // are recorded. An explicit index refers to the authored ArgRange; a default
 // refers to a declaration, never to a cached evaluation or a caller expression.
@@ -3045,6 +3049,7 @@ pub struct Decls {
     pub mut val funcParamPool: Array[Param] = []
     pub mut val defaultGeneratorRanges: Array[DefaultGeneratorRange] = []
     pub mut val defaultGeneratorFunctions: Array[U64] = []
+    pub mut val defaultGeneratorOrigins: Dictionary[U64, DefaultGeneratorOrigin] = [:]
     // Struct declaration / field position selects an independent default body.
     pub mut val fieldDefaultGeneratorRanges: Array[DefaultGeneratorRange] = []
     pub mut val fieldDefaultGeneratorFunctions: Array[U64] = []

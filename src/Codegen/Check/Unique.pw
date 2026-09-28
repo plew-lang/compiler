@@ -420,36 +420,34 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn checkFieldDefault(structure: U64, field: U64) -> Result[(), CompileDiagnostic] {
+        val source = self.arena.structAt(index: structure)
+        val selected = source.fields[field]
+        if !selected.hasDefault { return <Result.Ok value=() /> }
+        mut val forbidden: Array[U64] = []
+        mut val index = 0U64
+        while index < source.fields.count() {
+            forbidden.append(source.fields[index].nameId)
+            index += 1U64
+        }
+        val selfBind = self.internBytes(s: "self")
+        forbidden.append(selfBind.nameId)
+        try self.checkDefaultSelfContained(exprId: selected.defaultVal, forbidden: forbidden, offset: selected.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
+        try self.checkDefaultDoesNotSuspend(exprId: selected.defaultVal, offset: selected.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
+        try self.checkLitSpan(id: selected.defaultVal, tyStart: selected.tyStart, tyLen: selected.tyLen, isArray: selected.tyIsArray)
+        if !selected.tyIsArray { try self.tcCheckValue(expectedRef: selected.ty, valueExpr: selected.defaultVal, pos: "field default") }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkFieldDefaults() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.structCount() {
-            val s: StructDef = self.arena.structAt(index: i)
-            // sibling field names + `self` — a field default may reference none of them.
-            mut val forbidden: Array[U64] = []
-            mut val fk: U64 = 0
-            while fk < s.fields.count() {
-                forbidden.append(intern(c: inout self, start: s.fields[fk].nameStart, len: s.fields[fk].nameLen))
-                fk += 1
+        mut val structure = 0U64
+        while structure < self.arena.structCount() {
+            mut val field = 0U64
+            while field < self.arena.structAt(index: structure).fields.count() {
+                try self.checkFieldDefault(structure: structure, field: field)
+                field += 1U64
             }
-            val selfBind: Bind = self.internBytes(s: "self")
-            forbidden.append(intern(c: inout self, start: selfBind.nameStart, len: selfBind.nameLen))
-            mut val j: U64 = 0
-            while j < s.fields.count() {
-                val f: FieldDef = s.fields[j]
-                if f.hasDefault {
-                    try self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
-                    try self.checkDefaultDoesNotSuspend(exprId: f.defaultVal, offset: f.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
-                    try self.checkLitSpan(id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
-                    // checkLitSpan accepts a `true`/`false` (and other category-mismatched
-                    // values) regardless of the field type, so a default of the wrong type
-                    // (`val a: I64 = true`) slips through — full type-check against T.
-                    if !(f.tyIsArray) {
-                        try self.tcCheckValue(expectedRef: f.ty, valueExpr: f.defaultVal, pos: "field default")
-                    }
-                }
-                j += 1
-            }
-            i += 1
+            structure += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -577,33 +575,49 @@ pub impl Comp {
     // the default must fit T exactly as an explicit argument would — `fn f(x: I64 =
     // true)` is a category error (checkLitSpan accepts a bool literal regardless of T,
     // so the full type-check catches it). Skipped for array params (separate machinery).
+    inout fn checkParamDefault(function: U64, parameter: U64) -> Result[(), CompileDiagnostic] {
+        val params = self.arena.functionAt(index: function).params
+        val selected = self.funcParamAt(params: params, index: parameter)
+        if !selected.hasDefault { return <Result.Ok value=() /> }
+        mut val forbidden: Array[U64] = []
+        mut val index = 0U64
+        while index < params.count() {
+            forbidden.append(self.funcParamAt(params: params, index: index).nameId)
+            index += 1U64
+        }
+        val selfBind = self.internBytes(s: "self")
+        forbidden.append(selfBind.nameId)
+        try self.checkDefaultSelfContained(exprId: selected.defaultExpr, forbidden: forbidden, offset: selected.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
+        try self.checkDefaultDoesNotSuspend(exprId: selected.defaultExpr, offset: selected.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
+        try self.checkLitSpan(id: selected.defaultExpr, tyStart: selected.tyStart, tyLen: selected.tyLen, isArray: selected.tyIsArray)
+        if !selected.tyIsArray { try self.tcCheckValue(expectedRef: selected.ty, valueExpr: selected.defaultExpr, pos: "default arg") }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkParamDefaults() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.functionCount() {
-            val ps: Array[Param] = self.copyFuncParams(params: self.arena.functionAt(index: i).params)
-            // sibling parameter names + `self` — a parameter default may reference none.
-            mut val forbidden: Array[U64] = []
-            mut val pk: U64 = 0
-            while pk < ps.count() {
-                forbidden.append(intern(c: inout self, start: ps[pk].nameStart, len: ps[pk].nameLen))
-                pk += 1
+        mut val function = 0U64
+        while function < self.arena.functionCount() {
+            mut val parameter = 0U64
+            while parameter < self.arena.functionAt(index: function).params.count() {
+                try self.checkParamDefault(function: function, parameter: parameter)
+                parameter += 1U64
             }
-            val selfBind: Bind = self.internBytes(s: "self")
-            forbidden.append(intern(c: inout self, start: selfBind.nameStart, len: selfBind.nameLen))
-            mut val j: U64 = 0
-            while j < ps.count() {
-                val p: Param = ps[j]
-                if p.hasDefault {
-                    try self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
-                    try self.checkDefaultDoesNotSuspend(exprId: p.defaultExpr, offset: p.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
-                    try self.checkLitSpan(id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                    if !(p.tyIsArray) {
-                        try self.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")
-                    }
+            function += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Called in the generator's lexical type environment, before its body is
+    // recorded. Placed aliases share this original declaration's one request.
+    inout fn checkDefaultGenerator(fnIdx: U64) -> Result[(), CompileDiagnostic] {
+        match self.decls.defaultGeneratorOrigins.get(key: fnIdx) {
+            Optional.Some(v: val origin) => {
+                match origin {
+                    DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => { return self.checkParamDefault(function: function, parameter: parameter) }
+                    DefaultGeneratorOrigin.Field(structure: val structure, field: val field) => { return self.checkFieldDefault(structure: structure, field: field) }
                 }
-                j += 1
             }
-            i += 1
+            Optional.None => {}
         }
         return <Result.Ok value=() />
     }

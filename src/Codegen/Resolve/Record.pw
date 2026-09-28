@@ -2114,6 +2114,7 @@ pub impl Comp {
             self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
+            if !recordCallTemplates { try self.checkDefaultGenerator(fnIdx: fnIdx) }
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = self.funcParamAt(params: f.params, index: pi)
