@@ -25,7 +25,6 @@ pub enum DeclarationAccessObligation {
     TryConversion(body: U64, terminator: U64, expression: U64)
     Destruction(body: U64, typeTerm: U64, typeRecipe: U64)
     Value(body: U64, value: U64)
-    Storage(body: U64, statement: U64)
 }
 pub enum DeclarationAccessError {
     Build(body: DeclarationAccessNode, error: MidBuildError)
@@ -76,7 +75,6 @@ impl DeclarationAccessState {
                         val place = c.mid.places[statement.destination - 1U64]
                         self.destruction(c: c, caller: index, term: place.typeTerm, recipe: place.typeRecipe)
                     }
-                    if statement.tag == 11U64 { self.obligations.append(<DeclarationAccessObligation.Storage body=index statement=statementId + 1U64 />) }
                     if statement.value != 0U64 {
                         val value = c.mid.rvalues[statement.value - 1U64]
                         if value.isParametricOnly() || value.tag == 6U64 || (value.tag >= 8U64 && value.tag <= 10U64) || value.hasAggregateElements() || value.hasClosureCaptures() {

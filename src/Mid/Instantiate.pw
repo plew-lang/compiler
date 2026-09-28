@@ -10,7 +10,7 @@ import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolut
 import ../Diag with { eprintU64, CompileDiagnostic }
 import @Std/Io with { eprint }
 import @Std/Core with { bitCastI64 }
-import ./Ir with { MidEnumDestinationNode, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidLocalDecl, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
+import ./Ir with { midLocalIsOwnedTemporary, MidEnumDestinationNode, MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidLocalDecl, MidBody, canonicalMidBorrowOperand, canonicalMidBorrowPlace, canonicalMidMoveOperand }
 
 pub enum MidInstantiateError {
     Frontend(diagnostic: CompileDiagnostic)
@@ -690,23 +690,6 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, locals: MidRan
         4U64 => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.destination, environment: environment, error: inout error) flag=source.flag />) }
         5U64 => { c.mid.statements.append(<MidStatementNode tag=5U64 flag=source.flag isSet=source.isSet />) }
         6U64 => { c.mid.statements.append(<MidStatementNode tag=6U64 scope=source.scope />) }
-        11U64 => {
-            val factIndex: U64 = c.finalStorageIndex(bodyId: bodyId, stmtId: source.sourceStmt)
-            if factIndex >= c.arena.finalStorages.count() {
-                error = <MidInstantiateError.InvalidFinalResolution />
-                return false
-            }
-            val target: U64 = c.arena.finalStorages[factIndex].shadowedBindingTarget
-            if target != 0U64 {
-                mut val local: U64 = 0U64
-                while local < locals.len && c.mid.locals[locals.start + local].sourceNameStart != target { local += 1U64 }
-                if local == locals.len {
-                    error = <MidInstantiateError.InvalidFinalResolution />
-                    return false
-                }
-                c.mid.statements.append(<MidStatementNode tag=12U64 bindingLocal=local />)
-            }
-        }
         12U64 => { c.mid.statements.append(<MidStatementNode tag=12U64 bindingLocal=source.bindingLocal />) }
         7U64 => { c.mid.statements.append(<MidStatementNode tag=7U64 />) }
         _ => { return false }
@@ -975,7 +958,7 @@ fn canonicalBorrowOperand(c: inout Comp, operand: U64, locals: MidRange) -> U64 
         val place = c.mid.places[value.place - 1U64]
         if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= locals.len { return 0U64 }
         val local = c.mid.locals[locals.start + place.local]
-        if !local.isUnique || local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace { return 0U64 }
+        if !midLocalIsOwnedTemporary(local: local) { return 0U64 }
         return canonicalMidBorrowPlace(arena: inout c.mid, place: value.place, capability: 1U64)
     }
     return canonicalMidBorrowOperand(arena: inout c.mid, operandId: operand, capability: 1U64)

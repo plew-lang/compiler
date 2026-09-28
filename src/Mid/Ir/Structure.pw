@@ -39,8 +39,7 @@ pub impl MidRvalueNode {
 }
 
 pub impl MidStatementNode {
-    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 13U64 }
-    fn requiresAccessElaboration() -> Bool { return self.tag == 11U64 }
+    fn hasKnownOpcode() -> Bool { return self.tag >= 1U64 && self.tag <= 13U64 && self.tag != 11U64 }
     fn requiresDropElaboration() -> Bool { return self.tag == 6U64 || self.tag == 12U64 }
     // A destination slot is a structural role, not a definition: Drop and
     // ConditionalDrop also use that slot. Each analysis interprets it itself.

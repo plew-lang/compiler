@@ -23,6 +23,8 @@ fn main() {
     c.typeCache.identBind.append(identValueCode())
     c.typeCache.identTarget.append(60U64)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=70U64 nameLen=11U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=fileTerm init=2U64 />)
+    // The builder consumes the lexical type recorded by the frontend.
+    c.decls.semanticLetTerms[0U64] = fileTerm
     c.arena.blockStmtPool.append(0U64)
     c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
     c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=0U64 />)

@@ -1,0 +1,81 @@
+// Declaration ownership consumes semantic facts, without executable layouts.
+// The stricter instantiated/executable verifiers retain their stage contracts.
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { StructDef, TypeRef }
+import /Mid/Ir with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
+import /Mid/Build with { MidFunctionTemplates, MidBuildError }
+import /Mid/Drop with { elaborateCanonicalMidDrops }
+import /Mid/Verify with { verifyDeclarationMidOwnership, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody, MidVerifyError }
+import @Std/Io with { print }
+
+fn checkSource() {
+    mut val c = <Comp />
+    val text = "unique struct Resource {} impl Resource { fn inspect() {} } fn shadow() { val resource = <Resource /> resource.inspect() val resource = <Resource /> resource.inspect() } unique enum Outcome { Ready(resource: Resource) Empty } fn consume(value: move Outcome) { match move value { Outcome.Ready(val resource) => {} Outcome.Empty => {} } } fn identity[T](value: T) -> T { val local: T = value return local } fn widen(value: I32) -> I64 { return value as I64 } struct Number {} impl Number { assoc fn value() -> Self { mut val result: Self = <Number /> result = <Number /> return result } } fn main() {}"
+    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=text path="ownership.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val instances = c.arena.bodyInstanceCount()
+    val destructions = c.arena.finalDestructions.count()
+    mut val templates = <MidFunctionTemplates />
+    val count = c.arena.functionCount()
+    mut val index = 0U64
+    mut val strictRejections = 0U64
+    while index < count {
+        val function = c.arena.functionAt(index: index)
+        if function.body != 0U64 && !function.isExtern {
+            val built = templates.body(c: inout c, function: index)
+            match built.error { MidBuildError.None => {} _ => { panic("declaration Mid failed") } }
+            val analyzed = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: built.canonical)
+            match verifyDeclarationMidOwnership(c: inout c, canonical: analyzed).error {
+                MidVerifyError.None => {}
+                _ => { panic("valid declaration ownership rejected") }
+            }
+            match verifyCanonicalMidBody(c: inout c, canonical: analyzed).error {
+                MidVerifyError.None => {}
+                _ => { strictRejections += 1U64 }
+            }
+        }
+        index += 1U64
+    }
+    if c.decls.semanticMatches.count() == 0U64 { panic("missing consuming match fixture") }
+    val owner = c.decls.semanticMatches[0U64].ownerFnIdx
+    val consuming = templates.body(c: inout c, function: owner)
+    val checked = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: consuming.canonical)
+    c.decls.semanticMatches = []
+    c.decls.semanticMatchIndexSlots = []
+    match verifyDeclarationMidOwnership(c: inout c, canonical: checked).error {
+        MidVerifyError.MoveUnavailable => {}
+        _ => { panic("enum transfer admitted without semantic pattern evidence") }
+    }
+    if strictRejections < 3U64 { panic("instantiated stage admitted declaration boundaries") }
+    if c.arena.bodyInstanceCount() != instances || c.arena.finalDestructions.count() != destructions { panic("declaration verification discovered executable instances") }
+}
+
+fn checkInvalidOwnership() {
+    mut val c = <Comp />
+    c.arena.reserveTypeSentinel()
+    val name = c.internBytes(s: "Resource")
+    c.arena.registerStruct(<StructDef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId defOffset=100U64 typeParams=[] fields=[] isUnique=true isExtern=false />)
+    val term = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen hasDecl=true declOffset=100U64 args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    val place = <MidPlace local=0U64 typeTerm=term />
+    val local = <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=true isParameter=true ownsAtEntry=true />
+    val invalidCopy = c.mid.store(body: <MidBody locals=[local] blocks=[<MidBlock terminator=<MidTerminator.ReturnValue value=<MidOperand.Copy place=place /> /> />] />)
+    match verifyDeclarationMidOwnership(c: inout c, canonical: invalidCopy).error {
+        MidVerifyError.UniqueCopy => {}
+        _ => { panic("declaration unique copy accepted") }
+    }
+    val invalidMove = c.mid.store(body: <MidBody locals=[local] blocks=[<MidBlock statements=[<MidStatement.Drop place=place />] terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=place /> /> />] />)
+    match verifyDeclarationMidOwnership(c: inout c, canonical: invalidMove).error {
+        MidVerifyError.MoveUnavailable => {}
+        _ => { panic("declaration use after drop accepted") }
+    }
+    match verifyExecutableCanonicalMidBody(c: inout c, canonical: invalidCopy).error {
+        MidVerifyError.MissingOwnershipContract => {}
+        _ => { panic("executable contract weakened") }
+    }
+}
+
+fn main() {
+    checkSource()
+    checkInvalidOwnership()
+    print("ok")
+}

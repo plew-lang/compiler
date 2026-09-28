@@ -1954,7 +1954,6 @@ pub struct FinalStorageResolution {
     pub val stmtId: U64
     pub val sourceTypeRef: U64
     pub val targetTypeRef: U64
-    pub val shadowedBindingTarget: U64 = 0U64
     pub val conversion: U64
 }
 pub impl FinalStorageResolution { factory }
@@ -3082,6 +3081,10 @@ pub struct Decls {
     // These retain lexical views; Func.recvTy is the dispatch namespace and
     // BodySignature holds the later grounded ABI. Zero is no recorded receiver.
     pub mut val semanticBodyReceiverTerms: Array[U64] = []
+    // Lexical unique-binding lifetime ends are independent of instantiation.
+    pub mut val semanticBindingEnds: Dictionary[U64, U64] = [:]
+    // Let statement -> type resolved in its lexical Self/associated-type scope.
+    pub mut val semanticLetTerms: Dictionary[U64, U64] = [:]
     pub mut val semanticMatches: Array[SemanticMatch] = []
     pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val callTemplates: Array[CallTemplate] = []

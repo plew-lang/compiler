@@ -643,8 +643,6 @@ pub enum MidStatement {
     // lowering emits it; drop elaboration consumes it into explicit Drop /
     // ConditionalDrop statements, so LLVM never receives this marker.
     ScopeExit(scope: U64)
-    // Resolves the frontend storage fact after initializer temporaries end.
-    StorageCommit(stmtId: U64)
     // Ends one binding, even if its value has already been moved. Only drop
     // elaboration decides whether any ownership remains to destroy.
     EndBinding(local: U64)
@@ -740,6 +738,13 @@ pub struct MidLocalDecl {
     pub val sourceNameStart: U64 = 0U64
 }
 pub impl MidLocalDecl { factory }
+
+// Only a computed unique temporary can change from an owning use to a
+// guaranteed use. Authored moves and projected places retain their meaning.
+pub fn midLocalIsOwnedTemporary(local: MidLocalDecl) -> Bool {
+    return local.isUnique && local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell && !local.ownsAtEntry && !local.isReturnPlace
+}
+
 
 pub struct MidScope {
     pub val parent: U64 = 0U64
@@ -1035,7 +1040,6 @@ fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { arena.statements.append(<MidStatementNode tag=4U64 destination=midFreezePlace(arena: inout arena, place: place) flag=flag />) }
         MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { arena.statements.append(<MidStatementNode tag=5U64 flag=local isSet=isSet />) }
         MidStatement.ScopeExit(scope: val scope) => { arena.statements.append(<MidStatementNode tag=6U64 scope=scope />) }
-        MidStatement.StorageCommit(stmtId: val stmtId) => { arena.statements.append(<MidStatementNode tag=11U64 sourceStmt=stmtId />) }
         MidStatement.EndBinding(local: val local) => { arena.statements.append(<MidStatementNode tag=12U64 bindingLocal=local />) }
         MidStatement.Nop => { arena.statements.append(<MidStatementNode tag=7U64 />) }
     }
@@ -1250,7 +1254,7 @@ pub fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanonical
                     }
                     output += 1U64
                 }
-            } else if statement.tag == 11U64 || statement.tag == 12U64 {
+            } else if statement.tag == 12U64 {
                 if statement.destination != 0U64 || statement.source != 0U64 || statement.value != 0U64 { return false }
                 if statement.tag == 12U64 && statement.bindingLocal >= node.locals.len { return false }
             } else if statement.tag == 9U64 || statement.tag == 10U64 {

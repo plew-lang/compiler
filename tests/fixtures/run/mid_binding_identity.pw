@@ -29,6 +29,8 @@ fn main() {
     c.typeCache.identBind.append(0I64)
     c.typeCache.identTarget.append(0U64)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=40U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=1U64 />)
+    // The builder consumes the lexical type recorded by the frontend.
+    c.decls.semanticLetTerms[0U64] = valueTerm
     mut val letState: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val input = addMidLocal(state: inout letState, declarationTarget: 60U64, typeTerm: valueTerm, isUnique: true, isParameter: true, ownsAtEntry: true)
     val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: 0U64)
@@ -54,6 +56,8 @@ fn main() {
     c.typeCache.identBind.append(identValueCode())
     c.typeCache.identTarget.append(40U64)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=50U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=valueTerm init=3U64 />)
+    // The builder consumes the lexical type recorded by the frontend.
+    c.decls.semanticLetTerms[1U64] = valueTerm
     val secondStart = letState.blocks[0U64].statements.count()
     val moveResult = buildMidLet(c: inout c, state: inout letState, stmtId: 1U64)
     mut val hasMove: Bool = false

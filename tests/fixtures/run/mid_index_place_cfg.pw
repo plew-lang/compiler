@@ -31,6 +31,8 @@ fn main() {
     c.arena.semanticExprTypes.append(<SemanticExprType term=integerTerm />)
     c.arena.semanticExprTypes.append(<SemanticExprType term=integerTerm />)
     c.arena.stmts.append(<Stmt.Let mutable=false nameStart=30U64 nameLen=8U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=integerTerm init=2U64 />)
+    // The builder consumes the lexical type recorded by the frontend.
+    c.decls.semanticLetTerms[0U64] = integerTerm
 
     mut val state: MidBuildState = <MidBuildState.initial sourceFunction=0U64 />
     val items = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: arrayTerm, isUnique: false, isParameter: true, ownsAtEntry: true)

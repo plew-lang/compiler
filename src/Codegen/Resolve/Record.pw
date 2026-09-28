@@ -1947,7 +1947,15 @@ pub impl Comp {
                 try self.collectRecordedType(ref: ty)
                 try self.recordExpr(exprId: init, expectedTerm: ty)
                 try self.recordArrayLitCtx(exprId: init, ctxRef: ty)
+                val previous = self.localIndexByName(start: nameStart, len: nameLen)
+                if previous < self.cur.locals.count() {
+                    val prior = self.cur.locals[previous]
+                    if prior.owned && self.typeTermIsUnique(ref: prior.ty) {
+                        self.decls.semanticBindingEnds[stmtId] = prior.nameStart
+                    }
+                }
                 try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                self.decls.semanticLetTerms[stmtId] = self.cur.locals[self.cur.locals.count() - 1U64].ty
             }
             Stmt.Assign(val target, val value) => {
                 try self.recordExpr(exprId: target)

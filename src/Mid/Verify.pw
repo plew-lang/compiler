@@ -3,10 +3,19 @@ import ./AccessScopes with { canonicalMidAccessScopesValid }
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
 import ../Frontend with { Comp }
-import ../Ir with { MatchSource, SemanticMatchKind }
+import ../Ir with { MatchSource, SemanticMatchKind, SemanticMatchPayload }
 import ./Ir with { canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
 import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
 import ./Drop with { analyzeCanonicalMidOwnership }
+
+// Verification phases have different representation contracts. Declaration
+// ownership may consume symbolic conversion boundaries; executable admission
+// still requires their concrete lowering and ownership contracts.
+enum MidVerificationStage { Declaration Instantiated Executable }
+impl MidVerificationStage {
+    fn isDeclaration() -> Bool { match self { MidVerificationStage.Declaration => { return true } _ => { return false } } }
+    fn isExecutable() -> Bool { match self { MidVerificationStage.Executable => { return true } _ => { return false } } }
+}
 
 pub enum MidVerifyError {
     None
@@ -173,10 +182,16 @@ fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: Array[MidOwnership
     return <MidVerification />
 }
 
-fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], operandId: U64, block: U64, executable: Bool) -> MidVerification {
+fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], operandId: U64, block: U64, stage: MidVerificationStage) -> MidVerification {
+    val executable = stage.isExecutable()
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
     if operand.tag == 8U64 { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+    if stage.isDeclaration() && operand.tag == 1U64 {
+        if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+        val source = c.mid.places[operand.place - 1U64]
+        if c.typeTermIsUnique(ref: source.typeTerm) { return <MidVerification error=<MidVerifyError.UniqueCopy /> block=block local=source.local /> }
+    }
     if executable && operand.tag == 1U64 {
         if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         val source = c.mid.places[operand.place - 1U64]
@@ -252,7 +267,8 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
     return <MidVerification />
 }
 
-fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, executable: Bool) -> MidVerification {
+fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, stage: MidVerificationStage) -> MidVerification {
+    val executable = stage.isExecutable()
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if value.place != 0U64 {
@@ -268,10 +284,12 @@ fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: ino
             return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
         }
     }
-    if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
-    if value.tag == 20U64 { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
-    if value.tag == 7U64 || value.tag == 23U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
-    if (value.tag == 8U64 || value.tag == 9U64 || value.tag == 10U64) && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
+    if !stage.isDeclaration() {
+        if value.tag == 2U64 && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
+        if value.tag == 20U64 { return <MidVerification error=<MidVerifyError.UninstantiatedStorageBoundary /> block=block /> }
+        if value.tag == 7U64 || value.tag == 23U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
+        if (value.tag == 8U64 || value.tag == 9U64 || value.tag == 10U64) && (!isGrounded || value.targetTerm == 0U64) { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
+    }
     if value.tag >= 3U64 && value.tag <= 5U64 {
         mut val elementI: U64 = 0U64
         while elementI < value.elements.len {
@@ -279,25 +297,25 @@ fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: ino
             if executable && !c.conversionProofIsIdentity(id: conversion) && !canonicalMidConversionContractsAreReady(c: inout c, proofId: conversion) {
                 return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=block />
             }
-            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block, executable: executable)
+            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: c.mid.aggregateElements[value.elements.start + elementI].operand, block: block, stage: stage)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             elementI = elementI + 1U64
         }
         return <MidVerification />
     }
     if value.tag == 19U64 {
-        if !isGrounded || value.resultTerm == 0U64 || value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+        if (!stage.isDeclaration() && !isGrounded) || value.resultTerm == 0U64 || value.elements.start > c.mid.closureCaptures.count() || value.elements.len > c.mid.closureCaptures.count() - value.elements.start { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         mut val captureI: U64 = 0U64
         while captureI < value.elements.len {
             val capture: MidClosureCaptureNode = c.mid.closureCaptures[value.elements.start + captureI]
             if (capture.mode != 1U64 && capture.mode != 2U64) || capture.typeTerm == 0U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
-            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: capture.operand, block: block, executable: executable)
+            val verified: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: capture.operand, block: block, stage: stage)
             match verified.error { MidVerifyError.None => {} _ => { return verified } }
             captureI += 1U64
         }
         return <MidVerification />
     }
-    if value.operand != 0U64 { return canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: value.operand, block: block, executable: executable) }
+    if value.operand != 0U64 { return canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: value.operand, block: block, stage: stage) }
     return <MidVerification />
 }
 
@@ -463,7 +481,8 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
 // or range; the production path can therefore discard MidBody after freeze.
 // TypeRef allocation IDs are not type identity: use the frontend semantic
 // equality query for transferred values, retaining nominal/view distinctions.
-fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64, executable: Bool) -> MidVerification {
+fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64, stage: MidVerificationStage) -> MidVerification {
+    val executable = stage.isExecutable()
     val invalid = <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block />
     if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 1U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
     val source = c.mid.places[statement.source - 1U64]
@@ -473,20 +492,43 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
     match states[source.local] { MidOwnership.Owned => {} _ => { return invalid } }
     mut val key: MatchSource = <MatchSource.Statement stmtId=statement.sourceStmt />
     if statement.sourceTag == 1U64 { key = <MatchSource.Expression exprId=statement.sourceStmt /> }
-    val factIndex = c.finalMatchIndex(bodyId: body.bodyInstance, matchSource: key)
-    if factIndex >= c.arena.finalMatches.count() { return invalid }
-    val fact = c.arena.finalMatches[factIndex]
-    if !fact.isConsuming || !c.typeRefEq(a: fact.scrutineeTypeRef, b: source.typeTerm) { return invalid }
-    match fact.kind { SemanticMatchKind.Enum(enumIndex: val selected) => { if selected != statement.enumIndex { return invalid } } _ => { return invalid } }
-    mut val armIndex: U64 = 0U64
-    while armIndex < fact.armCount {
+    mut val finalPayloadStart = 0U64
+    mut val symbolicPayloads: Array[SemanticMatchPayload] = []
+    if stage.isDeclaration() {
+        val factIndex = match c.semanticMatchIndex(ownerFnIdx: body.sourceFunction, matchSource: key) {
+            Result.Ok(value: val index) => { give index }
+            Result.Err(error: _) => { return invalid }
+        }
+        if factIndex >= c.decls.semanticMatches.count() { return invalid }
+        val fact = c.decls.semanticMatches[factIndex]
+        if !fact.isConsuming || !c.typeRefEq(a: fact.scrutineeTerm, b: source.typeTerm) { return invalid }
+        match fact.kind { SemanticMatchKind.Enum(enumIndex: val selected) => { if selected != statement.enumIndex { return invalid } } _ => { return invalid } }
+        mut val armIndex = 0U64
+        while armIndex < fact.arms.count() {
+            val arm = fact.arms[armIndex]
+            if arm.hasVariant && arm.variantIndex == statement.variantIndex { break }
+            armIndex += 1U64
+        }
+        if armIndex == fact.arms.count() { return invalid }
+        symbolicPayloads = fact.arms[armIndex].payloads
+        if symbolicPayloads.count() != statement.enumDestinations.len { return invalid }
+    } else {
+        val factIndex = c.finalMatchIndex(bodyId: body.bodyInstance, matchSource: key)
+        if factIndex >= c.arena.finalMatches.count() { return invalid }
+        val fact = c.arena.finalMatches[factIndex]
+        if !fact.isConsuming || !c.typeRefEq(a: fact.scrutineeTypeRef, b: source.typeTerm) { return invalid }
+        match fact.kind { SemanticMatchKind.Enum(enumIndex: val selected) => { if selected != statement.enumIndex { return invalid } } _ => { return invalid } }
+        mut val armIndex: U64 = 0U64
+        while armIndex < fact.armCount {
+            val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
+            if arm.hasVariant && arm.variantIndex == statement.variantIndex { break }
+            armIndex += 1U64
+        }
+        if armIndex == fact.armCount { return invalid }
         val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
-        if arm.hasVariant && arm.variantIndex == statement.variantIndex { break }
-        armIndex += 1U64
+        if arm.payloadCount != statement.enumDestinations.len { return invalid }
+        finalPayloadStart = arm.payloadStart
     }
-    if armIndex == fact.armCount { return invalid }
-    val arm = c.arena.finalMatchArms[fact.armStart + armIndex]
-    if arm.payloadCount != statement.enumDestinations.len { return invalid }
     mut val index: U64 = 0U64
     while index < statement.enumDestinations.len {
         val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
@@ -496,8 +538,13 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
         val local = c.mid.locals[body.locals.start + destination.local]
         if local.isBorrowed || local.isInout || local.isCaptureCell || !c.typeRefEq(a: local.typeTerm, b: destination.typeTerm) { return invalid }
         match states[destination.local] { MidOwnership.Consumed => {} _ => { return invalid } }
-        val field = c.arena.finalMatchPayloads[arm.payloadStart + index]
-        if field.fieldIndex != index || field.isDiscard != entry.isDiscard || field.isBoxed != entry.isBoxed || field.bindTarget != entry.bindTarget || !c.typeRefEq(a: field.fieldTypeRef, b: destination.typeTerm) { return invalid }
+        if stage.isDeclaration() {
+            val field = symbolicPayloads[index]
+            if field.fieldIndex != index || field.isDiscard != entry.isDiscard || field.isBoxed != entry.isBoxed || field.bindTarget != entry.bindTarget || !c.typeRefEq(a: field.fieldTerm, b: destination.typeTerm) { return invalid }
+        } else {
+            val field = c.arena.finalMatchPayloads[finalPayloadStart + index]
+            if field.fieldIndex != index || field.isDiscard != entry.isDiscard || field.isBoxed != entry.isBoxed || field.bindTarget != entry.bindTarget || !c.typeRefEq(a: field.fieldTypeRef, b: destination.typeTerm) { return invalid }
+        }
         // A shared physical cell must copy its payload even though the
         // enclosing enum owner is consumed by this operation.
         if executable && entry.isBoxed && !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: destination.typeTerm) {
@@ -523,11 +570,17 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
 
 // Executable admission and earlier structural verification share one walk.
 pub fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
-    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: true)
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Executable />)
 }
 
 pub fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
-    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, executable: false)
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Instantiated />)
+}
+
+// This proves ownership dataflow only. It does not certify conversion
+// eligibility, access elaboration, or whole-body semantic checking.
+pub fn verifyDeclarationMidOwnership(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Declaration />)
 }
 
 // Copy requires a copyable semantic value, not merely available retain/drop
@@ -734,7 +787,8 @@ fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerificatio
     return <MidVerification />
 }
 
-fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, executable: Bool) -> MidVerification {
+fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
+    val executable = stage.isExecutable()
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     if !c.mid.isWellFormed(body: canonical) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
@@ -769,11 +823,11 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
             if executable && !canonicalMidStatementTypesMatch(c: inout c, body: body, statement: statement) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
             if statement.tag == 13U64 {
-                val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI, executable: executable)
+                val result = verifyCanonicalEnumDestructure(c: inout c, body: body, statement: statement, states: inout states, block: blockI, stage: stage)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
             if statement.tag == 1U64 {
-                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: inout c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64, executable: executable)
+                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: inout c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64, stage: stage)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
                     val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -785,7 +839,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                 }
             }
             if statement.tag == 9U64 {
-                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: inout c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64, executable: executable)
+                val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: inout c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64, stage: stage)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
@@ -901,7 +955,6 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
             }
-            if statement.requiresAccessElaboration() { return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI /> }
             if statement.requiresDropElaboration() {
                 if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
                 return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI />
@@ -914,7 +967,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
         if executable && !canonicalMidTerminatorTypesMatch(c: inout c, body: body, term: term) { return <MidVerification error=<MidVerifyError.TypeMismatch /> block=blockI /> }
         if term.tag == 2U64 && !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
         if term.tag == 3U64 {
-            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.discriminant, block: blockI, executable: executable)
+            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.discriminant, block: blockI, stage: stage)
             match result.error { MidVerifyError.None => {} _ => { return result } }
             mut val caseI: U64 = 0U64
             while caseI < term.cases.len {
@@ -927,14 +980,14 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             if term.callReceiver == 0U64 || term.callReceiver > c.mid.callReceivers.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
             val callReceiver = c.mid.callReceivers[term.callReceiver - 1U64]
             if callReceiver.tag == 2U64 {
-                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: callReceiver.operand, block: blockI, executable: executable)
+                val receiver: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: callReceiver.operand, block: blockI, stage: stage)
                 match receiver.error { MidVerifyError.None => {} _ => { return receiver } }
             } else if callReceiver.tag != 1U64 {
                 return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI />
             }
             mut val argumentI: U64 = 0U64
             while argumentI < term.args.len {
-                val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: c.mid.callArguments[term.args.start + argumentI], block: blockI, executable: executable)
+                val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: c.mid.callArguments[term.args.start + argumentI], block: blockI, stage: stage)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 argumentI = argumentI + 1U64
             }
@@ -965,7 +1018,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, execu
             states.set(i: destination.local, value: <MidOwnership.Owned />)
         }
         if term.tag == 6U64 || term.tag == 7U64 {
-            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.value, block: blockI, executable: executable)
+            val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.value, block: blockI, stage: stage)
             match result.error { MidVerifyError.None => {} _ => { return result } }
         }
         if term.tag == 5U64 || term.tag == 6U64 {

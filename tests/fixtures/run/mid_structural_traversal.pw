@@ -88,10 +88,10 @@ fn main() {
     val boundary = <MidRvalueNode tag=23U64 operand=31U64 />
     assert(boundary.hasKnownOpcode() && boundary.isParametricOnly())
     assert(!closure.isParametricOnly())
-    val commit = <MidStatementNode tag=11U64 />
+    val reserved = <MidStatementNode tag=11U64 />
     val end = <MidStatementNode tag=12U64 />
     val exit = <MidStatementNode tag=6U64 />
-    assert(commit.requiresAccessElaboration())
+    assert(!reserved.hasKnownOpcode())
     assert(end.requiresDropElaboration() && exit.requiresDropElaboration())
     assert(!drop.requiresDropElaboration())
     print("phases")
