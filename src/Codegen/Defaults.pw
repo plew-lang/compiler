@@ -189,7 +189,7 @@ pub impl Comp {
     // `resultTerm` and substitutions are already expressed in the caller's
     // parametric environment. This method performs no inference/name lookup.
     inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
-        if !self.cur.recordCallTemplates || generator >= self.arena.functionCount() {
+        if generator >= self.arena.functionCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record") />
             return <Result.Ok value=self.arena.exprs.count() />
         }
@@ -201,11 +201,13 @@ pub impl Comp {
         mut val call: U64 = existingExpr
         val noArgs: ArgRange = self.pushArgs(args: [])
         if call < self.arena.exprs.count() {
-            val previous: CallTemplate = (try self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: call))
             mut val matches: Bool = false
-            match previous.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => {
-                    matches = callee == generator && args.len == 0U64
+            // The occurrence already exists during preliminary type recording,
+            // before checked CallTemplates are published. Its synthetic origin
+            // and generated declaration name establish evaluation identity.
+            match self.arena.exprs[call] {
+                Expr.Call(val nameStart, val nameLen, val args) => {
+                    matches = nameStart == function.nameStart && nameLen == function.nameLen && args.len == 0U64 && self.syntheticCallSiteIndex(exprId: call) < self.decls.syntheticCallSites.count()
                 }
                 _ => {}
             }
@@ -332,7 +334,7 @@ pub impl Comp {
     }
 
     fn recordsFieldDefault(field: MakeField) -> Bool {
-        if !self.cur.recordCallTemplates || self.decls.fieldDefaultGeneratorRanges.count() == 0U64 { return false }
+        if self.decls.fieldDefaultGeneratorRanges.count() == 0U64 { return false }
         match field.origin {
             MakeFieldOrigin.DeclarationDefault => { return true }
             _ => { return false }

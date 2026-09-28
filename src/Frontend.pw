@@ -1085,7 +1085,7 @@ fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
 // consumer. Keeping this as an explicit phase makes the hand-off into
 // CallTemplate finalization a real `Comp` boundary, rather than an incidental
 // region inside the frontend driver.
-fn recordSemanticExpressionTypes(c: inout Comp) -> Result[(), CompileDiagnostic] {
+fn recordSemanticExpressionTypes(c: inout Comp, includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
     mut val i: U64 = 0U64
     while i < c.arena.exprs.count() {
         c.arena.semanticExprTypes.append(<SemanticExprType />)
@@ -1093,7 +1093,7 @@ fn recordSemanticExpressionTypes(c: inout Comp) -> Result[(), CompileDiagnostic]
     }
     tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.traceExprInstScans = 0U64
-    try c.recordParametricTypes(includeBodies: !c.genMode)
+    try c.recordParametricTypes(includeBodies: includeBodies && !c.genMode)
     tracePhaseCount(c: inout c, label: "semantic-expression-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "semantic-expression-record:done")
     return <Result.Ok value=() />
@@ -1131,7 +1131,7 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
 // Source roots are explicit: analysis never consults argv or reads stdin.
 // Produces declaration-time types, bindings and call templates, without
 // closing the executable BodyInstance/destruction worklist.
-pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                          options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
     val genMode = options.genMode
     val tcLog = options.tcLog
@@ -1716,6 +1716,28 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "instantiation-collection:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "instantiation-collection:done")
+    return <Result.Ok value=() />
+}
+
+// Whole-target source analysis requests every lexical owner. Generation keeps
+// its independent harness preparation. Neither entry discovers executable code.
+pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+                                  options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
+    if !options.genMode {
+        try analyzeFrontendForRequests(c: inout c, input: input, sources: sources, options: options)
+        // Freeze authored declarations and prepared default generators. Derived
+        // implementation rows consume their lexical owner's facts.
+        val limit = c.arena.functionCount()
+        mut val index = 0U64
+        while index < limit {
+            try c.prepareLexicalBody(fnIdx: index)
+            index += 1U64
+        }
+        try c.checkGenericUniqueArgs()
+        try c.closeProgramCallTemplates()
+        return <Result.Ok value=() />
+    }
+    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
     // Generic bodies are checked abstractly below. Concrete `where` bounds are
     // checked only when finalization enqueues their grounded BodyInstance; that
     // is the one semantic edge Mono and LLVM will actually consume.
@@ -1773,6 +1795,33 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
         try c.checkRecordedCallTemplateBounds()
         try c.checkClosedIterationProtocols()
     }
+    try c.prepareDiscriminantType()
+    return <Result.Ok value=() />
+}
+
+// Prepare ordinary source declarations and required initializers, without
+// checking unrelated function bodies or using generator mode as a substitute.
+// This is request admission, not whole-target static-check success.
+pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+                                 options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
+    if options.genMode {
+        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "source body requests cannot use generator mode") />
+    }
+    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
+    try recordSemanticExpressionTypes(c: inout c, includeBodies: false)
+    c.buildExprTyTable()
+    try c.verifyProgram(includeBodies: false)
+    try c.prepareDefaultArgumentGenerators()
+    c.prepareFieldDefaultGenerators()
+    try c.recordParametricTypes(recordCallTemplates: true, includeBodies: false)
+    if (try c.completeRecordedDefaultCalls()) != 0U64 {
+        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: global default argument plans are incomplete") />
+    }
+    try c.checkRecordedCallTemplateBounds()
+    try c.checkClosedIterationProtocols()
+    try c.checkGenericUniqueArgs()
+    // Whole-program closure remains false: unrequested closures and bodies
+    // must not inherit the initializers' readiness.
     try c.prepareDiscriminantType()
     return <Result.Ok value=() />
 }

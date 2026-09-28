@@ -1,0 +1,50 @@
+// Source request admission must not borrow generator-mode acceptance rules.
+import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing source declaration"
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="demand.pw" text="fn identity[T](value: T) -> T { return value } fn good() -> I64 { return identity(value: 1I64) } fn goodClosure() -> I64 { val getter = fn() -> I64 { return identity(value: 2I64) } return getter() } fn broken() { missing() } fn main() {}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    if compiler.genMode || compiler.globalCallTemplatesClosed || compiler.lexicalBodyPreparations.count() != 0U64 { panic "entry checked source bodies" }
+    if compiler.monoWork.bodyInstances.count() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 { panic "entry discovered executable code" }
+    val good = owner(c: inout compiler, name: "good")
+    val identity = owner(c: inout compiler, name: "identity")
+    val closure = owner(c: inout compiler, name: "goodClosure")
+    val broken = owner(c: inout compiler, name: "broken")
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    if compiler.lexicalBodyPreparations.count() != 1U64 { panic "request checked an unrelated callee body" }
+    val templates = compiler.decls.callTemplates.count()
+    compiler.prepareLexicalBody(fnIdx: good).unwrap()
+    if compiler.decls.callTemplates.count() != templates { panic "request repeated recording" }
+    compiler.prepareLexicalBody(fnIdx: identity).unwrap()
+    compiler.prepareLexicalBody(fnIdx: closure).unwrap()
+    if compiler.decls.semanticClosures.count() != 1U64 { panic "requested closure not recorded" }
+    match compiler.prepareLexicalBody(fnIdx: broken) {
+        Result.Ok(value: _) => { panic "requested invalid source body accepted" }
+        Result.Err(error: val diagnostic) => {
+            match compiler.prepareLexicalBody(fnIdx: broken) {
+                Result.Ok(value: _) => { panic "failed request became successful" }
+                Result.Err(error: val repeated) => {
+                    if repeated.message != diagnostic.message { panic "request changed its diagnostic" }
+                }
+            }
+        }
+    }
+    if compiler.lexicalBodyPreparations.count() != 4U64 { panic "requests were not independent" }
+    if compiler.monoWork.bodyInstances.count() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 { panic "lexical preparation discovered executable code" }
+    print("ok")
+}
