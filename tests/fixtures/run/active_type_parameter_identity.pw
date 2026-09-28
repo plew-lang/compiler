@@ -1,0 +1,18 @@
+import /Frontend with { Comp }
+import /Ir with { Bind, TypeRef }
+import @Std/Io with { print }
+
+fn main() {
+    mut val c = <Comp />
+    val name = c.internTmpName(prefix: "T", n: 0U64)
+    c.cur.typeParams = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=1U64 fieldStart=0U64 fieldLen=0U64 />]
+    val active = <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=1U64 args=[] />
+    val foreign = <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=2U64 args=[] />
+    val unbound = <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId args=[] />
+    if !c.isActiveTypeParam(t: active) { panic "active binder missing" }
+    if c.isActiveTypeParam(t: foreign) { panic "foreign binder captured" }
+    if c.isActiveTypeParam(t: unbound) { panic "unbound name captured" }
+    c.cur.typeParams = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId fieldStart=0U64 fieldLen=0U64 />]
+    if c.isActiveTypeParam(t: unbound) { panic "zero identity matched" }
+    print("ok")
+}

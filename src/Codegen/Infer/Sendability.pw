@@ -98,14 +98,14 @@ pub impl Comp {
         if !(self.isActiveTypeParam(t: t)) {
             return false
         }
-        if t.args.count() != 0U64 {
+        if t.paramId == 0U64 || t.args.count() != 0U64 {
             return false
         }
         mut val i: U64 = self.cur.typeParams.count()
         while i > 0U64 {
             i -= 1U64
             val p: Bind = self.cur.typeParams[i]
-            if p.nameId == t.nameId {
+            if p.paramId == t.paramId {
                 return p.isSendable
             }
         }
@@ -113,13 +113,13 @@ pub impl Comp {
     }
 
     inout fn isActiveTypeParam(t: TypeRef) -> Bool {
-        if t.args.count() != 0U64 {
+        if t.paramId == 0U64 || t.args.count() != 0U64 {
             return false
         }
         mut val i: U64 = self.cur.typeParams.count()
         while i > 0U64 {
             i -= 1U64
-            if self.cur.typeParams[i].nameId == t.nameId {
+            if self.cur.typeParams[i].paramId == t.paramId {
                 return true
             }
         }
