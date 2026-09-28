@@ -191,6 +191,12 @@ pub impl Comp {
         }
         val l: U64 = (try self.inferType(id: lhs))
         val r: U64 = (try self.inferType(id: rhs))
+        // An unsuffixed left operand takes the typed right operand's context,
+        // using the same direction rule as semantic expression recording.
+        if self.acceptsFloatingOperandContext(exprId: lhs, siblingExprId: rhs, siblingTerm: r) {
+            try self.tcCheckValue(expectedRef: r, valueExpr: lhs, pos: "binop")
+            return <Result.Ok value=() />
+        }
         if l == 0U64 || r == 0U64 {
             return <Result.Ok value=() />
         }

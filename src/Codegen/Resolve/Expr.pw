@@ -1378,22 +1378,23 @@ pub impl Comp {
         }
     }
 
+    inout fn acceptsFloatingOperandContext(exprId: U64, siblingExprId: U64, siblingTerm: U64) -> Bool {
+        if siblingTerm == 0U64 || siblingTerm >= self.arena.typeCount() { return false }
+        if self.contextualNumericExpression(exprId: siblingExprId) || !self.contextualNumericExpression(exprId: exprId) { return false }
+        val type = self.arena.typeTerms[siblingTerm]
+        return self.isFloatType(start: type.nameStart, len: type.nameLen)
+    }
+
     inout fn recordFloatingOperandContext(lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
         val left = self.parametricExprTerm(exprId: lhs)
         val right = self.parametricExprTerm(exprId: rhs)
-        if left != 0U64 {
-            val type = self.arena.typeTerms[left]
-            if self.isFloatType(start: type.nameStart, len: type.nameLen) && !self.contextualNumericExpression(exprId: lhs) && self.contextualNumericExpression(exprId: rhs) {
-                try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: left)
-                return <Result.Ok value=true />
-            }
+        if self.acceptsFloatingOperandContext(exprId: rhs, siblingExprId: lhs, siblingTerm: left) {
+            try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: left)
+            return <Result.Ok value=true />
         }
-        if right != 0U64 {
-            val type = self.arena.typeTerms[right]
-            if self.isFloatType(start: type.nameStart, len: type.nameLen) && !self.contextualNumericExpression(exprId: rhs) && self.contextualNumericExpression(exprId: lhs) {
-                try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: right)
-                return <Result.Ok value=true />
-            }
+        if self.acceptsFloatingOperandContext(exprId: lhs, siblingExprId: rhs, siblingTerm: right) {
+            try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: right)
+            return <Result.Ok value=true />
         }
         return <Result.Ok value=false />
     }
