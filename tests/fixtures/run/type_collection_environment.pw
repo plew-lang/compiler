@@ -1,0 +1,51 @@
+// Registering a nested type must not replace its caller's lexical environment.
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { TypeRef }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "struct Box[T] { val value: T } impl[T] Box[T] { fn get() -> T { return self.value } } fn main() { val box = <Box[I64] value=1I64 /> }"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="collection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val name = compiler.internBytes(s: "Box")
+    mut val instance = 0U64
+    for val candidate in compiler.monoWork.genInsts {
+        val term = compiler.arena.typeAt(index: candidate)
+        if term.nameId == name.nameId && term.args.count() == 1U64 { instance = candidate }
+    }
+    if instance == 0U64 { panic "test type was not registered" }
+    val declarationIndex = compiler.structIndexForType(ref: instance)
+    if declarationIndex >= compiler.arena.structCount() { panic "test declaration missing" }
+    val declaration = compiler.arena.structAt(index: declarationIndex)
+    if declaration.typeParams.count() == 0U64 { panic "test declaration has no binders" }
+    val argument = compiler.arena.typeAt(index: instance).args[0U64]
+    compiler.cur.typeParams = declaration.typeParams
+    compiler.cur.typeArgs = [argument]
+    compiler.cur.selfRef = argument
+    compiler.cur.itemRef = instance
+    compiler.scanGenInstFields(instRef: instance).unwrap()
+    if compiler.cur.typeParams.count() != declaration.typeParams.count() || compiler.cur.typeParams[0U64].paramId != declaration.typeParams[0U64].paramId { panic "caller binders changed" }
+    if compiler.cur.typeArgs.count() != 1U64 || compiler.cur.typeArgs[0U64] != argument { panic "caller arguments changed" }
+    if compiler.cur.selfRef != argument { panic "caller Self changed" }
+    if compiler.cur.itemRef != instance { panic "caller Item changed" }
+    // A nested registration diagnostic must unwind the same substitution scope.
+    mut val rejected = argument
+    mut val depth = 0U64
+    while depth < 66U64 {
+        rejected = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[rejected] hasDecl=true declOffset=declaration.defOffset />)
+        depth += 1U64
+    }
+    if compiler.structIndexForType(ref: rejected) != declarationIndex { panic "nested type lost declaration identity" }
+    match compiler.scanGenInstFields(instRef: rejected) {
+        Result.Ok(value: _) => { panic "expected nested registration diagnostic" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)" { panic "unexpected nested registration diagnostic" }
+        }
+    }
+    if compiler.cur.typeParams.count() != declaration.typeParams.count() || compiler.cur.typeParams[0U64].paramId != declaration.typeParams[0U64].paramId { panic "diagnostic changed caller binders" }
+    if compiler.cur.typeArgs.count() != 1U64 || compiler.cur.typeArgs[0U64] != argument { panic "diagnostic changed caller arguments" }
+    if compiler.cur.selfRef != argument { panic "diagnostic changed caller Self" }
+    if compiler.cur.itemRef != instance { panic "diagnostic changed caller Item" }
+    print("ok")
+}

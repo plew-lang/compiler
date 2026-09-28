@@ -1382,8 +1382,26 @@ pub impl Comp {
         if declaration.typeParams.count() == 0U64 || declaration.typeParams.count() != inst.args.count() { return <Result.Ok value=() /> }
         val savedParams = self.cur.typeParams
         val savedArgs = self.cur.typeArgs
+        val savedSelf = self.cur.selfRef
+        val savedItem = self.cur.itemRef
         self.cur.typeParams = declaration.typeParams
         self.cur.typeArgs = inst.args
+        // Registration owns a nested substitution scope. Preserve the caller
+        // on both success and diagnostic return, before publishing the result.
+        val result = self.collectGenericMemberTypes(instRef: instRef, declaration: declaration)
+        self.cur.typeParams = savedParams
+        self.cur.typeArgs = savedArgs
+        self.cur.selfRef = savedSelf
+        self.cur.itemRef = savedItem
+        return result
+    }
+
+    inout fn collectGenericMemberTypes(instRef: U64, declaration: StructDef) -> Result[(), CompileDiagnostic] {
+        val inst = self.arena.typeAt(index: instRef)
+        // Fields belong to the nominal type. The legacy Iterator Item bridge
+        // belongs only to method signatures, never to nominal field names.
+        self.cur.selfRef = instRef
+        self.cur.itemRef = 0U64
         mut val index: U64 = 0U64
         while index < declaration.fields.count() {
             try self.scanType(ref: declaration.fields[index].ty)
@@ -1393,22 +1411,23 @@ pub impl Comp {
         // Provided bodies are collected at their call sites to avoid recursive
         // template expansion. Other declarations with this spelling are unrelated.
         index = 0U64
+        mut val methodEnvironmentReady = false
         while index < self.arena.functionCount() {
             val method = self.arena.functionAt(index: index)
             if method.hasRecv && !method.isProvided && !self.methodRecvIsTrait(f: method) && method.recvId == declaration.nameId && self.receiverDeclarationMatches(f: method, receiverRef: instRef) {
-                try self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
+                if !methodEnvironmentReady {
+                    try self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: instRef)
+                    methodEnvironmentReady = true
+                }
                 if method.hasRet { try self.scanType(ref: method.retTy) }
                 mut val parameter: U64 = 0U64
                 while parameter < method.params.count() {
                     try self.scanType(ref: self.funcParamAt(params: method.params, index: parameter).ty)
                     parameter += 1U64
                 }
-                self.clearSelfItemEnv()
             }
             index += 1U64
         }
-        self.cur.typeParams = savedParams
-        self.cur.typeArgs = savedArgs
         return <Result.Ok value=() />
     }
 
