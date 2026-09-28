@@ -49,8 +49,8 @@ pub impl Comp {
         return signature.ready && signature.parameterTypes.count() == 0U64 && signature.resultType == 0U64 && self.typeRefEq(a: call.receiverType, b: body.environment.receiverRef)
     }
 
-    inout fn finalizeDestructorCalls() -> Result[(), CompileDiagnostic] {
-        mut val index = 0U64
+    inout fn finalizeDestructorCalls(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        mut val index = start
         while index < self.arena.finalDestructions.count() {
             val contract = self.arena.finalDestructions[index]
             val call = contract.deinitCall

@@ -4722,8 +4722,8 @@ pub impl Comp {
     // The frontend worklist is the only producer of final call descriptors.
     // Run this immediately before it freezes, while a violation can still be
     // attributed to a call-site instead of becoming a backend recovery path.
-    inout fn verifyFinalCallResolutions() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0U64
+    inout fn verifyFinalCallResolutions(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        mut val i: U64 = start
         while i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
             if !((try self.finalStaticCalleeIsComplete(e: e))) {
@@ -4895,14 +4895,11 @@ pub impl Comp {
         return 0U64
     }
 
-    // Freeze storage provenance only after the final-callable worklist has
-    // reached a fixpoint. This joins two already-selected calls; it neither
-    // names Index/IndexSet nor asks the type checker to resolve a second
-    // callable. Unreached source candidates intentionally produce no entry.
-    inout fn freezeFinalAccesses() -> Result[(), CompileDiagnostic] {
-        self.arena.semanticAccesses = []
-        self.arena.semanticAccessInputs = []
-        mut val parentIndex: U64 = 0U64
+    // Publish new call provenance after this request's descriptors are closed.
+    // Older access/input IDs remain valid for already prepared Mid bodies.
+    // Joining selected calls does not reopen Index/IndexSet resolution.
+    inout fn freezeFinalAccesses(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        mut val parentIndex: U64 = start
         while parentIndex < self.finalCalleeCount() {
             val parent: CallResolution = self.arena.finalCallees[parentIndex]
             mut val useIndex: U64 = 0U64
@@ -4965,7 +4962,7 @@ pub impl Comp {
     // Mono discovery lists still decide which generic layouts are required; this
     // pass adds the missing invariant: every emitted body instance has resolved
     // every static call exactly once in its own concrete environment.
-    inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
+    inout fn initializeFinalCallables() -> Result[(), CompileDiagnostic] {
         self.arena.finalDestructions = []
         self.arena.finalDestructionIds = []
         val noDestructionHeads: Dictionary[U64, U64] = [:]
@@ -4994,6 +4991,38 @@ pub impl Comp {
         // boundary: every reachable body is created directly by the selected
         // CallResolution in `enqueueSelectedCallee` below.
         self.monoWork.fnInsts = []
+        self.arena.semanticAccesses = []
+        self.arena.semanticAccessInputs = []
+        return <Result.Ok value=() />
+    }
+
+    // Advance only after all checks succeed. A failed request may leave
+    // diagnostic-only rows, but cannot be retried to duplicate their IDs.
+    inout fn publishFinalCallables(state: inout FinalizationPublication) -> Result[(), CompileDiagnostic] {
+        match state.failure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        val result = self.publishFinalCallableRange(calls: state.calls, destructions: state.destructions)
+        match result {
+            Result.Ok(value: _) => {
+                state.calls = self.finalCalleeCount()
+                state.destructions = self.arena.finalDestructions.count()
+            }
+            Result.Err(error: val diagnostic) => { state.failure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
+    inout fn publishFinalCallableRange(calls: U64, destructions: U64) -> Result[(), CompileDiagnostic] {
+        try self.finalizeDestructorCalls(start: destructions)
+        try self.verifyFinalCallResolutions(start: calls)
+        return self.freezeFinalAccesses(start: calls)
+    }
+
+    inout fn finalizeCallables() -> Result[(), CompileDiagnostic] {
+        try self.initializeFinalCallables()
+        mut val publication = <FinalizationPublication />
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // Global initializers are an anonymous body instance.  They can reach
@@ -5109,9 +5138,7 @@ pub impl Comp {
             self.retainSelectedGlobals()
             self.globalCallTemplatesClosed = true
         }
-        try self.finalizeDestructorCalls()
-        try self.verifyFinalCallResolutions()
-        try self.freezeFinalAccesses()
+        try self.publishFinalCallables(state: inout publication)
         // Do not leak the last scanned generic body's substitution environment
         // into backend pass setup.  Each emitter establishes its own instance;
         // leaving this ambient state live would make an otherwise argless
