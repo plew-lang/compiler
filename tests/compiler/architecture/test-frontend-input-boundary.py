@@ -21,7 +21,17 @@ compiler = (root / 'src/Compiler.pw').read_text()
 assert 'CheckedProgram.check(input: request.input, sources: request.sources, options: request.options)' in compiler
 checked = (root / 'src/CheckedProgram.pw').read_text()
 checking = checked.split('assoc fn check(', 1)[1].split('pub fn prepareCheckedProgram(', 1)[0]
-assert checking.index('analyzeFrontendDeclarations(') < checking.index('prepareDeclarationProgram(') < checking.index('<ProgramCheckResult.Success')
+assert checking.index('CompilerSession.open(') < checking.index('checkCompilerSession(session: move session)')
+opening = checked.split('assoc fn open(', 1)[1].split('// Declaration IDs', 1)[0]
+assert opening.index('analyzeFrontendForRequests(') < opening.index('<CompilerSessionResult.Success')
+completion = checked.split('pub fn checkCompilerSession(', 1)[1].split('// Static success', 1)[0]
+assert completion.index('completeFrontendDeclarations(') < completion.index('prepareDeclarationProgramWithRequests(') < completion.index('<ProgramCheckResult.Success')
+assert 'session=move state' in completion
+assert 'analyzeFrontendForRequests(' not in completion  # complete the same snapshot
+session = checked.split('pub unique struct CompilerSession {', 1)[1].split('}', 1)[0]
+assert 'pub val ' not in session and 'pub mut val ' not in session
+assert 'mut val session: CompilerSession' in checked
+checking = opening + checking
 for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'argCount(', 'readStdin(', 'exit(', 'emitDiagnostic('):
     assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
 assert 'import ./Backend' not in checked

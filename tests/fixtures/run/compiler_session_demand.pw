@@ -1,0 +1,96 @@
+import /CheckedProgram with { CompilerSession, CompilerSessionResult, checkCompilerSession, ProgramCheckResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess, SourceResource }
+import /Mid/DeclarationAccess with { DeclarationAccessNode }
+import @Std/Io with { print }
+
+fn partial() {
+    match CompilerSession.open(input: <FrontendInput.Text path="partial.pw" text="fn main() {} fn broken() { missing() }" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            session.request(root: <DeclarationAccessNode.Function function=0U64 />).unwrap()
+            mut val message = ""
+            mut val count = 0U64
+            while count < 2U64 {
+                match session.request(root: <DeclarationAccessNode.Function function=1U64 />) {
+                    Result.Ok(value: _) => { panic "bad body accepted" }
+                    Result.Err(error: val diagnostic) => {
+                        if count == 0U64 { message = diagnostic.message }
+                        else if diagnostic.message != message { panic "cached diagnostic changed" }
+                    }
+                }
+                count += 1U64
+            }
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Success(program: val program) => { panic "partial check became whole success" }
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if diagnostic.message != message { panic "whole target disagrees" } }
+            }
+        }
+    }
+}
+
+fn snapshot() {
+    val path = "plew:std/Session.pw"
+    mut val resources = [<SourceResource path=path.bytes() text="fn main() {}" />]
+    match CompilerSession.open(input: <FrontendInput.File path=path />, sources: <SourceAccess resources=resources />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            resources[0U64] = <SourceResource path=path.bytes() text="fn main() { missing() }" />
+            session.request(root: <DeclarationAccessNode.Function function=0U64 />).unwrap()
+            match checkCompilerSession(session: move session) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                ProgramCheckResult.Success(program: val program) => {}
+            }
+        }
+    }
+    match CompilerSession.open(input: <FrontendInput.File path=path />, sources: <SourceAccess resources=resources />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            match session.request(root: <DeclarationAccessNode.Function function=0U64 />) {
+                Result.Ok(value: _) => { panic "old session result reused for new input" }
+                Result.Err(error: _) => {}
+            }
+        }
+    }
+}
+
+fn effects() {
+    val source = "mut val value = 1I64 fn main() -> I64 { return leaf() } fn leaf() -> I64 { return value } fn broken() { missing() }"
+    match CompilerSession.open(input: <FrontendInput.Text path="effects.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val analysis = session.request(root: <DeclarationAccessNode.Function function=0U64 />).unwrap()
+            if analysis.nodes.count() != 2U64 || analysis.obligations.count() == 0U64 { panic "effect dependencies or obligations lost" }
+            val repeated = session.request(root: <DeclarationAccessNode.Function function=0U64 />).unwrap()
+            if repeated.nodes.count() != analysis.nodes.count() || repeated.obligations.count() != analysis.obligations.count() { panic "cached effect changed" }
+        }
+    }
+}
+
+fn localDependency() {
+    val source = "mut val value = 1I64 fn main() { conflict() } fn conflict() { mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) } struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } }"
+    match CompilerSession.open(input: <FrontendInput.Text path="local.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            match session.request(root: <DeclarationAccessNode.Function function=0U64 />) {
+                Result.Ok(value: _) => { panic "effect dependency bypassed local access checking" }
+                Result.Err(error: val diagnostic) => {
+                    if diagnostic.message != "read-only receiver overlaps an inout or move argument in the same call" { panic diagnostic.message }
+                }
+            }
+        }
+    }
+}
+
+fn main() {
+    partial()
+    snapshot()
+    effects()
+    localDependency()
+    print("ok")
+}

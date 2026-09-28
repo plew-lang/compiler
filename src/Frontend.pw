@@ -1727,17 +1727,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
                                   options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
     if !options.genMode {
         try analyzeFrontendForRequests(c: inout c, input: input, sources: sources, options: options)
-        // Freeze authored declarations and prepared default generators. Derived
-        // implementation rows consume their lexical owner's facts.
-        val limit = c.arena.functionCount()
-        mut val index = 0U64
-        while index < limit {
-            try c.prepareLexicalBody(fnIdx: index)
-            index += 1U64
-        }
-        try c.checkGenericUniqueArgs()
-        try c.closeProgramCallTemplates()
-        return <Result.Ok value=() />
+        return completeFrontendDeclarations(c: inout c)
     }
     try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
     // Generic bodies are checked abstractly below. Concrete `where` bounds are
@@ -1825,6 +1815,19 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
     // Whole-program closure remains false: unrequested closures and bodies
     // must not inherit the initializers' readiness.
     try c.prepareDiscriminantType()
+    return <Result.Ok value=() />
+}
+
+// Complete the already admitted snapshot; never reload source between requests.
+pub fn completeFrontendDeclarations(c: inout Comp) -> Result[(), CompileDiagnostic] {
+    val limit = c.arena.functionCount()
+    mut val index = 0U64
+    while index < limit {
+        try c.prepareLexicalBody(fnIdx: index)
+        index += 1U64
+    }
+    try c.checkGenericUniqueArgs()
+    try c.closeProgramCallTemplates()
     return <Result.Ok value=() />
 }
 

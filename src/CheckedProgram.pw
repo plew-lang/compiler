@@ -1,16 +1,69 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
-import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutables }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation }
-import ./DeclarationProgram with { prepareDeclarationProgram, declarationProgramDiagnostic }
+import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
 import ./Mid/Build with { MidFunctionTemplates }
-import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis }
+import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAccessNode }
 import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
 
-pub unique struct CheckedProgram {
+// The admitted source and every cache belong to one session. No mutable Comp
+// escapes; later requests cannot reload edited files or borrow another arena.
+pub unique struct CompilerSession {
     mut val compiler: Comp
-    mut val templates: MidFunctionTemplates
+    mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
+    mut val requests: DeclarationBodyRequests = <DeclarationBodyRequests />
+    mut val functionResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
+    mut val closureResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
+    mut val destructionResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
+    mut val initializerResult: Optional[Result[DeclarationAccessAnalysis, CompileDiagnostic]] = <Optional.None />
+}
+pub unique enum CompilerSessionResult {
+    Success(session: CompilerSession)
+    Failure(diagnostic: CompileDiagnostic)
+}
+
+pub impl CompilerSession {
+    assoc fn open(input: FrontendInput, sources: SourceAccess,
+                  options: FrontendOptions = <FrontendOptions />) -> CompilerSessionResult {
+        mut val compiler = <Comp />
+        match analyzeFrontendForRequests(c: inout compiler, input: input, sources: sources, options: options) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <CompilerSessionResult.Failure diagnostic=diagnostic /> }
+        }
+        return <CompilerSessionResult.Success session=<CompilerSession compiler=compiler /> />
+    }
+
+    // Declaration IDs are local to this admitted input. The returned analysis
+    // is observational: obligations remain, and it cannot authorize execution.
+    inout fn request(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
+        val cached = match root {
+            DeclarationAccessNode.Function(function: val function) => { give self.functionResults.get(key: function) }
+            DeclarationAccessNode.Closure(bodyKey: val key) => { give self.closureResults.get(key: key) }
+            DeclarationAccessNode.Destruction(typeTerm: val term) => { give self.destructionResults.get(key: term) }
+            DeclarationAccessNode.GlobalInitializer => { give self.initializerResult }
+        }
+        match cached {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        val result: Result[DeclarationAccessAnalysis, CompileDiagnostic] = match prepareDeclarationRoot(c: inout self.compiler, templates: inout self.templates, requests: inout self.requests, root: root) {
+            Result.Ok(value: val analysis) => { give <Result.Ok value=analysis /> }
+            Result.Err(error: val error) => { give <Result.Err error=declarationProgramDiagnostic(c: inout self.compiler, error: error) /> }
+        }
+        match root {
+            DeclarationAccessNode.Function(function: val function) => { self.functionResults[function] = result }
+            DeclarationAccessNode.Closure(bodyKey: val key) => { self.closureResults[key] = result }
+            DeclarationAccessNode.Destruction(typeTerm: val term) => { self.destructionResults[term] = result }
+            DeclarationAccessNode.GlobalInitializer => { self.initializerResult = <Optional.Some v=result /> }
+        }
+        return result
+    }
+}
+
+pub unique struct CheckedProgram {
+    mut val session: CompilerSession
     val declarationAccess: DeclarationAccessAnalysis
 }
 
@@ -39,37 +92,45 @@ pub impl CheckedProgram {
                 location=<DiagnosticLocation.Unpositioned />
                 message="whole-target check cannot use generator mode" /> />
         }
-        mut val compiler = <Comp />
-        match analyzeFrontendDeclarations(c: inout compiler, input: input, sources: sources, options: options) {
-            Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+        match CompilerSession.open(input: input, sources: sources, options: options) {
+            CompilerSessionResult.Failure(diagnostic: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+            CompilerSessionResult.Success(session: val session) => { return checkCompilerSession(session: move session) }
         }
-        mut val templates = <MidFunctionTemplates />
-        val analysis = match prepareDeclarationProgram(c: inout compiler, templates: inout templates) {
-            Result.Ok(value: val analysis) => { give analysis }
-            Result.Err(error: val error) => {
-                return <ProgramCheckResult.Failure diagnostic=declarationProgramDiagnostic(c: inout compiler, error: error) />
-            }
-        }
-        return <ProgramCheckResult.Success program=<CheckedProgram compiler=compiler templates=templates declarationAccess=analysis /> />
     }
 
+}
+
+// Consume this exact snapshot, including earlier partial requests. Checking
+// all declarations cannot accidentally bless source loaded by another session.
+pub fn checkCompilerSession(session: move CompilerSession) -> ProgramCheckResult {
+    mut val state = move session
+    match completeFrontendDeclarations(c: inout state.compiler) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+    }
+    val analysis = match prepareDeclarationProgramWithRequests(c: inout state.compiler, templates: inout state.templates, requests: inout state.requests) {
+        Result.Ok(value: val analysis) => { give analysis }
+        Result.Err(error: val error) => {
+            return <ProgramCheckResult.Failure diagnostic=declarationProgramDiagnostic(c: inout state.compiler, error: error) />
+        }
+    }
+    return <ProgramCheckResult.Success program=<CheckedProgram session=move state declarationAccess=analysis /> />
 }
 
 // Static success need not imply concrete implementation support. Consume the
 // checked snapshot once, retaining the same templates and all deferred effects.
 pub fn prepareCheckedProgram(checked: move CheckedProgram) -> ExecutableCompilationResult {
     mut val program = move checked
-    match finalizeFrontendExecutables(c: inout program.compiler) {
+    match finalizeFrontendExecutables(c: inout program.session.compiler) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
     }
-    val prepared = match PreparedProgram.prepareWithDeclarations(c: inout program.compiler,
-        templates: inout program.templates, declarationAccess: program.declarationAccess) {
+    val prepared = match PreparedProgram.prepareWithDeclarations(c: inout program.session.compiler,
+        templates: inout program.session.templates, declarationAccess: program.declarationAccess) {
         Result.Ok(value: val prepared) => { give prepared }
         Result.Err(error: val error) => {
-            return <ExecutableCompilationResult.Failure diagnostic=programPreparationDiagnostic(c: inout program.compiler, error: error) />
+            return <ExecutableCompilationResult.Failure diagnostic=programPreparationDiagnostic(c: inout program.session.compiler, error: error) />
         }
     }
-    return <ExecutableCompilationResult.Success compilation=<ExecutableCompilation compiler=program.compiler prepared=prepared /> />
+    return <ExecutableCompilationResult.Success compilation=<ExecutableCompilation compiler=program.session.compiler prepared=prepared /> />
 }

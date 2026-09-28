@@ -3,7 +3,7 @@
 import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
 import ./Mid/Build with { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
-import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 import ./Mid/Verify with { MidVerifyError }
 import ./Mid/OwnershipAnalysis with { MidOwnershipRequests }
 import ./Mid/Prepare with { MidParametricBody }
@@ -96,6 +96,11 @@ impl DeclarationBodyRequests {
 // then closes interprocedural global effects over the entire checked target.
 pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
     mut val requests = <DeclarationBodyRequests />
+    return prepareDeclarationProgramWithRequests(c: inout c, templates: inout templates, requests: inout requests)
+}
+
+pub fn prepareDeclarationProgramWithRequests(c: inout Comp, templates: inout MidFunctionTemplates,
+                                            requests: inout DeclarationBodyRequests) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
     match checkDeclarationBodies(c: inout c, templates: inout templates, requests: inout requests) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
@@ -108,6 +113,57 @@ pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemp
         return <Result.Err error=<DeclarationProgramError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: analysis.nodes[analysis.conflictingNode - 1U64]) /> />
     }
     return <Result.Ok value=analysis />
+}
+
+// A rooted result retains concrete/dynamic obligations. It is not permission
+// to execute; the session owns it until instance preparation discharges them.
+pub fn prepareDeclarationRoot(c: inout Comp, templates: inout MidFunctionTemplates,
+                              requests: inout DeclarationBodyRequests, root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
+    match checkDeclarationRootBody(c: inout c, templates: inout templates, requests: inout requests, owner: root) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+    }
+    val analysis = match analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests.ownership, roots: [root]) {
+        Result.Ok(value: val analysis) => { give analysis }
+        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+    }
+    // Effect dependencies may have prepared additional lexical bodies. Their
+    // ownership success must not bypass the local access checks.
+    for owner in analysis.nodes {
+        match checkDeclarationRootBody(c: inout c, templates: inout templates, requests: inout requests, owner: owner) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
+        }
+    }
+    if analysis.conflictingNode != 0U64 {
+        return <Result.Err error=<DeclarationProgramError.GlobalAccess offset=declarationAccessOffset(c: inout c, owner: analysis.nodes[analysis.conflictingNode - 1U64]) /> />
+    }
+    return <Result.Ok value=analysis />
+}
+
+fn checkDeclarationRootBody(c: inout Comp, templates: inout MidFunctionTemplates,
+                           requests: inout DeclarationBodyRequests, owner: DeclarationAccessNode) -> Result[(), DeclarationAccessError] {
+    match owner {
+        DeclarationAccessNode.Function(function: val function) => {
+            if function >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: declaration request has no function") /> /> }
+            val declaration = c.arena.functionAt(index: function)
+            if declaration.body != 0U64 && !declaration.isExtern { try requests.function(c: inout c, templates: inout templates, function: function) }
+        }
+        DeclarationAccessNode.Closure(bodyKey: val key) => {
+            mut val index = 0U64
+            while index < c.decls.semanticClosures.count() {
+                if c.decls.semanticClosures[index].bodyKey == key {
+                    try requests.closure(c: inout c, closure: c.decls.semanticClosures[index])
+                    return <Result.Ok value=() />
+                }
+                index += 1U64
+            }
+            return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=c.diagnosticAt(offset: 0U64, msg: "internal error: declaration request has no lexical closure") /> />
+        }
+        DeclarationAccessNode.GlobalInitializer => { if c.arena.globals.count() != 0U64 { try requests.globalInitializer(c: inout c, templates: inout templates) } }
+        DeclarationAccessNode.Destruction(typeTerm: _) => {}
+    }
+    return <Result.Ok value=() />
 }
 
 fn checkDeclarationBodies(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout DeclarationBodyRequests) -> Result[(), DeclarationAccessError] {
