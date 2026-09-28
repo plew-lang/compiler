@@ -158,7 +158,7 @@ pub impl Comp {
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.
-                return <Result.Ok value=te.paramId == tin.paramId />
+                return <Result.Ok value=te.paramId == tin.paramId && te.viewExtId == tin.viewExtId && self.sameViewIdSet(a: te.viewIds, b: tin.viewIds) />
             }
             // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
             if self.isConcreteType(type: tin) {
@@ -262,6 +262,12 @@ pub impl Comp {
             if inferredId == 0U64 { inferredId = self.genericStructHeadId(start: tin.nameStart, len: tin.nameLen) }
             if expectedId == 0U64 || inferredId == 0U64 { return <Result.Ok value=true /> }
             if expectedId != inferredId { return <Result.Ok value=false /> }
+        }
+        // Once the nominal heads are known, a view is part of semantic type
+        // identity even when the payload layout is unchanged. Unresolved
+        // foreign binders above remain the responsibility of substitution.
+        if te.viewExtId != tin.viewExtId || !self.sameViewIdSet(a: te.viewIds, b: tin.viewIds) {
+            return <Result.Ok value=false />
         }
         // same head: a generic head must agree on its type arguments.
         if te.args.count() == tin.args.count() {

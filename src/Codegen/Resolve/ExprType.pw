@@ -80,34 +80,13 @@ pub impl Comp {
         return <Result.Ok value=scalarInfo() />
     }
 
-    // A declared return's TypeInfo: an `Array[E]` return prefers the STRUCTURED
-    // retTy ref when it is ground — typeInfoOfName's kind-3 recovery drops the
-    // element instance (ref 0), so a direct-call for-in source (`for c in mkArr()`)
-    // lost `Ref[Cell]` elements and the body could not resolve `c->v`. A parametric
-    // retTy (un-grounded generic) falls back to the bare name span, as before.
+    // A return annotation is a semantic type, including views, binders,
+    // projections, and container children. Preserve it before specialization;
+    // name-only recovery would erase precisely the facts checked by callers.
     inout fn declaredRetInfo(f: Func) -> Result[TypeInfo, CompileDiagnostic] {
-        if f.isAsync && !f.hasRet { return <Result.Ok value=self.typeInfoOfRef(ref: self.semanticCallableReturnTerm(function: f)) /> }
-        if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
-            if (try self.tyRefIsGround(ref: f.retTy)) {
-                return <Result.Ok value=self.typeInfoOfRef(ref: f.retTy) />
-            }
-        }
-        // an existential `any P` return: the isAny ref IS the type identity, so a
-        // name-only recovery would degrade it to the plain trait name — a `f().m()`
-        // inline dispatch on the result would then misroute to the free-fn inference
-        // path instead of dynamic dispatch (spec/08).
-        if f.retTy != 0U64 && f.retTy < self.arena.typeCount() {
-            if self.arena.typeAt(index: f.retTy).isAny {
-                return <Result.Ok value=self.typeInfoOfRef(ref: f.retTy) />
-            }
-            // A non-generic anonymous-record return is nevertheless a fully
-            // structured semantic term.  Returning only its synthetic layout
-            // spelling would erase the Record children before the caller can
-            // compare, ground, or select a field.
-            if self.arena.typeAt(index: f.retTy).isRecord {
-                val rt: TypeRef = self.arena.typeAt(index: f.retTy)
-                return <Result.Ok value=<TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=f.retTy viewExtId=rt.viewExtId /> />
-            }
+        val result = self.semanticCallableReturnTerm(function: f)
+        if result != 0U64 && result < self.arena.typeCount() {
+            return <Result.Ok value=self.typeInfoOfRef(ref: result) />
         }
         return <Result.Ok value=self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray) />
     }
