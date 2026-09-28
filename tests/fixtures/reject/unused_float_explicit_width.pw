@@ -1,0 +1,5 @@
+fn probe() {
+val value: F32 = 1.5F32
+ val result = value * 2.0F64
+}
+fn main() {}

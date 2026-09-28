@@ -109,6 +109,17 @@ pub impl Comp {
             }
             _ => {}
         }
+        // Only unsuffixed numeric syntax accepts a floating context. Named
+        // values and explicit suffixes must pass ordinary type compatibility.
+        if self.contextualNumericExpression(exprId: valueExpr) {
+            val expectedGround = (try self.groundTypeRef(ref: expectedRef))
+            if expectedGround < self.arena.typeCount() {
+                val expected = self.arena.typeAt(index: expectedGround)
+                if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
+                    return <Result.Ok value=() />
+                }
+            }
+        }
         val inferred: U64 = (try self.inferType(id: valueExpr))
         if (try self.typesCompatible(expected: expectedRef, inferred: inferred)) {
             return <Result.Ok value=() />
@@ -197,7 +208,7 @@ pub impl Comp {
         // `Shl[I32]`), and `a OP b` always dispatches on the LHS type. So the RHS must
         // match `l` whether it is another primitive (`3I32 + 5I64`), a non-numeric
         // primitive (`1I64 + true`), or any other type — there is no `Add[Bool]` /
-        // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
+        // `Add[Money]` on a primitive int. typesCompatible preserves numeric widths
         // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
         // may legitimately differ) is excluded here — its witness is checked elsewhere.
         val lNum: Bool = self.isIntType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen) || self.isFloatType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen)

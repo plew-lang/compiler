@@ -1,0 +1,4 @@
+fn probe() -> F32 {
+return 1.5F64
+}
+fn main() {}

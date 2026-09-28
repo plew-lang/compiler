@@ -126,17 +126,12 @@ pub impl Comp {
             }
             return <Result.Ok value=true />
         }
-        // float-to-float is exempt: F32 is currently lowered as F64 (true F32 deferred), so
-        // an F64 value flowing into an F32 position is not a real mismatch yet, and a float
-        // literal recovered as F64 may meet a float local reporting otherwise. But a float
-        // paired with a NON-float (`val x: F64 = nI64`) IS a real mismatch — no implicit
-        // int↔float conversion (spec/12) — so only exempt when BOTH sides are float. (An
-        // untyped int LITERAL flowing into a float context is polymorphic and passes via the
-        // unknown-id path below, not here.)
+        // A typed floating value keeps its width. Contextual numeric expressions
+        // are handled at the expression boundary, never by weakening type equality.
         val eFloat: Bool = self.isFloatType(start: te.nameStart, len: te.nameLen)
         val iFloat: Bool = self.isFloatType(start: tin.nameStart, len: tin.nameLen)
         if eFloat && iFloat {
-            return <Result.Ok value=true />
+            return <Result.Ok value=self.typeRefEq(a: exp, b: inferred) />
         }
         if eFloat || iFloat {
             // one side float, the other not: a mismatch UNLESS the non-float side is an
