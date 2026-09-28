@@ -201,7 +201,7 @@ pub impl Comp {
                 // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
                 // field — a variant payload has no default values, so a missing field was
                 // silently constructed with garbage (spec/05). (Struct construction is
-                // covered by the backend missing-field check plus field defaults.)
+                // checked against the selected declaration below.)
                 if isEnum {
                     val cei: U64 = self.enumIndexForType(ref: ty)
                     if cei < self.arena.enumCount() {
@@ -293,6 +293,20 @@ pub impl Comp {
                     }
                     if missingArguments {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)") />
+                    }
+                }
+                if !isEnum {
+                    val declaration = self.structIndexForType(ref: selectedMakeType)
+                    if declaration < self.arena.structCount() && !self.arena.structAt(index: declaration).isExtern {
+                        val declaredFields = self.arena.structAt(index: declaration).fields
+                        mut val fieldIndex = 0U64
+                        while fieldIndex < declaredFields.count() {
+                            val field = declaredFields[fieldIndex]
+                            if !field.hasDefault && !self.makeFieldsCoverField(fields: fields, fieldStart: field.nameStart, fieldLen: field.nameLen) {
+                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "struct construction is missing a required field; supply every field without a default value") />
+                            }
+                            fieldIndex += 1U64
+                        }
                     }
                 }
                 try self.tcCheckMakeFields(expectedRef: selectedMakeType, makeId: id)

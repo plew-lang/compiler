@@ -1,0 +1,5 @@
+import @Std/Core
+struct Item { pub val values: Array[I64] }
+pub impl Item { factory }
+fn empty(item: Item) -> Bool { return item.values.count() == 0U64 }
+fn main() { if !empty(item: <Item />) { panic "nonempty" } }
