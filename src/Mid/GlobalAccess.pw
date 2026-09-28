@@ -31,13 +31,25 @@ fn addFinalDestructionEdge(c: inout Comp, graph: inout GlobalAccessGraph, caller
     return <Result.Ok value=() />
 }
 
-// Called after body discovery closes, before any LLVM text is published.
+pub struct MidGlobalAccessAnalysis {
+    pub val conflictingBody: U64 = 0U64
+    pub val requiredBodies: Array[U64] = []
+}
+
+// Compatibility entry for the closed AOT pipeline. Partial callers must use
+// the analysis result and close requiredBodies before granting execution.
+pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnostic] {
+    return <Result.Ok value=(try analyzeMidGlobalAccess(c: inout c)).conflictingBody />
+}
+
+// Called before any LLVM text is published.
 // Each body is scanned once. New summary entries form a worklist propagated
 // along reverse call edges, including recursive strongly connected bodies.
-// Return the one-based canonical body containing a conflicting call, or zero.
-pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnostic] {
-    if c.mid.globalAccessBodies.count() == 0U64 { return <Result.Ok value=0U64 /> }
+// Report definite conflicts separately from reachable, unprepared body IDs.
+pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, CompileDiagnostic] {
+    if c.mid.globalAccessBodies.count() == 0U64 { return <Result.Ok value=<MidGlobalAccessAnalysis /> /> }
     mut val graph = <GlobalAccessGraph.empty />
+    mut val missingBodies: Array[U64] = []
     mut val bodyMap: Array[U64] = []
     mut val index = 0U64
     while index <= c.arena.bodyInstanceCount() { bodyMap.append(0U64)
@@ -62,8 +74,11 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
         val owner = c.mid.globalAccessBodies.count() + index
         if contract.needsRelease {
             if contract.deinitCall.bodyId != 0U64 {
-                val callee = bodyMap[contract.deinitCall.bodyId]
-                if callee != 0U64 { graph.edge(caller: owner, callee: callee - 1U64) }
+                if bodyMap[contract.deinitCall.bodyId] == 0U64 {
+                    bodyMap[contract.deinitCall.bodyId] = graph.node() + 1U64
+                    missingBodies.append(contract.deinitCall.bodyId)
+                }
+                graph.edge(caller: owner, callee: bodyMap[contract.deinitCall.bodyId] - 1U64)
             }
             if contract.underlying != 0U64 { try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: owner, type: contract.underlying) }
             else {
@@ -115,9 +130,12 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
                             // Foreign boundaries are accepted, never labelled
                             // pure. This graph has no edge to their absent body.
                             if selected.calleeBodyId != 0U64 && selected.calleeBodyId < bodyMap.count() {
-                                val callee = bodyMap[selected.calleeBodyId]
-                                if callee != 0U64 && !c.arena.functionAt(index: selected.callee).isAsync {
-                                    graph.edge(caller: index, callee: callee - 1U64, term: block.terminator)
+                                if !c.arena.functionAt(index: selected.callee).isAsync {
+                                    if bodyMap[selected.calleeBodyId] == 0U64 {
+                                        bodyMap[selected.calleeBodyId] = graph.node() + 1U64
+                                        missingBodies.append(selected.calleeBodyId)
+                                    }
+                                    graph.edge(caller: index, callee: bodyMap[selected.calleeBodyId] - 1U64, term: block.terminator)
                                 }
                             }
                         }
@@ -130,6 +148,13 @@ pub fn conflictingMidGlobalAccess(c: inout Comp) -> Result[U64, CompileDiagnosti
         index += 1U64
     }
     val conflict = graph.solve(c: c)
-    if conflict != 0U64 { return <Result.Ok value=c.mid.globalAccessBodies[conflict - 1U64] /> }
-    return <Result.Ok value=0U64 />
+    mut val required: Array[U64] = []
+    if missingBodies.count() != 0U64 {
+        val reachable = graph.reachableDependencies(rootCount: c.mid.globalAccessBodies.count())
+        for body in missingBodies {
+            if reachable[bodyMap[body] - 1U64] { required.append(body) }
+        }
+    }
+    val canonical = if conflict == 0U64 { give 0U64 } else { give c.mid.globalAccessBodies[conflict - 1U64] }
+    return <Result.Ok value=<MidGlobalAccessAnalysis conflictingBody=canonical requiredBodies=required /> />
 }

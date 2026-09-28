@@ -10,6 +10,8 @@ import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAcce
 import ./PreparedProgram with { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
 import ./Mid/Program with { MidExecutableRequests }
 import ./Mid/Prepare with { MidExecutableBody }
+import ./Mid/GlobalAccess with { analyzeMidGlobalAccess }
+import ./Mid/Ambient with { MidAmbientProgram }
 
 // Observation of prepared descriptors. Remaining declaration obligations are
 // retained; this value cannot be passed to LLVM as execution permission.
@@ -28,6 +30,13 @@ pub struct BodyDescriptors {
 pub struct MidBodyPreparation {
     pub val descriptors: BodyDescriptors
     pub val executable: MidExecutableBody
+}
+
+// Static dependencies are closed and the dynamic enforcement plan is ready.
+// Startup/global initialization and backend publication remain separate steps.
+pub struct MidAccessPreparation {
+    pub val body: MidBodyPreparation
+    pub val ambient: MidAmbientProgram
 }
 
 // The admitted source and every cache belong to one session. No mutable Comp
@@ -110,6 +119,15 @@ pub impl CompilerSession {
         }
     }
 
+    inout fn prepareBodyAccess(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
+        val result = self.prepareBodyAccessInSession(bodyId: bodyId)
+        match result {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { self.executionFailure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
     // Declaration IDs are local to this admitted input. The returned analysis
     // is observational: obligations remain, and it cannot authorize execution.
     inout fn request(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
@@ -181,6 +199,28 @@ impl CompilerSession {
         val prepared = <BodyDescriptors bodyId=bodyId declarations=declarations />
         self.descriptorResults[bodyId] = prepared
         return <Result.Ok value=prepared />
+    }
+
+    inout fn prepareBodyAccessInSession(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
+        val body = (try self.prepareMidBody(bodyId: bodyId))
+        mut val closed = false
+        while !closed {
+            val analysis = (try analyzeMidGlobalAccess(c: inout self.compiler))
+            if analysis.conflictingBody != 0U64 {
+                val sourceFunction = self.compiler.mid.bodies[analysis.conflictingBody - 1U64].sourceFunction
+                mut val offset = 0U64
+                if sourceFunction < self.compiler.arena.functionCount() { offset = self.compiler.arena.functionAt(index: sourceFunction).defOffset }
+                return <Result.Err error=programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.GlobalAccess offset=offset />) />
+            }
+            closed = analysis.requiredBodies.count() == 0U64
+            for dependency in analysis.requiredBodies { (try self.prepareMidBody(bodyId: dependency)) }
+        }
+        val snapshot = match self.midRequests.snapshot() {
+            Result.Ok(value: val snapshot) => { give snapshot }
+            Result.Err(error: val error) => { return <Result.Err error=programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.Mid error=error />) /> }
+        }
+        val ambient = (try MidAmbientProgram.prepare(c: inout self.compiler, program: snapshot))
+        return <Result.Ok value=<MidAccessPreparation body=body ambient=ambient /> />
     }
 
     // Synthetic code inherits the effects of the operations it actually

@@ -71,6 +71,42 @@ pub impl GlobalAccessGraph {
         self.calls.append(<GlobalAccessCall caller=caller callee=callee term=term receiverTag=receiverTag next=self.incoming[callee] />)
         self.incoming[callee] = self.calls.count()
     }
+    // Follow outgoing dependencies, independently of reverse effect propagation.
+    fn reachableDependencies(rootCount: U64) -> Array[Bool] {
+        mut val reached: Array[Bool] = []
+        mut val outgoing: Array[U64] = []
+        mut val next: Array[U64] = []
+        mut val pending: Array[U64] = []
+        mut val index = 0U64
+        while index < self.heads.count() {
+            reached.append(index < rootCount)
+            outgoing.append(0U64)
+            if index < rootCount { pending.append(index) }
+            index += 1U64
+        }
+        index = 0U64
+        while index < self.calls.count() {
+            val call = self.calls[index]
+            next.append(outgoing[call.caller])
+            outgoing[call.caller] = index + 1U64
+            index += 1U64
+        }
+        index = 0U64
+        while index < pending.count() {
+            mut val edge = outgoing[pending[index]]
+            while edge != 0U64 {
+                val dependency = self.calls[edge - 1U64].callee
+                if !reached[dependency] {
+                    reached[dependency] = true
+                    pending.append(dependency)
+                }
+                edge = next[edge - 1U64]
+            }
+            index += 1U64
+        }
+        return reached
+    }
+
     inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
         if !globalPlace(c: c, placeId: place) { return }
         mut val entry = self.heads[body]

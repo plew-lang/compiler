@@ -19,7 +19,7 @@ fn reuseInBuild() {
                     Result.Err(error: val diagnostic) => { panic diagnostic.message }
                 }
                 if prepared.descriptors.bodyId != body || prepared.executable.canonical.body == 0U64 { panic "wrong Mid body preparation" }
-                val repeated = session.prepareMidBody(bodyId: body).unwrap()
+                val repeated = session.prepareBodyAccess(bodyId: body).unwrap().body
                 if repeated.executable.canonical.body != prepared.executable.canonical.body { panic "Mid request rebuilt passes" }
                 expected[body] = prepared.executable.canonical.body
                 index += 1U64
@@ -66,7 +66,23 @@ fn deferCallee() {
     }
 }
 
+fn globalDependencies() {
+    val source = "mut val counter = 0I64 fn main() { helper() val resource = <Resource /> } fn helper() { counter = 1I64 } unique struct Resource {} impl Resource { deinit { counter = 2I64 } }"
+    match CompilerSession.open(input: <FrontendInput.Text path="global.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val root = session.prepareFunction(function: 0U64).unwrap()
+            val prepared = session.prepareBodyAccess(bodyId: root.bodyId).unwrap()
+            if !prepared.ambient.enabled { panic "global enforcement disabled" }
+            val repeated = session.prepareBodyAccess(bodyId: root.bodyId).unwrap()
+            if repeated.body.executable.canonical.body != prepared.body.executable.canonical.body { panic "access request rebuilt body" }
+        }
+    }
+}
+
 fn main() {
+    globalDependencies()
     reuseInBuild()
     deferCallee()
     print("ok")

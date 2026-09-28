@@ -1,0 +1,46 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import /SourceAccess with { SourceAccess }
+import /Mid/Build with { MidFunctionTemplates }
+import /Mid/Program with { MidExecutableRequests }
+import /Mid/GlobalAccess with { analyzeMidGlobalAccess }
+import /Mid/GlobalAccessGraph with { GlobalAccessGraph }
+import @Std/Io with { print }
+
+fn graphDependencies() {
+    mut val graph = <GlobalAccessGraph.empty />
+    mut val index = 0U64
+    while index < 5U64 { graph.node() index += 1U64 }
+    graph.edge(caller: 0U64, callee: 1U64)
+    graph.edge(caller: 1U64, callee: 2U64)
+    graph.edge(caller: 2U64, callee: 1U64)
+    graph.edge(caller: 3U64, callee: 4U64)
+    val reached = graph.reachableDependencies(rootCount: 1U64)
+    if !reached[0U64] || !reached[1U64] || !reached[2U64] || reached[3U64] || reached[4U64] { panic "wrong dependency closure" }
+}
+
+fn partialBodies() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="global.pw" text="mut val counter = 0I64 fn main() { helper() helper() val resource = <Resource /> } fn helper() { counter = 1I64 } unique struct Resource {} impl Resource { deinit { counter = 2I64 } }" />, sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    requests.request(c: inout compiler, templates: inout templates, bodyId: compiler.monoWork.bodyInstances[0U64]).unwrap()
+    val count = compiler.mid.bodies.count()
+    val partial = analyzeMidGlobalAccess(c: inout compiler).unwrap()
+    if partial.conflictingBody != 0U64 || partial.requiredBodies.count() < 2U64 { panic "missing call or destructor dependency" }
+    if compiler.mid.bodies.count() != count { panic "analysis generated a body" }
+    mut val seen: Dictionary[U64, Bool] = [:]
+    for body in partial.requiredBodies {
+        if seen.getOr(key: body, fallback: false) { panic "duplicate dependency" }
+        seen[body] = true
+        requests.request(c: inout compiler, templates: inout templates, bodyId: body).unwrap()
+    }
+    val closed = analyzeMidGlobalAccess(c: inout compiler).unwrap()
+    if closed.conflictingBody != 0U64 || closed.requiredBodies.count() != 0U64 { panic "dependencies failed to close" }
+}
+
+fn main() {
+    graphDependencies()
+    partialBodies()
+    print("ok")
+}
