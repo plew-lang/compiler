@@ -1,9 +1,9 @@
 // Low-level compiler driver shared by the development and distributed entries.
 import @Std/Process with { argCount, argAt, exit }
-import ./Frontend with { Comp }
-import ./FrontendDriver with { runFrontend, frontendRequest }
-import ./CheckedProgram with { CheckedProgram, ProgramCheckResult }
-import ./Backend with { emitLlvm, emitLlvmRuntime, lowerLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
+import ./Frontend with { Comp, analyzeFrontend }
+import ./FrontendDriver with { frontendRequest }
+import ./CheckedProgram with { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
+import ./Backend with { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, emitDiagnostic }
 
@@ -36,12 +36,12 @@ pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 
             return
         }
     }
-    mut val compiler: Comp = <Comp />
-    runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
-    match emitLlvm(c: inout compiler) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic)
-            exit(code: 1I64) }
+    match compileSource(sources: sources, firstArgument: firstArgument, emitText: true) {
+        CompilationResult.Success(compilation: val compilation) => {}
+        CompilationResult.Failure(diagnostic: val diagnostic) => {
+            emitDiagnostic(diagnostic: diagnostic)
+            exit(code: 1I64)
+        }
     }
 }
 
@@ -57,12 +57,38 @@ unique enum CompilationResult {
     Failure(diagnostic: CompileDiagnostic)
 }
 
-fn compileSource(sources: SourceAccess, firstArgument: I64) -> CompilationResult {
-    mut val compiler: Comp = <Comp />
-    runFrontend(c: inout compiler, sources: sources, firstArgument: firstArgument)
-    match lowerLlvm(c: inout compiler) {
+fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = false) -> CompilationResult {
+    val request = frontendRequest(sources: sources, firstArgument: firstArgument)
+    // Generation checks a synthesized harness, not the user's whole target.
+    if request.options.genMode {
+        mut val compiler = <Comp />
+        match analyzeFrontend(c: inout compiler, input: request.input, sources: request.sources, options: request.options) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+        }
+        val lowered = lowerLlvm(c: inout compiler)
+        return finishCompilation(c: inout compiler, lowered: move lowered, emitText: emitText)
+    }
+    match CheckedProgram.check(input: request.input, sources: request.sources, options: request.options) {
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+        ProgramCheckResult.Success(program: val program) => {
+            match prepareCheckedProgram(checked: move program) {
+                ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+                ExecutableCompilationResult.Success(compilation: val compilation) => {
+                    mut val executable = move compilation
+                    val lowered = lowerPreparedLlvm(c: inout executable.compiler, prepared: executable.prepared)
+                    return finishCompilation(c: inout executable.compiler, lowered: move lowered, emitText: emitText)
+                }
+            }
+        }
+    }
+}
+
+fn finishCompilation(c: inout Comp, lowered: move LlvmLoweringResult, emitText: Bool) -> CompilationResult {
+    match move lowered {
         LlvmLoweringResult.Success(module: val module) => {
-            return <CompilationResult.Success compilation=<Compilation module=move module trace=compiler.tracePhases /> />
+            if emitText { module.writeText(c: inout c) }
+            return <CompilationResult.Success compilation=<Compilation module=move module trace=c.tracePhases /> />
         }
         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
     }
