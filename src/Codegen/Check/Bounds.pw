@@ -1506,6 +1506,31 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Check one selected source call without scanning other bodies or
+    // discovering executable instances. The caller owns demand/iteration.
+    inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        val template = self.decls.callTemplates[templateIndex]
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                val function = self.arena.functionAt(index: callee)
+                val args = self.callTemplateTypeArgs(range: arguments)
+                mut val resolved = args.count() == function.typeParams.count()
+                mut val argument = 0U64
+                while argument < args.count() {
+                    if args[argument] == 0U64 { resolved = false }
+                    argument += 1U64
+                }
+                val receiver = template.receiverTypeTerm
+                if function.hasRecv && (receiver == 0U64) { resolved = false }
+                if resolved {
+                    try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver), assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
+    }
+
     // Unused source calls still impose constraints. Symbolic substitutions
     // retain their bound-aware abstract checking and later instance obligations.
     // This pass never registers an executable body or resolves a new callee.
@@ -1526,21 +1551,9 @@ pub impl Comp {
         while index < count {
             val template = self.decls.callTemplates[index]
             match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if callee < constrained.count() && constrained[callee] {
-                        val function = self.arena.functionAt(index: callee)
-                        val args = self.callTemplateTypeArgs(range: arguments)
-                        mut val resolved = args.count() == function.typeParams.count()
-                        mut val argument = 0U64
-                        while argument < args.count() {
-                            if args[argument] == 0U64 { resolved = false }
-                            argument += 1U64
-                        }
-                        val receiver = template.receiverTypeTerm
-                        if function.hasRecv && (receiver == 0U64) { resolved = false }
-                        if resolved {
-                            try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver), assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
-                        }
+                        try self.checkRecordedCallTemplateBound(templateIndex: index)
                     }
                 }
                 _ => {}
