@@ -1,0 +1,13 @@
+import @Std/Core with { Iterable }
+import @Std/Io with { print }
+trait Source { type Values: Iterable[Item=I64] }
+impl Source {
+    fn sum(values: Self#Source.Values) -> I64 {
+        mut val total: I64 = 0
+        for val item in values { total += item }
+        return total
+    }
+}
+struct Box {}
+impl Box as Source { type Values = Array[I64] }
+fn main() { val box = <Box /> print(box.sum(values: [2I64,3I64])) }

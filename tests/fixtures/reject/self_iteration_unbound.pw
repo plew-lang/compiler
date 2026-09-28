@@ -1,0 +1,3 @@
+trait Source {}
+impl Source { fn inspect() { for val item in self {} } }
+fn main() {}

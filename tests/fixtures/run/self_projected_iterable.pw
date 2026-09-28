@@ -1,0 +1,4 @@
+import @Std/Core with { Iterable }
+trait Source { type Values: Iterable[Item=I64] }
+impl Source { fn inspect(values: Self#Source.Values) { for val item in values { val number: I64 = item } } }
+fn main() {}

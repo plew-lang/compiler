@@ -610,11 +610,12 @@ pub impl Comp {
             return 0U64
         }
         if self.methodRecvIsTrait(f: f) {
+            if f.recvTy != 0U64 && self.arena.typeAt(index: f.recvTy).paramId != 0U64 { return f.recvTy }
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
             mut val ti: U64 = 0U64
             while ti < self.decls.traitCount() {
                 val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
+                if traitDef.nameStart == f.recvStart && traitDef.selfParamId != 0U64 {
                     return self.pushType(t: <TypeRef nameStart=sb.nameStart nameLen=sb.nameLen paramId=traitDef.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                 }
                 ti += 1U64

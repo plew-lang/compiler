@@ -1,0 +1,22 @@
+import @Std/Core with { Iterator }
+import @Std/Io with { print }
+trait Source: Iterator[Item=I64] {}
+impl Source {
+    fn sum() -> I64 {
+        mut val total: I64 = 0
+        for val item in self { total += item }
+        return total
+    }
+}
+struct Counter { mut val remaining: I64 }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.remaining == 0 { return <Optional.None /> }
+        val item = self.remaining
+        self.remaining -= 1
+        return <Optional.Some v=item />
+    }
+}
+impl Counter as Source {}
+fn main() { val counter = <Counter remaining=3 /> print(counter.sum()) }

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
+import ../../Ir with { DeclarationBoundRef, SelectedCallableSubstitution, BodyOrigin, FinalExistentialMember, ClosureSignature, ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAccessInput, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosureCapture, SemanticClosureParameter, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalExistentialResolution, FinalTryResolution, FinalAwaitResolution, FinalForResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, CallResolutionArgumentRange, CallEvaluationArgument, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, Param }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -142,7 +142,7 @@ pub impl Comp {
         if node.tag == 1U64 {
             return <StaticConformanceProof.ConcreteWitness witness=self.thawFrozenWitnessMatch(witness: <FrozenWitnessMatch selfRef=node.witnessSelfRef conformIdx=node.conformIdx binds=node.witnessBinds bindCount=node.witnessBindCount />) />
         }
-        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 3U64 { return <StaticConformanceProof.Missing /> }
+        if node.tag >= 2U64 && node.tag <= 4U64 && node.boundKind > 4U64 { return <StaticConformanceProof.Missing /> }
         if node.tag == 2U64 { return <StaticConformanceProof.AssumedBound source=self.thawDeclarationBound(kind: node.boundKind, index: node.boundIdx) /> }
         if node.tag == 3U64 {
             mut val edges: Array[WitnessMatch] = []
@@ -891,6 +891,12 @@ pub impl Comp {
     inout fn concreteStaticMemberProof(proof: StaticConformanceProof, traitIdx: U64, receiverRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { return <Result.Ok value=self.cur.bodyEnvironment.proof />}
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                match source {
+                    DeclarationBoundRef.MethodReceiver(index: _) => { return <Result.Ok value=self.cur.bodyEnvironment.proof /> }
+                    _ => {}
+                }
+            }
             _ => {}
         }
         if traitIdx >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> />}
@@ -4152,8 +4158,12 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method template has invalid proof or receiver") />
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
-                mut val callee: U64 = self.arena.functionCount()
-                match proof {
+                // Preserve the requirement selected in the declaration. A
+                // grounded proof chooses its witness before surface lookup can
+                // re-rank overloads using partially inferred argument types.
+                val concreteProof = (try self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef))
+                mut val callee: U64 = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
+                if callee >= self.arena.functionCount() { match proof {
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
                         callee = (try self.proofConcreteWitness(proof: self.cur.bodyEnvironment.proof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                         if callee >= self.arena.functionCount() {
@@ -4173,6 +4183,7 @@ pub impl Comp {
                             callee = (try self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false))
                         }
                     }
+                }
                 }
                 if callee >= self.arena.functionCount() {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method proof has no concrete implementation") />

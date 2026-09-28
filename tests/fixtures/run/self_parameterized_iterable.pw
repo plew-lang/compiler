@@ -1,0 +1,8 @@
+import @Std/Core with { Iterable }
+trait Source[T] { type Values: Iterable[Item=T] }
+impl[T] Source[T] {
+    fn inspect(values: Self#Source[T].Values) {
+        for val item in values { val same: T = item }
+    }
+}
+fn main() {}

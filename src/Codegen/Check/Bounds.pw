@@ -8,6 +8,17 @@ import ../../Ir with { DynamicCallTemplateTarget }
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    // A trait-provided declaration is abstract over its source receiver,
+    // including when it supplies another trait through `impl B as A`.
+    fn functionHasTraitReceiver(fnIdx: U64) -> Bool {
+        if fnIdx >= self.arena.functionCount() { return false }
+        val function = self.arena.functionAt(index: fnIdx)
+        if function.recvTy == 0U64 || function.recvTy >= self.arena.typeCount() { return false }
+        val traitIndex = self.decls.traitIndexByOffset(offset: function.recvStart)
+        if traitIndex >= self.decls.traitCount() { return false }
+        return self.arena.typeAt(index: function.recvTy).paramId != 0U64 && self.arena.typeAt(index: function.recvTy).paramId == self.decls.traitAt(index: traitIndex).selfParamId
+    }
+
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         mut val result: Array[DeclarationBoundRef] = []
         mut val index = 0U64
@@ -15,6 +26,7 @@ pub impl Comp {
             if self.decls.funcBounds[index].fnIdx == fnIdx { result.append(<DeclarationBoundRef.Function index=index />) }
             index += 1U64
         }
+        if self.functionHasTraitReceiver(fnIdx: fnIdx) { result.append(<DeclarationBoundRef.MethodReceiver index=fnIdx />) }
         return result
     }
 
@@ -34,6 +46,7 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conforms.count() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
+            DeclarationBoundRef.MethodReceiver(val index) => { return self.functionHasTraitReceiver(fnIdx: index) }
         }
     }
 
@@ -55,6 +68,10 @@ pub impl Comp {
                 return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidence[index].bound }
+            DeclarationBoundRef.MethodReceiver(val index) => {
+                val function = self.arena.functionAt(index: index)
+                return <TraitBound subject=function.recvTy constraint=<TraitConstraint key=<TraitInstanceKey owner=function.recvStart positionalArgs=self.copyFuncTypes(types: function.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=function.defOffset />
+            }
         }
     }
 
@@ -72,6 +89,9 @@ pub impl Comp {
             DeclarationBoundRef.AssociatedType(index: val left) => {
                 match b { DeclarationBoundRef.AssociatedType(index: val right) => { return left == right } _ => { return false } }
             }
+            DeclarationBoundRef.MethodReceiver(index: val left) => {
+                match b { DeclarationBoundRef.MethodReceiver(index: val right) => { return left == right } _ => { return false } }
+            }
         }
     }
 
@@ -81,6 +101,7 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(index: _) => { return 1U64 }
             DeclarationBoundRef.TraitSubject(index: _) => { return 2U64 }
             DeclarationBoundRef.AssociatedType(index: _) => { return 3U64 }
+            DeclarationBoundRef.MethodReceiver(index: _) => { return 4U64 }
         }
     }
 
@@ -90,6 +111,7 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(val index) => { return index }
             DeclarationBoundRef.TraitSubject(val index) => { return index }
             DeclarationBoundRef.AssociatedType(val index) => { return index }
+            DeclarationBoundRef.MethodReceiver(val index) => { return index }
         }
     }
 
@@ -98,7 +120,8 @@ pub impl Comp {
         if kind == 0U64 { return <DeclarationBoundRef.Function index=index /> }
         if kind == 1U64 { return <DeclarationBoundRef.Conformance index=index /> }
         if kind == 2U64 { return <DeclarationBoundRef.TraitSubject index=index /> }
-        return <DeclarationBoundRef.AssociatedType index=index />
+        if kind == 3U64 { return <DeclarationBoundRef.AssociatedType index=index /> }
+        return <DeclarationBoundRef.MethodReceiver index=index />
     }
 
     // Form the semantic constraint carried by an existential once, at the
@@ -416,11 +439,12 @@ pub impl Comp {
     // grounds the selected bound at an actual instantiation.
     inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
         val memberId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
         mut val i: U64 = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
-                val proof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+        while i < assumptions.count() {
+            val bound = self.declarationBound(source: assumptions[i])
+            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
+                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
                 match proof {
                     StaticConformanceProof.AssumedBound(source: _) => {
                         mut val ti: U64 = 0U64
@@ -457,10 +481,10 @@ pub impl Comp {
         // the proof records the derivation rather than collapsing it into an
         // indistinguishable direct bound.
         i = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
-                val direct: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+        while i < assumptions.count() {
+            val bound = self.declarationBound(source: assumptions[i])
+            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
+                val direct: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
                 match direct {
                     StaticConformanceProof.AssumedBound(source: val boundRef) => {
                         mut val ti: U64 = 0U64
@@ -484,10 +508,10 @@ pub impl Comp {
         // owner-module trait-subject edge. This is symbolic evidence: Record
         // stores the exact edge id and BodyInstance later grounds the receiver.
         i = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
-                val baseProof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+        while i < assumptions.count() {
+            val bound = self.declarationBound(source: assumptions[i])
+            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
+                val baseProof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
                 match baseProof {
                     StaticConformanceProof.AssumedBound(source: val boundRef) => {
                         mut val ci: U64 = 0U64
@@ -524,42 +548,6 @@ pub impl Comp {
             }
             i += 1U64
         }
-        // A provided trait body is checked once against an abstract `Self`.
-        // Its declaring trait is an implicit bound, not a concrete witness and
-        // not an ambient lookup: `impl P { self.p() }` has exactly `Self: P`
-        // in scope.  Preserve that proof in the same carrier as an authored
-        // `where T: P`, so BodyInstance later grounds the receiver once.
-        if fnIdx < self.arena.functionCount() && receiverRef < self.arena.typeCount() {
-            val f: Func = self.arena.functionAt(index: fnIdx)
-            val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
-            if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
-                val ti: U64 = self.decls.traitIndexByOffset(offset: f.recvStart)
-                if ti < self.decls.traitCount() {
-                    val traitDef: TraitDef = self.decls.traitAt(index: ti)
-                    // In `impl B as A`, the implementation's conformance
-                    // target is A (`provTraitOwner`), but its body receiver is
-                    // B.  The implicit proof for `self.base()` is therefore
-                    // `Self: B`, not `Self: A`.  Receiver trait identity is
-                    // carried by canonical `recvStart`/`recvTraitArgs`; provenance remains
-                    // relevant to dispatch but must not rewrite this local
-                    // body constraint.
-                    if traitDef.nameStart == f.recvStart && traitDef.nameId == f.recvId && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: f.recvTraitArgs.count()) {
-                        val proof: StaticConformanceProof = <StaticConformanceProof.TraitSelf traitIdx=ti receiverRef=receiverRef traitArgs=self.copyFuncTypes(types: f.recvTraitArgs) />
-                        mut val requirement: StaticMemberResolution = <StaticMemberResolution.Missing />
-                        if requiredTraitOwner == 0U64 || self.decls.traitAt(index: ti).nameStart == requiredTraitOwner { requirement = (try self.selectStaticRequirement(proof: proof, traitIdx: ti, memberId: memberId, args: args)) }
-                        match requirement { StaticMemberResolution.Missing => {} _ => { return <Result.Ok value=requirement />} }
-                        mut val fi: U64 = 0U64
-                        while fi < self.arena.functionCount() {
-                            val candidate: Func = self.arena.functionAt(index: fi)
-                            if (requiredTraitOwner == 0U64 || candidate.provTraitOwner == requiredTraitOwner) && !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
-                                return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi /> />
-                            }
-                            fi += 1U64
-                        }
-                    }
-                }
-            }
-        }
         return <Result.Ok value=<StaticMemberResolution.Missing /> />
     }
 
@@ -573,12 +561,13 @@ pub impl Comp {
         val targetOwner: U64 = self.coreTraitOwner(name: traitName, arity: traitArity)
         if targetOwner == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
         val memberId: U64 = self.internBytes(s: memberName).nameId
+        val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
         mut val i: U64 = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
+        while i < assumptions.count() {
+            val bound = self.declarationBound(source: assumptions[i])
+            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
                 if bound.constraint.key.owner == targetOwner {
-                    val proof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+                    val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound source=assumptions[i] />
                     match proof {
                         StaticConformanceProof.AssumedBound(source: _) => {
                             mut val ti: U64 = 0U64
@@ -606,10 +595,10 @@ pub impl Comp {
         // Reuse the member resolver's supertrait path, retaining the
         // authored bound as evidence rather than inventing a direct bound.
         i = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
-                match self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint) {
+        while i < assumptions.count() {
+            val bound = self.declarationBound(source: assumptions[i])
+            if bound.subject != 0U64 && self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiverRef)) {
+                match <StaticConformanceProof.AssumedBound source=assumptions[i] /> {
                     StaticConformanceProof.AssumedBound(source: val boundRef) => {
                         mut val ti: U64 = 0U64
                         while ti < self.decls.traitCount() {

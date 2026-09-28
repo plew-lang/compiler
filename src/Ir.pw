@@ -1364,6 +1364,7 @@ pub enum DeclarationBoundRef {
     Conformance(index: U64)
     TraitSubject(index: U64)
     AssociatedType(index: U64)
+    MethodReceiver(index: U64)
 }
 
 // Common read-only semantic view of an authored condition. Storage and source

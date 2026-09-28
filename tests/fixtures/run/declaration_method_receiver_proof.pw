@@ -1,0 +1,37 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+import /Ir with { StaticConformanceProof, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
+fn main() {
+    val source = "trait Marker {}\ntrait Root { type Item: Marker }\ntrait Parent: Root {}\nimpl Parent { fn probe(value: Self#Root.Item) {} }\nfn outside() {}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="self.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.functionAt(index: 0U64)
+    val assumptions = compiler.functionBoundAssumptions(fnIdx: 0U64)
+    assert(assumptions.count() == 1U64)
+    match assumptions[0U64] {
+        DeclarationBoundRef.MethodReceiver(val index) => { assert(index == 0U64) }
+        _ => { panic "lost receiver declaration" }
+    }
+    assert(compiler.functionBoundAssumptions(fnIdx: 1U64).count() == 0U64)
+    assert(!compiler.declarationBoundIsValid(source: <DeclarationBoundRef.MethodReceiver index=1U64 />))
+    val inherited = compiler.traitPatternProof(baseRef: function.recvTy, traitId: 0U64, traitOwner: compiler.decls.traitAt(index: 1U64).nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions).unwrap()
+    match inherited {
+        StaticConformanceProof.AssumedSupertraitPath(source: val origin, steps: val steps) => {
+            assert(compiler.sameDeclarationBound(a: origin, b: assumptions[0U64]))
+            assert(steps.count() == 1U64)
+        }
+        _ => { panic "lost inherited receiver proof" }
+    }
+    val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: inherited))
+    assert(compiler.sameStaticConformanceProof(a: inherited, b: restored))
+    val item = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val marker = compiler.decls.traitAt(index: 0U64).nameStart
+    val associated = compiler.traitPatternProof(baseRef: item, traitId: 0U64, traitOwner: marker, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions).unwrap()
+    match associated { StaticConformanceProof.Missing => { panic "lost associated constraint" } _ => {} }
+    val absent = compiler.traitPatternProof(baseRef: item, traitId: 0U64, traitOwner: marker, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).unwrap()
+    match absent { StaticConformanceProof.Missing => {} _ => { panic "invented receiver evidence" } }
+    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    print("ok")
+}

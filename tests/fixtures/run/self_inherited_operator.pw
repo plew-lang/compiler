@@ -1,0 +1,6 @@
+import @Std/Core with { Eq }
+trait Comparable: Eq {}
+impl Comparable {
+    fn same(other: Self) -> Bool { return self == other }
+}
+fn main() {}
