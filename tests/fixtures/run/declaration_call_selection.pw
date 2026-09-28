@@ -1,0 +1,21 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
+import /SourceAccess with { SourceAccess }
+fn main() {
+    val cases = [
+        "fn f(a: I64, b: I64) -> I64 { return a }\nfn unused() { f(a: 1I64) }\n",
+        "fn f(n: I64) -> I64 { return n }\nfn unused[T](value: T) { f(1I64) }\n",
+        "fn f(n: I64) -> I64 { return n }\nfn unused() { f(x: 1I64) }\n"
+    ]
+    for val source in cases {
+        mut val c = <Comp />
+        match analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="call.pw" />, sources: <SourceAccess stdRoot=[] />) {
+            Result.Ok(value: _) => { assert(false) }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "no matching function for this argument list") }
+        }
+        assert(c.monoWork.bodyInstances.count() == 0U64)
+        assert(c.arena.finalDestructions.count() == 0U64)
+    }
+    print("ok")
+}
