@@ -4468,6 +4468,89 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Publish a source callable's grounded ABI without requesting its body.
+    // The instance/proof is selected by the caller; never guess a conformance
+    // from a matching name. This does not publish body descriptors or Mid.
+    inout fn prepareFinalCallableSignature(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: signature request has no body instance") />
+        }
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if !self.arena.bodyIsCallable(bodyId: bodyId) || instance.fnIdx >= self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: signature request is not a source callable") />
+        }
+        val saved = self.cur
+        val collecting = self.inCollection
+        self.inCollection = true
+        val result = self.prepareFinalCallableSignatureInContext(bodyId: bodyId, instance: instance)
+        self.inCollection = collecting
+        self.cur = saved
+        return result
+    }
+
+    inout fn prepareFinalCallableSignatureInContext(bodyId: U64, instance: BodyInstance) -> Result[(), CompileDiagnostic] {
+        val function = self.arena.functionAt(index: instance.fnIdx)
+        try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: function)
+        return self.recordFinalCallableSignature(bodyId: bodyId, instance: instance, function: function)
+    }
+
+    inout fn enterFinalCallableEnvironment(bodyId: U64, instance: BodyInstance, function: Func) -> Result[(), CompileDiagnostic] {
+        val f = function
+        self.cur.locals = []
+        self.cur.hasRecv = f.hasRecv
+        self.cur.recvStart = f.recvStart
+        self.cur.recvLen = f.recvLen
+        self.cur.extId = f.extId
+        self.cur.selfInout = f.selfInout
+        self.cur.recvInstRef = instance.environment.receiverRef
+        self.cur.typeParams = instance.environment.params
+        self.cur.typeArgs = instance.environment.args
+        self.cur.bodyFnIdx = instance.fnIdx
+        self.cur.bodyEnvironment = instance.environment
+        self.cur.bodyId = bodyId
+        // Associated callables have no value `self`, but their bodies may name
+        // `Self`/associated types and their final-callable key is the concrete
+        // subject selected at the call.  Mirror emitOneGenFn's assoc environment
+        // here so Mono and LLVM use the same body-instance identity.
+        if f.hasRecv || f.isAssoc {
+            try self.setSelfItemEnvForBody(f: f, environment: instance.environment)
+        } else {
+            self.clearSelfItemEnv()
+        }
+        // The worklist already carries the canonical receiver key.  Do not
+        // rebuild it from `self` here: that would make finalization and backend
+        // emission independently responsible for preserving source views.
+        if self.cur.bodyEnvironment.receiverRef != 0U64 { self.cur.selfRef = self.cur.bodyEnvironment.receiverRef }
+        self.cur.bodySelfRef = self.cur.selfRef
+        self.cur.bodyItemRef = self.cur.itemRef
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordFinalCallableSignature(bodyId: U64, instance: BodyInstance, function: Func) -> Result[(), CompileDiagnostic] {
+        val f = function
+        // A body instance owns every concrete layout named by its ABI, even
+        // when the source body never reads that parameter or return value.
+        // This is deliberately beside the final semantic call closure: the
+        // old provisional AST collector discovered these as an incidental
+        // side effect before it later discarded its call decisions.
+        mut val signatureParameters: Array[U64] = []
+        mut val pi: U64 = 0U64
+        while pi < f.params.count() {
+            val p: Param = self.funcParamAt(params: f.params, index: pi)
+            signatureParameters.append((try self.groundAndRecordBodyType(ref: p.ty, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)))
+            try self.scanType(ref: signatureParameters[pi])
+            pi += 1U64
+        }
+        mut val signatureResult: U64 = 0U64
+        if f.hasRet || f.isAsync {
+            signatureResult = (try self.groundAndRecordBodyType(ref: self.semanticCallableReturnTerm(function: f), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
+            try self.scanType(ref: signatureResult)
+        }
+        val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
+        return <Result.Ok value=() />
+    }
+
     inout fn scanFinalBodyInstance(bodyId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.bodyOrigin(bodyId: bodyId) {
             BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => { return <Result.Ok value=() /> }
@@ -4508,52 +4591,14 @@ pub impl Comp {
             self.traceMonoTypeHead(ref: instance.environment.receiverRef)
             eprint(text: "\n")
         }
-        self.cur.locals = []
-        self.cur.hasRecv = f.hasRecv
-        self.cur.recvStart = f.recvStart
-        self.cur.recvLen = f.recvLen
-        self.cur.extId = f.extId
-        self.cur.selfInout = f.selfInout
-        self.cur.recvInstRef = instance.environment.receiverRef
-        self.cur.typeParams = instance.environment.params
-        self.cur.typeArgs = instance.environment.args
-        self.enterBodyInstance(fnIdx: instance.fnIdx, environment: instance.environment)
-        // Associated callables have no value `self`, but their bodies may name
-        // `Self`/associated types and their final-callable key is the concrete
-        // subject selected at the call.  Mirror emitOneGenFn's assoc environment
-        // here so Mono and LLVM use the same body-instance identity.
-        if f.hasRecv || f.isAssoc {
-            try self.setSelfItemEnvForBody(f: f, environment: instance.environment)
-        } else {
-            self.clearSelfItemEnv()
-        }
-        // The worklist already carries the canonical receiver key.  Do not
-        // rebuild it from `self` here: that would make finalization and backend
-        // emission independently responsible for preserving source views.
-        if self.cur.bodyEnvironment.receiverRef != 0U64 { self.cur.selfRef = self.cur.bodyEnvironment.receiverRef }
-        self.cur.bodySelfRef = self.cur.selfRef
-        self.cur.bodyItemRef = self.cur.itemRef
-        // A body instance owns every concrete layout named by its ABI, even
-        // when the source body never reads that parameter or return value.
-        // This is deliberately beside the final semantic call closure: the
-        // old provisional AST collector discovered these as an incidental
-        // side effect before it later discarded its call decisions.
-        mut val signatureParameters: Array[U64] = []
-        mut val pi: U64 = 0U64
-        while pi < f.params.count() {
-            val p: Param = self.funcParamAt(params: f.params, index: pi)
-            signatureParameters.append((try self.groundAndRecordBodyType(ref: p.ty, environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)))
+        try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: f)
+        try self.recordFinalCallableSignature(bodyId: bodyId, instance: instance, function: f)
+        mut val parameter = 0U64
+        while parameter < f.params.count() {
+            val p = self.funcParamAt(params: f.params, index: parameter)
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
-            try self.scanType(ref: signatureParameters[pi])
-            pi += 1U64
+            parameter += 1U64
         }
-        mut val signatureResult: U64 = 0U64
-        if f.hasRet || f.isAsync {
-            signatureResult = (try self.groundAndRecordBodyType(ref: self.semanticCallableReturnTerm(function: f), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId))
-            try self.scanType(ref: signatureResult)
-        }
-        val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.semanticBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
         if instance.adapterTargetBodyId != 0U64 {
             try self.finalizeNewtypeAdapter(bodyId: bodyId)
         } else { try self.scanBlockInsts(blkId: f.body) }
