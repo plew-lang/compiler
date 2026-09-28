@@ -134,6 +134,9 @@ pub struct Comp {
     // finishes its verified second walk, all written calls must instead be
     // finalized from those templates; a miss is then an internal error.
     pub mut val closedCallTemplateBodies: Array[Bool] = []
+    // Session-local outcomes of lexical preparation, not whole-body ownership
+    // or effect proofs. Failure must remain failure even after template closure.
+    pub mut val lexicalBodyPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
     pub mut val preparedGlobalTargets: Array[U64] = []

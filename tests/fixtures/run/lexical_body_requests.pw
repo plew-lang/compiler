@@ -1,0 +1,62 @@
+// Internal request contract: diagnostics survive retries, the caller's cursor
+// is restored, and an unrelated owner remains independently preparable.
+import /Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendDeclarations, spansEqual }
+import /SourceAccess with { SourceAccess }
+import /Ir with { CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic("missing fixture owner")
+}
+
+fn main() {
+    mut val c = <Comp />
+    analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text
+        text="fn broken() { missing() } fn good() {} fn main() {}" path="requests.pw" />,
+        sources: <SourceAccess stdRoot=[] />, options: <FrontendOptions genMode=true />).unwrap()
+    val broken = owner(c: inout c, name: "broken")
+    val good = owner(c: inout c, name: "good")
+    c.cur.checkFn = 70001U64
+    c.cur.bodyFnIdx = 70002U64
+    c.cur.bodyId = 70003U64
+    c.cur.recordCallTemplates = true
+    val diagnostic = match c.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: val failure) => { give failure }
+        Result.Ok(value: _) => { panic("invalid requested body succeeded") }
+    }
+    if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("failed request leaked its cursor") }
+    val templates = c.decls.callTemplates.count()
+    match c.prepareLexicalBody(fnIdx: broken) {
+        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("retry changed diagnostic") } }
+        Result.Ok(value: _) => { panic("retry lost failure") }
+    }
+    if c.decls.callTemplates.count() != templates { panic("retry repeated recording") }
+    c.prepareLexicalBody(fnIdx: good).unwrap()
+    if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("successful request leaked its cursor") }
+    val complete = c.decls.callTemplates.count()
+    c.prepareLexicalBody(fnIdx: good).unwrap()
+    if c.decls.callTemplates.count() != complete || c.lexicalBodyPreparations.count() != 2U64 { panic("owner requests were not cached separately") }
+
+    // A preclosed selection is not proof of constraints. Supply an invalid
+    // protocol row for another owner and require its diagnostic on every demand.
+    val closed = owner(c: inout c, name: "main")
+    c.closeCallTemplatesForBody(fnIdx: closed).unwrap()
+    val integer = c.internBytes(s: "I64")
+    val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    c.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=closed originKind=3U64 originSerial=1U64 slot=1U64 />
+        kind=<CallTemplateKind.Protocol receiver=<CallTemplateReceiver.Term term=term /> /> />)
+    for attempt in [0U64, 1U64] {
+        match c.prepareLexicalBody(fnIdx: closed) {
+            Result.Ok(value: _) => { panic("template closure bypassed constraints") }
+            Result.Err(error: _) => {}
+        }
+    }
+    print("ok")
+}

@@ -2134,8 +2134,27 @@ pub impl Comp {
     // frontend. Specialization may consume this owner only after completion.
     inout fn prepareLexicalBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
-        if (try self.callTemplatesClosedForBody(fnIdx: owner)) { return <Result.Ok value=() /> }
+        if owner >= self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical body request has no declaration") />
+        }
+        match self.lexicalBodyPreparations.get(key: owner) {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
         val saved = self.cur
+        val result = self.prepareLexicalBodyUncached(owner: owner)
+        self.cur = saved
+        self.lexicalBodyPreparations[owner] = result
+        return result
+    }
+
+    // This local request does not recursively request another source body:
+    // calls consume registered signatures, never their callees' preparation.
+    // Template closure is only a phase prerequisite; constraints still run.
+    inout fn prepareLexicalBodyUncached(owner: U64) -> Result[(), CompileDiagnostic] {
+        if (try self.callTemplatesClosedForBody(fnIdx: owner)) {
+            return self.checkRecordedBodyCallConstraints(owner: owner)
+        }
         self.cur.bodyFnIdx = owner
         self.cur.bodyEnvironment = <InstanceEnvironment />
         self.cur.bodyId = 0U64
@@ -2150,7 +2169,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />
         }
         try self.closeCallTemplatesForBody(fnIdx: owner)
-        self.cur = saved
+        try self.checkRecordedBodyCallConstraints(owner: owner)
         return <Result.Ok value=() />
     }
 
