@@ -1,0 +1,71 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+import /SourceAccess with { SourceAccess }
+import /Ir with { BodyInstance, InstanceEnvironment }
+import /Mid/Build with { MidFunctionTemplates, MidBuildError }
+import /Mid/Program with { MidExecutableRequests, MidProgramError }
+import @Std/Io with { print }
+
+fn instances() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="instances.pw" text="fn main() { val one = identity(value: 1I64) val two = identity(value: true) val get = fn() -> I64 { return 2I64 } val three = get() } fn identity[T](value: T) -> T { return value }" />, sources: <SourceAccess />).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val main = compiler.monoWork.bodyInstances[0U64]
+    val first = requests.request(c: inout compiler, templates: inout templates, bodyId: main).unwrap()
+    if compiler.mid.bodies[first.canonical.body - 1U64].bodyInstance != main { panic "wrong instance" }
+    for body in compiler.mid.bodies {
+        if body.bodyInstance != 0U64 && body.bodyInstance != main { panic "request prepared another instance" }
+    }
+    val count = compiler.mid.bodies.count()
+    val repeated = requests.request(c: inout compiler, templates: inout templates, bodyId: main).unwrap()
+    if first.canonical.body != repeated.canonical.body || compiler.mid.bodies.count() != count { panic "successful request rebuilt passes" }
+    mut val index = 1U64
+    mut val closures = 0U64
+    while index <= compiler.arena.bodyInstanceCount() {
+        if compiler.arena.bodySignature(bodyId: index).ready {
+            val prepared = requests.request(c: inout compiler, templates: inout templates, bodyId: index).unwrap()
+            if compiler.mid.bodies[prepared.canonical.body - 1U64].bodyInstance != index { panic "instance cache mixed bodies" }
+            if compiler.arena.bodySignature(bodyId: index).closureSignatureId != 0U64 { closures += 1U64 }
+        }
+        index += 1U64
+    }
+    if closures == 0U64 { panic "closure request not covered" }
+}
+
+fn failure() {
+    mut val compiler = <Comp />
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=123U64 environment=<InstanceEnvironment /> />)
+    match requests.request(c: inout compiler, templates: inout templates, bodyId: instance) {
+        Result.Ok(value: _) => { panic "unready signature accepted" }
+        Result.Err(error: val error) => { match error { MidProgramError.MissingSignature(bodyId: _) => {} _ => { panic "wrong readiness error" } } }
+    }
+    compiler.arena.setBodySignature(bodyId: instance, parameters: [], passings: [], result: 0U64)
+    mut val index = 0U64
+    mut val count = 0U64
+    while index < 2U64 {
+        match requests.request(c: inout compiler, templates: inout templates, bodyId: instance) {
+            Result.Ok(value: _) => { panic "invalid function published an executable body" }
+            Result.Err(error: val error) => {
+                match error {
+                    MidProgramError.Build(bodyId: val body, error: val error) => {
+                        if body != instance { panic "failure lost instance" }
+                        match error { MidBuildError.InvalidFunction => {} _ => { panic "wrong build failure" } }
+                    }
+                    _ => { panic "wrong failed stage" }
+                }
+            }
+        }
+        if index == 0U64 { count = compiler.mid.bodies.count() }
+        else if count != compiler.mid.bodies.count() { panic "failed request reran builder" }
+        index += 1U64
+    }
+}
+
+fn main() {
+    instances()
+    failure()
+    print("ok")
+}

@@ -12,6 +12,64 @@ pub enum MidProgramError {
     Preparation(bodyId: U64, error: MidPreparationError)
 }
 
+// Keep with the owning Comp and its templates. A request consumes finalized
+// descriptors for one instance; it does not discover or prepare other bodies.
+pub struct MidExecutableRequests {
+    mut val outcomes: Array[Optional[Result[MidExecutableBody, MidProgramError]]] = []
+    mut val closureByKey: Dictionary[U64, U64] = [:]
+    mut val closureFrontier: U64 = 0U64
+}
+pub impl MidExecutableRequests {
+    factory
+
+    inout fn request(c: inout Comp, templates: inout MidFunctionTemplates, bodyId: U64) -> Result[MidExecutableBody, MidProgramError] {
+        // Readiness is an admission precondition, not a failed pass result.
+        // An unpublished signature may become ready in a later frontend request.
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
+            return <Result.Err error=<MidProgramError.MissingSignature bodyId=bodyId /> />
+        }
+        if !c.arena.bodySignature(bodyId: bodyId).ready {
+            return <Result.Err error=<MidProgramError.MissingSignature bodyId=bodyId /> />
+        }
+        while self.outcomes.count() <= bodyId { self.outcomes.append(<Optional.None />) }
+        match self.outcomes[bodyId] {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        val result = self.prepare(c: inout c, templates: inout templates, bodyId: bodyId)
+        self.outcomes[bodyId] = <Optional.Some v=result />
+        return result
+    }
+}
+impl MidExecutableRequests {
+    inout fn prepare(c: inout Comp, templates: inout MidFunctionTemplates, bodyId: U64) -> Result[MidExecutableBody, MidProgramError] {
+        val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        val built: MidBodyBuild = if signature.closureSignatureId != 0U64 {
+            // Lexical requests can append closure metadata. Index new rows only.
+            while self.closureFrontier < c.decls.semanticClosures.count() {
+                self.closureByKey[c.decls.semanticClosures[self.closureFrontier].bodyKey] = self.closureFrontier + 1U64
+                self.closureFrontier += 1U64
+            }
+            val closure = self.closureByKey.getOr(key: instance.fnIdx, fallback: 0U64)
+            if closure == 0U64 { return <Result.Err error=<MidProgramError.MissingClosure bodyId=bodyId /> /> }
+            give ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[closure - 1U64])
+        } else if instance.fnIdx == 18446744073709551615U64 {
+            give templates.globalInitializer(c: inout c)
+        } else {
+            give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId, templates: inout templates)
+        }
+        match built.error {
+            MidBuildError.None => {}
+            _ => { return <Result.Err error=<MidProgramError.Build bodyId=bodyId error=built.error /> /> }
+        }
+        match MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId) {
+            Result.Ok(value: val executable) => { return <Result.Ok value=executable /> }
+            Result.Err(error: val error) => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=error /> /> }
+        }
+    }
+}
+
 pub struct MidExecutableProgram {
     val bodies: Array[Optional[MidExecutableBody]] = []
 }
@@ -36,12 +94,7 @@ pub impl MidExecutableProgram {
             bodies.append(<Optional.None />)
             index += 1U64
         }
-        mut val closureByKey: Dictionary[U64, U64] = [:]
-        index = 0U64
-        while index < c.decls.semanticClosures.count() {
-            closureByKey[c.decls.semanticClosures[index].bodyKey] = index + 1U64
-            index += 1U64
-        }
+        mut val requests = <MidExecutableRequests />
         // Named bodies and synthetic adapters are in the executable worklist.
         // Global initialization and finalized closure signatures are separate
         // frontend roots, not source declarations guessed to be reachable.
@@ -65,26 +118,8 @@ pub impl MidExecutableProgram {
                     continue }
                 Optional.None => {}
             }
-            val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
-            val signature = c.arena.bodySignature(bodyId: bodyId)
-            if !signature.ready { return <Result.Err error=<MidProgramError.MissingSignature bodyId=bodyId /> /> }
-            val built: MidBodyBuild = if signature.closureSignatureId != 0U64 {
-                val closure = closureByKey.getOr(key: instance.fnIdx, fallback: 0U64)
-                if closure == 0U64 { return <Result.Err error=<MidProgramError.MissingClosure bodyId=bodyId /> /> }
-                give ensureParametricMidClosureBody(c: inout c, closure: c.decls.semanticClosures[closure - 1U64])
-            } else if instance.fnIdx == 18446744073709551615U64 {
-                give templates.globalInitializer(c: inout c)
-            } else {
-                give buildMidBodyForInstance(c: inout c, fnIdx: instance.fnIdx, bodyId: bodyId, templates: inout templates)
-            }
-            match built.error {
-                MidBuildError.None => {}
-                _ => { return <Result.Err error=<MidProgramError.Build bodyId=bodyId error=built.error /> /> }
-            }
-            match MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId) {
-                Result.Ok(value: val executable) => { bodies.set(i: bodyId, value: <Optional.Some v=executable />) }
-                Result.Err(error: val error) => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=error /> /> }
-            }
+            val executable = try requests.request(c: inout c, templates: inout templates, bodyId: bodyId)
+            bodies.set(i: bodyId, value: <Optional.Some v=executable />)
             index += 1U64
         }
         return <Result.Ok value=<MidExecutableProgram bodies=bodies /> />
