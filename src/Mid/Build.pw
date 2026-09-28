@@ -1839,14 +1839,18 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
     val callee = midDirectCallee(c: c, template: template)
     if callee >= c.arena.functionCount() { return built }
     val function = c.arena.functionAt(index: callee)
-    if !function.hasRecv || function.selfInout || function.selfMove { return built }
+    if !function.hasRecv || function.selfInout { return built }
     match built.receiver {
         MidCallReceiver.Value(operand: val operand) => {
             match operand {
                 MidOperand.Copy(place: val place) => {
+                    if function.selfMove {
+                        return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Move place=place /> /> />
+                    }
                     return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Read /> /> /> />
                 }
                 MidOperand.Move(place: val place) => {
+                    if function.selfMove { return built }
                     if place.rootTag != 1U64 || place.projections.count() != 0U64 || place.local >= state.locals.count() { return built }
                     if !midLocalIsOwnedTemporary(local: state.locals[place.local]) { return built }
                     return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Read /> /> /> />

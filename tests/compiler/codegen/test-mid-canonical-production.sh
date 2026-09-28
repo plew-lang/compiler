@@ -137,8 +137,12 @@ for path in Path('src').rglob('*.pw'):
 # Match each executable entry, not just a symbol somewhere in the file.
 analysis = Path('src/Mid/OwnershipAnalysis.pw').read_text()
 assert 'body: MidParametricBody' in analysis
-assert '-> Optional[MidOwnershipAnalysis]' in analysis
-assert 'factory' not in re.sub(r'//[^\n]*', '', analysis)
+assert '-> Result[MidDeclarationOwnership, MidVerification]' in analysis
+assert 'pub impl MidDeclarationOwnership' not in analysis, 'ownership proof must not expose a constructor'
+request = analysis.split('inout fn request(', 1)[1].split('inout fn destructionBody(', 1)[0]
+assert request.index('verifyDeclarationMidOwnership(') < request.index('<MidDeclarationOwnership ')
+assert '<MidDeclarationOwnership ' in request.split('MidVerifyError.None =>', 1)[1].split('\n            _ =>', 1)[0]
+assert 'elaborateCanonicalMidDrops(' not in request, 'local verification must not eagerly expand cleanup'
 assert analysis.count('elaborateCanonicalMidDrops(') == 1
 for stage in ['MidInstantiatedBody', 'MidAccessResolvedBody', 'MidDropElaboratedBody', 'MidExecutableBody']:
     assert '<' + stage not in analysis, 'analysis must not forge executable stage tokens'
@@ -163,7 +167,7 @@ program = Path('src/Mid/Program.pw').read_text()
 assert 'MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId)' in program
 assert 'self.midProgram.body(bodyId: bodyId)' in backend
 assert 'Array[Optional[MidExecutableBody]]' in program
-assert 'buildParametricMidGlobalInit(' in program
+assert 'templates.globalInitializer(c: inout c)' in program
 assert 'ensureParametricMidClosureBody(' in program
 assert 'buildMidBodyForInstance(' in program
 entry = Path('src/Backend.pw').read_text().split('pub fn emitLlvm(', 1)[1]
@@ -173,8 +177,8 @@ assert analysis.index('MidExecutableProgram.prepareWithTemplates(') < analysis.i
 assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
 assert 'prepareDeclarationProgram(c: inout c, templates: inout templates)' in analysis
 declarations = Path('src/DeclarationProgram.pw').read_text()
-assert declarations.index('checkDeclarationLocalAccess(') < declarations.index('analyzeDeclarationGlobalAccess(')
-assert 'analyzeDeclarationGlobalAccess(c: inout c, templates: inout templates)' in declarations
+assert declarations.index('checkDeclarationOwnership(') < declarations.index('checkDeclarationLocalAccess(') < declarations.index('analyzeDeclarationGlobalAccessWithRequests(')
+assert 'analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests)' in declarations
 assert 'checkDeclarationLocalAccess(c: inout c, templates: inout templates)' in declarations
 for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreate(', 'import ./Backend', 'exit(', 'c.errorAt(']:
     assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'

@@ -15,6 +15,7 @@ pub struct MidDeclarationOwnership {
 
 pub struct MidOwnershipRequests {
     mut val results: Dictionary[U64, Result[MidDeclarationOwnership, MidVerification]] = [:]
+    mut val destructionBodies: Dictionary[U64, Result[MidCanonicalBody, MidVerification]] = [:]
 }
 pub impl MidOwnershipRequests {
     factory
@@ -30,13 +31,31 @@ pub impl MidOwnershipRequests {
         }
         // This local dataflow request has no recursive request edges. Store
         // either outcome so a repeated demand neither rewrites nor rechecks it.
-        val canonical = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: body.canonical)
+        val canonical = body.canonical
         val verification = verifyDeclarationMidOwnership(c: inout c, canonical: canonical)
         val result: Result[MidDeclarationOwnership, MidVerification] = match verification.error {
             MidVerifyError.None => { give <Result.Ok value=<MidDeclarationOwnership canonical=canonical /> /> }
             _ => { give <Result.Err error=verification /> }
         }
         self.results[key] = result
+        return result
+    }
+
+    // Effects need actual conditional destruction sites; ownership checking
+    // alone does not. Cache this separate, more expensive derived snapshot.
+    inout fn destructionBody(c: inout Comp, body: MidDeclarationOwnership) -> Result[MidCanonicalBody, MidVerification] {
+        val key = body.canonical.body
+        match self.destructionBodies.get(key: key) {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        val canonical = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: body.canonical)
+        val verification = verifyDeclarationMidOwnership(c: inout c, canonical: canonical)
+        val result: Result[MidCanonicalBody, MidVerification] = match verification.error {
+            MidVerifyError.None => { give <Result.Ok value=canonical /> }
+            _ => { give <Result.Err error=verification /> }
+        }
+        self.destructionBodies[key] = result
         return result
     }
 }

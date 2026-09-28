@@ -60,7 +60,11 @@ impl DeclarationAccessState {
             Result.Ok(value: val verified) => { give verified }
             Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] verification=verification /> /> }
         }
-        val body = c.mid.bodies[ownership.canonical.body - 1U64]
+        val destruction = match requests.destructionBody(c: inout c, body: ownership) {
+            Result.Ok(value: val canonical) => { give canonical }
+            Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] verification=verification /> /> }
+        }
+        val body = c.mid.bodies[destruction.body - 1U64]
         val reachable = canonicalMidReachable(c: c, body: body)
         mut val blockIndex = 0U64
         while blockIndex < body.blocks.len {

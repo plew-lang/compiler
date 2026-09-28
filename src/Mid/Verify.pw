@@ -884,7 +884,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 // is nevertheless observable through ARC/deinit, so the
                 // completed body must prove the lowering's explicit release
                 // immediately before transferring the replacement.
-                if destination.rootTag == 2U64 || canonicalMidPlaceHasDeref(c: c, place: destination) {
+                if !stage.isDeclaration() && (destination.rootTag == 2U64 || canonicalMidPlaceHasDeref(c: c, place: destination)) {
                     if statementI == 0U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     val previous: MidStatementNode = c.mid.statements[block.statements.start + statementI - 1U64]
                     if previous.tag != 3U64 || !canonicalMidSamePlace(c: c, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
@@ -895,9 +895,14 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 }
                 if destination.rootTag == 2U64 { }
                 else if destination.projections.len == 0U64 {
-                    match states[destination.local] {
-                        MidOwnership.Consumed => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
-                        _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                    // Before Drop elaboration, Overwrite owns the conditional
+                    // release of the previous value as well as replacement.
+                    if stage.isDeclaration() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    else {
+                        match states[destination.local] {
+                            MidOwnership.Consumed => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                            _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                        }
                     }
                 } else {
                     match states[destination.local] {
@@ -977,8 +982,26 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 }
             }
             if statement.requiresDropElaboration() {
-                if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
-                return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI />
+                if !stage.isDeclaration() {
+                    if statement.tag == 6U64 { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=blockI /> }
+                    return <MidVerification error=<MidVerifyError.UnelaboratedBindingEnd /> block=blockI />
+                }
+                // The declaration opcode ends ownership on every path. Drop
+                // elaboration later realizes Owned/MaybeOwned with concrete
+                // cleanup and flags; it does not decide whether this use lives.
+                if statement.tag == 12U64 {
+                    if statement.bindingLocal >= states.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+                    states.set(i: statement.bindingLocal, value: <MidOwnership.Consumed />)
+                } else {
+                    if statement.scope >= body.scopes.len { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+                    val scope = c.mid.scopes[body.scopes.start + statement.scope]
+                    if scope.firstLocal > states.count() || scope.localCount > states.count() - scope.firstLocal { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
+                    mut val local = scope.firstLocal
+                    while local < scope.firstLocal + scope.localCount {
+                        states.set(i: local, value: <MidOwnership.Consumed />)
+                        local += 1U64
+                    }
+                }
             }
             statementI = statementI + 1U64
         }

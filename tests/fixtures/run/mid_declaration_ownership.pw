@@ -3,7 +3,7 @@
 import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
 import /SourceAccess with { SourceAccess }
 import /Ir with { StructDef, TypeRef, AccessCandidate, CallSiteKey }
-import /Mid/Ir with { MidRange, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
+import /Mid/Ir with { MidRange, MidCallTarget, MidCallReceiver, MidScope, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
 import /Mid/Build with { MidFunctionTemplates, MidBuildError }
 import /Mid/Drop with { elaborateCanonicalMidDrops }
 import /Mid/Prepare with { MidParametricBody }
@@ -13,7 +13,7 @@ import @Std/Io with { print }
 
 fn checkSource() {
     mut val c = <Comp />
-    val text = "val global = 1I64 unique struct Resource {} impl Resource { fn inspect() {} } fn shadow() { val resource = <Resource /> resource.inspect() val resource = <Resource /> resource.inspect() } unique enum Outcome { Ready(resource: Resource) Empty } fn consume(value: move Outcome) { match move value { Outcome.Ready(val resource) => {} Outcome.Empty => {} } } fn identity[T](value: T) -> T { val local: T = value return local } fn widen(value: I32) -> I64 { return value as I64 } struct Number {} impl Number { assoc fn value() -> Self { mut val result: Self = <Number /> result = <Number /> return result } } fn main() {}"
+    val text = "val global = 1I64 unique struct Resource {} fn take(value: move Resource) {} fn conditional(flag: Bool) { val resource = <Resource /> if flag { take(value: move resource) } } impl Resource { fn inspect() {} } fn shadow() { val resource = <Resource /> resource.inspect() val resource = <Resource /> resource.inspect() } unique enum Outcome { Ready(resource: Resource) Empty } fn consume(value: move Outcome) { match move value { Outcome.Ready(val resource) => {} Outcome.Empty => {} } } fn identity[T](value: T) -> T { val local: T = value return local } fn widen(value: I32) -> I64 { return value as I64 } struct Number {} impl Number { assoc fn value() -> Self { mut val result: Self = <Number /> result = <Number /> return result } } fn main() {}"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=text path="ownership.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val instances = c.arena.bodyInstanceCount()
     val destructions = c.arena.finalDestructions.count()
@@ -27,11 +27,17 @@ fn checkSource() {
         if function.body != 0U64 && !function.isExtern {
             val built = templates.body(c: inout c, function: index)
             match built.error { MidBuildError.None => {} _ => { panic("declaration Mid failed") } }
+            val inputCount = c.mid.bodies.count()
             val verified = requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+            if verified.canonical.body != built.canonical.body || c.mid.bodies.count() != inputCount { panic("declaration verification rewrote its input") }
             val analyzed = verified.canonical
             val bodyCount = c.mid.bodies.count()
             val repeated = requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
-            if repeated.canonical.body != analyzed.body || c.mid.bodies.count() != bodyCount { panic("ownership request was recomputed") }
+            if repeated.canonical.body != analyzed.body || c.mid.bodies.count() != bodyCount { panic("ownership request changed its snapshot") }
+            val destruction = requests.destructionBody(c: inout c, body: verified).unwrap()
+            val expandedCount = c.mid.bodies.count()
+            val repeatedDestruction = requests.destructionBody(c: inout c, body: verified).unwrap()
+            if destruction.body != repeatedDestruction.body || c.mid.bodies.count() != expandedCount { panic("destruction request was recomputed") }
             match verifyCanonicalMidBody(c: inout c, canonical: analyzed).error {
                 MidVerifyError.None => {}
                 _ => { strictRejections += 1U64 }
@@ -104,6 +110,38 @@ fn checkInvalidOwnership() {
                 _ => { panic("instantiated verification admitted symbolic access") }
             }
         }
+    }
+    val scope = <MidScope firstLocal=0U64 localCount=1U64 />
+    for marker in [<MidStatement.ScopeExit scope=0U64 />, <MidStatement.EndBinding local=0U64 />] {
+        val ended = c.mid.store(body: <MidBody locals=[local] scopes=[scope] blocks=[<MidBlock statements=[marker] terminator=<MidTerminator.Return /> />] />)
+        match verifyDeclarationMidOwnership(c: inout c, canonical: ended).error {
+            MidVerifyError.None => {}
+            _ => { panic("declaration lifetime end rejected") }
+        }
+        val invalidRead = c.mid.store(body: <MidBody locals=[local] scopes=[scope] blocks=[<MidBlock statements=[marker] terminator=<MidTerminator.ReturnValue value=<MidOperand.Move place=place /> /> />] />)
+        match verifyDeclarationMidOwnership(c: inout c, canonical: invalidRead).error {
+            MidVerifyError.MoveUnavailable => {}
+            _ => { panic("declaration lifetime end did not kill ownership") }
+        }
+        match verifyCanonicalMidBody(c: inout c, canonical: ended).error {
+            MidVerifyError.UnelaboratedScopeExit => {}
+            MidVerifyError.UnelaboratedBindingEnd => {}
+            _ => { panic("instantiated stage admitted a lifetime marker") }
+        }
+    }
+    val missingEnd = c.mid.store(body: <MidBody locals=[local] scopes=[scope] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match verifyDeclarationMidOwnership(c: inout c, canonical: missingEnd).error {
+        MidVerifyError.OutstandingOwnership => {}
+        _ => { panic("declaration silently discarded a live owner") }
+    }
+    val replaced = c.mid.store(body: <MidBody locals=[local, keyLocal] blocks=[<MidBlock statements=[<MidStatement.Overwrite destination=place source=keyPlace />, <MidStatement.EndBinding local=0U64 />] terminator=<MidTerminator.Return /> />] />)
+    match verifyDeclarationMidOwnership(c: inout c, canonical: replaced).error {
+        MidVerifyError.None => {}
+        _ => { panic("declaration replacement rejected") }
+    }
+    match verifyCanonicalMidBody(c: inout c, canonical: replaced).error {
+        MidVerifyError.DropUnavailable => {}
+        _ => { panic("instantiated replacement admitted missing cleanup") }
     }
     mut val requests = <MidOwnershipRequests />
     match requests.request(c: inout c, body: <MidParametricBody.input canonical=invalidCopy />) {
