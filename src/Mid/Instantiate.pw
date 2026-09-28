@@ -124,11 +124,12 @@ fn instantiateCanonicalOperand(c: inout Comp, bodyId: U64, operandId: U64, envir
     if source.place != 0U64 { place = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.place, environment: environment, error: inout error) }
     mut val accessPlace: U64 = 0U64
     if source.accessPlace != 0U64 { accessPlace = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.accessPlace, environment: environment, error: inout error) }
+    val accessOwner = instantiateCanonicalPlace(c: inout c, bodyId: bodyId, placeId: source.accessOwner, environment: environment, error: inout error)
     // Only untyped literal adapters consume the frontend-frozen source type.
     // Never retag a place or an already typed value to fit the callee.
     mut val operandType = instantiateMidTerm(c: inout c, typeTerm: source.typeTerm, bodyId: bodyId, environment: environment, error: inout error)
     if source.tag == 5U64 && source.typeTerm == 0U64 && literalType != 0U64 { operandType = literalType }
-    c.mid.operands.append(<MidOperandNode tag=source.tag place=place borrowsStorage=source.borrowsStorage accessPlace=accessPlace capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate preparedInputs=source.preparedInputs />)
+    c.mid.operands.append(<MidOperandNode tag=source.tag place=place borrowsStorage=source.borrowsStorage accessPlace=accessPlace accessOwner=accessOwner capability=source.capability integerValue=source.integerValue integerNegative=source.integerNegative integerBool=source.integerBool stringStart=source.stringStart stringLen=source.stringLen typeTerm=operandType accessCandidate=source.accessCandidate preparedInputs=source.preparedInputs />)
     return c.mid.operands.count()
 }
 

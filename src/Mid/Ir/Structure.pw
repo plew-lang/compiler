@@ -10,13 +10,20 @@ pub impl MidOperandNode {
         mut val count: U64 = 0U64
         if self.place != 0U64 { count += 1U64 }
         if self.accessPlace != 0U64 { count += 1U64 }
+        if self.accessOwner != 0U64 { count += 1U64 }
         return count
     }
     fn placeAt(index: U64) -> U64 {
+        mut val remaining = index
         if self.place != 0U64 {
-            if index == 0U64 { return self.place }
-            if index == 1U64 && self.accessPlace != 0U64 { return self.accessPlace }
-        } else if index == 0U64 && self.accessPlace != 0U64 { return self.accessPlace }
+            if remaining == 0U64 { return self.place }
+            remaining -= 1U64
+        }
+        if self.accessPlace != 0U64 {
+            if remaining == 0U64 { return self.accessPlace }
+            remaining -= 1U64
+        }
+        if remaining == 0U64 && self.accessOwner != 0U64 { return self.accessOwner }
         panic "Mid operand place index out of bounds"
     }
 }

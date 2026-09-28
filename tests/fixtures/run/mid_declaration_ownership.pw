@@ -2,8 +2,8 @@
 // The stricter instantiated/executable verifiers retain their stage contracts.
 import /Frontend with { Comp, FrontendInput, analyzeFrontendDeclarations }
 import /SourceAccess with { SourceAccess }
-import /Ir with { StructDef, TypeRef }
-import /Mid/Ir with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
+import /Ir with { StructDef, TypeRef, AccessCandidate, CallSiteKey }
+import /Mid/Ir with { MidRange, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator }
 import /Mid/Build with { MidFunctionTemplates, MidBuildError }
 import /Mid/Drop with { elaborateCanonicalMidDrops }
 import /Mid/Verify with { verifyDeclarationMidOwnership, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody, MidVerifyError }
@@ -67,6 +67,34 @@ fn checkInvalidOwnership() {
     match verifyDeclarationMidOwnership(c: inout c, canonical: invalidMove).error {
         MidVerifyError.MoveUnavailable => {}
         _ => { panic("declaration use after drop accepted") }
+    }
+    // The Access owner and published evaluation homes must remain alive until
+    // the parent call, even before getter/setter expansion is available.
+    c.decls.registerAccessCandidate(<AccessCandidate readExpr=0U64 writeExpr=1U64 placeExpr=2U64 />, expressionCount: 3U64)
+    val keyPlace = <MidPlace local=1U64 typeTerm=term />
+    val outputPlace = <MidPlace local=2U64 typeTerm=term />
+    val keyLocal = <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=true isParameter=true ownsAtEntry=true preparedExpr=1U64 />
+    val outputLocal = <MidLocalDecl typeTerm=term sourceScope=0U64 isUnique=true isParameter=false />
+    val access = <MidOperand.Access candidate=0U64 inputs=<MidRange start=1U64 len=1U64 /> owner=place />
+    for variant in [0U64, 1U64, 2U64] {
+        mut val prefix: Array[MidStatement] = []
+        if variant == 1U64 { prefix.append(<MidStatement.Drop place=place />) }
+        if variant == 2U64 { prefix.append(<MidStatement.Drop place=keyPlace />) }
+        val call = <MidTerminator.Call callee=<MidCallTarget.Template site=<CallSiteKey /> /> receiver=<MidCallReceiver.None /> args=[access] destination=outputPlace target=1U64 />
+        val cleanup = <MidBlock statements=[<MidStatement.Drop place=place />, <MidStatement.Drop place=keyPlace />, <MidStatement.Drop place=outputPlace />] terminator=<MidTerminator.Return /> />
+        val body = c.mid.store(body: <MidBody locals=[local, keyLocal, outputLocal] blocks=[<MidBlock statements=prefix terminator=call />, cleanup] />)
+        val verification = verifyDeclarationMidOwnership(c: inout c, canonical: body)
+        match verification.error {
+            MidVerifyError.None => { if variant != 0U64 { panic("access revived a consumed evaluation owner") } }
+            MidVerifyError.MoveUnavailable => { if variant == 0U64 { panic("live access evaluation rejected") } }
+            _ => { panic("unexpected access ownership result") }
+        }
+        if variant == 0U64 {
+            match verifyCanonicalMidBody(c: inout c, canonical: body).error {
+                MidVerifyError.UnelaboratedAccess => {}
+                _ => { panic("instantiated verification admitted symbolic access") }
+            }
+        }
     }
     match verifyExecutableCanonicalMidBody(c: inout c, canonical: invalidCopy).error {
         MidVerifyError.MissingOwnershipContract => {}

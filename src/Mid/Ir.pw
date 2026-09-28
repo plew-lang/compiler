@@ -106,6 +106,8 @@ pub struct MidOperandNode {
     // get-modify-set. Zero means `place`; otherwise this is a canonical
     // container place with one-time-evaluated reference roots.
     pub val accessPlace: U64 = 0U64
+    // Readable owner of an unexpanded Access; not its future ABI place.
+    pub val accessOwner: U64 = 0U64
     pub val capability: U64 = 0U64
     pub val integerValue: U64 = 0U64
     pub val integerNegative: Bool = false
@@ -428,8 +430,9 @@ pub enum MidOperand {
     Constant(value: MidConstant)
     // A Lower-published indexed read that has not yet been expanded into its
     // instance-specific get-modify-set CFG. It is valid only between the
-    // parametric builder and access elaboration; verifier/backend reject it.
-    Access(candidate: U64, inputs: MidRange)
+    // parametric builder and access elaboration. Declaration verification reads
+    // its owner/evaluation homes; executable verification/backend reject it.
+    Access(candidate: U64, inputs: MidRange, owner: MidPlace)
 }
 
 // A call is a high-fanout ownership boundary.  Its draft arguments must not
@@ -825,7 +828,8 @@ fn midFreezeNormalizedCallArgument(arena: inout MidCanonicalArena, projections: 
         return arena.operands.count()
     }
     if argument.tag == 8U64 {
-        arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=argument.accessCandidate preparedInputs=argument.preparedInputs />)
+        arena.places.append(<MidPlaceNode rootTag=argument.rootTag local=argument.local globalTarget=argument.globalTarget globalMutable=argument.globalMutable typeTerm=argument.typeTerm typeRecipe=argument.typeRecipe />)
+        arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=argument.accessCandidate preparedInputs=argument.preparedInputs accessOwner=arena.places.count() />)
         return arena.operands.count()
     }
     return 0U64
@@ -869,8 +873,9 @@ fn midFreezeOperand(arena: inout MidCanonicalArena, operand: MidOperand) -> U64 
                 }
             }
         }
-        MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
-            arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=candidate preparedInputs=inputs />)
+        MidOperand.Access(candidate: val candidate, inputs: val inputs, owner: val owner) => {
+            val ownerId = midFreezePlace(arena: inout arena, place: owner)
+            arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=candidate preparedInputs=inputs accessOwner=ownerId />)
         }
     }
     return arena.operands.count()
@@ -1157,7 +1162,7 @@ fn midCanonicalOperandIsWellFormed(arena: MidCanonicalArena, operand: U64) -> Bo
         5U64 => { return true }
         6U64 => { return true }
         7U64 => { return true }
-        8U64 => { return true }
+        8U64 => { return midCanonicalPlaceIsWellFormed(arena: arena, place: node.accessOwner) }
         _ => { return false }
     }
 }

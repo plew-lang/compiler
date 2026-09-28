@@ -205,7 +205,7 @@ fn midNormalizeCallArgument(state: inout MidBuildState, operand: MidOperand) -> 
                 MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val term) => { return <MidCallArgument tag=7U64 stringStart=start stringLen=len typeTerm=term /> }
             }
         }
-        MidOperand.Access(candidate: val candidate, inputs: val inputs) => { return <MidCallArgument tag=8U64 accessCandidate=candidate preparedInputs=inputs /> }
+        MidOperand.Access(candidate: val candidate, inputs: val inputs, owner: val owner) => { return <MidCallArgument tag=8U64 accessCandidate=candidate preparedInputs=inputs rootTag=owner.rootTag local=owner.local globalTarget=owner.globalTarget globalMutable=owner.globalMutable typeTerm=owner.typeTerm typeRecipe=owner.typeRecipe /> }
     }
 }
 pub impl MidBuildState {
@@ -517,10 +517,42 @@ fn midPrepareAccessPlace(c: inout Comp, state: inout MidBuildState, exprId: U64)
     }
 }
 
+// Freeze only the owner needed for declaration ownership. Access still owns
+// getter/setter selection and the complete physical path after instantiation.
+fn midPreparedAccessOwner(state: MidBuildState, start: U64, exprId: U64) -> MidPlaceLookup {
+    mut val index = start
+    while index < state.locals.count() {
+        val local = state.locals[index]
+        if local.preparedExpr == exprId + 1U64 {
+            return <MidPlaceLookup found=true place=<MidPlace local=index typeTerm=local.typeTerm typeRecipe=local.typeRecipe /> />
+        }
+        index += 1U64
+    }
+    return <MidPlaceLookup />
+}
+
+fn midAccessOwner(c: inout Comp, state: MidBuildState, start: U64, exprId: U64) -> MidPlaceLookup {
+    if exprId >= c.arena.exprs.count() { return <MidPlaceLookup /> }
+    val candidate = c.decls.accessCandidateForExpr(exprId: exprId)
+    val source = if candidate < c.decls.accessCandidateCount() { give c.decls.accessCandidateAt(index: candidate).placeExpr } else { give exprId }
+    match c.arena.exprs[source] {
+        Expr.ExtView(recv: val base, source: _, strip: _) => { return midAccessOwner(c: inout c, state: state, start: start, exprId: base) }
+        Expr.Index(base: val base, index: _) => { return midAccessOwner(c: inout c, state: state, start: start, exprId: base) }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => { return midAccessOwner(c: inout c, state: state, start: start, exprId: base) }
+        Expr.Arrow(base: val base, nameStart: _, nameLen: _) => { return midPreparedAccessOwner(state: state, start: start, exprId: base) }
+        Expr.Deref(base: val base) => { return midPreparedAccessOwner(state: state, start: start, exprId: base) }
+        Expr.Ident(start: _, len: _) => { return midPlaceForRecordedIdent(c: inout c, state: state, exprId: source, typeTerm: c.semanticExprTerm(exprId: source)) }
+        _ => { return midPreparedAccessOwner(state: state, start: start, exprId: source) }
+    }
+}
+
 fn midPrepareAccess(c: inout Comp, state: inout MidBuildState, candidate: U64) -> MidOperandBuild {
     val start = state.locals.count()
     val error = midPrepareAccessPlace(c: inout c, state: inout state, exprId: c.decls.accessCandidateAt(index: candidate).placeExpr)
-    return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=<MidRange start=start len=state.locals.count() - start /> /> error=error />
+    match error { MidBuildError.None => {} _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=error /> } }
+    val owner = midAccessOwner(c: inout c, state: state, start: start, exprId: c.decls.accessCandidateAt(index: candidate).placeExpr)
+    if !owner.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=<MidRange start=start len=state.locals.count() - start /> owner=owner.place /> />
 }
 
 fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidNormalizedCallArgumentBuild {
@@ -1474,8 +1506,8 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val place: MidPlace = match baseValue.operand {
                 MidOperand.Copy(place: val source) => { give source }
                 MidOperand.Move(place: val source) => { give source }
-                MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
-                    if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs /> /> }
+                MidOperand.Access(candidate: val candidate, inputs: val inputs, owner: val owner) => {
+                    if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs owner=owner /> /> }
                     return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> />
                 }
                 _ => { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> /> }
@@ -1686,10 +1718,10 @@ fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argumen
             MidOperand.Copy(place: val place) => {
                 return <MidOperandBuild operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> />
             }
-            MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
+            MidOperand.Access(candidate: val candidate, inputs: val inputs, owner: val owner) => {
                 // The instance-specific access elaborator supplies the
                 // materialized temporary and its Inout borrow.
-                return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs /> />
+                return <MidOperandBuild operand=<MidOperand.Access candidate=candidate inputs=inputs owner=owner /> />
             }
             _ => {
                 return <MidOperandBuild operand=built.operand error=<MidBuildError.UnsupportedCallTemplate /> />
@@ -1896,10 +1928,10 @@ fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64,
                 val receiver: MidCallReceiver = <MidCallReceiver.Value operand=borrowed />
                 return <MidReceiverBuild receiver=receiver />
             }
-            MidOperand.Access(candidate: val candidate, inputs: val inputs) => {
+            MidOperand.Access(candidate: val candidate, inputs: val inputs, owner: val owner) => {
                 // Access elaboration replaces this marker with the mutable
                 // temporary borrowed by the selected inout receiver.
-                return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate inputs=inputs /> /> />
+                return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate inputs=inputs owner=owner /> /> />
             }
             _ => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
         }
@@ -1933,7 +1965,7 @@ fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64
     mut val hasInoutArgument: Bool = false
     mut val delayedAccess = false
     match receiver.receiver {
-        MidCallReceiver.Value(operand: val operand) => { match operand { MidOperand.Access(candidate: _, inputs: _) => { delayedAccess = true } _ => {} } }
+        MidCallReceiver.Value(operand: val operand) => { match operand { MidOperand.Access(candidate: _, inputs: _, owner: _) => { delayedAccess = true } _ => {} } }
         _ => {}
     }
     mut val captures: Array[Bool] = []

@@ -186,7 +186,28 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
     val executable = stage.isExecutable()
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-    if operand.tag == 8U64 { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+    if operand.tag == 8U64 {
+        if !stage.isDeclaration() { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+        if operand.accessCandidate >= c.decls.accessCandidateCount() || operand.preparedInputs.start > body.locals.len || operand.preparedInputs.len > body.locals.len - operand.preparedInputs.start {
+            return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block />
+        }
+        val owner = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: operand.accessOwner, block: block)
+        match owner.error { MidVerifyError.None => {} _ => { return owner } }
+        // Only the published key/reference homes survive to the access. The
+        // range also contains intermediate results already consumed by them.
+        mut val index = operand.preparedInputs.start
+        val end = index + operand.preparedInputs.len
+        while index < end {
+            if c.mid.locals[body.locals.start + index].preparedExpr != 0U64 {
+                match states[index] {
+                    MidOwnership.Owned => {}
+                    _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=index /> }
+                }
+            }
+            index += 1U64
+        }
+        return <MidVerification />
+    }
     if stage.isDeclaration() && operand.tag == 1U64 {
         if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         val source = c.mid.places[operand.place - 1U64]
