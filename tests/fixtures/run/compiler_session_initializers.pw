@@ -1,0 +1,49 @@
+import /CheckedProgram with { CompilerSession, CompilerSessionResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Io with { print }
+
+fn initializers() {
+    val source = "mut val counter = 1I64 val ready = initialize() fn initialize() -> I64 { return counter } fn main() { missing() }"
+    match CompilerSession.open(input: <FrontendInput.Text path="startup.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val prepared = session.prepareInitializers().unwrap().unwrap()
+            if !prepared.ambient.enabled { panic "startup global plan missing" }
+            val repeated = session.prepareInitializers().unwrap().unwrap()
+            if prepared.body.executable.canonical.body != repeated.body.executable.canonical.body { panic "startup rebuilt" }
+            // Initializer dependencies are valid; unrelated main is checked
+            // only when its body is requested, and failure stays terminal.
+            match session.prepareFunction(function: 1U64) {
+                Result.Ok(value: _) => { panic "invalid main accepted" }
+                Result.Err(error: val diagnostic) => {
+                    match session.prepareInitializers() {
+                        Result.Ok(value: _) => { panic "startup resumed failed session" }
+                        Result.Err(error: val repeated) => { if repeated.message != diagnostic.message { panic "terminal error changed" } }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn empty() {
+    match CompilerSession.open(input: <FrontendInput.Text path="empty.pw" text="fn main() { missing() }" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            match session.prepareInitializers().unwrap() {
+                Optional.None => {}
+                Optional.Some(v: _) => { panic "invented initializer" }
+            }
+            if session.registeredBodies().count() != 0U64 { panic "startup demanded main" }
+        }
+    }
+}
+
+fn main() {
+    initializers()
+    empty()
+    print("ok")
+}

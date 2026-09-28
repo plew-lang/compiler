@@ -1,7 +1,7 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-import ./Ir with { StaticConformanceProof, BodyOrigin }
+import ./Ir with { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation }
 import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
@@ -119,6 +119,21 @@ pub impl CompilerSession {
         }
     }
 
+    // Startup is an explicit root, independent of requesting main's body.
+    // None means there are no global initializers to execute.
+    inout fn prepareInitializers() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
+        match self.executionFailure {
+            Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            Optional.None => {}
+        }
+        val result = self.prepareInitializersInSession()
+        match result {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { self.executionFailure = <Optional.Some v=diagnostic /> }
+        }
+        return result
+    }
+
     inout fn prepareBodyAccess(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
         val result = self.prepareBodyAccessInSession(bodyId: bodyId)
         match result {
@@ -161,6 +176,16 @@ impl CompilerSession {
         try self.compiler.initializeFinalCallables()
         self.finalizationStarted = true
         return <Result.Ok value=() />
+    }
+
+    inout fn prepareInitializersInSession() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
+        (try self.request(root: <DeclarationAccessNode.GlobalInitializer />))
+        try self.startFinalization()
+        try self.compiler.prepareFinalInitializers(state: inout self.finalDependencies)
+        if self.compiler.arena.globals.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val bodyId = self.compiler.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        val prepared = (try self.prepareBodyAccess(bodyId: bodyId))
+        return <Result.Ok value=<Optional.Some v=prepared /> />
     }
 
     inout fn prepareFunctionInSession(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof) -> Result[BodyDescriptors, CompileDiagnostic] {
