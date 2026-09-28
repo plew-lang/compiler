@@ -1771,7 +1771,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     tracePhase(c: inout c, label: "default-call-completion:done")
     if !c.genMode {
         try c.closeProgramCallTemplates()
-        try c.checkClosedCallTemplateBounds()
+        try c.checkRecordedCallTemplateBounds()
         try c.checkClosedIterationProtocols()
     }
     try c.prepareDiscriminantType()

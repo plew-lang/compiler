@@ -1347,14 +1347,14 @@ pub impl Comp {
     // its substitutions came from arguments, a receiver, or an expected result.
     // The same closed callable constraint is checked whether selected during
     // declaration analysis or demanded later by executable discovery.
-    inout fn checkSelectedCallableBounds(fnIdx: U64, args: Array[U64], receiver: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkSelectedCallableBounds(fnIdx: U64, args: Array[U64], receiver: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         val function = self.arena.functionAt(index: fnIdx)
         val declaration = try self.lexicalFunction(f: function)
         if declaration.hasRecv && receiver != 0U64 {
-            return self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: receiver)
+            return self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: receiver, assumptions: assumptions)
         }
-        if function.typeParams.count() > 0U64 && args.count() == function.typeParams.count() && (try self.fnArgsAllGround(args: args)) {
-            return self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=receiver />)
+        if function.typeParams.count() > 0U64 && args.count() == function.typeParams.count() {
+            return self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=receiver />, assumptions: assumptions)
         }
         return <Result.Ok value=() />
     }
@@ -1509,7 +1509,7 @@ pub impl Comp {
     // Unused source calls still impose constraints. Symbolic substitutions
     // retain their bound-aware abstract checking and later instance obligations.
     // This pass never registers an executable body or resolves a new callee.
-    inout fn checkClosedCallTemplateBounds() -> Result[(), CompileDiagnostic] {
+    inout fn checkRecordedCallTemplateBounds() -> Result[(), CompileDiagnostic] {
         if self.decls.funcBounds.count() == 0U64 { return <Result.Ok value=() /> }
         mut val constrained: Array[Bool] = []
         mut val index = 0U64
@@ -1530,16 +1530,16 @@ pub impl Comp {
                     if callee < constrained.count() && constrained[callee] {
                         val function = self.arena.functionAt(index: callee)
                         val args = self.callTemplateTypeArgs(range: arguments)
-                        mut val closed = args.count() == function.typeParams.count()
+                        mut val resolved = args.count() == function.typeParams.count()
                         mut val argument = 0U64
                         while argument < args.count() {
-                            if args[argument] == 0U64 || !self.typeTermIsClosed(ref: args[argument]) { closed = false }
+                            if args[argument] == 0U64 { resolved = false }
                             argument += 1U64
                         }
                         val receiver = template.receiverTypeTerm
-                        if function.hasRecv && (receiver == 0U64 || !self.typeTermIsClosed(ref: receiver)) { closed = false }
-                        if closed {
-                            try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver))
+                        if function.hasRecv && (receiver == 0U64) { resolved = false }
+                        if resolved {
+                            try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: self.canonicalBodyReceiverRef(fnIdx: callee, recvInstRef: receiver), assumptions: self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx))
                         }
                     }
                 }
@@ -1550,7 +1550,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkOneFnInstBounds(fin: FnInst) -> Result[(), CompileDiagnostic] {
+    inout fn checkOneFnInstBounds(fin: FnInst, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fin.fnIdx)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
@@ -1560,7 +1560,7 @@ pub impl Comp {
                 if fb.paramTy != 0U64 {
                     val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: fin.args)
                     if lhs < self.arena.typeCount() {
-                        val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint))
+                        val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint, assumptions: assumptions))
                         if !ok {
                             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
                         }
@@ -1578,7 +1578,7 @@ pub impl Comp {
                             // conformsInstance checks CONDITIONAL conformance against the
                             // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
                             // location — no deferral to a deeper monomorphization level).
-                            val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: fin.args[pi], constraint: constraint))
+                            val ok: Bool = (try self.viewedTypeConformsTraitConstraint(ref: fin.args[pi], constraint: constraint, assumptions: assumptions))
                             if !ok {
                                 return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
                             }
@@ -1612,7 +1612,7 @@ pub impl Comp {
     // substitution by the same directional pattern match used for conformance
     // proofs, but run it for the one BodyInstance that finalization enqueues
     // rather than sweeping every discovered generic layout up front.
-    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val receiverEnv: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: instRef))
         if receiverEnv.conformIdx == 0U64 { return <Result.Ok value=() /> }
@@ -1650,7 +1650,7 @@ pub impl Comp {
                     }
                 }
                 if lhs != 0U64 && lhs < self.arena.typeCount() {
-                    if !((try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint))) {
+                    if !((try self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint, assumptions: assumptions))) {
                         return <Result.Err error=self.diagnosticAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`") />
                     }
                 }

@@ -1,0 +1,7 @@
+import @Std/Core
+trait Stepper { fn step() -> I64 }
+struct Wrapper[T] { val value: T }
+impl[T] Wrapper[T] as Stepper where T: Stepper { fn step() -> I64 { return self.value.step() } }
+fn run[T](value: T) -> I64 where T: Stepper { return value.step() }
+fn unused[T](value: T) -> I64  { return run(value: <Wrapper[T] value=value />) }
+fn main() {}
