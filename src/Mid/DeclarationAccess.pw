@@ -238,7 +238,7 @@ fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool 
     return false
 }
 
-fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
+pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
     match built.error { MidBuildError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> } }
     val body = c.mid.bodies[built.canonical.body - 1U64]
     val reachable = canonicalMidReachable(c: c, body: body)

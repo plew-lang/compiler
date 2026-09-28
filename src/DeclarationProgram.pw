@@ -3,10 +3,12 @@
 import ./Frontend with { Comp }
 import ./Diag with { CompileDiagnostic }
 import ./Mid/Build with { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
-import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, checkDeclarationLocalAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+import ./Mid/DeclarationAccess with { analyzeDeclarationGlobalAccessWithRequests, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 import ./Mid/Verify with { MidVerifyError }
 import ./Mid/OwnershipAnalysis with { MidOwnershipRequests }
 import ./Mid/Prepare with { MidParametricBody }
+import ./Mid/Ir with { MidCanonicalBody }
+import ./Ir with { SemanticClosure }
 import ./Mid/Diagnostics with { reportMidBuildError }
 
 pub enum DeclarationProgramError {
@@ -14,18 +16,91 @@ pub enum DeclarationProgramError {
     GlobalAccess(offset: U64)
 }
 
-// The caller retains templates so execution preparation reuses the same bodies.
+// A local declaration result proves ownership and local call-access checks of
+// one immutable canonical body. Global effects and concrete obligations remain.
+pub struct CheckedDeclarationBody {
+    pub val canonical: MidCanonicalBody
+}
+
+// Requests are session scoped, like templates: keep them with the owning Comp.
+pub struct DeclarationBodyRequests {
+    mut val ownership: MidOwnershipRequests = <MidOwnershipRequests />
+    mut val results: Dictionary[U64, Result[CheckedDeclarationBody, DeclarationAccessError]] = [:]
+}
+pub impl DeclarationBodyRequests {
+    factory
+
+    inout fn function(c: inout Comp, templates: inout MidFunctionTemplates, function: U64) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        match c.prepareLexicalBody(fnIdx: function) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+        }
+        val built = templates.body(c: inout c, function: function)
+        return self.body(c: inout c, owner: <DeclarationAccessNode.Function function=function />, built: built)
+    }
+
+    inout fn closure(c: inout Comp, closure: SemanticClosure) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
+        return self.body(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built)
+    }
+
+    inout fn globalInitializer(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        val built = templates.globalInitializer(c: inout c)
+        return self.body(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built)
+    }
+}
+impl DeclarationBodyRequests {
+    inout fn body(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        match built.error {
+            MidBuildError.None => {}
+            _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> }
+        }
+        val key = built.canonical.body
+        match self.results.get(key: key) {
+            Optional.Some(v: val result) => { return result }
+            Optional.None => {}
+        }
+        val result = self.checkBody(c: inout c, owner: owner, built: built)
+        self.results[key] = result
+        return result
+    }
+
+    inout fn checkBody(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        match self.ownership.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=owner verification=verification /> /> }
+        }
+        mut val needsAccess = true
+        match owner {
+            DeclarationAccessNode.Function(function: val function) => {
+                needsAccess = false
+                val lexical = match c.semanticBodyOwner(fnIdx: function) {
+                    Result.Ok(value: val lexical) => { give lexical }
+                    Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+                }
+                mut val row = c.firstLexicalCallTemplate(owner: lexical)
+                while row != 0U64 {
+                    if c.decls.callTemplates[row - 1U64].mayHaveStorageArguments { needsAccess = true
+                        break }
+                    row = c.decls.callTemplateBodyNext[row - 1U64]
+                }
+            }
+            _ => {}
+        }
+        if needsAccess { try checkDeclarationBodyAccess(c: inout c, owner: owner, built: built) }
+        return <Result.Ok value=<CheckedDeclarationBody canonical=built.canonical /> />
+    }
+}
+
+// Whole-target checking demands the same local requests as lazy admission,
+// then closes interprocedural global effects over the entire checked target.
 pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[DeclarationAccessAnalysis, DeclarationProgramError] {
-    mut val requests = <MidOwnershipRequests />
-    match checkDeclarationOwnership(c: inout c, templates: inout templates, requests: inout requests) {
+    mut val requests = <DeclarationBodyRequests />
+    match checkDeclarationBodies(c: inout c, templates: inout templates, requests: inout requests) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
-    match checkDeclarationLocalAccess(c: inout c, templates: inout templates) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
-    }
-    val analysis = match analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests) {
+    val analysis = match analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests.ownership) {
         Result.Ok(value: val analysis) => { give analysis }
         Result.Err(error: val error) => { return <Result.Err error=<DeclarationProgramError.Analysis error=error /> /> }
     }
@@ -35,39 +110,24 @@ pub fn prepareDeclarationProgram(c: inout Comp, templates: inout MidFunctionTemp
     return <Result.Ok value=analysis />
 }
 
-fn checkDeclarationOwnershipBody(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
-    match built.error {
-        MidBuildError.None => {}
-        _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> }
-    }
-    match requests.request(c: inout c, body: <MidParametricBody.input canonical=built.canonical />) {
-        Result.Ok(value: _) => { return <Result.Ok value=() /> }
-        Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=owner verification=verification /> /> }
-    }
-}
-
-fn checkDeclarationOwnership(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout MidOwnershipRequests) -> Result[(), DeclarationAccessError] {
+fn checkDeclarationBodies(c: inout Comp, templates: inout MidFunctionTemplates, requests: inout DeclarationBodyRequests) -> Result[(), DeclarationAccessError] {
     val functions = c.arena.functionCount()
     mut val index = 0U64
     while index < functions {
         val function = c.arena.functionAt(index: index)
         if function.body != 0U64 && !function.isExtern {
-            val built = templates.body(c: inout c, function: index)
-            try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.Function function=index />, built: built, requests: inout requests)
+            try requests.function(c: inout c, templates: inout templates, function: index)
         }
         index += 1U64
     }
     val closures = c.decls.semanticClosures.count()
     index = 0U64
     while index < closures {
-        val closure = c.decls.semanticClosures[index]
-        val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
-        try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built, requests: inout requests)
+        try requests.closure(c: inout c, closure: c.decls.semanticClosures[index])
         index += 1U64
     }
     if c.arena.globals.count() != 0U64 {
-        val built = templates.globalInitializer(c: inout c)
-        try checkDeclarationOwnershipBody(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built, requests: inout requests)
+        try requests.globalInitializer(c: inout c, templates: inout templates)
     }
     return <Result.Ok value=() />
 }

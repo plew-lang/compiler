@@ -177,9 +177,14 @@ assert analysis.index('MidExecutableProgram.prepareWithTemplates(') < analysis.i
 assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecutableProgram.prepareWithTemplates(')
 assert 'prepareDeclarationProgram(c: inout c, templates: inout templates)' in analysis
 declarations = Path('src/DeclarationProgram.pw').read_text()
-assert declarations.index('checkDeclarationOwnership(') < declarations.index('checkDeclarationLocalAccess(') < declarations.index('analyzeDeclarationGlobalAccessWithRequests(')
-assert 'analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests)' in declarations
-assert 'checkDeclarationLocalAccess(c: inout c, templates: inout templates)' in declarations
+local = declarations.split('inout fn checkBody(', 1)[1].split('// Whole-target checking', 1)[0]
+assert local.index('self.ownership.request(') < local.index('checkDeclarationBodyAccess(') < local.index('<CheckedDeclarationBody ')
+whole = declarations.split('pub fn prepareDeclarationProgram(', 1)[1]
+assert whole.index('checkDeclarationBodies(') < whole.index('analyzeDeclarationGlobalAccessWithRequests(')
+assert 'analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests.ownership)' in whole
+assert 'requests.function(c: inout c, templates: inout templates, function: index)' in declarations
+assert 'requests.closure(c: inout c, closure: c.decls.semanticClosures[index])' in declarations
+assert 'requests.globalInitializer(c: inout c, templates: inout templates)' in declarations
 for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreate(', 'import ./Backend', 'exit(', 'c.errorAt(']:
     assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'
 assert 'MidExecutableProgram.prepareWithTemplates(c: inout c, templates: inout templates)' in analysis

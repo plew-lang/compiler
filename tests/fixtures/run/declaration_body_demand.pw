@@ -1,0 +1,55 @@
+import /Frontend with { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+import /SourceAccess with { SourceAccess }
+import /DeclarationProgram with { DeclarationBodyRequests }
+import /Mid/Build with { MidFunctionTemplates }
+import /Mid/DeclarationAccess with { DeclarationAccessError }
+import /Mid/Verify with { MidVerifyError }
+import @Std/Io with { print }
+
+fn owner(c: inout Comp, name: String) -> U64 {
+    val span = c.internBytes(s: name)
+    mut val index = 0U64
+    while index < c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: span.nameStart, bLen: span.nameLen) { return index }
+        index += 1U64
+    }
+    panic "missing source declaration"
+}
+
+fn main() {
+    mut val c = <Comp />
+    val source = "struct Counter { mut val value: I64 } impl Counter { fn read[T](other: inout Counter, token: T) -> I64 { other.value = 2I64 return self.value } } fn good[T](value: T) -> T { return value } fn closure() -> I64 { val get = fn() -> I64 { return 1I64 } return get() } fn conflict() { mut val counter = <Counter value=1I64 /> counter.read(other: inout counter, token: 0I64) } fn broken() { missing() } fn main() {}"
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="body-demand.pw" text=source />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <DeclarationBodyRequests />
+    val good = owner(c: inout c, name: "good")
+    val conflict = owner(c: inout c, name: "conflict")
+    val closure = owner(c: inout c, name: "closure")
+    val checked = requests.function(c: inout c, templates: inout templates, function: good).unwrap()
+    if c.lexicalBodyPreparations.count() != 1U64 || checked.canonical.body == 0U64 { panic "unrelated body requested" }
+    val bodies = c.mid.bodies.count()
+    val repeated = requests.function(c: inout c, templates: inout templates, function: good).unwrap()
+    if repeated.canonical.body != checked.canonical.body || c.mid.bodies.count() != bodies { panic "request rebuilt its body" }
+    requests.function(c: inout c, templates: inout templates, function: closure).unwrap()
+    if c.decls.semanticClosures.count() != 1U64 { panic "closure metadata missing" }
+    requests.closure(c: inout c, closure: c.decls.semanticClosures[0U64]).unwrap()
+    mut val iteration = 0U64
+    while iteration < 2U64 {
+        match requests.function(c: inout c, templates: inout templates, function: conflict) {
+            Result.Ok(value: _) => { panic "local access conflict accepted" }
+            Result.Err(error: val error) => {
+                match error {
+                    DeclarationAccessError.LocalAccess(body: _, error: val error) => {
+                        match error { MidVerifyError.ConflictingReceiverAccess => {} _ => { panic "wrong local access diagnostic" } }
+                    }
+                    _ => { panic "wrong request diagnostic" }
+                }
+            }
+        }
+        iteration += 1U64
+    }
+    if c.lexicalBodyPreparations.count() != 3U64 { panic "request inspected unused callee or broken body" }
+    if c.monoWork.bodyInstances.count() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "declaration request discovered executable code" }
+    print("ok")
+}
