@@ -139,7 +139,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_b".bytes())
         appendU64Dec(into: inout nm, n: bodyId)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: bodyId)
         self.genMethVal.append(fv)
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)

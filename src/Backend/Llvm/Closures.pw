@@ -56,7 +56,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "pwclodrop".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function = self.declareBodyFunction(name: arrayCPtr(name), signature: type)
+        val function = self.declareBodyFunction(name: arrayCPtr(name), signature: type, bodyId: bodyId)
         self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
         return <Result.Ok value=function />
     }
@@ -180,7 +180,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "__closure".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(name), signature: functionTypeLlvm)
+        val function: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(name), signature: functionTypeLlvm, bodyId: bodyId)
         self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
         return <Result.Ok value=() />
     }

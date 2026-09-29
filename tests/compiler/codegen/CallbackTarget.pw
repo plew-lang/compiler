@@ -1,3 +1,5 @@
-fn target(value~: I64) -> I64 { return value }
+fn target(value~: I64) -> I64 { return increment(value) }
 fn unused() { missing() }
 fn main() {}
+
+fn increment(value~: I64) -> I64 { return value + 1I64 }

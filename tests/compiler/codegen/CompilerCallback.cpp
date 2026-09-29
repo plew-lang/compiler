@@ -12,8 +12,8 @@ extern "C" int exerciseCompilerCallback(uint64_t session, uint64_t body) {
   auto address = plew_llvm_jit_lookup(jit, name);
   assert(address);
   auto target = reinterpret_cast<int64_t (*)(int64_t)>(address);
-  assert(target(41) == 41);
-  assert(target(72) == 72);
+  assert(target(41) == 42);
+  assert(target(72) == 73);
   assert(!plew_llvm_jit_failed(jit));
   plew_llvm_jit_destroy(jit);
   return 0;

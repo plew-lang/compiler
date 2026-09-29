@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 struct State {
-  int calls[5] = {};
+  int calls[6] = {};
   PlewLlvmJit *jit = nullptr;
   std::thread::id thread = std::this_thread::get_id();
   bool fail = false;
@@ -18,7 +18,7 @@ static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
   assert(found != sessions.end());
   auto &state = *found->second;
   assert(state.thread == std::this_thread::get_id());
-  assert(body < 4 && ++state.calls[body] == 1);
+  assert(body < 5 && ++state.calls[body] == 1);
   *context = LLVMContextCreate();
   *out = LLVMModuleCreateWithNameInContext("requested", *context);
   if (state.fail) return 1; // Failure still transfers allocated handles.
@@ -36,6 +36,22 @@ static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
   }
   auto integer = LLVMInt64TypeInContext(*context);
   auto signature = LLVMFunctionType(integer, &integer, 1, 0);
+  if (body == 4) {
+    auto primary = LLVMAddFunction(*out, "multi.primary", signature);
+    auto sibling = LLVMAddFunction(*out, "multi.sibling", signature);
+    auto kind = LLVMGetMDKindIDInContext(*context, "plew.body", 9);
+    auto operand = LLVMValueAsMetadata(LLVMConstInt(integer, body, 0));
+    auto metadata = LLVMMDNodeInContext2(*context, &operand, 1);
+    LLVMGlobalSetMetadata(primary, kind, metadata);
+    LLVMGlobalSetMetadata(sibling, kind, metadata);
+    auto builder = LLVMCreateBuilderInContext(*context);
+    LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(*context, primary, "entry"));
+    LLVMBuildRet(builder, LLVMBuildPtrToInt(builder, sibling, integer, ""));
+    LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(*context, sibling, "entry"));
+    LLVMBuildRet(builder, LLVMBuildAdd(builder, LLVMGetParam(sibling, 0), LLVMConstInt(integer, 2, 0), ""));
+    LLVMDisposeBuilder(builder);
+    return 0;
+  }
   const char *names[] = {"first", "second", "identity"};
   auto function = LLVMAddFunction(*out, names[body], signature);
   auto builder = LLVMCreateBuilderInContext(*context);
@@ -62,7 +78,7 @@ int main(int argc, char **argv) {
   assert(jit);
   state.jit = jit;
   assert(plew_llvm_jit_defer(jit, "first", 0, prepare, session) == 0);
-  assert(plew_llvm_jit_defer(jit, "unused", 4, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "unused", 5, prepare, session) == 0);
   assert(plew_llvm_jit_defer(jit, "identity", 2, prepare, session) == 0);
   assert(plew_llvm_jit_defer(jit, "floating", 3, prepare, session) == 0);
   auto address = plew_llvm_jit_lookup(jit, "first");
@@ -78,6 +94,16 @@ int main(int argc, char **argv) {
   assert(state.calls[3] == 0);
   assert(floating(1.25,2,3,4,5,6,7,8,9,10.5) == 11.75);
   assert(floating(2.25,2,3,4,5,6,7,8,9,20.5) == 22.75 && state.calls[3] == 1);
+  assert(plew_llvm_jit_defer(jit, "multi.primary", 4, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "multi.sibling", 4, prepare, session) == 0);
+  // Exact repeat is idempotent and may occur in every requested module.
+  assert(plew_llvm_jit_defer(jit, "multi.primary", 4, prepare, session) == 0);
+  auto primaryAddress = plew_llvm_jit_lookup(jit, "multi.primary");
+  auto siblingAddress = plew_llvm_jit_lookup(jit, "multi.sibling");
+  assert(primaryAddress && siblingAddress && state.calls[4] == 0);
+  auto primary = reinterpret_cast<uint64_t (*)(uint64_t)>(primaryAddress);
+  auto sibling = reinterpret_cast<uint64_t (*)(uint64_t)>(siblingAddress);
+  assert(primary(0) == siblingAddress && sibling(40) == 42 && state.calls[4] == 1);
   assert(!plew_llvm_jit_failed(jit));
   plew_llvm_jit_destroy(jit);
   sessions.erase(session);

@@ -41,7 +41,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
-                    val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
+                    val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: bodyId)
                     if f.isExposed && !c.genMode {
                         try self.emitExposedEntry(c: inout c, bodyId: bodyId, target: fv, signature: fty)
                     }
@@ -111,6 +111,7 @@ pub impl LlvmCtx {
         if declaration.hasRet { returnType = (try self.cScalarType(c: inout c, ref: prepared.resultType)) }
         val externalSignature = LLVMFunctionType(returnType, arrayCPtr(parameters), parameters.count(), 0I32)
         val entry = LLVMAddFunction(self.mod, arrayCPtr(name), externalSignature)
+        self.attachBodyIdentity(function: entry, bodyId: bodyId)
         self.declId.append(declaration.nameId)
         self.declFn.append(entry)
         self.declTy.append(externalSignature)

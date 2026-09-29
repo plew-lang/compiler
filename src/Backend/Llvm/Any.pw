@@ -53,7 +53,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: member.adapterBodyId)
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return <Result.Ok value=fv />
     }

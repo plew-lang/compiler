@@ -475,6 +475,11 @@ extern(c) {
     type LLVMValueRef
     type LLVMBasicBlockRef
     type LLVMBuilderRef
+    type LLVMMetadataRef
+    fn LLVMGetMDKindIDInContext(context~: LLVMContextRef, name~: CPtr[U8], length~: U32) -> U32
+    fn LLVMValueAsMetadata(value~: LLVMValueRef) -> LLVMMetadataRef
+    fn LLVMMDNodeInContext2(context~: LLVMContextRef, operands~: CPtr[LLVMMetadataRef], count~: U64) -> LLVMMetadataRef
+    fn LLVMGlobalSetMetadata(global~: LLVMValueRef, kind~: U32, metadata~: LLVMMetadataRef)
     fn plew_pointer_equal(first~: LLVMTypeRef, second~: LLVMTypeRef) -> I32
 
     // Context / module.

@@ -88,10 +88,21 @@ pub impl LlvmCtx {
 
     // Body symbols can be resolved across requested modules. Local ARC/layout
     // glue keeps ordinary internal linkage and uses the same physical ABI.
-    inout fn declareBodyFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
+    inout fn declareBodyFunction(name: CPtr[U8], signature: LLVMTypeRef, bodyId: U64) -> LLVMValueRef {
         val function = self.declareValueFunction(name: name, signature: signature)
         if !self.wholeProgram() { LLVMSetLinkage(function, 0U32) }
+        self.attachBodyIdentity(function: function, bodyId: bodyId)
         return function
+    }
+
+    // Frozen semantic identity travels with the declaration, independently of
+    // symbol spelling and physical entry count (for example async entry/resume).
+    fn attachBodyIdentity(function: LLVMValueRef, bodyId: U64) {
+        if self.wholeProgram() { return }
+        val name = <CString.copied text="plew.body" />
+        val kind = LLVMGetMDKindIDInContext(self.ctx, name.ptr, 9U32)
+        val operands = [LLVMValueAsMetadata(LLVMConstInt(self.i64ty, bodyId, 0I32))]
+        LLVMGlobalSetMetadata(function, kind, LLVMMDNodeInContext2(self.ctx, arrayCPtr(operands), 1U64))
     }
 
     inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {

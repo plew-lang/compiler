@@ -7,6 +7,8 @@
 #include <llvm/ExecutionEngine/Orc/LazyReexports.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Metadata.h>
 #include <llvm/Support/Error.h>
 #include <llvm-c/Error.h>
 #include <llvm-c/Target.h>
@@ -146,14 +148,21 @@ class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
     PlewLlvmPrepareBody prepare;
     uint64_t session;
     bool requested = false;
+    bool emitted = false;
   };
   PlewLlvmJit &jit;
   llvm::DenseMap<llvm::orc::SymbolStringPtr, Body> bodies;
+  llvm::DenseMap<llvm::orc::SymbolStringPtr, llvm::orc::SymbolStringPtr> publicBodies;
 public:
   explicit SourceBodyGenerator(PlewLlvmJit &jit) : jit(jit) {}
+  Body *find(llvm::StringRef name) {
+    auto found = publicBodies.find(jit.engine->mangleAndIntern(name));
+    return found == publicBodies.end() ? nullptr : &bodies.find(found->second)->second;
+  }
   void add(std::string name, std::string implementation, uint64_t body,
            PlewLlvmPrepareBody prepare, uint64_t session) {
     auto symbol = jit.engine->mangleAndIntern(implementation);
+    publicBodies.try_emplace(jit.engine->mangleAndIntern(name), symbol);
     bodies.try_emplace(symbol, Body{std::move(name), std::move(implementation),
                                    body, prepare, session});
   }
@@ -163,7 +172,7 @@ public:
                            const llvm::orc::SymbolLookupSet &symbols) override {
     for (const auto &entry : symbols) {
       auto found = bodies.find(entry.first);
-      if (found == bodies.end())
+      if (found == bodies.end() || found->second.emitted)
         continue;
       // Preparing a body may register more bodies and rehash the index.
       // Copy the descriptor before invoking the compiler callback.
@@ -205,14 +214,45 @@ private:
       auto *function = value.getFunction(name);
       if (!function || function->isDeclaration())
         return llvm::createStringError("prepared module lacks its requested body");
-      // All observed callable addresses, including self references, remain
-      // canonical stub addresses. Only the private definition is renamed.
-      function->setName(implementation);
-      auto *entry = llvm::Function::Create(function->getFunctionType(),
-          llvm::GlobalValue::ExternalLinkage, name, value);
-      entry->setCallingConv(function->getCallingConv());
-      entry->setAttributes(function->getAttributes());
-      function->replaceAllUsesWith(entry);
+      // Declarations carry frozen body identities. Register dependencies before
+      // linking without preparing their source bodies or decoding symbol names.
+      std::vector<llvm::Function *> definitions;
+      for (auto &candidate : value) {
+        auto *metadata = candidate.getMetadata("plew.body");
+        if (!metadata)
+          continue;
+        auto *identity = metadata->getNumOperands() == 1
+            ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0))
+            : nullptr;
+        if (!identity || identity->getBitWidth() != 64 || identity->isZero())
+          return llvm::createStringError("invalid source body identity");
+        auto candidateBody = identity->getZExtValue();
+        if (!candidate.isDeclaration() && candidateBody != body)
+          return llvm::createStringError("prepared module defines another source body");
+        if (plew_llvm_jit_defer(&jit, candidate.getName().str().c_str(),
+                                candidateBody, prepare, session))
+          return llvm::createStringError("source dependency registration failed");
+        if (!candidate.isDeclaration())
+          definitions.push_back(&candidate);
+      }
+      // Generic native clients may provide a single entry without metadata.
+      if (!function->getMetadata("plew.body"))
+        definitions.push_back(function);
+      for (auto *definition : definitions) {
+        auto originalName = definition->getName().str();
+        auto *registered = find(originalName);
+        if (!registered || registered->body != body || registered->emitted)
+          return llvm::createStringError("inconsistent source body entry");
+        // All addresses, including self references and sibling entry addresses,
+        // remain canonical stubs. One callback defines every entry of this body.
+        definition->setName(registered->implementation);
+        auto *entry = llvm::Function::Create(definition->getFunctionType(),
+            llvm::GlobalValue::ExternalLinkage, originalName, value);
+        entry->setCallingConv(definition->getCallingConv());
+        entry->setAttributes(definition->getAttributes());
+        definition->replaceAllUsesWith(entry);
+        registered->emitted = true;
+      }
       return llvm::Error::success();
     });
     if (!error)
@@ -258,6 +298,12 @@ extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
     jit->calls = std::move(*calls);
     jit->stubs = llvm::orc::createLocalIndirectStubsManagerBuilder(
         jit->engine->getTargetTriple())();
+  }
+  auto *existing = static_cast<SourceBodyGenerator *>(jit->sourceBodies)->find(name);
+  if (existing) {
+    if (existing->body == body && existing->prepare == prepare && existing->session == session)
+      return 0;
+    return jitError(jit, llvm::createStringError("conflicting source body identity"));
   }
   std::string implementation = "__plew_lazy_body." + std::to_string(jit->nextBody++);
   static_cast<SourceBodyGenerator *>(jit->sourceBodies)->add(
