@@ -46,6 +46,12 @@ ASan/LSan; it does not instrument the generated JIT instructions. This manual
 diagnostic covers shared storage, existing host symbols and terminal failures,
 not frontend lazy requests or the product CLI.
 
+`compiler/codegen/test-orc-lazy.py` checks synchronous first-call callbacks,
+stable entry addresses (including self references), integer/FP/stack arguments,
+new registrations during preparation, unused bodies, and terminal failure.
+`--asan` checks native bridge ownership on LLVM22; JIT instructions are not
+instrumented. The callback is native C++ in this diagnostic, not CompilerSession.
+
 `compiler/codegen/test-session-jit.py` executes a main lowered by CompilerSession
 through the native ORC bridge while leaving an invalid unused body unrequested.
 It checks consuming module transfer on success and terminal failure. `--asan`

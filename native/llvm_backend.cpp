@@ -4,6 +4,7 @@
 #include <llvm-c/Analysis.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/LazyReexports.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
@@ -14,10 +15,20 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <cstdlib>
+#include <string>
+#include <llvm/ADT/DenseMap.h>
 
 struct PlewLlvmJit {
+  // Destroy the engine (and its generators) before the trampoline owners.
+  std::unique_ptr<llvm::orc::LazyCallThroughManager> calls;
+  std::unique_ptr<llvm::orc::IndirectStubsManager> stubs;
   std::unique_ptr<llvm::orc::LLJIT> engine;
+  llvm::orc::JITDylib *bodies = nullptr;
+  llvm::orc::DefinitionGenerator *sourceBodies = nullptr;
   bool failed = false;
+  bool preparing = false;
+  uint64_t nextBody = 0;
 };
 
 namespace {
@@ -98,32 +109,165 @@ extern "C" int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
   return 0;
 }
 
-extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
-                                 LLVMContextRef context) {
-  // Local ownership covers verification, terminal-session and add failures.
+namespace {
+llvm::Expected<llvm::orc::ThreadSafeModule>
+consumeModule(PlewLlvmJit *jit, LLVMModuleRef module, LLVMContextRef context) {
   auto ownedContext = std::unique_ptr<llvm::LLVMContext>(llvm::unwrap(context));
   auto ownedModule = std::unique_ptr<llvm::Module>(llvm::unwrap(module));
-  if (!module || !context) {
-    if (jit)
-      jit->failed = true;
-    return 1;
-  }
+  if (!module || !context)
+    return llvm::createStringError("missing module/context pair");
   llvm::orc::ThreadSafeModule owned(std::move(ownedModule), std::move(ownedContext));
   if (!jit || jit->failed)
-    return 1;
-  if (!verify(module)) {
-    jit->failed = true;
-    return 1;
-  }
+    return llvm::createStringError("terminal JIT session");
+  if (!verify(module))
+    return llvm::createStringError("module verification failed");
   const auto &triple = jit->engine->getTargetTriple();
   const char *actual = LLVMGetTarget(module);
   if (*actual && llvm::Triple(actual) != triple)
-    return jitError(jit, llvm::createStringError("module target is not the native JIT target"));
+    return llvm::createStringError("module target is not the native JIT target");
   LLVMSetTarget(module, triple.str().c_str());
   owned.withModuleDo([&](llvm::Module &value) {
     value.setDataLayout(jit->engine->getDataLayout());
   });
-  if (auto error = jit->engine->addIRModule(std::move(owned)))
+  return std::move(owned);
+}
+
+[[noreturn]] void lazyFailure() {
+  // A trampoline cannot return an arbitrary result with the callee's ABI.
+  // The run contract is terminal failure, without application unwinding.
+  std::fputs("plew: lazy compilation failed\n", stderr);
+  std::_Exit(1);
+}
+
+class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
+  struct Body {
+    std::string name, implementation;
+    uint64_t body;
+    PlewLlvmPrepareBody prepare;
+    void *owner;
+    bool requested = false;
+  };
+  PlewLlvmJit &jit;
+  llvm::DenseMap<llvm::orc::SymbolStringPtr, Body> bodies;
+public:
+  explicit SourceBodyGenerator(PlewLlvmJit &jit) : jit(jit) {}
+  void add(std::string name, std::string implementation, uint64_t body,
+           PlewLlvmPrepareBody prepare, void *owner) {
+    auto symbol = jit.engine->mangleAndIntern(implementation);
+    bodies.try_emplace(symbol, Body{std::move(name), std::move(implementation),
+                                   body, prepare, owner});
+  }
+  llvm::Error tryToGenerate(llvm::orc::LookupState &, llvm::orc::LookupKind,
+                           llvm::orc::JITDylib &destination,
+                           llvm::orc::JITDylibLookupFlags,
+                           const llvm::orc::SymbolLookupSet &symbols) override {
+    for (const auto &entry : symbols) {
+      auto found = bodies.find(entry.first);
+      if (found == bodies.end())
+        continue;
+      // Preparing a body may register more bodies and rehash the index.
+      // Copy the descriptor before invoking the compiler callback.
+      auto body = found->second;
+      found->second.requested = true;
+      if (auto error = generate(destination, body))
+        return error;
+    }
+    return llvm::Error::success();
+  }
+private:
+  llvm::Error generate(llvm::orc::JITDylib &destination, Body &descriptor) {
+    const auto &name = descriptor.name;
+    const auto &implementation = descriptor.implementation;
+    auto body = descriptor.body;
+    auto prepare = descriptor.prepare;
+    auto owner = descriptor.owner;
+    auto &requested = descriptor.requested;
+    if (requested || jit.failed || jit.preparing) {
+      jit.failed = true;
+      return llvm::createStringError("invalid recursive source preparation");
+    }
+    requested = true;
+    jit.preparing = true;
+    LLVMModuleRef module = nullptr;
+    LLVMContextRef context = nullptr;
+    int status = prepare(owner, body, &module, &context);
+    jit.preparing = false;
+    auto owned = consumeModule(&jit, module, context);
+    if (!owned) {
+      jit.failed = true;
+      return owned.takeError();
+    }
+    if (status != 0) {
+      jit.failed = true;
+      return llvm::createStringError("source body preparation failed");
+    }
+    auto error = owned->withModuleDo([&](llvm::Module &value) -> llvm::Error {
+      auto *function = value.getFunction(name);
+      if (!function || function->isDeclaration())
+        return llvm::createStringError("prepared module lacks its requested body");
+      // All observed callable addresses, including self references, remain
+      // canonical stub addresses. Only the private definition is renamed.
+      function->setName(implementation);
+      auto *entry = llvm::Function::Create(function->getFunctionType(),
+          llvm::GlobalValue::ExternalLinkage, name, value);
+      entry->setCallingConv(function->getCallingConv());
+      entry->setAttributes(function->getAttributes());
+      function->replaceAllUsesWith(entry);
+      return llvm::Error::success();
+    });
+    if (!error)
+      error = jit.engine->addIRModule(destination, std::move(*owned));
+    if (error)
+      jit.failed = true;
+    return error;
+  }
+};
+} // namespace
+
+extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
+                                 LLVMContextRef context) {
+  auto owned = consumeModule(jit, module, context);
+  if (!owned)
+    return jitError(jit, owned.takeError());
+  if (auto error = jit->engine->addIRModule(std::move(*owned)))
+    return jitError(jit, std::move(error));
+  return 0;
+}
+
+extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
+                                   uint64_t body, PlewLlvmPrepareBody prepare,
+                                   void *owner) {
+  if (!jit || jit->failed)
+    return 1;
+  if (!name || !*name || !prepare)
+    return jitError(jit, llvm::createStringError("invalid deferred body"));
+  if (!jit->bodies) {
+    auto bodies = jit->engine->createJITDylib("plew.bodies");
+    if (!bodies)
+      return jitError(jit, bodies.takeError());
+    jit->bodies = &*bodies;
+    jit->bodies->addToLinkOrder(jit->engine->getMainJITDylib());
+    auto generator = std::make_unique<SourceBodyGenerator>(*jit);
+    jit->sourceBodies = generator.get();
+    jit->bodies->addGenerator(std::move(generator));
+    auto calls = llvm::orc::createLocalLazyCallThroughManager(
+        jit->engine->getTargetTriple(), jit->engine->getExecutionSession(),
+        llvm::orc::ExecutorAddr::fromPtr(&lazyFailure));
+    if (!calls)
+      return jitError(jit, calls.takeError());
+    jit->calls = std::move(*calls);
+    jit->stubs = llvm::orc::createLocalIndirectStubsManagerBuilder(
+        jit->engine->getTargetTriple())();
+  }
+  std::string implementation = "__plew_lazy_body." + std::to_string(jit->nextBody++);
+  static_cast<SourceBodyGenerator *>(jit->sourceBodies)->add(
+      name, implementation, body, prepare, owner);
+  llvm::orc::SymbolAliasMap aliases;
+  aliases[jit->engine->mangleAndIntern(name)] = {
+      jit->engine->mangleAndIntern(implementation),
+      llvm::JITSymbolFlags::Exported | llvm::JITSymbolFlags::Callable};
+  if (auto error = jit->engine->getMainJITDylib().define(llvm::orc::lazyReexports(
+          *jit->calls, *jit->stubs, *jit->bodies, std::move(aliases))))
     return jitError(jit, std::move(error));
   return 0;
 }
@@ -131,6 +275,10 @@ extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
 extern "C" uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name) {
   if (!jit || jit->failed)
     return 0;
+  if (jit->preparing) {
+    jitError(jit, llvm::createStringError("symbol lookup during source preparation"));
+    return 0;
+  }
   if (!name || !*name) {
     jitError(jit, llvm::createStringError("invalid lookup symbol"));
     return 0;

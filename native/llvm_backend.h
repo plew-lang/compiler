@@ -32,6 +32,14 @@ int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
 // module/context pair owned exclusively by the caller before this call.
 int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
                       LLVMContextRef context);
+// The borrowed callback/context live until JIT destruction. Called synchronously
+// on first execution, never on registration/address lookup. It must not execute
+// application code or perform symbol lookup. It returns a freshly owned pair;
+// the bridge consumes any non-null outputs even when the callback fails.
+typedef int (*PlewLlvmPrepareBody)(void *owner, uint64_t body,
+                                  LLVMModuleRef *module, LLVMContextRef *context);
+int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name, uint64_t body,
+                        PlewLlvmPrepareBody prepare, void *owner);
 // Returns zero on failure. Any failure makes this session terminal.
 uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name);
 
