@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <thread>
+#include <unordered_map>
 
 struct State {
   int calls[5] = {};
@@ -10,9 +11,12 @@ struct State {
   std::thread::id thread = std::this_thread::get_id();
   bool fail = false;
 };
-static int prepare(void *owner, uint64_t body, LLVMModuleRef *out,
+static std::unordered_map<uint64_t, State *> sessions;
+static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
                    LLVMContextRef *context) {
-  auto &state = *static_cast<State *>(owner);
+  auto found = sessions.find(session);
+  assert(found != sessions.end());
+  auto &state = *found->second;
   assert(state.thread == std::this_thread::get_id());
   assert(body < 4 && ++state.calls[body] == 1);
   *context = LLVMContextCreate();
@@ -38,7 +42,7 @@ static int prepare(void *owner, uint64_t body, LLVMModuleRef *out,
   LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(*context, function, "entry"));
   auto argument = LLVMGetParam(function, 0);
   if (body == 0) {
-    assert(plew_llvm_jit_defer(state.jit, "second", 1, prepare, &state) == 0);
+    assert(plew_llvm_jit_defer(state.jit, "second", 1, prepare, session) == 0);
     auto second = LLVMAddFunction(*out, "second", signature);
     LLVMBuildRet(builder, LLVMBuildCall2(builder, signature, second, &argument, 1, ""));
   } else if (body == 1) {
@@ -51,14 +55,16 @@ static int prepare(void *owner, uint64_t body, LLVMModuleRef *out,
 }
 int main(int argc, char **argv) {
   State state;
+  constexpr uint64_t session = UINT64_C(0xf000000100000003);
+  sessions.emplace(session, &state);
   state.fail = argc > 1 && std::strcmp(argv[1], "fail") == 0;
   auto jit = plew_llvm_jit_create();
   assert(jit);
   state.jit = jit;
-  assert(plew_llvm_jit_defer(jit, "first", 0, prepare, &state) == 0);
-  assert(plew_llvm_jit_defer(jit, "unused", 4, prepare, &state) == 0);
-  assert(plew_llvm_jit_defer(jit, "identity", 2, prepare, &state) == 0);
-  assert(plew_llvm_jit_defer(jit, "floating", 3, prepare, &state) == 0);
+  assert(plew_llvm_jit_defer(jit, "first", 0, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "unused", 4, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "identity", 2, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "floating", 3, prepare, session) == 0);
   auto address = plew_llvm_jit_lookup(jit, "first");
   auto identity = plew_llvm_jit_lookup(jit, "identity");
   assert(address && identity && state.calls[0] == 0 && state.calls[1] == 0 && state.calls[2] == 0);
@@ -74,4 +80,5 @@ int main(int argc, char **argv) {
   assert(floating(2.25,2,3,4,5,6,7,8,9,20.5) == 22.75 && state.calls[3] == 1);
   assert(!plew_llvm_jit_failed(jit));
   plew_llvm_jit_destroy(jit);
+  sessions.erase(session);
 }

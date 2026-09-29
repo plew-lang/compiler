@@ -144,7 +144,7 @@ class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
     std::string name, implementation;
     uint64_t body;
     PlewLlvmPrepareBody prepare;
-    void *owner;
+    uint64_t session;
     bool requested = false;
   };
   PlewLlvmJit &jit;
@@ -152,10 +152,10 @@ class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
 public:
   explicit SourceBodyGenerator(PlewLlvmJit &jit) : jit(jit) {}
   void add(std::string name, std::string implementation, uint64_t body,
-           PlewLlvmPrepareBody prepare, void *owner) {
+           PlewLlvmPrepareBody prepare, uint64_t session) {
     auto symbol = jit.engine->mangleAndIntern(implementation);
     bodies.try_emplace(symbol, Body{std::move(name), std::move(implementation),
-                                   body, prepare, owner});
+                                   body, prepare, session});
   }
   llvm::Error tryToGenerate(llvm::orc::LookupState &, llvm::orc::LookupKind,
                            llvm::orc::JITDylib &destination,
@@ -180,7 +180,7 @@ private:
     const auto &implementation = descriptor.implementation;
     auto body = descriptor.body;
     auto prepare = descriptor.prepare;
-    auto owner = descriptor.owner;
+    auto session = descriptor.session;
     auto &requested = descriptor.requested;
     if (requested || jit.failed || jit.preparing) {
       jit.failed = true;
@@ -190,7 +190,7 @@ private:
     jit.preparing = true;
     LLVMModuleRef module = nullptr;
     LLVMContextRef context = nullptr;
-    int status = prepare(owner, body, &module, &context);
+    int status = prepare(session, body, &module, &context);
     jit.preparing = false;
     auto owned = consumeModule(&jit, module, context);
     if (!owned) {
@@ -236,7 +236,7 @@ extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
 
 extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
                                    uint64_t body, PlewLlvmPrepareBody prepare,
-                                   void *owner) {
+                                   uint64_t session) {
   if (!jit || jit->failed)
     return 1;
   if (!name || !*name || !prepare)
@@ -261,7 +261,7 @@ extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
   }
   std::string implementation = "__plew_lazy_body." + std::to_string(jit->nextBody++);
   static_cast<SourceBodyGenerator *>(jit->sourceBodies)->add(
-      name, implementation, body, prepare, owner);
+      name, implementation, body, prepare, session);
   llvm::orc::SymbolAliasMap aliases;
   aliases[jit->engine->mangleAndIntern(name)] = {
       jit->engine->mangleAndIntern(implementation),
