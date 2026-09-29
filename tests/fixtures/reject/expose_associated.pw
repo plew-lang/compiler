@@ -1,0 +1,3 @@
+struct Box {}
+impl Box { expose assoc fn call() {} }
+fn main() {}

@@ -622,6 +622,15 @@ pub impl Comp {
 
     inout fn registerDeclaredFunc(f: Func) -> Result[U64, CompileDiagnostic] {
         if f.isExposed {
+            if f.hasRecv || f.isAssoc {
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a free function; methods and associated functions cannot be exposed") />
+            }
+            if f.isAsync {
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a synchronous function") />
+            }
+            if f.typeParams.len != 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a nongeneric function") />
+            }
             mut val parameterIndex = 0U64
             while parameterIndex < f.params.count() {
                 val parameter = self.funcParamAt(params: f.params, index: parameterIndex)

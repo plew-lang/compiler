@@ -5229,8 +5229,8 @@ pub impl Comp {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         try self.prepareFinalInitializers(state: inout dependencies)
-        // Only the selected entry is a root. Sync and async callees both
-        // join the executable closure through their finalized call sites.
+        // The selected entry and explicitly exposed functions are roots. Other
+        // sync and async callees join through their finalized call sites.
         mut val fi: U64 = 0U64
         while fi < self.arena.functionCount() {
             tracePhaseProgress(c: inout self, label: "finalize-callables:function-root", count: fi, stride: 64U64)
@@ -5240,7 +5240,7 @@ pub impl Comp {
                 // made an unused macro value parser (and every other imported
                 // helper) part of a normal compiler binary.  Finalization owns
                 // the executable call closure: globals seed it above, then only
-                // the selected program entry seeds it here; every ordinary,
+                // the selected program entry and exposed functions seed it here; other
                 // generic, method, witness, or async callee joins through a
                 // resolved call descriptor below.
                 mut val isEntry: Bool = self.nameIsMain(f: f)
