@@ -20,8 +20,8 @@ for index, (name, expected_count, payload) in enumerate(cases, 1):
         results.append(result)
     if results[0].stdout != results[1].stdout:
         raise SystemExit(f'{name}: tracing changed LLVM')
-    resumes = set(re.findall(rb'^define[^\n]*@(__af[0-9]+_resume)\(', results[1].stdout, re.M))
-    emitted = re.findall(rb'^mid-body symbol=(__af[0-9]+_resume) canonical=[1-9][0-9]*$', results[1].stderr, re.M)
+    resumes = set(re.findall(rb'^define[^\n]*@(plew\.body\.__af[0-9]+_resume)\(', results[1].stdout, re.M))
+    emitted = re.findall(rb'^mid-body symbol=(plew\.body\.__af[0-9]+_resume) canonical=[1-9][0-9]*$', results[1].stderr, re.M)
     if not resumes or set(emitted) != resumes or len(emitted) != len(resumes):
         raise SystemExit(f'{name}: every async resume must have exactly one Mid emission record')
     facts = {}
