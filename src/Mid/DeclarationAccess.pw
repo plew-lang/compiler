@@ -5,7 +5,7 @@ import ../Frontend with { Comp }
 import ../Diag with { CompileDiagnostic }
 import ../Ir with { CallSiteKey, CallTemplateKind }
 import ./Build with { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
-import ./Ir with { MidTerminatorNode }
+import ./Ir with { MidTerminatorNode, MidCanonicalBody }
 import ./Prepare with { MidParametricBody }
 import ./OwnershipAnalysis with { MidOwnershipRequests }
 import ./GlobalAccessGraph with { GlobalAccessGraph }
@@ -86,7 +86,13 @@ impl DeclarationAccessState {
             Result.Ok(value: val canonical) => { give canonical }
             Result.Err(error: val verification) => { return <Result.Err error=<DeclarationAccessError.Ownership body=self.owners[index] verification=verification /> /> }
         }
-        val body = c.mid.bodies[destruction.body - 1U64]
+        return self.scanBody(c: c, index: index, canonical: destruction)
+    }
+
+    // Ownership preparation may extend Mid; effect collection only reads the
+    // resulting snapshot and mutates this analysis's graph and obligations.
+    inout fn scanBody(c: Comp, index: U64, canonical: MidCanonicalBody) -> Result[(), DeclarationAccessError] {
+        val body = c.mid.bodies[canonical.body - 1U64]
         val reachable = canonicalMidReachable(c: c, body: body)
         mut val blockIndex = 0U64
         while blockIndex < body.blocks.len {

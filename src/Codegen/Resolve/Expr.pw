@@ -703,7 +703,7 @@ pub impl Comp {
         return self.decls.callTemplateBodyHeads.getOr(key: root, fallback: 0U64)
     }
 
-    inout fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
+    fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
         val capacity: U64 = self.decls.callTemplateIndexSlots.count()
         if capacity == 0U64 { return self.decls.callTemplates.count() }
         mut val slot: U64 = self.callTemplateHash(siteKey: siteKey) % capacity

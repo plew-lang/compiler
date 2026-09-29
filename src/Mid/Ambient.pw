@@ -107,6 +107,16 @@ pub impl MidAmbientProgram {
     fn callMayAccess(c: Comp, term: MidTerminatorNode) -> Bool { return self.effects.callMayAccess(c: c, term: term) }
 
     assoc fn prepare(c: inout Comp, program: MidExecutableProgram) -> Result[Self, CompileDiagnostic] {
+        mut val ambientBodies: Array[U64] = []
+        val storage = MidAmbientProgram.storagePlans(c: c, program: program, ambientBodies: inout ambientBodies)
+        if !storage.enabled { return <Result.Ok value=storage /> }
+        val effects = try MidAmbientEffects.prepare(c: inout c, program: program, ambientBodies: ambientBodies)
+        return <Result.Ok value=<MidAmbientProgram enabled=true bodies=storage.bodies effects=effects /> />
+    }
+
+    // Storage recipes only read the frozen executable snapshot. Keep this scan
+    // outside the mutable preparation boundary used to resolve effect contracts.
+    assoc fn storagePlans(c: Comp, program: MidExecutableProgram, ambientBodies: inout Array[U64]) -> Self {
         // No aliasable storage means no dynamic obligations. Do not add a
         // runtime registry operation to ordinary local/by-value accesses.
         mut val possible = false
@@ -125,8 +135,7 @@ pub impl MidAmbientProgram {
             possible = c.mid.projections[index].tag == 3U64
             index += 1U64
         }
-        if !possible { return <Result.Ok value=<MidAmbientProgram /> /> }
-        mut val ambientBodies: Array[U64] = []
+        if !possible { return <MidAmbientProgram /> }
         mut val plans: Dictionary[U64, MidAmbientBodyPlan] = [:]
         mut val bodyId = 1U64
         while bodyId <= c.arena.bodyInstanceCount() {
@@ -173,8 +182,7 @@ pub impl MidAmbientProgram {
             }
             bodyId += 1U64
         }
-        val effects = try MidAmbientEffects.prepare(c: inout c, program: program, ambientBodies: ambientBodies)
-        return <Result.Ok value=<MidAmbientProgram enabled=true bodies=plans effects=effects /> />
+        return <MidAmbientProgram enabled=true bodies=plans />
     }
 }
 
