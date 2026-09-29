@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-') as folder:
         executable = directory / ('test' + level)
         run(llvm_link.selected_clang(config), level, source, runtime, fixture.with_suffix('.c'), '-o', executable)
         assert run(executable).stdout == b''
-for name in ['expose_labels', 'expose_duplicate', 'expose_generic', 'expose_method', 'expose_associated']:
+for name in ['expose_labels', 'expose_duplicate', 'expose_generic', 'expose_method', 'expose_associated', 'expose_main']:
     source = root / 'tests/fixtures/reject' / (name + '.pw')
     result = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
     assert result.returncode != 0, name

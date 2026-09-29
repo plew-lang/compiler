@@ -631,6 +631,11 @@ pub impl Comp {
             if f.typeParams.len != 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a nongeneric function") />
             }
+            // The program entry owns the external main symbol and has the OS
+            // entry ABI, rather than the source function's C-compatible ABI.
+            if self.nameIsMain(f: f) {
+                return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "exposed name conflicts with the program entry symbol `main`") />
+            }
             mut val parameterIndex = 0U64
             while parameterIndex < f.params.count() {
                 val parameter = self.funcParamAt(params: f.params, index: parameterIndex)
