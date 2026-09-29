@@ -92,13 +92,25 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
+    fn mainFunctionType() -> LLVMTypeRef {
+        val parameters = [self.i32ty, self.ptrty]
+        return LLVMFunctionType(self.i32ty, arrayCPtr(parameters), 2U64, 0I32)
+    }
+
+    inout fn initializeProgramArguments(c: inout Comp, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
+        val parameters = [self.i32ty, self.ptrty]
+        val signature = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 2U64, 0I32)
+        val setter = (try self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: signature))
+        val arguments = [LLVMGetParam(function, 0U64), LLVMGetParam(function, 1U64)]
+        LLVMBuildCall2(self.b, signature, setter, arrayCPtr(arguments), 2U64, anon())
+        return <Result.Ok value=() />
+    }
+
     inout fn declareProgramEntries(c: inout Comp) -> Result[(), CompileDiagnostic] {
         for bodyId in c.monoWork.bodyInstances {
             val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             if body.fnIdx < c.arena.functionCount() && c.nameIsMain(f: c.arena.functionAt(index: body.fnIdx)) {
-                mut val parameters: Array[LLVMTypeRef] = []
-                if !isAsyncFn(c: inout c, fi: body.fnIdx) { parameters = [self.i32ty, self.ptrty] }
-                val signature = LLVMFunctionType(self.i32ty, arrayCPtr(parameters), parameters.count(), 0I32)
+                val signature = self.mainFunctionType()
                 val entry = (try self.getOrDeclare(c: inout c, name: "main", fnTy: signature))
                 self.attachBodyIdentity(function: entry, bodyId: bodyId)
             }
@@ -120,10 +132,7 @@ pub impl LlvmCtx {
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
         // plew_set_args before the body runs.
-        mut val mainParams: Array[LLVMTypeRef] = []
-        mainParams.append(self.i32ty)
-        mainParams.append(self.ptrty)
-        val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(mainParams), 2U64, 0I32)
+        val mainTy: LLVMTypeRef = self.mainFunctionType()
         val mainFnCString = <CString.copied text="main" />
         val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, mainFnCString.ptr, mainTy)
         self.attachBodyIdentity(function: mainFn, bodyId: bodyId)
@@ -152,16 +161,7 @@ pub impl LlvmCtx {
             return <Result.Err error=c.diagnosticAt(offset: mainDef.nameStart, msg: "internal error: main requires verified Mid lowering") />
         }
         self.beginFnBody(fv: mainFn)
-        // plew_set_args(argc, argv).
-        mut val saTys: Array[LLVMTypeRef] = []
-        saTys.append(self.i32ty)
-        saTys.append(self.ptrty)
-        val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
-        val saFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: saTy))
-        mut val saArgs: Array[LLVMValueRef] = []
-        saArgs.append(LLVMGetParam(mainFn, 0U64))
-        saArgs.append(LLVMGetParam(mainFn, 1U64))
-        LLVMBuildCall2(self.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
+        try self.initializeProgramArguments(c: inout c, function: mainFn)
         // initialize module-level variables (spec/15) before the body runs.
         try self.callInitGlobals(c: inout c)
         if midReady {

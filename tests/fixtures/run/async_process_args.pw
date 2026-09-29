@@ -1,0 +1,9 @@
+import @Std/Process with { argCount }
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+val initializedWithArguments = argCount() > 0I64
+async fn main() {
+    print(initializedWithArguments)
+    await sleep(ms: 1)
+    print(argCount() > 0I64)
+}
