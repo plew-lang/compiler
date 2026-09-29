@@ -1353,8 +1353,9 @@ pub impl Comp {
                     }
                     mut val k: U64 = 0
                     while k < args.len {
-                        if k < ps.count() {
-                            mut val cctx: U64 = ps[k].ty
+                        val parameterIndex = self.paramIndexForArg(params: cf.params, args: args, argIdx: k)
+                        if parameterIndex < ps.count() {
+                            mut val cctx: U64 = ps[parameterIndex].ty
                             if cctx != 0U64 && canGround && !((try self.tyRefIsGround(ref: cctx))) {
                                 val savedP: Array[Bind] = self.cur.typeParams
                                 val savedA: Array[U64] = self.cur.typeArgs

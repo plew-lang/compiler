@@ -1,0 +1,18 @@
+// Omitted leading/middle defaults must not become the context of later literals.
+import @Std/Io with { print }
+struct Options { val increment: I64 = 1I64 }
+fn choose(options: Options = <Options />, items: Array[I64]) -> I64 {
+    return options.increment + items[0U64]
+}
+fn generic[T](options: Options = <Options />, items: Array[T]) -> T {
+    return items[0U64]
+}
+fn middle(prefix: String, options: Options = <Options />, items: Array[I64]) -> I64 {
+    return choose(options: options, items: items)
+}
+fn main() {
+    print(choose(items: [42I64]))
+    print(generic(items: [7I64]))
+    print(middle(prefix: "context", items: [9I64]))
+    print(choose(options: <Options increment=2I64 />, items: [42I64]))
+}
