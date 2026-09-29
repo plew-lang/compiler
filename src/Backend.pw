@@ -179,7 +179,7 @@ struct LlvmAsyncFrame {
     val localSlots: Array[U64]
 }
 
-pub enum LlvmBodyEmission { Whole Requested(bodyId: U64) }
+pub enum LlvmBodyEmission { Whole Declarations Requested(bodyId: U64) }
 
 struct LlvmCInout {
     val original: LLVMValueRef
@@ -495,6 +495,7 @@ extern(c) {
     fn plew_llvm_jit_failed(jit~: PlewLlvmJitRef) -> I32
     fn plew_llvm_jit_add(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef) -> I32
     fn plew_llvm_jit_define(jit~: PlewLlvmJitRef, name~: CPtr[U8], address~: U64, callable~: I32) -> I32
+    fn plew_compiler_jit_declarations(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef, session~: U64) -> I32
     fn plew_llvm_jit_lookup(jit~: PlewLlvmJitRef, name~: CPtr[U8]) -> U64
     fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMDisposeMessage(msg~: CPtr[U8])
@@ -777,6 +778,12 @@ pub impl LlvmJit {
         return plew_llvm_jit_add(self.handle, owned.module, owned.context)
     }
 
+    inout fn registerDeclarations(module: move LlvmModule, sessionId: U64) -> I32 {
+        mut val owned = move module
+        owned.transferred = true
+        return plew_compiler_jit_declarations(self.handle, owned.module, owned.context, sessionId)
+    }
+
     inout fn define(name: String, address: U64, callable: Bool) -> I32 {
         val symbol = cString(name)
         val result = plew_llvm_jit_define(self.handle, symbol, address, if callable { give 1I32 } else { give 0I32 })
@@ -939,46 +946,10 @@ fn lowerExecutableLlvm(c: inout Comp, program: MidExecutableProgram, ambient: Mi
     c.appendSrc(from: "self".bytes())
     st.selfLen = 4U64
 
-    match st.registerFinalLayoutNames(c: inout c) {
+    match st.declareProgramCallables(c: inout c) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
     }
-    match st.registerFinalStructBodies(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    tracePhase(c: inout c, label: "backend:types:done")
-
-    // pass 1: declare generic free-fn instances + generic method instances (one per
-    // receiver instantiation). Non-generic free/assoc fns and methods are no longer
-    // eagerly declared — each reachable free-function body is declared from its frozen
-    // BodyInstance, while receiver methods use their corresponding body identity.
-    match st.declareGenFns(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    match st.declareGenMethods(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    // async fns: declare the resume fn and a non-main entry symbol
-    // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
-    // call). Done before bodies emit so main's resume can call them.
-    match st.declareAsyncFns(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    // declare lambda-lifted closures (after the named types + functions they may
-    // reference exist), so a closure literal can build its {fn, env} value.
-    match st.collectClosures(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    match st.declareRequestedSynthetic(c: inout c) {
-        Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-    }
-    tracePhase(c: inout c, label: "backend:declarations:done")
 
     // Global addresses and types are declarations, independent of executable
     // initializer code. Every body sees the same complete storage map.
@@ -1158,6 +1129,29 @@ fn lowerExecutableLlvm(c: inout Comp, program: MidExecutableProgram, ambient: Mi
         }
     }
     return <LlvmLoweringResult.Success module=move module />
+}
+
+// Signature-only publication cannot lower a body: its context has no prepared
+// Mid program and every body admission is disabled by Declarations.
+pub fn lowerCallableDeclarationsLlvm(c: inout Comp) -> LlvmLoweringResult {
+    val ctx = LLVMContextCreate()
+    val name = <CString.copied text="plew.declarations" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, ctx)
+    val owned = <LlvmModule.owned context=ctx module=module />
+    val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
+    val triple = LLVMGetDefaultTargetTriple()
+    LLVMSetTarget(module, triple)
+    LLVMDisposeMessage(triple)
+    mut val state = llvmContext(ctx: ctx, m: module, builder: builder.handle, emission: <LlvmBodyEmission.Declarations />)
+    match state.declareProgramCallables(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    match state.declareProgramEntries(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    return <LlvmLoweringResult.Success module=move owned />
 }
 
 // A session publishes exactly one definition module; body modules only reference

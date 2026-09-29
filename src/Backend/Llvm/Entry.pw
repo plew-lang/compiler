@@ -92,6 +92,26 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
+    inout fn declareProgramEntries(c: inout Comp) -> Result[(), CompileDiagnostic] {
+        for bodyId in c.monoWork.bodyInstances {
+            val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+            if body.fnIdx < c.arena.functionCount() && c.nameIsMain(f: c.arena.functionAt(index: body.fnIdx)) {
+                mut val parameters: Array[LLVMTypeRef] = []
+                if !isAsyncFn(c: inout c, fi: body.fnIdx) { parameters = [self.i32ty, self.ptrty] }
+                val signature = LLVMFunctionType(self.i32ty, arrayCPtr(parameters), parameters.count(), 0I32)
+                val entry = (try self.getOrDeclare(c: inout c, name: "main", fnTy: signature))
+                self.attachBodyIdentity(function: entry, bodyId: bodyId)
+            }
+        }
+        if c.arena.globals.count() != 0U64 {
+            val parameters: Array[LLVMTypeRef] = []
+            val signature = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 0U64, 0I32)
+            val entry = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: signature))
+            self.attachBodyIdentity(function: entry, bodyId: c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />))
+        }
+        return <Result.Ok value=() />
+    }
+
     // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
     inout fn genLlvmMain(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
         val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />

@@ -2,7 +2,7 @@
 // No public factory or mutable arena accessor can attach it to another input.
 import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
 import ./Ir with { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
-import ./Backend with { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm }
+import ./Backend with { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation }
 import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
@@ -145,6 +145,25 @@ pub impl CompilerSession {
         return result
     }
 
+    // Publish entry signatures without requesting main or exposed source bodies.
+    // Global initializers are mandatory startup roots, with their own preparation.
+    inout fn lowerDeclarations() -> LlvmLoweringResult {
+        match self.registerProgramRoots() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
+            }
+        }
+        match lowerCallableDeclarationsLlvm(c: inout self.compiler) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
+            }
+        }
+    }
+
     // Compile from this session's checked request and matching snapshot. No
     // mutable compiler or whole-target check token escapes to the execution host.
     inout fn lowerBody(bodyId: U64) -> LlvmLoweringResult {
@@ -205,6 +224,26 @@ pub impl CompilerSession {
 }
 
 impl CompilerSession {
+    inout fn registerProgramRoots() -> Result[(), CompileDiagnostic] {
+        (try self.prepareInitializers())
+        mut val foundMain = false
+        mut val index = 0U64
+        while index < self.compiler.arena.functionCount() {
+            val function = self.compiler.arena.functionAt(index: index)
+            val main = self.compiler.nameIsMain(f: function)
+            if !function.isExtern && function.body != 0U64 && (main || function.isExposed) {
+                val bodyId = (try self.compiler.enqueueFinalBody(fnIdx: index, args: [], recvInstRef: 0U64))
+                if bodyId == 0U64 { return <Result.Err error=self.compiler.diagnosticAt(offset: function.nameStart, msg: "program entry has no concrete body identity") /> }
+                if main { foundMain = true }
+            }
+            index += 1U64
+        }
+        if !foundMain { return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "program has no main function") /> }
+        try self.compiler.closeFinalDependencies(state: inout self.finalDependencies)
+        try self.compiler.publishFinalCallables(state: inout self.finalPublication)
+        return <Result.Ok value=() />
+    }
+
     inout fn startFinalization() -> Result[(), CompileDiagnostic] {
         if self.finalizationStarted { return <Result.Ok value=() /> }
         try self.compiler.initializeFinalCallables()

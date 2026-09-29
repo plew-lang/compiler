@@ -337,6 +337,34 @@ extern "C" int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name,
   return 0;
 }
 
+extern "C" int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module,
+                                          LLVMContextRef context,
+                                          PlewLlvmPrepareBody prepare, uint64_t session) {
+  auto owned = consumeModule(jit, module, context);
+  if (!owned)
+    return jitError(jit, owned.takeError());
+  auto error = owned->withModuleDo([&](llvm::Module &value) -> llvm::Error {
+    if (!value.global_empty())
+      return llvm::createStringError("declaration module contains global storage");
+    for (auto &function : value) {
+      if (!function.isDeclaration())
+        return llvm::createStringError("declaration module contains executable code");
+      auto *metadata = function.getMetadata("plew.body");
+      if (!metadata)
+        continue;
+      auto *identity = metadata->getNumOperands() == 1
+          ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0)) : nullptr;
+      if (!identity || identity->getBitWidth() != 64 || identity->isZero())
+        return llvm::createStringError("invalid entry body identity");
+      if (plew_llvm_jit_defer(jit, function.getName().str().c_str(),
+                              identity->getZExtValue(), prepare, session))
+        return llvm::createStringError("entry registration failed");
+    }
+    return llvm::Error::success();
+  });
+  return error ? jitError(jit, std::move(error)) : 0;
+}
+
 extern "C" uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name) {
   if (!jit || jit->failed)
     return 0;

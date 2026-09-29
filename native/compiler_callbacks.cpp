@@ -7,3 +7,8 @@ extern "C" int plew_compiler_jit_defer(PlewLlvmJit *jit, const char *name,
                                       uint64_t body, uint64_t session) {
   return plew_llvm_jit_defer(jit, name, body, plew_compiler_prepare_body, session);
 }
+
+extern "C" int plew_compiler_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module,
+                                              LLVMContextRef context, uint64_t session) {
+  return plew_llvm_jit_declarations(jit, module, context, plew_compiler_prepare_body, session);
+}

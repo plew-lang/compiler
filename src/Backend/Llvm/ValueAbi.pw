@@ -37,11 +37,25 @@ pub impl LlvmCtx {
         return self.valueAbis.count()
     }
 
+    inout fn declareProgramCallables(c: inout Comp) -> Result[(), CompileDiagnostic] {
+        try self.registerFinalLayoutNames(c: inout c)
+        try self.registerFinalStructBodies(c: inout c)
+        tracePhase(c: inout c, label: "backend:types:done")
+        try self.declareGenFns(c: inout c)
+        try self.declareGenMethods(c: inout c)
+        try self.declareAsyncFns(c: inout c)
+        try self.collectClosures(c: inout c)
+        try self.declareRequestedSynthetic(c: inout c)
+        tracePhase(c: inout c, label: "backend:declarations:done")
+        return <Result.Ok value=() />
+    }
+
     // A synthetic body can be the demand root even when the expression that
     // normally registers its thunk belongs to a different LLVM module.
     inout fn declareRequestedSynthetic(c: inout Comp) -> Result[(), CompileDiagnostic] {
         val bodyId = match self.emission {
             LlvmBodyEmission.Whole => { return <Result.Ok value=() /> }
+            LlvmBodyEmission.Declarations => { return <Result.Ok value=() /> }
             LlvmBodyEmission.Requested(bodyId: val requested) => { give requested }
         }
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
@@ -71,6 +85,7 @@ pub impl LlvmCtx {
     fn wholeProgram() -> Bool {
         match self.emission {
             LlvmBodyEmission.Whole => { return true }
+            LlvmBodyEmission.Declarations => { return false }
             LlvmBodyEmission.Requested(bodyId: _) => { return false }
         }
     }
@@ -78,6 +93,7 @@ pub impl LlvmCtx {
     inout fn admitBody(bodyId: U64) -> Bool {
         match self.emission {
             LlvmBodyEmission.Whole => { return true }
+            LlvmBodyEmission.Declarations => { return false }
             LlvmBodyEmission.Requested(bodyId: val requested) => {
                 if bodyId == 0U64 || bodyId != requested { return false }
                 self.requestedBodyEmitted = true

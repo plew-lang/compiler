@@ -72,12 +72,6 @@ pub impl LlvmCtx {
     }
 
     inout fn emitExposedEntry(c: inout Comp, bodyId: U64, target: LLVMValueRef, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
-        match self.emission {
-            LlvmBodyEmission.Whole => {}
-            LlvmBodyEmission.Requested(bodyId: val requested) => {
-                if bodyId != requested { return <Result.Ok value=() /> }
-            }
-        }
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         val declaration = c.arena.functionAt(index: body.fnIdx)
         val prepared = c.arena.bodySignature(bodyId: bodyId)
@@ -115,6 +109,13 @@ pub impl LlvmCtx {
         self.declId.append(declaration.nameId)
         self.declFn.append(entry)
         self.declTy.append(externalSignature)
+        match self.emission {
+            LlvmBodyEmission.Whole => {}
+            LlvmBodyEmission.Declarations => { return <Result.Ok value=() /> }
+            LlvmBodyEmission.Requested(bodyId: val requested) => {
+                if bodyId != requested { return <Result.Ok value=() /> }
+            }
+        }
         self.curFn = entry
         self.beginFnBody(fv: entry)
         mut val writebacks: Array[LlvmCInout] = []
