@@ -111,7 +111,8 @@ pub impl LlvmCtx {
         nm.append(0)
         val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
-        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        val entryCString = <CString.copied text="entry" />
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
         LLVMPositionBuilderAtEnd(self.b, entry)
         val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.valueParameter(function: fv, index: 0U64)), anon())
         try self.emitStructRetain(c: inout c, v: srcVal, ref: sourceRef)
@@ -139,7 +140,8 @@ pub impl LlvmCtx {
         val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val savedFn: LLVMValueRef = self.curFn
-        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        val entryCString = <CString.copied text="entry" />
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
         if (try c.finalNeedsRelease(typeRef: instRef)) {
@@ -164,8 +166,10 @@ pub impl LlvmCtx {
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
-        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anyrel.free"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anyrel.cont"))
+        val freeBBCString = <CString.copied text="anyrel.free" />
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, freeBBCString.ptr)
+        val contBBCString = <CString.copied text="anyrel.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         mut val gepIdx: Array[LLVMValueRef] = []
@@ -198,8 +202,10 @@ pub impl LlvmCtx {
         val rcPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(rcIdx), 1U64, anon())
         val rc: LLVMValueRef = llvmLoad(self.b, self.i64ty, rcPtr, anon())
         val isShared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), rc, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        val splitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.split"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.cont"))
+        val splitBBCString = <CString.copied text="anycow.split" />
+        val splitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, splitBBCString.ptr)
+        val contBBCString = <CString.copied text="anycow.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, isShared, splitBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, splitBB)
         val fresh: LLVMValueRef = (try self.copyAnyValue(c: inout c, fat: fat))

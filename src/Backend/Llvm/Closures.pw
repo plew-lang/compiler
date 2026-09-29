@@ -109,10 +109,14 @@ pub impl LlvmCtx {
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), env, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
-        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.free"))
-        val callBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.drop"))
-        val tailBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.freetail"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.cont"))
+        val freeBBCString = <CString.copied text="clorel.free" />
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, freeBBCString.ptr)
+        val callBBCString = <CString.copied text="clorel.drop" />
+        val callBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, callBBCString.ptr)
+        val tailBBCString = <CString.copied text="clorel.freetail" />
+        val tailBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, tailBBCString.ptr)
+        val contBBCString = <CString.copied text="clorel.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         val dropFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, env, anon())

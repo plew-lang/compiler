@@ -160,7 +160,8 @@ pub impl LlvmCtx {
         if isMain {
             mut val noParams: Array[LLVMTypeRef] = []
             val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(noParams), 0U64, 0I32)
-            entryFn = LLVMAddFunction(self.mod, cstr(s: "main"), mainTy)
+            val symbolCString = <CString.copied text="main" />
+            entryFn = LLVMAddFunction(self.mod, symbolCString.ptr, mainTy)
         } else {
             entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
         }

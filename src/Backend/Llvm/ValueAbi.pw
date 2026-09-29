@@ -4,7 +4,8 @@
 pub impl LlvmCtx {
     inout fn byvalAttributeKind() -> U32 {
         if self.valueAbiByvalKind == 0U32 {
-            self.valueAbiByvalKind = LLVMGetEnumAttributeKindForName(cstr(s: "byval"), 5U64)
+            val symbolCString = <CString.copied text="byval" />
+            self.valueAbiByvalKind = LLVMGetEnumAttributeKindForName(symbolCString.ptr, 5U64)
         }
         return self.valueAbiByvalKind
     }

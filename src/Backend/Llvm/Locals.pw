@@ -46,8 +46,10 @@ pub impl LlvmCtx {
     // iteration — which overflowed the 8 MB stack on large inputs. Positions the
     // builder at `body0`; the caller binds params + emits the body from there.
     inout fn beginFnBody(fv: LLVMValueRef) {
-        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
-        val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "body0"))
+        val entryCString = <CString.copied text="entry" />
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
+        val body0CString = <CString.copied text="body0" />
+        val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, body0CString.ptr)
         LLVMPositionBuilderAtEnd(self.b, entry)
         LLVMBuildBr(self.b, body0)
         LLVMPositionBuilderAtEnd(self.b, body0)

@@ -31,9 +31,12 @@ pub impl LlvmCtx {
             // LLVMInternalLinkage: implementation-only physical runtime glue.
             LLVMSetLinkage(function, 8U32)
             val builder = LLVMCreateBuilderInContext(self.ctx)
-            val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
-            val present = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "present"))
-            val done = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "done"))
+            val entryCString = <CString.copied text="entry" />
+            val entry = LLVMAppendBasicBlockInContext(self.ctx, function, entryCString.ptr)
+            val presentCString = <CString.copied text="present" />
+            val present = LLVMAppendBasicBlockInContext(self.ctx, function, presentCString.ptr)
+            val doneCString = <CString.copied text="done" />
+            val done = LLVMAppendBasicBlockInContext(self.ctx, function, doneCString.ptr)
             LLVMPositionBuilderAtEnd(builder, entry)
             val pointer = LLVMGetParam(function, 0U64)
             val zero = LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -232,8 +235,10 @@ pub impl LlvmCtx {
         val countPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(indices), 1U64, anon())
         val count: LLVMValueRef = llvmLoad(self.b, self.i64ty, countPtr, anon())
         val shared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        val split: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.split"))
-        val continuation: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "valuecow.cont"))
+        val splitCString = <CString.copied text="valuecow.split" />
+        val split: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, splitCString.ptr)
+        val continuationCString = <CString.copied text="valuecow.cont" />
+        val continuation: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, continuationCString.ptr)
         LLVMBuildCondBr(self.b, shared, split, continuation)
         LLVMPositionBuilderAtEnd(self.b, split)
         val type: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: typeRef))
@@ -262,8 +267,10 @@ pub impl LlvmCtx {
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
         val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
-        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "boxrel.free"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "boxrel.cont"))
+        val freeBBCString = <CString.copied text="boxrel.free" />
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, freeBBCString.ptr)
+        val contBBCString = <CString.copied text="boxrel.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         if ref != 0U64 {
@@ -357,8 +364,10 @@ pub impl LlvmCtx {
         // until we decrement and dispose exactly once.
         val cur: LLVMValueRef = (try self.refStrongCount(c: inout c, cell: cell))
         val isLast: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), cur, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.last"))
-        val decBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.dec"))
+        val deinitBBCString = <CString.copied text="refrel.last" />
+        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, deinitBBCString.ptr)
+        val decBBCString = <CString.copied text="refrel.dec" />
+        val decBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, decBBCString.ptr)
         LLVMBuildCondBr(self.b, isLast, deinitBB, decBB)
         LLVMPositionBuilderAtEnd(self.b, deinitBB)
         // destroy the pointee through the classifier (arcNeedsRelease gate + valueArc
@@ -378,8 +387,10 @@ pub impl LlvmCtx {
         // cell — freed iff no weak observers remain.
         val newStrong: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newStrong, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-        val dispBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.disp"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.cont"))
+        val dispBBCString = <CString.copied text="refrel.disp" />
+        val dispBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, dispBBCString.ptr)
+        val contBBCString = <CString.copied text="refrel.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, isZero, dispBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, dispBB)
         try self.refDisposeStrong(c: inout c, cell: cell)
@@ -413,8 +424,10 @@ pub impl LlvmCtx {
         // owner co-owns it (balanced by this owner's eventual element release at drop).
         if (try c.finalNeedsRelease(typeRef: elemRef)) {
             val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
-            val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.retain"))
-            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.cont"))
+            val retBBCString = <CString.copied text="cow.retain" />
+            val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, retBBCString.ptr)
+            val contBBCString = <CString.copied text="cow.cont" />
+            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
             LLVMBuildCondBr(self.b, copied, retBB, contBB)
             LLVMPositionBuilderAtEnd(self.b, retBB)
             try self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
@@ -643,8 +656,10 @@ pub impl LlvmCtx {
         }
         val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: data))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.free"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.cont"))
+        val freeBBCString = <CString.copied text="arrrel.free" />
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, freeBBCString.ptr)
+        val contBBCString = <CString.copied text="arrrel.cont" />
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, isZero, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
         // Only the final owner needs the live range. rawbufRelease decrements
@@ -668,9 +683,12 @@ pub impl LlvmCtx {
     inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) -> Result[(), CompileDiagnostic] {
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         llvmStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
-        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.cond"))
-        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.body"))
-        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.end"))
+        val condBBCString = <CString.copied text="arrelem.cond" />
+        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, condBBCString.ptr)
+        val bodyBBCString = <CString.copied text="arrelem.body" />
+        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, bodyBBCString.ptr)
+        val endBBCString = <CString.copied text="arrelem.end" />
+        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, endBBCString.ptr)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
         val iv: LLVMValueRef = llvmLoad(self.b, self.i64ty, iSlot, anon())
@@ -693,9 +711,12 @@ pub impl LlvmCtx {
         }
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         llvmStore(self.b, start, iSlot)
-        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.cond"))
-        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.body"))
-        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.end"))
+        val condBBCString = <CString.copied text="arrrng.cond" />
+        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, condBBCString.ptr)
+        val bodyBBCString = <CString.copied text="arrrng.body" />
+        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, bodyBBCString.ptr)
+        val endBBCString = <CString.copied text="arrrng.end" />
+        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, endBBCString.ptr)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, condBB)
         val iv: LLVMValueRef = llvmLoad(self.b, self.i64ty, iSlot, anon())
@@ -719,9 +740,12 @@ pub impl LlvmCtx {
         val panicType = LLVMFunctionType(self.voidty, arrayCPtr(panicParameters), 2U64, 0I32)
         val panicFunction = (try self.getOrDeclare(c: inout c, name: "plew_panic_raw", fnTy: panicType))
         val builder = LLVMCreateBuilderInContext(self.ctx)
-        val entry = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "entry"))
-        val failed = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "failed"))
-        val done = LLVMAppendBasicBlockInContext(self.ctx, function, cstr(s: "done"))
+        val entryCString = <CString.copied text="entry" />
+        val entry = LLVMAppendBasicBlockInContext(self.ctx, function, entryCString.ptr)
+        val failedCString = <CString.copied text="failed" />
+        val failed = LLVMAppendBasicBlockInContext(self.ctx, function, failedCString.ptr)
+        val doneCString = <CString.copied text="done" />
+        val done = LLVMAppendBasicBlockInContext(self.ctx, function, doneCString.ptr)
         LLVMPositionBuilderAtEnd(builder, entry)
         val index = LLVMGetParam(function, 0U64)
         val count = LLVMGetParam(function, 1U64)
@@ -729,7 +753,8 @@ pub impl LlvmCtx {
         val pastEnd = LLVMBuildICmp(builder, llvmIntSge(), index, count, anon())
         LLVMBuildCondBr(builder, LLVMBuildOr(builder, negative, pastEnd, anon()), failed, done)
         LLVMPositionBuilderAtEnd(builder, failed)
-        val message = LLVMBuildGlobalStringPtr(builder, cstr(s: "index out of bounds"), anon())
+        val messageCString = <CString.copied text="index out of bounds" />
+        val message = LLVMBuildGlobalStringPtr(builder, messageCString.ptr, anon())
         val arguments: Array[LLVMValueRef] = [message, LLVMConstInt(self.i64ty, 19U64, 0I32)]
         LLVMBuildCall2(builder, panicType, panicFunction, arrayCPtr(arguments), 2U64, anon())
         LLVMBuildUnreachable(builder)

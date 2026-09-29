@@ -20,9 +20,12 @@ int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
 
 // Single-threaded native execution session. It owns code, not a second Plew
 // runtime. Hosts explicitly supply symbols from the existing runtime instance.
+// Immutable empty instruction name, borrowed for the process lifetime.
+const unsigned char *plew_llvm_empty_name(void);
 typedef struct PlewLlvmJit PlewLlvmJit;
 PlewLlvmJit *plew_llvm_jit_create(void);
 void plew_llvm_jit_destroy(PlewLlvmJit *jit);
+int plew_llvm_jit_failed(const PlewLlvmJit *jit);
 int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
                          uint64_t address, int callable);
 // Always consumes both handles, including on failure. They must be a matching

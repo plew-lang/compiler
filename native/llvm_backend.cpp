@@ -55,6 +55,11 @@ bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
 }
 } // namespace
 
+extern "C" const unsigned char *plew_llvm_empty_name(void) {
+  static const unsigned char empty[] = "";
+  return empty;
+}
+
 extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
   if (LLVMInitializeNativeTarget() || LLVMInitializeNativeAsmPrinter()) {
     std::fprintf(stderr, "plew: native LLVM JIT target unavailable\n");
@@ -71,6 +76,9 @@ extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
 }
 
 extern "C" void plew_llvm_jit_destroy(PlewLlvmJit *jit) { delete jit; }
+extern "C" int plew_llvm_jit_failed(const PlewLlvmJit *jit) {
+  return !jit || jit->failed;
+}
 
 extern "C" int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
                                     uint64_t address, int callable) {

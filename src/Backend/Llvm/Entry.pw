@@ -21,7 +21,8 @@ pub impl LlvmCtx {
             val term = c.arena.finalStorages[descriptor].targetTypeRef
             if term == 0U64 || term >= c.arena.typeCount() { return <Result.Ok value=false /> }
             val lty: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: term))
-            val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
+            val gvCString = <CString.copied text=globalSymbol(idx: gi) />
+            val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, gvCString.ptr)
             match storage {
                 LlvmGlobalStorage.Definition => { LLVMSetInitializer(gv, LLVMConstNull(lty)) }
                 LlvmGlobalStorage.Reference => {}
@@ -102,7 +103,8 @@ pub impl LlvmCtx {
         mainParams.append(self.i32ty)
         mainParams.append(self.ptrty)
         val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(mainParams), 2U64, 0I32)
-        val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, cstr(s: "main"), mainTy)
+        val mainFnCString = <CString.copied text="main" />
+        val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, mainFnCString.ptr, mainTy)
         self.curFn = mainFn
         self.curIsMain = true
         self.curRetVoid = false

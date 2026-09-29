@@ -141,8 +141,10 @@ pub impl LlvmCtx {
             }
             if hasOwnership {
                 val selected = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon())
-                val active = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumarc.active"))
-                val done = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumarc.done"))
+                val activeCString = <CString.copied text="enumarc.active" />
+                val active = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, activeCString.ptr)
+                val doneCString = <CString.copied text="enumarc.done" />
+                val done = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, doneCString.ptr)
                 LLVMBuildCondBr(self.b, selected, active, done)
                 LLVMPositionBuilderAtEnd(self.b, active)
                 mut val types: Array[LLVMTypeRef] = []

@@ -36,7 +36,7 @@ environment-drop and existential-witness requests. Neither mode proves ORC
 execution or sanitizer safety.
 
 `compiler/codegen/SessionModule.pw` is a native embedding diagnostic. Link its
-generated LLVM with the common runtime and libLLVM, then compile/run its stdout
+generated LLVM with the common runtime, native backend bridge and libLLVM, then compile/run its stdout
 as LLVM. It verifies main-only generation with an invalid unused body and terminal
 session failure when that body is requested. It is not a full ORC execution gate.
 
@@ -45,6 +45,13 @@ the selected LLVM. `--asan` defaults to LLVM22 and checks bridge ownership with
 ASan/LSan; it does not instrument the generated JIT instructions. This manual
 diagnostic covers shared storage, existing host symbols and terminal failures,
 not frontend lazy requests or the product CLI.
+
+`compiler/codegen/test-session-jit.py` executes a main lowered by CompilerSession
+through the native ORC bridge while leaving an invalid unused body unrequested.
+It checks consuming module transfer on success and terminal failure. `--asan`
+instruments the Plew embedding harness and native bridge, but not the nested
+JIT-generated instructions. Runtime state isolation and source-call lazy stubs
+remain separate product requirements. Set `PLEWC` to the candidate.
 
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store

@@ -89,8 +89,10 @@ pub impl LlvmCtx {
         llvmStore(self.b, LLVMConstInt(self.i32ty, term.state, 0I32), LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()))
         val done = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.promiseTy, promise, 0U64, anon()), anon())
         val complete = LLVMBuildICmp(self.b, llvmIntNe(), done, LLVMConstInt(self.i32ty, 0U64, 0I32), anon())
-        val completion = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.await.complete"))
-        val suspended = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.await.suspend"))
+        val completionCString = <CString.copied text="mid.await.complete" />
+        val completion = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, completionCString.ptr)
+        val suspendedCString = <CString.copied text="mid.await.suspend" />
+        val suspended = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, suspendedCString.ptr)
         LLVMBuildCondBr(self.b, complete, completion, suspended)
         LLVMPositionBuilderAtEnd(self.b, suspended)
         // Registration is runtime-owned: several activations may await the
@@ -140,7 +142,8 @@ pub impl LlvmCtx {
         }
         if !(try self.midPrepareCanonicalLocals(c: inout c, body: body, storage: storage, initializeParameters: false)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid local binding failed") />
             return <Result.Ok value=() /> }
-        val start = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.async.start"))
+        val startCString = <CString.copied text="mid.async.start" />
+        val start = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, startCString.ptr)
         val state = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()), anon())
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, start, 8U32)
         LLVMPositionBuilderAtEnd(self.b, start)

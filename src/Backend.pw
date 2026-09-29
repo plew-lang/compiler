@@ -10,7 +10,7 @@ import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
-import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
+import @Std/Ffi with { CString, cString, cFree, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
@@ -453,6 +453,7 @@ extern(c) {
     type LLVMValueRef
     type LLVMBasicBlockRef
     type LLVMBuilderRef
+    type PlewLlvmJitRef
     fn plew_pointer_equal(first~: LLVMTypeRef, second~: LLVMTypeRef) -> I32
 
     // Context / module.
@@ -462,6 +463,13 @@ extern(c) {
     fn LLVMDisposeModule(module~: LLVMModuleRef)
     fn LLVMContextDispose(context~: LLVMContextRef)
     fn plew_llvm_emit_object(module~: LLVMModuleRef, output~: CPtr[U8], cpu~: CPtr[U8], trace~: I32) -> I32
+    fn plew_llvm_empty_name() -> CPtr[U8]
+    fn plew_llvm_jit_create() -> PlewLlvmJitRef
+    fn plew_llvm_jit_destroy(jit~: PlewLlvmJitRef)
+    fn plew_llvm_jit_failed(jit~: PlewLlvmJitRef) -> I32
+    fn plew_llvm_jit_add(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef) -> I32
+    fn plew_llvm_jit_define(jit~: PlewLlvmJitRef, name~: CPtr[U8], address~: U64, callable~: I32) -> I32
+    fn plew_llvm_jit_lookup(jit~: PlewLlvmJitRef, name~: CPtr[U8]) -> U64
     fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMDisposeMessage(msg~: CPtr[U8])
 
@@ -691,13 +699,56 @@ pub fn nativeCpu() -> String {
 }
 
 // One owner keeps the context alive until its module has been consumed. Native
-// output may mutate the module, but never takes ownership of either handle.
+// object output borrows both handles; LlvmJit.add consumes them together.
 pub unique struct LlvmModule {
     val context: LLVMContextRef
     val module: LLVMModuleRef
+    mut val transferred: Bool = false
     deinit {
-        LLVMDisposeModule(self.module)
-        LLVMContextDispose(self.context)
+        if !self.transferred {
+            LLVMDisposeModule(self.module)
+            LLVMContextDispose(self.context)
+        }
+    }
+}
+
+// Code and native contexts live until this owner is destroyed. It never owns a
+// second runtime; registered addresses refer to the embedding host's instance.
+pub unique struct LlvmJit {
+    val handle: PlewLlvmJitRef
+    deinit { plew_llvm_jit_destroy(self.handle) }
+}
+pub unique enum LlvmJitCreation {
+    Success(jit: LlvmJit)
+    Failure
+}
+pub impl LlvmJit {
+    assoc fn create() -> LlvmJitCreation {
+        val handle = plew_llvm_jit_create()
+        if plew_llvm_jit_failed(handle) != 0I32 { return <LlvmJitCreation.Failure /> }
+        return <LlvmJitCreation.Success jit=<LlvmJit handle=handle /> />
+    }
+
+    inout fn add(module: move LlvmModule) -> I32 {
+        mut val owned = move module
+        // The native call consumes both handles on every return path. Only
+        // this consuming method can disarm the original unique owner.
+        owned.transferred = true
+        return plew_llvm_jit_add(self.handle, owned.module, owned.context)
+    }
+
+    inout fn define(name: String, address: U64, callable: Bool) -> I32 {
+        val symbol = cString(name)
+        val result = plew_llvm_jit_define(self.handle, symbol, address, if callable { give 1I32 } else { give 0I32 })
+        cFree(symbol)
+        return result
+    }
+
+    inout fn lookup(name: String) -> U64 {
+        val symbol = cString(name)
+        val address = plew_llvm_jit_lookup(self.handle, symbol)
+        cFree(symbol)
+        return address
     }
 }
 impl LlvmModule {
@@ -831,7 +882,8 @@ pub fn lowerRequestedLlvm(c: inout Comp, program: MidExecutableProgram, ambient:
 fn lowerExecutableLlvm(c: inout Comp, program: MidExecutableProgram, ambient: MidAmbientProgram,
                       globalStorage: LlvmGlobalStorage, emission: LlvmBodyEmission) -> LlvmLoweringResult {
     val ctx: LLVMContextRef = LLVMContextCreate()
-    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
+    val mCString = <CString.copied text="plew" />
+    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(mCString.ptr, ctx)
     val module = <LlvmModule.owned context=ctx module=m />
     val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
     // Layout-sensitive optimizers must use the same native ABI as the linker.
@@ -1042,7 +1094,8 @@ fn lowerExecutableLlvm(c: inout Comp, program: MidExecutableProgram, ambient: Mi
     // actually instruments memory accesses. Declarations (runtime externs) are left
     // untouched — they carry no body and are compiled/instrumented by clang.
     if c.asan {
-        val kind: U32 = LLVMGetEnumAttributeKindForName(cstr(s: "sanitize_address"), 16U64)
+        val kindCString = <CString.copied text="sanitize_address" />
+        val kind: U32 = LLVMGetEnumAttributeKindForName(kindCString.ptr, 16U64)
         val attr: LLVMAttributeRef = LLVMCreateEnumAttribute(st.ctx, kind, 0U64)
         // LLVMAttributeFunctionIndex (~0u) targets the function itself, not a param.
         val fnIndex: U32 = 4294967295U32
@@ -1074,7 +1127,8 @@ pub enum LlvmGlobalStorage { Definition Reference }
 
 pub fn lowerGlobalStorageLlvm(c: inout Comp) -> LlvmLoweringResult {
     val ctx = LLVMContextCreate()
-    val m = LLVMModuleCreateWithNameInContext(cstr(s: "plew.globals"), ctx)
+    val mCString = <CString.copied text="plew.globals" />
+    val m = LLVMModuleCreateWithNameInContext(mCString.ptr, ctx)
     val module = <LlvmModule.owned context=ctx module=m />
     val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
     val targetTriple = LLVMGetDefaultTargetTriple()
@@ -1410,7 +1464,7 @@ pub fn emitLlvmRuntime() {
     write(s: "void plew_loop_run(void) { PlewTask t; while (1) { while (plew_dequeue(&t)) { t.fn(t.arg); } if (plew_timers_len == 0) break; long long bi = -1, bd = 0; for (long long i = 0; i < plew_timers_len; i++) { if (bi < 0 || plew_timers[i].deadline < bd) { bi = i; bd = plew_timers[i].deadline; } } PlewPromise* p = plew_timers[bi].p; plew_vnow = plew_timers[bi].deadline; plew_timers[bi] = plew_timers[--plew_timers_len]; plew_promise_resolve(p, 0); plew_rawbuf_drop(p); } }\n")
 }
 
-fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
+fn floatText(c: inout Comp, start: U64, len: U64) -> String {
     mut val bs: Array[U8] = []
     mut val i: U64 = 0
     while i < len {
@@ -1421,7 +1475,7 @@ fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
         if byte != 95U8 { bs.append(byte) }
         i += 1U64
     }
-    return cstr(s: stringFromBytesUnchecked(bs))
+    return stringFromBytesUnchecked(bs)
 }
 
 fn floatTextLen(c: inout Comp, start: U64, len: U64) -> U64 {
@@ -1434,14 +1488,8 @@ fn floatTextLen(c: inout Comp, start: U64, len: U64) -> U64 {
     return out
 }
 
-fn cstr(s: String) -> CPtr[U8] {
-    return cString(s)
-}
-
-// Empty instruction name (LLVM auto-numbers unnamed values).
-fn anon() -> CPtr[U8] {
-    return cString("")
-}
+// LLVM copies instruction names; this immutable empty name needs no allocation.
+fn anon() -> CPtr[U8] { return plew_llvm_empty_name() }
 
 // Physical memory operations have no work for a zero-sized aggregate. Keep
 // evaluation, allocation and ownership at their callers; only omit the memory

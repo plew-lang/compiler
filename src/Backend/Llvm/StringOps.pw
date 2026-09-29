@@ -22,7 +22,8 @@ pub impl LlvmCtx {
             }
             index += 1U64
         }
-        val function = LLVMAddFunction(self.mod, cstr(s: name), fnTy)
+        val functionCString = <CString.copied text=name />
+        val function = LLVMAddFunction(self.mod, functionCString.ptr, fnTy)
         self.declId.append(key)
         self.declFn.append(function)
         self.declTy.append(fnTy)
@@ -57,7 +58,8 @@ pub impl LlvmCtx {
         }
         val m: U64 = 24U64 + bytes.count()
         val arrTy: LLVMTypeRef = LLVMArrayType2(i8ty, m)
-        val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, cstr(s: "str"))
+        val gCString = <CString.copied text="str" />
+        val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, gCString.ptr)
         LLVMSetInitializer(g, LLVMConstArray2(i8ty, arrayCPtr(cvals), m))
         LLVMSetGlobalConstant(g, 0I32)
         LLVMSetAlignment(g, 8U32)

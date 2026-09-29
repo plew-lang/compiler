@@ -38,7 +38,8 @@ pub impl LlvmCtx {
         mut val path = LLVMConstNull(self.ptrty)
         if fields.count() != 0U64 {
             val array = LLVMConstArray2(self.i64ty, arrayCPtr(fields), fields.count())
-            path = LLVMAddGlobal(self.mod, LLVMTypeOf(array), cstr(s: "access.path"))
+            val symbolCString = <CString.copied text="access.path" />
+            path = LLVMAddGlobal(self.mod, LLVMTypeOf(array), symbolCString.ptr)
             LLVMSetInitializer(path, array)
             LLVMSetGlobalConstant(path, 1I32)
             LLVMSetLinkage(path, 9U32)

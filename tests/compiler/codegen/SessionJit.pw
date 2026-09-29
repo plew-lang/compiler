@@ -1,0 +1,43 @@
+// Exercise ownership transfer from a partial compiler session to ORC.
+import ../../../src/CheckedProgram with { CompilerSession, CompilerSessionResult }
+import ../../../src/Frontend with { FrontendInput }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Backend with { LlvmLoweringResult, LlvmJit, LlvmJitCreation }
+import @Std/Io with { write }
+extern(c) {
+    fn plew_test_args_address() -> U64
+    fn plew_test_call_main(address~: U64) -> I32
+}
+fn main() {
+    match CompilerSession.open(input: <FrontendInput.Text text="fn main() {} fn unused() { missing() }" path="request.pw" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val main = session.prepareFunction(function: 0U64).unwrap()
+            match LlvmJit.create() {
+                LlvmJitCreation.Failure => { panic "JIT creation failed" }
+                LlvmJitCreation.Success(jit: val created) => {
+                    mut val jit = move created
+                    if jit.define(name: "plew_set_args", address: plew_test_args_address(), callable: true) != 0I32 { panic "host symbol failed" }
+                    match session.lowerBody(bodyId: main.bodyId) {
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        LlvmLoweringResult.Success(module: val module) => {
+                            if jit.add(module: move module) != 0I32 { panic "module transfer failed" }
+                        }
+                    }
+                    val address = jit.lookup(name: "main")
+                    if address == 0U64 { panic "main missing" }
+                    if plew_test_call_main(address) != 0I32 { panic "main failed" }
+                    if jit.lookup(name: "missing") != 0U64 { panic "missing symbol accepted" }
+                    match session.lowerBody(bodyId: main.bodyId) {
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        LlvmLoweringResult.Success(module: val module) => {
+                            if jit.add(module: move module) == 0I32 { panic "failed JIT accepted module" }
+                        }
+                    }
+                }
+            }
+            write(s: "ok\n")
+        }
+    }
+}

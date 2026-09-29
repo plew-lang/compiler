@@ -32,8 +32,12 @@ def capture(command, name):
 
 capture([compiler, root / 'tests/compiler/codegen/GlobalModules.pw'], 'harness.ll')
 capture([compiler, '--runtime'], 'runtime.c')
+capture([bindir / 'clang++', '-std=c++17', '-O1', '-isystem',
+         subprocess.check_output([str(config), '--includedir'], text=True).strip(),
+         '-c', root / 'native/llvm_backend.cpp', '-o', evidence / 'backend.o'], 'backend')
 capture([bindir / 'clang', '-O0', evidence / 'harness.ll', evidence / 'runtime.c',
-         '-L' + str(libdir), '-lLLVM', '-o', evidence / 'harness'], 'harness.link')
+         evidence / 'backend.o', '-lc++', '-L' + str(libdir), '-lLLVM',
+         '-o', evidence / 'harness'], 'harness.link')
 print('PASS global module harness build', flush=True)
 results = []
 for name in ([] if options.requested else ['global_var', 'global_generic_init', 'global_forward_ref']):

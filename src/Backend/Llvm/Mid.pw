@@ -436,7 +436,8 @@ pub impl LlvmCtx {
             return <Result.Ok value=self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen, type: (try self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm))) />
         }
         if operand.tag == 7U64 {
-            return <Result.Ok value=LLVMConstRealOfStringAndSize((try self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm)), floatTextCPtr(c: inout c, start: operand.stringStart, len: operand.stringLen), floatTextLen(c: inout c, start: operand.stringStart, len: operand.stringLen)) />
+            val literalText = <CString.copied text=floatText(c: inout c, start: operand.stringStart, len: operand.stringLen) />
+            return <Result.Ok value=LLVMConstRealOfStringAndSize((try self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm)), literalText.ptr, floatTextLen(c: inout c, start: operand.stringStart, len: operand.stringLen)) />
         }
         return <Result.Ok value=LLVMConstNull(self.ptrty) />
     }
@@ -574,9 +575,12 @@ pub impl LlvmCtx {
         val targetData: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(targetElementTy), cap: count))
         val indexSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         llvmStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), indexSlot)
-        val condition: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.cond"))
-        val loop: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.body"))
-        val done: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.array.done"))
+        val conditionCString = <CString.copied text="mid.canonical.repack.array.cond" />
+        val condition: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, conditionCString.ptr)
+        val loopCString = <CString.copied text="mid.canonical.repack.array.body" />
+        val loop: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, loopCString.ptr)
+        val doneCString = <CString.copied text="mid.canonical.repack.array.done" />
+        val done: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, doneCString.ptr)
         LLVMBuildBr(self.b, condition)
         LLVMPositionBuilderAtEnd(self.b, condition)
         val index: LLVMValueRef = llvmLoad(self.b, self.i64ty, indexSlot, anon())
@@ -609,12 +613,15 @@ pub impl LlvmCtx {
         val tag: LLVMValueRef = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sourceLlvmType, sourceSlotPtr, 0U64, anon()), anon())
         val sourcePayloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, sourceLlvmType, sourceSlotPtr, 1U64, anon())
         val resultSlot: LLVMValueRef = self.entryAlloca(ty: targetLlvmType)
-        val end: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.end"))
+        val endCString = <CString.copied text="mid.canonical.repack.enum.end" />
+        val end: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, endCString.ptr)
         mut val payloadIndex: U64 = 0U64
         mut val variant: U64 = 0U64
         while variant < c.arena.enumAt(index: enumIdx).variants.count() {
-            val matched: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.variant"))
-            val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.canonical.repack.enum.next"))
+            val matchedCString = <CString.copied text="mid.canonical.repack.enum.variant" />
+            val matched: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, matchedCString.ptr)
+            val nextCString = <CString.copied text="mid.canonical.repack.enum.next" />
+            val next: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, nextCString.ptr)
             LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, variant, 0I32), anon()), matched, next)
             LLVMPositionBuilderAtEnd(self.b, matched)
             val fields: Array[FieldDef] = c.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields
@@ -1642,8 +1649,10 @@ pub impl LlvmCtx {
                                 val count: LLVMValueRef = (try self.rawbufCount(c: inout c, data: data))
                                 val requested: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64)))
                                 val shrink: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntUlt(), requested, count, anon())
-                                val shrinkBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.buf.truncate"))
-                                val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.buf.truncate.cont"))
+                                val shrinkBlockCString = <CString.copied text="mid.buf.truncate" />
+                                val shrinkBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, shrinkBlockCString.ptr)
+                                val continueBlockCString = <CString.copied text="mid.buf.truncate.cont" />
+                                val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, continueBlockCString.ptr)
                                 LLVMBuildCondBr(self.b, shrink, shrinkBlock, continueBlock)
                                 LLVMPositionBuilderAtEnd(self.b, shrinkBlock)
                                 try self.rawbufSetCount(c: inout c, data: data, n: requested)
@@ -2167,8 +2176,10 @@ pub impl LlvmCtx {
         // branch when both destruction and dynamic access work are empty.
         if !(try c.finalNeedsRelease(typeRef: place.typeTerm)) && (!self.ambientProgram.enabled || self.ambientBody.path(c: c, body: body, place: place).count() == 0U64) { return <Result.Ok value=true /> }
         val flagValue: LLVMValueRef = llvmLoad(self.b, self.i1ty, self.midCanonicalLocalPtr(body: body, local: flag), anon())
-        val thenBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop"))
-        val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop.cont"))
+        val thenBlockCString = <CString.copied text="mid.drop" />
+        val thenBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, thenBlockCString.ptr)
+        val continueBlockCString = <CString.copied text="mid.drop.cont" />
+        val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, continueBlockCString.ptr)
         LLVMBuildCondBr(self.b, flagValue, thenBlock, continueBlock)
         LLVMPositionBuilderAtEnd(self.b, thenBlock)
         if !(try self.midCanonicalEmitDrop(c: inout c, body: body, placeId: placeId)) { return <Result.Ok value=false /> }
@@ -2281,9 +2292,12 @@ pub impl LlvmCtx {
         val value = llvmLoad(self.b, (try self.llvmTypeOfRef(c: inout c, ref: typeRef)), cell, anon())
         val count = (try self.rawbufRelease(c: inout c, cell: cell))
         val last = LLVMBuildICmp(self.b, llvmIntEq(), count, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-        val release = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.free"))
-        val shared = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.shared"))
-        val continuation = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumtake.cont"))
+        val releaseCString = <CString.copied text="enumtake.free" />
+        val release = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, releaseCString.ptr)
+        val sharedCString = <CString.copied text="enumtake.shared" />
+        val shared = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, sharedCString.ptr)
+        val continuationCString = <CString.copied text="enumtake.cont" />
+        val continuation = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, continuationCString.ptr)
         LLVMBuildCondBr(self.b, last, release, shared)
         LLVMPositionBuilderAtEnd(self.b, release)
         try self.rawbufFree(c: inout c, cell: cell)
@@ -2630,7 +2644,10 @@ impl LlvmCtx {
         mut val blockI: U64 = 0U64
         while blockI < body.blocks.len {
             if blockI == body.entry { blocks.append(LLVMGetInsertBlock(self.b)) }
-            else { blocks.append(LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid"))) }
+            else {
+                val blockName = <CString.copied text="mid" />
+                blocks.append(LLVMAppendBasicBlockInContext(self.ctx, self.curFn, blockName.ptr))
+            }
             blockI = blockI + 1U64
         }
         blockI = 0U64
