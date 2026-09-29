@@ -104,6 +104,20 @@ pub impl LlvmCtx {
         return <Result.Ok value=LLVMGetEnumAttributeKindForName(attribute.ptr, 7U64) />
     }
 
+    inout fn checkCIntegerExtension(c: inout Comp, function: LLVMValueRef, index: U64, ref: U64, physical: LLVMTypeRef, offset: U64) -> Result[(), CompileDiagnostic] {
+        val expected = (try self.cIntegerExtension(c: inout c, ref: ref, physical: physical))
+        val signedName = <CString.copied text="signext" />
+        val unsignedName = <CString.copied text="zeroext" />
+        val signedKind = LLVMGetEnumAttributeKindForName(signedName.ptr, 7U64)
+        val unsignedKind = LLVMGetEnumAttributeKindForName(unsignedName.ptr, 7U64)
+        val signed = LLVMGetEnumAttributeAtIndex(function, truncU32(n: index), signedKind) != 0U64
+        val unsigned = LLVMGetEnumAttributeAtIndex(function, truncU32(n: index), unsignedKind) != 0U64
+        if signed != (expected == signedKind) || unsigned != (expected == unsignedKind) {
+            return <Result.Err error=c.diagnosticAt(offset: offset, msg: "conflicting C function ABI for external name") />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn attachCIntegerExtension(c: inout Comp, function: LLVMValueRef, index: U64, ref: U64, physical: LLVMTypeRef, callSite: Bool) -> Result[(), CompileDiagnostic] {
         val kind = (try self.cIntegerExtension(c: inout c, ref: ref, physical: physical))
         if kind != 0U32 {

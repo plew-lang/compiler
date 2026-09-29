@@ -24,8 +24,9 @@ def run(*args):
 fixture = root / 'tests/compiler/codegen/Expose.pw'
 compile_flags = ['--asan'] if options.asan else []
 raw = run(compiler, *compile_flags, '--require-mid', fixture).stdout
-for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean', 'exposedSingle', 'exposedMutateSingle', 'exposedHandle', 'exposedPointer']:
+for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean', 'exposedSingle', 'exposedMutateSingle', 'exposedHandle', 'exposedPointer', 'exposedImported']:
     assert re.search(rb'^define (?!internal)[^\n]*@' + name.encode() + rb'\(', raw, re.M), name
+assert b'@exposedImported.' not in raw
 # Use the selected target's C compiler as an ABI reference: successful low-bit
 # roundtrips alone do not prove the upper-register extension contract.
 c_reference = run(llvm_link.selected_clang(config), '-S', '-emit-llvm', '-O0', fixture.with_suffix('.c'), '-o', '-').stdout
@@ -74,4 +75,16 @@ for name in ['expose_labels', 'expose_duplicate', 'expose_generic', 'expose_meth
     result = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
     assert result.returncode != 0, name
     assert source.with_suffix('.err').read_bytes().strip() in result.stderr, result.stderr
+# Separate modules may declare the same external name, but cannot silently
+# change its ABI. I8/U8 share an LLVM type and differ in extension attributes.
+with tempfile.TemporaryDirectory(prefix='plew-expose-collision-') as folder:
+    directory = Path(folder)
+    (directory / 'Library.pw').write_text('pub expose fn entry(value~: I8) -> I8 { return value }\n')
+    for parameter, result in [('I64', 'I8'), ('I8', 'I64'), ('U8', 'I8'), ('I8', 'U8')]:
+        source = directory / 'Main.pw'
+        source.write_text('import ./Library as Library\nextern(c) { fn entry(value~: ' + parameter + ') -> ' + result + ' }\nfn main() { val value = entry(1' + parameter + ') }\n')
+        execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
+        assert execution.returncode != 0, (parameter, result)
+        expected = b'conflicting C function ABI for external name' if parameter == 'I8' else b'type mismatch'
+        assert expected in execution.stderr, execution.stderr
 print('PASS expose: C and Plew calls, external-only roots, integer/float/void/inout ABI, labels and name collisions')

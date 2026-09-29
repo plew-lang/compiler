@@ -98,6 +98,9 @@ pub impl LlvmCtx {
         if declaration.hasRet { returnType = (try self.cScalarType(c: inout c, ref: prepared.resultType)) }
         val externalSignature = LLVMFunctionType(returnType, arrayCPtr(parameters), parameters.count(), 0I32)
         val entry = LLVMAddFunction(self.mod, arrayCPtr(name), externalSignature)
+        self.declId.append(declaration.nameId)
+        self.declFn.append(entry)
+        self.declTy.append(externalSignature)
         self.curFn = entry
         self.beginFnBody(fv: entry)
         mut val writebacks: Array[LlvmCInout] = []

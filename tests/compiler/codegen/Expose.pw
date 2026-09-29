@@ -1,6 +1,8 @@
 import @Std/Core with { assert }
+import ./ExposeLibrary as Library
 
 extern(c) {
+    fn exposedImported(value~: I8) -> I8
     type ExposedHandle
     fn exerciseExposed() -> I32
     fn cSignedByte(value~: I8) -> I8
@@ -38,6 +40,7 @@ expose fn exposedSingle(value~: F32) -> F32 { return cSingle(value) }
 expose fn exposedBoolean(value~: Bool) -> Bool { return cBoolean(value) }
 
 fn main() {
+    assert(exposedImported(-42I8) == -42I8)
     mut val single: F32 = 1.25
     assert(exposedMutateSingle(inout single) == 1.25)
     assert(single == 1.5)

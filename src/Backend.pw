@@ -546,6 +546,7 @@ extern(c) {
     fn LLVMSetTarget(m~: LLVMModuleRef, triple~: CPtr[U8])
     fn LLVMGetDefaultTargetTriple() -> CPtr[U8]
     fn LLVMGetEnumAttributeKindForName(name~: CPtr[U8], len~: U64) -> U32
+    fn LLVMGetEnumAttributeAtIndex(function~: LLVMValueRef, index~: U32, kind~: U32) -> U64
     fn LLVMCreateEnumAttribute(ctx~: LLVMContextRef, kindID~: U32, val~: U64) -> LLVMAttributeRef
     // The function-iteration handles are opaque pointers. libLLVM signals "no more"
     // by returning a NULL pointer, which LLVMIsNull (a null-CONSTANT test) can't
