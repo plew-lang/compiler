@@ -97,4 +97,18 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-private-name-') as folder:
     source.write_text('expose fn ' + name + '() -> I32 { return 42I32 }\nfn main() {}\n')
     output = run(compiler, source).stdout
     assert re.search(rb'^define i32 @' + name.encode() + rb'\(', output, re.M)
+# Managed values cannot cross the raw C boundary just because their physical
+# representation happens to be a pointer. Cover both parameters and results.
+with tempfile.TemporaryDirectory(prefix='plew-expose-managed-') as folder:
+    source = Path(folder) / 'Main.pw'
+    for type_name in ['Buffer[I64]', 'Ref[I64]', 'String', 'Array[I64]']:
+        imports = 'import @Std/Core with { Buffer, Ref }\n'
+        for declaration, diagnostic in [
+            ('expose fn entry(value~: ' + type_name + ') {}', b'expose parameter ABI is not supported'),
+            ('expose fn entry() -> ' + type_name + ' { panic "unreachable" }', b'expose return ABI is not supported'),
+        ]:
+            source.write_text(imports + declaration + '\nfn main() {}\n')
+            execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
+            assert execution.returncode != 0, (type_name, declaration)
+            assert diagnostic in execution.stderr, execution.stderr
 print('PASS expose: C and Plew calls, external-only roots, integer/float/void/inout ABI, labels and name collisions')

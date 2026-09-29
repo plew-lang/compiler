@@ -58,6 +58,19 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
+    // A pointer-shaped managed value is not a C pointer contract. Expose only
+    // the implemented scalar/opaque boundary; managed values need a separately
+    // specified ownership interface, even if their layout happens to be small.
+    inout fn exposedCTypeSupported(c: inout Comp, ref: U64) -> Result[Bool, CompileDiagnostic] {
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
+        if contract.isUnique || contract.needsRelease { return <Result.Ok value=false /> }
+        match contract.ownershipClass {
+            ArcClass.Scalar => {}
+            _ => { return <Result.Ok value=false /> }
+        }
+        return self.resolvedCTypeSupported(c: inout c, ref: ref)
+    }
+
     inout fn emitExposedEntry(c: inout Comp, bodyId: U64, target: LLVMValueRef, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
         match self.emission {
             LlvmBodyEmission.Whole => {}
@@ -70,12 +83,12 @@ pub impl LlvmCtx {
         val prepared = c.arena.bodySignature(bodyId: bodyId)
         mut val index = 0U64
         while index < prepared.parameterTypes.count() {
-            if !(try self.resolvedCTypeSupported(c: inout c, ref: prepared.parameterTypes[index])) {
+            if !(try self.exposedCTypeSupported(c: inout c, ref: prepared.parameterTypes[index])) {
                 return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose parameter ABI is not supported by the C backend") />
             }
             index += 1U64
         }
-        if declaration.hasRet && !(try self.resolvedCTypeSupported(c: inout c, ref: prepared.resultType)) {
+        if declaration.hasRet && !(try self.exposedCTypeSupported(c: inout c, ref: prepared.resultType)) {
             return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose return ABI is not supported by the C backend") />
         }
         mut val name: Array[U8] = []
