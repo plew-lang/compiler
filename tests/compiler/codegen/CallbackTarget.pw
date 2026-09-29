@@ -1,5 +1,6 @@
+import @Std/Io with { print }
 fn target(value~: I64) -> I64 { return increment(value) }
 fn unused() { missing() }
 fn main() {}
 
-fn increment(value~: I64) -> I64 { return value + 1I64 }
+fn increment(value~: I64) -> I64 { print(value) return value + 1I64 }

@@ -3,6 +3,9 @@
 
 #include <llvm-c/Analysis.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/DynamicLibrary.h>
+#include <unordered_set>
+#include <vector>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/LazyReexports.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
@@ -31,6 +34,7 @@ struct PlewLlvmJit {
   bool failed = false;
   bool preparing = false;
   uint64_t nextBody = 0;
+  std::unordered_set<std::string> hostSymbols;
 };
 
 namespace {
@@ -108,6 +112,7 @@ extern "C" int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
   if (auto error = jit->engine->getMainJITDylib().define(
           llvm::orc::absoluteSymbols(std::move(symbols))))
     return jitError(jit, std::move(error));
+  jit->hostSymbols.insert(name);
   return 0;
 }
 
@@ -186,7 +191,6 @@ public:
 private:
   llvm::Error generate(llvm::orc::JITDylib &destination, Body &descriptor) {
     const auto &name = descriptor.name;
-    const auto &implementation = descriptor.implementation;
     auto body = descriptor.body;
     auto prepare = descriptor.prepare;
     auto session = descriptor.session;
@@ -219,8 +223,23 @@ private:
       std::vector<llvm::Function *> definitions;
       for (auto &candidate : value) {
         auto *metadata = candidate.getMetadata("plew.body");
-        if (!metadata)
+        if (!metadata) {
+          if (candidate.isDeclaration() && !candidate.use_empty() &&
+              !candidate.isIntrinsic() && candidate.getMetadata("plew.host")) {
+            auto symbol = candidate.getName().str();
+            if (!find(symbol) && jit.hostSymbols.find(symbol) == jit.hostSymbols.end()) {
+              auto host = llvm::sys::DynamicLibrary::getPermanentLibrary(nullptr);
+              void *address = host.isValid() ? host.getAddressOfSymbol(symbol.c_str()) : nullptr;
+              if (!address)
+                return llvm::createStringError("unresolved host import: " + symbol);
+              if (plew_llvm_jit_define(&jit, symbol.c_str(),
+                      llvm::orc::ExecutorAddr::fromPtr(address).getValue(), 1))
+                return llvm::createStringError("host import registration failed: " + symbol);
+              jit.hostSymbols.insert(symbol);
+            }
+          }
           continue;
+        }
         auto *identity = metadata->getNumOperands() == 1
             ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0))
             : nullptr;

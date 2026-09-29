@@ -162,6 +162,7 @@ pub impl LlvmCtx {
             val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(noParams), 0U64, 0I32)
             val symbolCString = <CString.copied text="main" />
             entryFn = LLVMAddFunction(self.mod, symbolCString.ptr, mainTy)
+            self.attachBodyIdentity(function: entryFn, bodyId: self.asyncBodyIds[slot])
         } else {
             entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
         }

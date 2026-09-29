@@ -42,6 +42,6 @@ if options.asan:
     os.environ['ASAN_OPTIONS'] = 'detect_leaks=1:halt_on_error=1'
     os.environ['LSAN_OPTIONS'] = 'exitcode=23'
 capture([evidence / 'test', str(root / 'std') + '/', root / 'tests/compiler/codegen/CallbackTarget.pw'], 'run')
-assert (evidence / 'run').read_text() == 'ok\n'
+assert (evidence / 'run').read_text() == '41\n72\nok\n'
 assert (evidence / 'run.err').read_text() == 'plew: unknown compiler session ID\n'
 (evidence / 'summary.txt').write_text('status=passed\nllvm=' + query('--version') + '\n')

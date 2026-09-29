@@ -105,6 +105,15 @@ pub impl LlvmCtx {
         LLVMGlobalSetMetadata(function, kind, LLVMMDNodeInContext2(self.ctx, arrayCPtr(operands), 1U64))
     }
 
+    // Only explicitly declared foreign/runtime symbols may resolve in the host.
+    // A missing source body must never bind to compiler machine code by name.
+    fn attachHostIdentity(function: LLVMValueRef) {
+        if self.wholeProgram() { return }
+        val name = <CString.copied text="plew.host" />
+        val operands: Array[LLVMMetadataRef] = []
+        LLVMGlobalSetMetadata(function, LLVMGetMDKindIDInContext(self.ctx, name.ptr, 9U32), LLVMMDNodeInContext2(self.ctx, arrayCPtr(operands), 0U64))
+    }
+
     inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
         val abiId = self.valueAbi(signature)
         val abi = self.valueAbis[abiId - 1U64]

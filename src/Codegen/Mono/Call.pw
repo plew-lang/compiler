@@ -5148,7 +5148,7 @@ pub impl Comp {
     }
 
     fn hasFinalDependencies(state: FinalDependencies) -> Bool {
-        return state.globals < self.selectedGlobalTargets.count() || state.aggregates < self.arena.finalAggregates.count() || state.calls < self.finalCalleeCount() || state.storages < self.arena.finalStorages.count()
+        return state.signatures < self.monoWork.bodyInstances.count() || state.globals < self.selectedGlobalTargets.count() || state.aggregates < self.arena.finalAggregates.count() || state.calls < self.finalCalleeCount() || state.storages < self.arena.finalStorages.count()
     }
 
     // One wave preserves AOT worklist order. A lazy driver drains these waves
@@ -5193,6 +5193,18 @@ pub impl Comp {
         }
         // Destructors can call ordinary functions and construct further
         // values. Both queues must close together, before the freeze.
+        // ABI layouts may be needed before a source body is requested. Close
+        // ownership for every registered signature, not only visited call sites.
+        // Use a monotonic frontier so recursive signatures stay declaration-only.
+        while state.signatures < self.monoWork.bodyInstances.count() {
+            val bodyId = self.monoWork.bodyInstances[state.signatures]
+            val signature = self.arena.bodySignature(bodyId: bodyId)
+            try self.enqueueFinalDestruction(typeRef: signature.receiverType)
+            for parameter in signature.parameterTypes { try self.enqueueFinalDestruction(typeRef: parameter) }
+            try self.enqueueFinalDestruction(typeRef: signature.resultType)
+            try self.enqueueFinalDestruction(typeRef: signature.bodyResultType)
+            state.signatures += 1U64
+        }
         while state.aggregates < self.arena.finalAggregates.count() {
             try self.enqueueFinalDestruction(typeRef: self.arena.finalAggregates[state.aggregates].resultTypeRef)
             state.aggregates += 1U64

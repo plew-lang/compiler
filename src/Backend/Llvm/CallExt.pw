@@ -89,6 +89,7 @@ pub impl LlvmCtx {
         }
         symbol.append(0U8)
         val function: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(symbol), signature)
+        self.attachHostIdentity(function: function)
         index = 0U64
         while index < parameters.count() {
             try self.attachCIntegerExtension(c: inout c, function: function, index: index + 1U64, ref: parameters[index], physical: types[index], callSite: false)

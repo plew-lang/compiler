@@ -68,6 +68,7 @@ pub impl FinalBodyRequests { factory }
 
 // Monotonic dependency frontiers belong to the same finalization arena.
 pub struct FinalDependencies {
+    mut val signatures: U64 = 0U64
     mut val initializersPrepared: Bool = false
     mut val globals: U64 = 0U64
     mut val aggregates: U64 = 0U64
