@@ -5,6 +5,7 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
@@ -49,6 +50,8 @@ struct PlewLlvmJit {
   uint64_t nextBody = 0;
   int mainParameters = -1;
   std::unordered_set<std::string> hostSymbols;
+  struct SharedDefinition { uint64_t session, identity, bytes; };
+  std::unordered_map<std::string, SharedDefinition> sharedDefinitions;
 #ifdef PLEW_JIT_LSAN
   // JIT static storage lives in mapped memory, outside LSan's loader-discovered
   // globals. Register storage slots, never the objects they happen to contain.
@@ -253,6 +256,27 @@ private:
       auto *function = value.getFunction(name);
       if (!function || function->isDeclaration())
         return llvm::createStringError("prepared module lacks its requested body");
+      // The frontend explicitly identifies immutable session-owned metadata.
+      // Keep the first definition; later modules import that same address.
+      for (auto &global : value.globals()) {
+        auto *metadata = global.getMetadata("plew.shared");
+        if (!metadata) continue;
+        auto *identity = metadata->getNumOperands() == 1
+            ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0))
+            : nullptr;
+        if (!identity || identity->getBitWidth() != 64 || identity->isZero() ||
+            !global.isConstant() || !global.hasExternalLinkage() || global.isDeclaration())
+          return llvm::createStringError("invalid shared metadata definition");
+        auto bytes = value.getDataLayout().getTypeAllocSize(global.getValueType()).getFixedValue();
+        auto inserted = jit.sharedDefinitions.emplace(global.getName().str(),
+            PlewLlvmJit::SharedDefinition{session, identity->getZExtValue(), bytes});
+        if (!inserted.second) {
+          const auto &existing = inserted.first->second;
+          if (existing.session != session || existing.identity != identity->getZExtValue() || existing.bytes != bytes)
+            return llvm::createStringError("conflicting shared metadata identity");
+          global.setInitializer(nullptr);
+        }
+      }
       // Declarations carry frozen body identities. Register dependencies before
       // linking without preparing their source bodies or decoding symbol names.
       std::vector<llvm::Function *> definitions;

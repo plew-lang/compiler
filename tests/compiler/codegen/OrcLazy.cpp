@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 struct State {
-  int calls[6] = {};
+  int calls[8] = {};
   PlewLlvmJit *jit = nullptr;
   std::thread::id thread = std::this_thread::get_id();
   bool fail = false;
@@ -18,7 +18,7 @@ static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
   assert(found != sessions.end());
   auto &state = *found->second;
   assert(state.thread == std::this_thread::get_id());
-  assert(body < 5 && ++state.calls[body] == 1);
+  assert(body < 8 && body != 5 && ++state.calls[body] == 1);
   *context = LLVMContextCreate();
   *out = LLVMModuleCreateWithNameInContext("requested", *context);
   if (state.fail) return 1; // Failure still transfers allocated handles.
@@ -36,6 +36,20 @@ static int prepare(uint64_t session, uint64_t body, LLVMModuleRef *out,
   }
   auto integer = LLVMInt64TypeInContext(*context);
   auto signature = LLVMFunctionType(integer, &integer, 1, 0);
+  if (body == 6 || body == 7) {
+    auto global = LLVMAddGlobal(*out, integer, "shared.table");
+    LLVMSetGlobalConstant(global, 1);
+    LLVMSetInitializer(global, LLVMConstInt(integer, 29, 0));
+    auto identity = LLVMValueAsMetadata(LLVMConstInt(integer, 1, 0));
+    LLVMGlobalSetMetadata(global, LLVMGetMDKindIDInContext(*context, "plew.shared", 11),
+                         LLVMMDNodeInContext2(*context, &identity, 1));
+    auto function = LLVMAddFunction(*out, body == 6 ? "shared.first" : "shared.second", signature);
+    auto builder = LLVMCreateBuilderInContext(*context);
+    LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(*context, function, "entry"));
+    LLVMBuildRet(builder, LLVMBuildPtrToInt(builder, global, integer, ""));
+    LLVMDisposeBuilder(builder);
+    return 0;
+  }
   if (body == 4) {
     auto primary = LLVMAddFunction(*out, "multi.primary", signature);
     auto sibling = LLVMAddFunction(*out, "multi.sibling", signature);
@@ -104,6 +118,14 @@ int main(int argc, char **argv) {
   auto primary = reinterpret_cast<uint64_t (*)(uint64_t)>(primaryAddress);
   auto sibling = reinterpret_cast<uint64_t (*)(uint64_t)>(siblingAddress);
   assert(primary(0) == siblingAddress && sibling(40) == 42 && state.calls[4] == 1);
+  assert(plew_llvm_jit_defer(jit, "shared.first", 6, prepare, session) == 0);
+  assert(plew_llvm_jit_defer(jit, "shared.second", 7, prepare, session) == 0);
+  auto sharedFirst = reinterpret_cast<uint64_t (*)(uint64_t)>(plew_llvm_jit_lookup(jit, "shared.first"));
+  auto sharedSecond = reinterpret_cast<uint64_t (*)(uint64_t)>(plew_llvm_jit_lookup(jit, "shared.second"));
+  assert(sharedFirst && sharedSecond && state.calls[6] == 0 && state.calls[7] == 0);
+  auto table = sharedFirst(0);
+  assert(table && sharedSecond(0) == table);
+  assert(*reinterpret_cast<const uint64_t *>(table) == 29);
   assert(!plew_llvm_jit_failed(jit));
   plew_llvm_jit_destroy(jit);
   sessions.erase(session);

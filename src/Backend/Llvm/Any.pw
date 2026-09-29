@@ -277,7 +277,7 @@ pub impl LlvmCtx {
         val slotCount: U64 = 2U64 + t.reqs.count()
         val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pfvtbl".bytes())
+        appendBytes(into: inout nm, from: "plew.metadata.vtable.".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: traitIdx)
@@ -286,6 +286,13 @@ pub impl LlvmCtx {
         nm.append(0)
         val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, arrayCPtr(nm))
         LLVMSetGlobalConstant(g, 1I32)
+        if !self.wholeProgram() {
+            // The session's finalized existential descriptor owns this table.
+            // Independently requested bodies refer to one immutable definition.
+            val identity = [LLVMValueAsMetadata(LLVMConstInt(self.i64ty, resolutionIndex + 1U64, 0I32))]
+            val kind = <CString.copied text="plew.shared" />
+            LLVMGlobalSetMetadata(g, LLVMGetMDKindIDInContext(self.ctx, kind.ptr, 11U32), LLVMMDNodeInContext2(self.ctx, arrayCPtr(identity), 1U64))
+        }
         self.anyVtResolution.append(resolutionIndex + 1U64)
         self.anyVtVal.append(g)
         mut val slots: Array[LLVMValueRef] = []
