@@ -98,17 +98,22 @@ pub impl LlvmCtx {
         if declaration.hasRet { returnType = (try self.cScalarType(c: inout c, ref: prepared.resultType)) }
         val externalSignature = LLVMFunctionType(returnType, arrayCPtr(parameters), parameters.count(), 0I32)
         val entry = LLVMAddFunction(self.mod, arrayCPtr(name), externalSignature)
-        val block = LLVMAppendBasicBlockInContext(self.ctx, entry, anon())
-        LLVMPositionBuilderAtEnd(self.b, block)
+        self.curFn = entry
+        self.beginFnBody(fv: entry)
+        mut val writebacks: Array[LlvmCInout] = []
         mut val arguments: Array[LLVMValueRef] = []
         index = 0U64
         while index < prepared.parameterTypes.count() {
             val argument = LLVMGetParam(entry, index)
             try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: LLVMTypeOf(argument), callSite: false)
-            arguments.append((try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument)))
+            match prepared.parameterPassings[index] {
+                CallArgumentPassing.Inout => { arguments.append((try self.prepareCInout(c: inout c, ref: prepared.parameterTypes[index], pointer: argument, toC: false, writebacks: inout writebacks))) }
+                _ => { arguments.append((try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument))) }
+            }
             index += 1U64
         }
         val result = (try self.callValueFunction(signature: signature, function: target, arguments: arguments))
+        try self.completeCInouts(c: inout c, writebacks: writebacks)
         if declaration.hasRet {
             val externalResult = (try self.scalarToC(c: inout c, ref: prepared.resultType, value: result))
             try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: LLVMTypeOf(externalResult), callSite: false)

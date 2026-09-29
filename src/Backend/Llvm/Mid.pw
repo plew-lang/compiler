@@ -2105,6 +2105,7 @@ pub impl LlvmCtx {
                 _ => { return <Result.Ok value=false /> }
             }
         }
+        mut val cWritebacks: Array[LlvmCInout] = []
         mut val argumentI: U64 = 0U64
         while argumentI < term.args.len {
             val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
@@ -2112,7 +2113,10 @@ pub impl LlvmCtx {
             val parameterRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
             match c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => { value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true)) }
+                CallArgumentPassing.Inout => {
+                    value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
+                    if callee.isExtern { value = (try self.prepareCInout(c: inout c, ref: parameterRef, pointer: value, toC: true, writebacks: inout cWritebacks)) }
+                }
                 _ => {
                     value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId))
                     if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
@@ -2133,6 +2137,7 @@ pub impl LlvmCtx {
         else if useMethod { result = (try self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values)) }
         else { result = (try self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values)) }
         if callee.isExtern {
+            try self.completeCInouts(c: inout c, writebacks: cWritebacks)
             argumentI = 0U64
             while argumentI < values.count() {
                 val parameterRef = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)

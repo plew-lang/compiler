@@ -4,6 +4,7 @@ extern(c) {
     fn exerciseExposed() -> I32
     fn cSignedByte(value~: I8) -> I8
     fn cUnsignedShort(value~: U16) -> U16
+    fn cMutateSingle(value~: inout F32) -> F32
     fn cSingle(value~: F32) -> F32
     fn cBoolean(value~: Bool) -> Bool
 }
@@ -29,10 +30,20 @@ expose fn exposedWrite(value~: inout I64) {
 
 expose fn exposedSignedByte(value~: I8) -> I8 { return cSignedByte(value) }
 expose fn exposedUnsignedShort(value~: U16) -> U16 { return cUnsignedShort(value) }
+expose fn exposedMutateSingle(value~: inout F32) -> F32 { return cMutateSingle(inout value) }
 expose fn exposedSingle(value~: F32) -> F32 { return cSingle(value) }
 expose fn exposedBoolean(value~: Bool) -> Bool { return cBoolean(value) }
 
 fn main() {
+    mut val single: F32 = 1.25
+    assert(exposedMutateSingle(inout single) == 1.25)
+    assert(single == 1.5)
+    mut val iteration = 0U64
+    while iteration < 100U64 {
+        val previous = cMutateSingle(inout single)
+        assert(single == previous + 0.25)
+        iteration += 1U64
+    }
     assert(exposedAdd(12I64, 30I64) == 42I64)
     assert(exerciseExposed() == 0I32)
 }

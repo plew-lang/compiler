@@ -180,6 +180,13 @@ struct LlvmAsyncFrame {
 
 pub enum LlvmBodyEmission { Whole Requested(bodyId: U64) }
 
+struct LlvmCInout {
+    val original: LLVMValueRef
+    val temporary: LLVMValueRef
+    val ref: U64
+    val toC: Bool
+}
+
 enum LlvmCIntegerPolicy { Extend Unextended BoolOnly Unsupported }
 
 fn llvmTargetComponent(bytes: Array[U8], component: String) -> Bool {

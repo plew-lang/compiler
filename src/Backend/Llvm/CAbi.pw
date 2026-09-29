@@ -14,15 +14,42 @@ pub impl LlvmCtx {
     inout fn cParameterType(c: inout Comp, ref: U64, passing: CallArgumentPassing) -> Result[LLVMTypeRef, CompileDiagnostic] {
         val native = (try self.cScalarType(c: inout c, ref: ref))
         match passing {
-            CallArgumentPassing.Inout => {
-                val logical = (try self.llvmTypeOfRef(c: inout c, ref: ref))
-                if plew_pointer_equal(native, logical) == 0I32 {
-                    return <Result.Err error=c.diagnosticAt(offset: c.arena.typeAt(index: ref).nameStart, msg: "C inout conversion between different memory representations is not implemented") />
-                }
-                return <Result.Ok value=self.ptrty />
-            }
+            CallArgumentPassing.Inout => { return <Result.Ok value=self.ptrty /> }
             _ => { return <Result.Ok value=native /> }
         }
+    }
+
+    // Exclusive inout access permits copy-in/copy-out. Keep its temporary in
+    // entry even when the source call appears in a loop; never widen the caller's
+    // storage or lend a float pointer to a double-valued Plew body.
+    inout fn prepareCInout(c: inout Comp, ref: U64, pointer: LLVMValueRef, toC: Bool, writebacks: inout Array[LlvmCInout]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val logical = (try self.llvmTypeOfRef(c: inout c, ref: ref))
+        val native = (try self.cScalarType(c: inout c, ref: ref))
+        if plew_pointer_equal(logical, native) != 0I32 { return <Result.Ok value=pointer /> }
+        mut val sourceType = native
+        mut val temporaryType = logical
+        if toC { sourceType = logical temporaryType = native }
+        val original = llvmLoad(self.b, sourceType, pointer, anon())
+        mut val converted = original
+        if toC { converted = (try self.scalarToC(c: inout c, ref: ref, value: original)) }
+        else { converted = (try self.scalarFromC(c: inout c, ref: ref, value: original)) }
+        val temporary = self.entryAlloca(ty: temporaryType)
+        llvmStore(self.b, converted, temporary)
+        writebacks.append(<LlvmCInout original=pointer temporary=temporary ref=ref toC=toC />)
+        return <Result.Ok value=temporary />
+    }
+
+    inout fn completeCInouts(c: inout Comp, writebacks: Array[LlvmCInout]) -> Result[(), CompileDiagnostic] {
+        for val writeback in writebacks {
+            mut val type = (try self.llvmTypeOfRef(c: inout c, ref: writeback.ref))
+            if writeback.toC { type = (try self.cScalarType(c: inout c, ref: writeback.ref)) }
+            val value = llvmLoad(self.b, type, writeback.temporary, anon())
+            mut val converted = value
+            if writeback.toC { converted = (try self.scalarFromC(c: inout c, ref: writeback.ref, value: value)) }
+            else { converted = (try self.scalarToC(c: inout c, ref: writeback.ref, value: value)) }
+            llvmStore(self.b, converted, writeback.original)
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn scalarToC(c: inout Comp, ref: U64, value: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
