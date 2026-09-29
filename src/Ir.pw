@@ -2200,6 +2200,8 @@ pub struct Func {
     // a foreign C symbol. Unlike a plewIntrinsic extern, the compiler emits a C
     // prototype (still no body — the library provides it) and a call lowers to the
     // RAW name `<name>(args)` (no `plew_` prefix, no overload mangling). Default false.
+    // Named external entry; the source callable keeps the ordinary Plew ABI.
+    pub val isExposed: Bool = false
     pub val isCExtern: Bool = false
     // Set exactly once while lowering a recognized bundled runtime declaration.
     // This is declaration identity metadata, not a backend lookup hint.

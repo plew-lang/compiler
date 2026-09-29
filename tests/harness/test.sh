@@ -390,6 +390,12 @@ else
     fail=$((fail + 1)); failed="$failed bounds-lowering"
 fi
 
+if python3 ./tests/compiler/codegen/test-expose.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed expose"
+fi
+
 if python3 ./tests/compiler/codegen/test-value-abi.py; then
     :
 else

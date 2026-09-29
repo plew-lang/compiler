@@ -621,6 +621,23 @@ pub impl Comp {
     }
 
     inout fn registerDeclaredFunc(f: Func) -> Result[U64, CompileDiagnostic] {
+        if f.isExposed {
+            mut val parameterIndex = 0U64
+            while parameterIndex < f.params.count() {
+                val parameter = self.funcParamAt(params: f.params, index: parameterIndex)
+                if !parameter.noLabel {
+                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires every parameter to be unlabeled (`~`)") />
+                }
+                parameterIndex += 1U64
+            }
+            mut val previous = self.arena.firstFunctionNamed(nameId: f.nameId)
+            while previous < self.arena.functionCount() {
+                if self.arena.functionAt(index: previous).isExposed {
+                    return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "duplicate exposed function name") />
+                }
+                previous = self.arena.nextFunctionNamed(index: previous)
+            }
+        }
         val idx: U64 = self.arena.functionCount()
         self.arena.registerFunction(f)
         try self.registerCallable(funcIdx: idx, checkCollisions: true)

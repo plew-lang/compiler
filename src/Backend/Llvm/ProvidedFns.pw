@@ -42,6 +42,9 @@ pub impl LlvmCtx {
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
                     val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
+                    if f.isExposed && !c.genMode {
+                        try self.emitExposedEntry(c: inout c, bodyId: bodyId, target: fv, signature: fty)
+                    }
                     self.genFnK.append(bodyId)
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
@@ -52,6 +55,51 @@ pub impl LlvmCtx {
             }
             bodyIndex += 1U64
         }
+        return <Result.Ok value=() />
+    }
+
+    inout fn emitExposedEntry(c: inout Comp, bodyId: U64, target: LLVMValueRef, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
+        match self.emission {
+            LlvmBodyEmission.Whole => {}
+            LlvmBodyEmission.Requested(bodyId: val requested) => {
+                if bodyId != requested { return <Result.Ok value=() /> }
+            }
+        }
+        val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val declaration = c.arena.functionAt(index: body.fnIdx)
+        val prepared = c.arena.bodySignature(bodyId: bodyId)
+        mut val index = 0U64
+        while index < prepared.parameterTypes.count() {
+            if !(try self.resolvedCTypeSupported(c: inout c, ref: prepared.parameterTypes[index])) {
+                return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose parameter ABI is not supported by the C backend") />
+            }
+            index += 1U64
+        }
+        if declaration.hasRet && !(try self.resolvedCTypeSupported(c: inout c, ref: prepared.resultType)) {
+            return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "expose return ABI is not supported by the C backend") />
+        }
+        mut val name: Array[U8] = []
+        index = 0U64
+        while index < declaration.nameLen {
+            name.append(c.arena.bytes[declaration.nameStart + index])
+            index += 1U64
+        }
+        name.append(0U8)
+        if LLVMGetNamedFunction(self.mod, arrayCPtr(name)) != 0U64 {
+            return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "exposed name conflicts with an existing LLVM symbol") />
+        }
+        val entry = LLVMAddFunction(self.mod, arrayCPtr(name), signature)
+        val block = LLVMAppendBasicBlockInContext(self.ctx, entry, anon())
+        LLVMPositionBuilderAtEnd(self.b, block)
+        mut val arguments: Array[LLVMValueRef] = []
+        index = 0U64
+        while index < prepared.parameterTypes.count() {
+            arguments.append(LLVMGetParam(entry, index))
+            index += 1U64
+        }
+        val result = (try self.callValueFunction(signature: signature, function: target, arguments: arguments))
+        if declaration.hasRet { LLVMBuildRet(self.b, result) }
+        else { LLVMBuildRetVoid(self.b) }
         return <Result.Ok value=() />
     }
 

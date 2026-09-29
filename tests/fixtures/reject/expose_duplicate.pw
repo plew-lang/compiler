@@ -1,0 +1,3 @@
+expose fn exposed(value~: I64) -> I64 { return value }
+expose fn exposed(value~: F64) -> F64 { return value }
+fn main() {}

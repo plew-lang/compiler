@@ -5251,7 +5251,7 @@ pub impl Comp {
                 if self.genMode && isEntry && fi != self.genMainIdx {
                     isEntry = false
                 }
-                if isEntry {
+                if isEntry || (f.isExposed && !self.genMode) {
                     (try self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64))
                 }
             }

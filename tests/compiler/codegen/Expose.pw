@@ -1,0 +1,29 @@
+import @Std/Core with { assert }
+
+extern(c) {
+    fn exerciseExposed() -> I32
+}
+
+fn add(value: I64, amount: I64) -> I64 {
+    return value + amount
+}
+
+expose fn exposedAdd(value~: I64, amount~: I64) -> I64 {
+    return add(value: value, amount: amount)
+}
+
+// These have no Plew call sites and must remain executable roots.
+expose fn exposedFloat(value~: F64) -> F64 {
+    return value * 2.0
+}
+
+expose fn exposedEmpty() {}
+
+expose fn exposedWrite(value~: inout I64) {
+    value = 42I64
+}
+
+fn main() {
+    assert(exposedAdd(12I64, 30I64) == 42I64)
+    assert(exerciseExposed() == 0I32)
+}

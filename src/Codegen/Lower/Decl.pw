@@ -417,7 +417,7 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=d.name.start />))
+        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExposed=d.isExposed isExtern=false defOffset=d.name.start />))
         try self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
@@ -511,7 +511,7 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = (try self.lowerBlock(b: d.body))
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />))
+        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExposed=d.isExposed isExtern=false defOffset=nameStart />))
         // A `where T: P` is part of this function's declaration, not a later
         // name lookup.  Lower it while the same lexical binder scope that
         // lowered the parameters, return type, and body remains installed.
