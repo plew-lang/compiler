@@ -87,4 +87,14 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-collision-') as folder:
         assert execution.returncode != 0, (parameter, result)
         expected = b'conflicting C function ABI for external name' if parameter == 'I8' else b'type mismatch'
         assert expected in execution.stderr, execution.stderr
+# Choose a generated private name from real compiler output, then publish
+# exactly that spelling. Private naming must not constrain source API names.
+private = re.search(rb'^define internal[^\n]*@plew\.body\.(gf[0-9]+)\(', raw, re.M)
+assert private, 'generated bodies use a namespace outside source identifiers'
+with tempfile.TemporaryDirectory(prefix='plew-expose-private-name-') as folder:
+    source = Path(folder) / 'Main.pw'
+    name = private.group(1).decode()
+    source.write_text('expose fn ' + name + '() -> I32 { return 42I32 }\nfn main() {}\n')
+    output = run(compiler, source).stdout
+    assert re.search(rb'^define i32 @' + name.encode() + rb'\(', output, re.M)
 print('PASS expose: C and Plew calls, external-only roots, integer/float/void/inout ABI, labels and name collisions')

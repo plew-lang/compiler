@@ -26,5 +26,5 @@ for body in bodies:
         if uses.count(name) == 1:
             dead.append((body.splitlines()[0], name))
 assert not dead, f'unused cleanup payload loads: {dead}'
-assert not re.search(r'call void @pwdrop[^ (]*\(', llvm), 'empty drop witness call remains'
+assert not re.search(r'call void @plew\.body\.pwdrop[^ (]*\(', llvm), 'empty drop witness call remains'
 print('PASS mid-trivial-drop')

@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix="plew-closure-env-mid-") as directory:
             )
         if result.returncode:
             raise SystemExit(result.stderr or f"{name}: compiler exited {result.returncode}")
-        definitions = re.findall(r"^define\b[^\n]*@(pwclodrop[\w.]*)\(", output.read_text(), re.M)
+        definitions = re.findall(r"^define\b[^\n]*@(plew\.body\.pwclodrop[\w.]*)\(", output.read_text(), re.M)
         evidence = re.findall(r"^mid-body symbol=(\S+) canonical=[1-9][0-9]*$", result.stderr, re.M)
         missing = [symbol for symbol in definitions if evidence.count(symbol) != 1]
         if not definitions:

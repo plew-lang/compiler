@@ -97,6 +97,6 @@ if options.requested:
     if options.synthetic:
         symbols = [symbol for item in results for symbol in item['definitions']]
         for prefix in ['__closure', 'pwclodrop', 'pfvt']:
-            assert any(symbol.startswith(prefix) for symbol in symbols), prefix
+            assert any(symbol.startswith('plew.body.' + prefix) for symbol in symbols), prefix
     print('PASS separately emitted bodies: ' + str(len(ids)), flush=True)
 (evidence / ('requested-results.json' if options.requested else 'results.json')).write_text(json.dumps(results, indent=2) + '\n')

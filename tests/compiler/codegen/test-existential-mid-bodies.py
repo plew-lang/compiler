@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='plew-witness-mid-') as directory:
             )
         if result.returncode:
             raise SystemExit(result.stderr)
-        definitions = re.findall(r'^define\b[^\n]*@(pfvt\d[\w.]*)\(', output.read_text(), re.M)
+        definitions = re.findall(r'^define\b[^\n]*@(plew\.body\.pfvt\d[\w.]*)\(', output.read_text(), re.M)
         evidence = re.findall(r'^mid-body symbol=(\S+) canonical=\d+$', result.stderr, re.M)
         if not definitions:
             raise SystemExit(f'{name}: no member witness; fixture cannot establish coverage')

@@ -97,7 +97,11 @@ pub impl LlvmCtx {
     inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
         val abiId = self.valueAbi(signature)
         val abi = self.valueAbis[abiId - 1U64]
-        val function = LLVMAddFunction(self.mod, name, abi.functionType)
+        // Generated symbols must never collide with a source-level external
+        // name. Dots cannot occur in a Plew function identifier. Keep this
+        // namespace stable across separately requested LLVM modules as well.
+        val internalName = <CString.copied text="plew.body." + stringFromCString(name) />
+        val function = LLVMAddFunction(self.mod, internalName.ptr, abi.functionType)
         LLVMSetLinkage(function, 8U32)
         // The iteration/attribute binding uses a nullable integer handle at
         // the FFI floor. Resolve the actual (possibly uniqued) LLVM symbol.
