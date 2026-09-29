@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+import @Std/Process with { argAt, argCount }
+mut val starts = 0I64
+val initial = initialize()
+val items = [2I64, 3I64]
+fn initialize() -> I64 { starts += 1I64 return 7I64 }
+fn main() {
+    print(starts)
+    print(initial)
+    print(items[1U64])
+    print(argCount())
+    print(argAt(1I64))
+}
+fn unused() { missing() }

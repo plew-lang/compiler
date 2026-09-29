@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+val bytes: Array[U8] = []
+val integers: Array[I64] = []
+fn main() {
+    print(bytes.count())
+    print(integers.count())
+}

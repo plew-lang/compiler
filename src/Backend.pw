@@ -496,6 +496,7 @@ extern(c) {
     fn plew_llvm_jit_add(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef) -> I32
     fn plew_llvm_jit_define(jit~: PlewLlvmJitRef, name~: CPtr[U8], address~: U64, callable~: I32) -> I32
     fn plew_compiler_jit_declarations(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef, session~: U64) -> I32
+    fn plew_compiler_jit_main(jit~: PlewLlvmJitRef, count~: U64, arguments~: CPtr[CPtr[U8]]) -> I32
     fn plew_llvm_jit_lookup(jit~: PlewLlvmJitRef, name~: CPtr[U8]) -> U64
     fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMDisposeMessage(msg~: CPtr[U8])
@@ -782,6 +783,14 @@ pub impl LlvmJit {
         mut val owned = move module
         owned.transferred = true
         return plew_compiler_jit_declarations(self.handle, owned.module, owned.context, sessionId)
+    }
+
+    inout fn run(arguments: Array[String]) -> I32 {
+        mut val pointers: Array[CPtr[U8]] = []
+        for argument in arguments { pointers.append(cString(argument)) }
+        val result = plew_compiler_jit_main(self.handle, pointers.count(), arrayCPtr(pointers))
+        for pointer in pointers { cFree(pointer) }
+        return result
     }
 
     inout fn define(name: String, address: U64, callable: Bool) -> I32 {
@@ -1370,6 +1379,8 @@ pub fn emitLlvmRuntime() {
     // shaped: plew_str_buf(n) gives an n+1-byte rawbuf (rc=1, freeable, count to be set by the
     // caller); plew_str_empty is a shared never-free (sentinel rc) count=0 empty. (forward-decl
     // rawbuf_alloc / set_count, defined below.)
+    // Keep the data pointer inside the allocation even for zero payload bytes.
+    // Conservative root scanners must be able to trace process-lived empty buffers.
     write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap);\n")
     write(s: "void plew_rawbuf_set_count(void* p, long long n);\n")
     write(s: "static char* plew_str_buf(long long n){ return (char*)plew_rawbuf_alloc(1, n+1); }\n")
@@ -1392,7 +1403,7 @@ pub fn emitLlvmRuntime() {
     // FREES the buffer it replaces on realloc (guarded by rc<=1 — a shared buffer is left
     // alone, leak-safe), reclaiming the geometric-growth intermediates an append chain
     // would otherwise leak. per-element load/store is inlined in IR via typed GEP.
-    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }\n")
+    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(elemSize*cap ? (size_t)(elemSize*cap) : 1)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }\n")
     write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-3]:0; }\n")
     // header `count` accessors (the Buffer floor's live-element count).
     write(s: "long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }\n")
@@ -1450,6 +1461,8 @@ pub fn emitLlvmRuntime() {
     // no struct-by-value ABI is assumed; readers return a rawbuf data pointer). ----
     write(s: "static int plew_argc = 0; static char** plew_argv = 0;\n")
     write(s: "void plew_set_args(int argc, char** argv){ plew_argc = argc; plew_argv = argv; }\n")
+    // Scoped execution hosts borrow argv and restore the previous owner before freeing it.
+    write(s: "char** plew_exchange_args(int argc, char** argv, int* previous_count){ char** previous=plew_argv; *previous_count=plew_argc; plew_set_args(argc,argv); return previous; }\n")
     write(s: "long long plew_argCount(void){ return (long long)plew_argc; }\n")
     write(s: "char* plew_argAt(long long i){ if(i<0||i>=plew_argc) return plew_str_empty(); size_t n=strlen(plew_argv[i]); char* b=plew_str_buf((long long)n); memcpy(b,plew_argv[i],n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }\n")
     write(s: "void plew_writeByte(unsigned char b){ putchar((int)b); }\n")

@@ -1,0 +1,69 @@
+// One process execution owns its compiler session and ORC code together.
+import ./CompilerCallbacks as Callbacks
+import ./CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+import ./CheckedProgram with { CompilerSession, CompilerSessionResult }
+import ./Frontend with { FrontendInput, FrontendOptions }
+import ./SourceAccess with { SourceAccess }
+import ./Backend with { LlvmJit, LlvmJitCreation, LlvmLoweringResult }
+import ./Diag with { emitDiagnostic }
+import @Std/Io with { eprint }
+import @Std/Core with { MutableRef }
+
+unique struct SessionRegistration {
+    val id: U64
+    deinit { unregisterCompilerSession(sessionId: self.id) }
+}
+
+// Like AOT code/static storage, an application's entry addresses and globals
+// remain valid through process exit, including native exit callbacks. This is
+// deliberately a one-execution process owner, not an in-process restart API.
+unique struct ProcessExecution {
+    mut val jit: LlvmJit
+    val registration: SessionRegistration
+}
+mut val processExecution: Optional[MutableRef[ProcessExecution]] = <Optional.None />
+
+pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
+                      options: FrontendOptions = <FrontendOptions />,
+                      arguments: Array[String]) -> I32 {
+    match processExecution {
+        Optional.Some(v: _) => { eprint(text: "plew: this process already owns an execution\n") return 1I32 }
+        Optional.None => {}
+    }
+    val opened = CompilerSession.open(input: input, sources: sources, options: options)
+    match move opened {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => {
+            emitDiagnostic(diagnostic: diagnostic)
+            return 1I32
+        }
+        CompilerSessionResult.Success(session: val session) => {
+            val id = match registerCompilerSession(session: move session) {
+                Optional.Some(v: val id) => { give id }
+                Optional.None => { eprint(text: "plew: compiler session IDs exhausted\n") return 1I32 }
+            }
+            // Before publication, an error unregisters the scoped session.
+            val registration = <SessionRegistration id=id />
+            val shared = findCompilerSession(registry: compilerSessionSnapshot(), sessionId: id).unwrap()
+            match LlvmJit.create() {
+                LlvmJitCreation.Failure => { eprint(text: "plew: JIT creation failed\n") return 1I32 }
+                LlvmJitCreation.Success(jit: val created) => {
+                    val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created registration=move registration /> />
+                    processExecution = <Optional.Some v=execution />
+                    match shared->lowerDeclarations() {
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
+                        LlvmLoweringResult.Success(module: val module) => {
+                            if execution->jit.registerDeclarations(module: move module, sessionId: id) != 0I32 { return 1I32 }
+                        }
+                    }
+                    match shared->lowerGlobalStorage() {
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
+                        LlvmLoweringResult.Success(module: val module) => {
+                            if execution->jit.add(module: move module) != 0I32 { return 1I32 }
+                        }
+                    }
+                    return execution->jit.run(arguments: arguments)
+                }
+            }
+        }
+    }
+}

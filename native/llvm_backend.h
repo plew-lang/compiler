@@ -44,6 +44,7 @@ int plew_llvm_jit_defer(PlewLlvmJit *jit, const char *name, uint64_t body,
 int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module,
                                 LLVMContextRef context, PlewLlvmPrepareBody prepare,
                                 uint64_t session);
+int plew_llvm_jit_call_main(PlewLlvmJit *jit, int argc, char **argv);
 // Returns zero on failure. Any failure makes this session terminal.
 uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name);
 

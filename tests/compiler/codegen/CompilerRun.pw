@@ -1,0 +1,15 @@
+import /CompilerExecution with { executeProgram }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Process with { argAt, argCount, exit }
+import @Std/Core with { assert }
+fn main() {
+    val original = argAt(0I64)
+    val count = argCount()
+    val status = executeProgram(input: <FrontendInput.File path=argAt(2I64) />,
+        sources: <SourceAccess stdRoot=argAt(1I64).bytes() />,
+        arguments: [argAt(2I64), "example"])
+    assert(argCount() == count)
+    assert(argAt(0I64) == original)
+    if status != 0I32 { exit(code: 1I64) }
+}

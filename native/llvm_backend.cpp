@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <vector>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/LazyReexports.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/Module.h>
@@ -24,6 +25,18 @@
 #include <string>
 #include <llvm/ADT/DenseMap.h>
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define PLEW_JIT_LSAN 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) && !defined(PLEW_JIT_LSAN)
+#define PLEW_JIT_LSAN 1
+#endif
+#ifdef PLEW_JIT_LSAN
+#include <sanitizer/lsan_interface.h>
+#endif
+
 struct PlewLlvmJit {
   // Destroy the engine (and its generators) before the trampoline owners.
   std::unique_ptr<llvm::orc::LazyCallThroughManager> calls;
@@ -34,7 +47,17 @@ struct PlewLlvmJit {
   bool failed = false;
   bool preparing = false;
   uint64_t nextBody = 0;
+  int mainParameters = -1;
   std::unordered_set<std::string> hostSymbols;
+#ifdef PLEW_JIT_LSAN
+  // JIT static storage lives in mapped memory, outside LSan's loader-discovered
+  // globals. Register storage slots, never the objects they happen to contain.
+  std::vector<std::pair<const void *, size_t>> roots;
+  ~PlewLlvmJit() {
+    for (const auto &root : roots)
+      __lsan_unregister_root_region(root.first, root.second);
+  }
+#endif
 };
 
 namespace {
@@ -82,7 +105,19 @@ extern "C" PlewLlvmJit *plew_llvm_jit_create(void) {
     std::fprintf(stderr, "plew: native LLVM JIT target unavailable\n");
     return nullptr;
   }
-  auto engine = llvm::orc::LLJITBuilder().setNumCompileThreads(0).create();
+  // The ORC platform needs process symbols for its own support, but source
+  // modules must resolve only their declared imports, not compiler globals.
+  auto engine = llvm::orc::LLJITBuilder()
+      .setLinkProcessSymbolsByDefault(false)
+      .setProcessSymbolsJITDylibSetup([](llvm::orc::LLJIT &engine)
+          -> llvm::Expected<llvm::orc::JITDylibSP> {
+        auto &process = engine.getExecutionSession().createBareJITDylib("plew.platform.process");
+        auto search = llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+            engine.getDataLayout().getGlobalPrefix());
+        if (!search) return search.takeError();
+        process.addGenerator(std::move(*search));
+        return llvm::orc::JITDylibSP(&process);
+      }).setNumCompileThreads(0).create();
   if (!engine) {
     jitError(nullptr, engine.takeError());
     return nullptr;
@@ -288,8 +323,29 @@ extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
   auto owned = consumeModule(jit, module, context);
   if (!owned)
     return jitError(jit, owned.takeError());
+#ifdef PLEW_JIT_LSAN
+  std::vector<std::pair<std::string, size_t>> globals;
+  owned->withModuleDo([&](llvm::Module &input) {
+    for (auto &global : input.globals()) {
+      if (!global.isDeclaration() && !global.isConstant() &&
+          global.hasExternalLinkage())
+        globals.emplace_back(global.getName().str(),
+            jit->engine->getDataLayout().getTypeAllocSize(global.getValueType()));
+    }
+  });
+#endif
   if (auto error = jit->engine->addIRModule(std::move(*owned)))
     return jitError(jit, std::move(error));
+#ifdef PLEW_JIT_LSAN
+  for (const auto &global : globals) {
+    auto address = jit->engine->lookup(global.first);
+    if (!address) return jitError(jit, address.takeError());
+    if (!global.second) continue;
+    const void *storage = address->toPtr<const void *>();
+    __lsan_register_root_region(storage, global.second);
+    jit->roots.emplace_back(storage, global.second);
+  }
+#endif
   return 0;
 }
 
@@ -349,6 +405,15 @@ extern "C" int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module
     for (auto &function : value) {
       if (!function.isDeclaration())
         return llvm::createStringError("declaration module contains executable code");
+      if (function.getName() == "main") {
+        auto *type = function.getFunctionType();
+        auto count = type->getNumParams();
+        if (!type->getReturnType()->isIntegerTy(32) || type->isVarArg() ||
+            (count != 0 && (count != 2 || !type->getParamType(0)->isIntegerTy(32) ||
+                            !type->getParamType(1)->isPointerTy())))
+          return llvm::createStringError("invalid process entry ABI");
+        jit->mainParameters = static_cast<int>(count);
+      }
       auto *metadata = function.getMetadata("plew.body");
       if (!metadata)
         continue;
@@ -363,6 +428,15 @@ extern "C" int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module
     return llvm::Error::success();
   });
   return error ? jitError(jit, std::move(error)) : 0;
+}
+
+extern "C" int plew_llvm_jit_call_main(PlewLlvmJit *jit, int argc, char **argv) {
+  if (!jit || jit->mainParameters < 0) return 1;
+  auto address = plew_llvm_jit_lookup(jit, "main");
+  if (!address) return 1;
+  if (jit->mainParameters == 0)
+    return llvm::orc::ExecutorAddr(address).toPtr<int (*)()>()();
+  return llvm::orc::ExecutorAddr(address).toPtr<int (*)(int, char **)>()(argc, argv);
 }
 
 extern "C" uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name) {

@@ -54,12 +54,23 @@ def compiler_backend(config, output, sanitize=False):
     """Build the native module consumer against the compiler's selected LLVM."""
     clangxx = Path(subprocess.check_output([config, '--bindir'], text=True).strip()) / 'clang++'
     include = subprocess.check_output([config, '--includedir'], text=True).strip()
-    command = [str(clangxx), '-std=c++17', '-O2', '-isystem', include,
-               '-c', str(ROOT / 'native/llvm_backend.cpp'), '-o', str(output)]
-    if sanitize:
-        command += ['-fsanitize=address', '-fno-omit-frame-pointer']
-    subprocess.run([sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--', *command], check=True)
-    return [str(output), '-lc++' if sys.platform == 'darwin' else '-lstdc++']
+    objects = []
+    for name in ('llvm_backend', 'compiler_callbacks', 'compiler_execution'):
+        target = Path(str(output) + '.' + name + '.o')
+        command = [str(clangxx), '-std=c++17', '-O2', '-isystem', include,
+                   '-c', str(ROOT / 'native' / (name + '.cpp')), '-o', str(target)]
+        if sanitize:
+            command += ['-fsanitize=address', '-fno-omit-frame-pointer']
+        subprocess.run([sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--', *command], check=True)
+        objects.append(str(target))
+    # Optional compiler adapters are pulled only by execution hosts that use
+    # them. Generic LLVM tools and bootstrap carriers need no callback symbol.
+    archive = Path(str(output) + '.a')
+    archive.unlink(missing_ok=True)
+    subprocess.run([str(clangxx.parent / 'llvm-ar'), 'rcs', str(archive), *objects], check=True)
+    exports = ['-Wl,-export_dynamic'] if sys.platform == 'darwin' else ['-Wl,--export-dynamic']
+    return [str(archive), '-lc++' if sys.platform == 'darwin' else '-lstdc++', *exports]
+
 
 
 def link(config, log_prefix, source, runtime, destination, libraries=(), clang=None, *, with_backend=False, object_input=False):
