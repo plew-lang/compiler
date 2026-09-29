@@ -35,6 +35,11 @@ and a shared global definition. `--synthetic` exercises standalone closure-body,
 environment-drop and existential-witness requests. Neither mode proves ORC
 execution or sanitizer safety.
 
+`compiler/codegen/SessionModule.pw` is a native embedding diagnostic. Link its
+generated LLVM with the common runtime and libLLVM, then compile/run its stdout
+as LLVM. It verifies main-only generation with an invalid unused body and terminal
+session failure when that body is requested. It is not a full ORC execution gate.
+
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store
 accesses; use the standard ASan gate for memory-safety evidence. Tooling tests

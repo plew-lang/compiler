@@ -1,0 +1,32 @@
+// A whole-target check would reject unused(). The session must lower main
+// first, and become terminal only when the invalid body is actually requested.
+import ../../../src/CheckedProgram with { CompilerSession, CompilerSessionResult }
+import ../../../src/Frontend with { FrontendInput }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/Backend with { LlvmLoweringResult }
+import @Std/Io with { write }
+
+fn main() {
+    val source = "fn main() {} fn unused() { missing() }"
+    match CompilerSession.open(input: <FrontendInput.Text text=source path="request.pw" />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val main = session.prepareFunction(function: 0U64).unwrap()
+            match session.lowerBody(bodyId: main.bodyId) {
+                LlvmLoweringResult.Success(module: val module) => { write(s: module.text()) }
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+            }
+            val failure = match session.prepareFunction(function: 1U64) {
+                Result.Ok(value: _) => { panic "invalid function accepted" }
+                Result.Err(error: val diagnostic) => { give diagnostic.message }
+            }
+            match session.lowerBody(bodyId: main.bodyId) {
+                LlvmLoweringResult.Success(module: val module) => { panic "failed session generated another module" }
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                    if diagnostic.message != failure { panic "terminal diagnostic changed" }
+                }
+            }
+        }
+    }
+}

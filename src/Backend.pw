@@ -706,6 +706,14 @@ impl LlvmModule {
     }
 }
 pub impl LlvmModule {
+    // Diagnostic output without exposing the session's mutable compiler state.
+    fn text() -> String {
+        val ir = LLVMPrintModuleToString(self.module)
+        val result = stringFromCString(ir)
+        LLVMDisposeMessage(ir)
+        return result
+    }
+
     fn writeText(c: inout Comp) {
         tracePhase(c: inout c, label: "backend:print-module:start")
         val ir = LLVMPrintModuleToString(self.module)
@@ -807,6 +815,21 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
 }
 
 pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage: LlvmGlobalStorage = <LlvmGlobalStorage.Definition />, emission: LlvmBodyEmission = <LlvmBodyEmission.Whole />) -> LlvmLoweringResult {
+    return lowerExecutableLlvm(c: inout c, program: prepared.executable, ambient: prepared.ambient, globalStorage: globalStorage, emission: emission)
+}
+
+// Low-level emission consumes the same canonical program as whole-target build.
+// The owning CompilerSession closes source and effect obligations before calling.
+pub fn lowerRequestedLlvm(c: inout Comp, program: MidExecutableProgram, ambient: MidAmbientProgram, bodyId: U64) -> LlvmLoweringResult {
+    match program.body(bodyId: bodyId) {
+        Optional.None => { return <LlvmLoweringResult.Failure diagnostic=c.diagnosticAt(offset: 0U64, msg: "LLVM backend: requested body has no prepared Mid") /> }
+        Optional.Some(v: _) => {}
+    }
+    return lowerExecutableLlvm(c: inout c, program: program, ambient: ambient, globalStorage: <LlvmGlobalStorage.Reference />, emission: <LlvmBodyEmission.Requested bodyId=bodyId />)
+}
+
+fn lowerExecutableLlvm(c: inout Comp, program: MidExecutableProgram, ambient: MidAmbientProgram,
+                      globalStorage: LlvmGlobalStorage, emission: LlvmBodyEmission) -> LlvmLoweringResult {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val module = <LlvmModule.owned context=ctx module=m />
@@ -815,7 +838,7 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage
     val targetTriple = LLVMGetDefaultTargetTriple()
     LLVMSetTarget(m, targetTriple)
     LLVMDisposeMessage(targetTriple)
-    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle, program: prepared.executable, ambient: prepared.ambient, emission: emission)
+    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle, program: program, ambient: ambient, emission: emission)
 
     tracePhase(c: inout c, label: "mid:program:ready")
 

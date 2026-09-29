@@ -2,13 +2,14 @@
 // No public factory or mutable arena accessor can attach it to another input.
 import ./Frontend with { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
 import ./Ir with { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
+import ./Backend with { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm }
 import ./SourceAccess with { SourceAccess }
 import ./Diag with { CompileDiagnostic, DiagnosticLocation }
 import ./DeclarationProgram with { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
 import ./Mid/Build with { MidFunctionTemplates }
 import ./Mid/DeclarationAccess with { DeclarationAccessAnalysis, DeclarationAccessNode }
 import ./PreparedProgram with { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
-import ./Mid/Program with { MidExecutableRequests }
+import ./Mid/Program with { MidExecutableRequests, MidExecutableProgram }
 import ./Mid/Prepare with { MidExecutableBody }
 import ./Mid/GlobalAccess with { analyzeMidGlobalAccess }
 import ./Mid/Ambient with { MidAmbientProgram }
@@ -35,6 +36,7 @@ pub struct MidBodyPreparation {
 // Static dependencies are closed and the dynamic enforcement plan is ready.
 // Startup/global initialization and backend publication remain separate steps.
 pub struct MidAccessPreparation {
+    pub val program: MidExecutableProgram
     pub val body: MidBodyPreparation
     pub val ambient: MidAmbientProgram
 }
@@ -143,6 +145,38 @@ pub impl CompilerSession {
         return result
     }
 
+    // Compile from this session's checked request and matching snapshot. No
+    // mutable compiler or whole-target check token escapes to the execution host.
+    inout fn lowerBody(bodyId: U64) -> LlvmLoweringResult {
+        val prepared = match self.prepareBodyAccess(bodyId: bodyId) {
+            Result.Ok(value: val prepared) => { give prepared }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match lowerRequestedLlvm(c: inout self.compiler, program: prepared.program, ambient: prepared.ambient, bodyId: bodyId) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
+            }
+        }
+    }
+
+    // Storage publication is separate from executing its initializer. The host
+    // must install this unique definition module before calling any app entry.
+    inout fn lowerGlobalStorage() -> LlvmLoweringResult {
+        match self.prepareInitializers() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match lowerGlobalStorageLlvm(c: inout self.compiler) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
+            }
+        }
+    }
+
     // Declaration IDs are local to this admitted input. The returned analysis
     // is observational: obligations remain, and it cannot authorize execution.
     inout fn request(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
@@ -245,7 +279,7 @@ impl CompilerSession {
             Result.Err(error: val error) => { return <Result.Err error=programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.Mid error=error />) /> }
         }
         val ambient = (try MidAmbientProgram.prepare(c: inout self.compiler, program: snapshot))
-        return <Result.Ok value=<MidAccessPreparation body=body ambient=ambient /> />
+        return <Result.Ok value=<MidAccessPreparation body=body program=snapshot ambient=ambient /> />
     }
 
     // Synthetic code inherits the effects of the operations it actually
