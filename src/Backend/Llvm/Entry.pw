@@ -43,6 +43,9 @@ pub impl LlvmCtx {
         if c.arena.globals.count() == 0U64 {
             return <Result.Ok value=() />
         }
+        val globalOwner: U64 = 18446744073709551615U64
+        val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
+        if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
         mut val noParams: Array[LLVMTypeRef] = []
         val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
         val fv: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: fnTy))
@@ -65,8 +68,6 @@ pub impl LlvmCtx {
         self.locOwned = []
         self.locMoved = []
         self.locCellHome = []
-        val globalOwner: U64 = 18446744073709551615U64
-        val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
         val storageReady: Bool = self.gvalRef.count() == c.arena.globals.count()
         mut val midReady: Bool = false
         if !storageReady {
@@ -91,6 +92,9 @@ pub impl LlvmCtx {
 
     // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
     inout fn genLlvmMain(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
+        val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
+        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
+        if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
         // plew_set_args before the body runs.
@@ -107,8 +111,6 @@ pub impl LlvmCtx {
         // they are never recovered through legacy seeded locals.
         mut val midReady: Bool = false
         mut val preparedMid: MidLlvmPrepared = <MidLlvmPrepared.None />
-        val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
-        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
         // Global LLVM storage is emitted before every function body. Refuse
         // Mid rather than fabricate a local root if that initialization ever
         // failed to produce the complete declaration-target map.

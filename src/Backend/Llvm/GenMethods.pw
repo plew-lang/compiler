@@ -139,7 +139,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_b".bytes())
         appendU64Dec(into: inout nm, n: bodyId)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
         self.genMethVal.append(fv)
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)
@@ -149,6 +149,7 @@ pub impl LlvmCtx {
 
     inout fn emitOneGenMethod(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
         val bodyId = self.genMethBody[slot]
+        if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
         val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         self.traceGenMethod(c: inout c, event: "emit", mfi: body.fnIdx, instRef: body.environment.receiverRef, bodyId: bodyId)
         try self.genLlvmFuncBody(c: inout c, bodyId: bodyId, fv: self.genMethVal[slot])

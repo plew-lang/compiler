@@ -36,6 +36,32 @@ pub impl LlvmCtx {
         return self.valueAbis.count()
     }
 
+    fn wholeProgram() -> Bool {
+        match self.emission {
+            LlvmBodyEmission.Whole => { return true }
+            LlvmBodyEmission.Requested(bodyId: _) => { return false }
+        }
+    }
+
+    inout fn admitBody(bodyId: U64) -> Bool {
+        match self.emission {
+            LlvmBodyEmission.Whole => { return true }
+            LlvmBodyEmission.Requested(bodyId: val requested) => {
+                if bodyId == 0U64 || bodyId != requested { return false }
+                self.requestedBodyEmitted = true
+                return true
+            }
+        }
+    }
+
+    // Body symbols can be resolved across requested modules. Local ARC/layout
+    // glue keeps ordinary internal linkage and uses the same physical ABI.
+    inout fn declareBodyFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
+        val function = self.declareValueFunction(name: name, signature: signature)
+        if !self.wholeProgram() { LLVMSetLinkage(function, 0U32) }
+        return function
+    }
+
     inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
         val abiId = self.valueAbi(signature)
         val abi = self.valueAbis[abiId - 1U64]

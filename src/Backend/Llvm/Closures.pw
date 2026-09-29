@@ -56,7 +56,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "pwclodrop".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function = self.declareValueFunction(name: arrayCPtr(name), signature: type)
+        val function = self.declareBodyFunction(name: arrayCPtr(name), signature: type)
         self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
         return <Result.Ok value=function />
     }
@@ -64,6 +64,7 @@ pub impl LlvmCtx {
     inout fn emitClosureEnvironmentDrops(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.closureEnvironmentDropsEmitted < self.closureEnvironmentDrops.count() {
             val queued = self.closureEnvironmentDrops[self.closureEnvironmentDropsEmitted]
+            if !self.admitBody(bodyId: queued.bodyId) { self.closureEnvironmentDropsEmitted += 1U64 continue }
             val closure = self.closures[queued.closureSlot]
             val body = c.arena.bodyInstanceAt(index: queued.bodyId - 1U64)
             val offset = c.exprOffset(id: c.decls.semanticClosures[closure.semanticIndex].exprId)
@@ -175,7 +176,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout name, from: "__closure".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(name), signature: functionTypeLlvm)
+        val function: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(name), signature: functionTypeLlvm)
         self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
         return <Result.Ok value=() />
     }
@@ -238,6 +239,7 @@ pub impl LlvmCtx {
         mut val slot: U64 = 0U64
         while slot < self.closures.count() {
             val closure: LlvmClosure = self.closures[slot]
+            if !self.admitBody(bodyId: closure.bodyId) { slot += 1U64 continue }
             val fact: SemanticClosure = c.decls.semanticClosures[closure.semanticIndex]
             val signature: TypeRef = c.arena.typeAt(index: closure.functionTypeTerm)
             self.curFn = closure.function

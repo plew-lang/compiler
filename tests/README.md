@@ -30,7 +30,8 @@ assertion's responsibility, not prefixes such as `mid_` or the tool used.
 `GlobalModules.pw`. Set `PLEWC` to the candidate and optionally `LLVM_CONFIG`.
 It links separate global-definition and executable modules, checks shared
 storage and initialization behavior, and saves evidence under
-`tmp/lazy-build/global-modules/`. It does not prove ORC execution or sanitizer safety.
+`tmp/lazy-build/global-modules/`. Its `--requested` mode checks one executable body per module, cross-module calls,
+and a shared global definition. It does not prove ORC execution or sanitizer safety.
 
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store

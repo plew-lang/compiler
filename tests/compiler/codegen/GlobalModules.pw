@@ -3,7 +3,8 @@
 import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
 import ../../../src/SourceAccess with { SourceAccess }
 import ../../../src/PreparedProgram with { PreparedProgram }
-import ../../../src/Backend with { lowerGlobalStorageLlvm, lowerPreparedLlvm, LlvmLoweringResult, LlvmGlobalStorage }
+import ../../../src/Backend with { lowerGlobalStorageLlvm, lowerPreparedLlvm, LlvmLoweringResult, LlvmGlobalStorage, LlvmBodyEmission }
+import @Std/Io with { print }
 import @Std/Process with { argAt }
 
 fn main() {
@@ -12,13 +13,30 @@ fn main() {
         input: <FrontendInput.File path=argAt(1I64) />,
         sources: <SourceAccess stdRoot=argAt(3I64).bytes() />).unwrap()
     val prepared = PreparedProgram.prepare(c: inout compiler).unwrap()
+    if argAt(2I64) == "list" {
+        mut val bodyId = 1U64
+        while bodyId <= compiler.arena.bodyInstanceCount() {
+            match prepared.executable.body(bodyId: bodyId) {
+                Optional.Some(v: _) => { print(bodyId) }
+                Optional.None => {}
+            }
+            bodyId += 1U64
+        }
+        return
+    }
     if argAt(2I64) == "storage" {
         match lowerGlobalStorageLlvm(c: inout compiler) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         }
     } else {
-        match lowerPreparedLlvm(c: inout compiler, prepared: prepared, globalStorage: <LlvmGlobalStorage.Reference />) {
+        mut val emission = <LlvmBodyEmission.Whole />
+        if argAt(2I64) == "requested" {
+            mut val bodyId = 0U64
+            for byte in argAt(4I64).bytes() { bodyId = bodyId * 10U64 + (byte as U64) - 48U64 }
+            emission = <LlvmBodyEmission.Requested bodyId=bodyId />
+        }
+        match lowerPreparedLlvm(c: inout compiler, prepared: prepared, globalStorage: <LlvmGlobalStorage.Reference />, emission: emission) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         }

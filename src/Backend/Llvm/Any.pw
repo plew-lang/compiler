@@ -48,7 +48,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return <Result.Ok value=fv />
     }
@@ -57,6 +57,7 @@ pub impl LlvmCtx {
         while self.existentialWitnessesEmitted < self.existentialWitnesses.count() {
             val witness = self.existentialWitnesses[self.existentialWitnessesEmitted]
             val member = c.arena.finalExistentials[witness.resolution].members[witness.member]
+            if !self.admitBody(bodyId: member.adapterBodyId) { self.existentialWitnessesEmitted += 1U64 continue }
             val body = c.arena.bodyInstanceAt(index: member.adapterBodyId - 1U64)
             self.curFn = witness.function
             self.curIsMain = false

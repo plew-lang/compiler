@@ -178,7 +178,11 @@ struct LlvmAsyncFrame {
     val localSlots: Array[U64]
 }
 
+pub enum LlvmBodyEmission { Whole Requested(bodyId: U64) }
+
 struct LlvmCtx {
+    val emission: LlvmBodyEmission = <LlvmBodyEmission.Whole />
+    mut val requestedBodyEmitted: Bool = false
     pub val ambientProgram: MidAmbientProgram = <MidAmbientProgram.empty />
     pub mut val ambientBody: MidAmbientBodyPlan = <MidAmbientBodyPlan.empty />
     pub mut val ambientPermit: Optional[LLVMValueRef] = <Optional.None />
@@ -763,7 +767,8 @@ impl LlvmBuilder {
 // handles are borrowed from the enclosing module/builder owners.
 fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
                program: MidExecutableProgram = <MidExecutableProgram.empty />,
-               ambient: MidAmbientProgram = <MidAmbientProgram.empty />) -> LlvmCtx {
+               ambient: MidAmbientProgram = <MidAmbientProgram.empty />,
+               emission: LlvmBodyEmission = <LlvmBodyEmission.Whole />) -> LlvmCtx {
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
     val i64ty: LLVMTypeRef = LLVMInt64TypeInContext(ctx)
     mut val cloelems: Array[LLVMTypeRef] = []
@@ -784,7 +789,7 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
     promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     return <LlvmCtx
-        ctx=ctx mod=m b=builder ambientProgram=ambient
+        ctx=ctx mod=m b=builder ambientProgram=ambient emission=emission
         midProgram=program
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
@@ -801,7 +806,7 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
 
 }
 
-pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage: LlvmGlobalStorage = <LlvmGlobalStorage.Definition />) -> LlvmLoweringResult {
+pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage: LlvmGlobalStorage = <LlvmGlobalStorage.Definition />, emission: LlvmBodyEmission = <LlvmBodyEmission.Whole />) -> LlvmLoweringResult {
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val module = <LlvmModule.owned context=ctx module=m />
@@ -810,7 +815,7 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage
     val targetTriple = LLVMGetDefaultTargetTriple()
     LLVMSetTarget(m, targetTriple)
     LLVMDisposeMessage(targetTriple)
-    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle, program: prepared.executable, ambient: prepared.ambient)
+    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle, program: prepared.executable, ambient: prepared.ambient, emission: emission)
 
     tracePhase(c: inout c, label: "mid:program:ready")
 
@@ -994,8 +999,12 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage
         drainRound += 1U64
     }
     tracePhase(c: inout c, label: "backend:drain:done")
-    if !(foundMain) {
+    if !foundMain && st.wholeProgram() {
         return <LlvmLoweringResult.Failure diagnostic=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="LLVM backend: no `main` function found" /> />
+    }
+
+    if !st.wholeProgram() && !st.requestedBodyEmitted {
+        return <LlvmLoweringResult.Failure diagnostic=c.diagnosticAt(offset: 0U64, msg: "LLVM backend: requested body was not emitted") />
     }
 
     // `--asan`: a normal `.ll` carries no `sanitize_address`

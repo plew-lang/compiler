@@ -41,7 +41,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
-                    val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+                    val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty)
                     self.genFnK.append(bodyId)
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
@@ -59,6 +59,7 @@ pub impl LlvmCtx {
     // Emission never installs a parallel ambient substitution environment.
     inout fn emitOneGenFn(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.genFnK[slot]
+        if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Ok value=() /> }
         val body: BodyInstance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
         if body.fnIdx >= c.arena.functionCount() { return <Result.Ok value=() /> }

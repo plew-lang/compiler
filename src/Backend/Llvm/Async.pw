@@ -43,7 +43,7 @@ pub impl LlvmCtx {
                 appendU64Dec(into: inout rnm, n: fi)
                 appendBytes(into: inout rnm, from: "_resume".bytes())
                 rnm.append(0)
-                val resumeFn: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(rnm), signature: resumeTy)
+                val resumeFn: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(rnm), signature: resumeTy)
                 self.asyncFnIdx.append(fi)
                 self.asyncBodyIds.append(bodyId)
                 self.asyncResumeFn.append(resumeFn)
@@ -70,7 +70,7 @@ pub impl LlvmCtx {
                     appendBytes(into: inout enm, from: "pf".bytes())
                     appendU64Dec(into: inout enm, n: fi)
                     enm.append(0)
-                    val entryFn: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(enm), signature: fty)
+                    val entryFn: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(enm), signature: fty)
                     self.asyncEntryIdx.append(fi)
                     self.asyncEntryVal.append(entryFn)
                     self.asyncEntryTy.append(fty)
@@ -149,6 +149,7 @@ pub impl LlvmCtx {
         if slot >= self.asyncFnIdx.count() {
             return <Result.Ok value=() />
         }
+        if !self.admitBody(bodyId: self.asyncBodyIds[slot]) { return <Result.Ok value=() /> }
         val f: Func = c.arena.functionAt(index: fi)
         val activation = (try self.prepareMidAsyncFrame(c: inout c, bodyId: self.asyncBodyIds[slot]))
         val frameTy: LLVMTypeRef = activation.type
