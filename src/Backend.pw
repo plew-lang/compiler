@@ -371,6 +371,9 @@ struct LlvmCtx {
     pub mut val gvalRef: Array[LLVMValueRef] = []
     pub mut val gvalLty: Array[LLVMTypeRef] = []
     pub mut val gvalTref: Array[U64] = []
+    // One addressable byte per global gives even zero-sized values a distinct
+    // runtime identity. Source offsets identify declarations, not processes.
+    pub mut val globalIdentityStorage: Optional[LLVMValueRef] = <Optional.None />
     // Cell pin (spec/03): a deref-crossing `inout` place retains its Ref cell for the
     // call's duration, so a mid-call rebind cannot free the lent pointee — the pointee
     // deinit runs after the call. A stack of pinned cells (parallel: cell value, the

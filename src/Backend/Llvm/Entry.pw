@@ -13,6 +13,16 @@ pub impl LlvmCtx {
     // not an observation made by legacy expression emission.
     inout fn declareGlobalStorage(c: inout Comp, bodyId: U64, storage: LlvmGlobalStorage) -> Result[Bool, CompileDiagnostic] {
         if bodyId == 0U64 { return <Result.Ok value=false /> }
+        if c.arena.globals.count() != 0U64 {
+            val identitiesType = LLVMArrayType2(self.i8ty, c.arena.globals.count())
+            val identityName = <CString.copied text="plew.global.identities" />
+            val identities = LLVMAddGlobal(self.mod, identitiesType, identityName.ptr)
+            match storage {
+                LlvmGlobalStorage.Definition => { LLVMSetInitializer(identities, LLVMConstNull(identitiesType)) }
+                LlvmGlobalStorage.Reference => {}
+            }
+            self.globalIdentityStorage = <Optional.Some v=identities />
+        }
         mut val gi: U64 = 0U64
         while gi < c.arena.globals.count() {
             val global = c.arena.globals[gi]

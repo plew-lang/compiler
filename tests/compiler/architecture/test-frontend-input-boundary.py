@@ -15,7 +15,8 @@ entry = analysis.split('// Whether the literal', 1)[0]
 assert '-> Result[(), CompileDiagnostic]' in entry
 assert 'c.errorAt(' not in entry and 'exit(' not in entry
 assert 'match analysis {' in driver and 'emitDiagnostic(diagnostic: diagnostic)' in driver
-assert 'return <FrontendRequest input=input sources=configuredSources' in driver
+assert 'return <FrontendRequest input=input sources=configuredSourceAccess(sources: sources)' in driver
+assert 'pub fn configuredSourceAccess(sources: SourceAccess) -> SourceAccess' in driver
 assert 'analyzeFrontend(c: inout c, input: request.input, sources: request.sources, options: request.options)' in driver
 compiler = (root / 'src/Compiler.pw').read_text()
 assert 'CheckedProgram.check(input: request.input, sources: request.sources, options: request.options)' in compiler

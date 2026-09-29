@@ -23,7 +23,16 @@ pub impl LlvmCtx {
 
     inout fn ambientStorageValues(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, storage: MidAmbientStorage, writes: Bool) -> Result[Array[LLVMValueRef], CompileDiagnostic] {
         val root = if storage.kind == 2U64 {
-            give LLVMConstIntToPtr(LLVMConstInt(self.i64ty, place.globalTarget, 0I32), self.ptrty)
+            val identities = match self.globalIdentityStorage {
+                Optional.Some(v: val identities) => { give identities }
+                Optional.None => { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: global access identity storage missing") /> }
+            }
+            val index = self.midCanonicalGlobalIndex(c: inout c, place: place)
+            if index >= self.gvalRef.count() {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: global access identity not declared") />
+            }
+            val indices = [LLVMConstInt(self.i64ty, 0U64, 0I32), LLVMConstInt(self.i64ty, index, 0I32)]
+            give LLVMBuildGEP2(self.b, LLVMArrayType2(self.i8ty, self.gvalRef.count()), identities, arrayCPtr(indices), 2U64, anon())
         } else {
             val prefix = <MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=place.globalTarget globalMutable=place.globalMutable projections=<MidRange start=place.projections.start len=storage.rootLength /> typeTerm=place.typeTerm />
             give (try self.midCanonicalPlacePtrUnchecked(c: inout c, body: body, place: prefix))
