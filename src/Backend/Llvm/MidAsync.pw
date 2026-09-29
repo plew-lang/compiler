@@ -13,7 +13,7 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn buildMidAsyncFrameTy(c: inout Comp, bodyId: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+    inout fn prepareMidAsyncFrame(c: inout Comp, bodyId: U64) -> Result[LlvmAsyncFrame, CompileDiagnostic] {
         val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         val canonical = (try self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId))
         val plan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
@@ -66,9 +66,7 @@ pub impl LlvmCtx {
         name.append(0U8)
         val frame = LLVMStructCreateNamed(self.ctx, arrayCPtr(name))
         LLVMStructSetBody(frame, arrayCPtr(types), types.count(), 0I32)
-        self.asyncMidBodies.append(canonical)
-        self.asyncLocalSlots.append(slots)
-        return <Result.Ok value=frame />
+        return <Result.Ok value=<LlvmAsyncFrame type=frame canonical=canonical localSlots=slots /> />
     }
 
     inout fn midAsyncComplete(c: inout Comp, value: LLVMValueRef) -> Result[(), CompileDiagnostic] {
@@ -115,8 +113,8 @@ pub impl LlvmCtx {
         return <Result.Ok value=true />
     }
 
-    inout fn genLlvmMidAsyncResume(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
-        val canonical = self.asyncMidBodies[slot]
+    inout fn genLlvmMidAsyncResume(c: inout Comp, slot: U64, activation: LlvmAsyncFrame) -> Result[(), CompileDiagnostic] {
+        val canonical = activation.canonical
         val body = c.mid.bodies[canonical.body - 1U64]
         val parameters = c.arena.bodySignature(bodyId: body.bodyInstance).parameterTypes.count()
         match (try self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameters, asyncBody: true)) {
@@ -126,13 +124,13 @@ pub impl LlvmCtx {
         }
         self.curFn = self.asyncResumeFn[slot]
         self.curResumeFn = self.curFn
-        self.curFrameTy = self.asyncFrameTy[slot]
+        self.curFrameTy = activation.type
         self.curFrameBase = (try self.valueParameter(function: self.curFn, index: 0U64))
         self.curIsMain = false
         self.curRetVoid = true
         self.beginFnBody(fv: self.curFn)
         mut val storage: Array[LLVMValueRef] = []
-        val slots = self.asyncLocalSlots[slot]
+        val slots = activation.localSlots
         mut val local: U64 = 0U64
         while local < body.locals.len {
             if slots[local] != 0U64 { storage.append(LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, slots[local], anon())) }

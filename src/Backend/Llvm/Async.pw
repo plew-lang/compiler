@@ -10,7 +10,7 @@
 
 pub impl LlvmCtx {
 
-    // Declare each reachable async body: build its frame struct type + resume fn, and (for a
+    // Declare each reachable async signature and resume symbol, and (for a
     // non-main async fn) its entry symbol in the fnIdx table (signature: params ->
     // PlewPromise*, so a call site `doubler(x: 21)` resolves to a promise-returning
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
@@ -34,7 +34,6 @@ pub impl LlvmCtx {
                 if c.arena.functionAt(index: fi).hasRecv {
                     return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)") />
                 }
-                val frameTy: LLVMTypeRef = (try self.buildMidAsyncFrameTy(c: inout c, bodyId: bodyId))
                 // resume fn: void __af<fi>_resume(void*).
                 mut val rptys: Array[LLVMTypeRef] = []
                 rptys.append(self.ptrty)
@@ -46,7 +45,7 @@ pub impl LlvmCtx {
                 rnm.append(0)
                 val resumeFn: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(rnm), signature: resumeTy)
                 self.asyncFnIdx.append(fi)
-                self.asyncFrameTy.append(frameTy)
+                self.asyncBodyIds.append(bodyId)
                 self.asyncResumeFn.append(resumeFn)
                 // entry symbol (non-main): params -> ptr (Promise).
                 if !(c.nameIsMain(f: c.arena.functionAt(index: fi))) {
@@ -151,7 +150,8 @@ pub impl LlvmCtx {
             return <Result.Ok value=() />
         }
         val f: Func = c.arena.functionAt(index: fi)
-        val frameTy: LLVMTypeRef = self.asyncFrameTy[slot]
+        val activation = (try self.prepareMidAsyncFrame(c: inout c, bodyId: self.asyncBodyIds[slot]))
+        val frameTy: LLVMTypeRef = activation.type
         val resumeFn: LLVMValueRef = self.asyncResumeFn[slot]
         val isMain: Bool = c.nameIsMain(f: f)
         // ---- entry function ----
@@ -180,13 +180,13 @@ pub impl LlvmCtx {
         // Frame storage owns the entry arguments. Copy borrowed ABI values here;
         // moved arguments transfer their existing ownership. The prepared Mid
         // body supplies the matching parameter Drops on every normal exit.
-        val canonical = self.asyncMidBodies[slot]
+        val canonical = activation.canonical
         val body = c.mid.bodies[canonical.body - 1U64]
         val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
         mut val pi: U64 = 0
         while pi < signature.parameterTypes.count() {
             val pv: LLVMValueRef = (try self.valueParameter(function: entryFn, index: pi))
-            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, self.asyncLocalSlots[slot][pi], anon()))
+            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, activation.localSlots[pi], anon()))
             match signature.parameterPassings[pi] {
                 CallArgumentPassing.Borrow => { try self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
                 CallArgumentPassing.Move => {}
@@ -218,11 +218,11 @@ pub impl LlvmCtx {
         } else {
             LLVMBuildRet(self.b, promiseSelf)
         }
-        try self.genLlvmMidAsyncResume(c: inout c, slot: slot)
+        try self.genLlvmMidAsyncResume(c: inout c, slot: slot, activation: activation)
         return <Result.Ok value=() />
     }
 
-    // Declaration fixes the reachable set and prepares each Mid body once.
+    // Only emission requests the activation layout; declarations need no body.
     inout fn emitAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot = 0U64
         while slot < self.asyncFnIdx.count() {

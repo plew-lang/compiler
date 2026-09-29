@@ -170,6 +170,14 @@ struct LlvmAmbientScope {
 pub impl LlvmAmbientScope { factory }
 
 
+// One prepared activation layout is shared by its entry and resume emission.
+// It exists only after the requested canonical body has passed Mid preparation.
+struct LlvmAsyncFrame {
+    val type: LLVMTypeRef
+    val canonical: MidCanonicalBody
+    val localSlots: Array[U64]
+}
+
 struct LlvmCtx {
     pub val ambientProgram: MidAmbientProgram = <MidAmbientProgram.empty />
     pub mut val ambientBody: MidAmbientBodyPlan = <MidAmbientBodyPlan.empty />
@@ -403,9 +411,7 @@ struct LlvmCtx {
     // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
     // resume fn value, so the entry/resume/await sites all agree on the layout.
     pub mut val asyncFnIdx: Array[U64]
-    pub mut val asyncMidBodies: Array[MidCanonicalBody] = []
-    pub mut val asyncLocalSlots: Array[Array[U64]] = []
-    pub mut val asyncFrameTy: Array[LLVMTypeRef]
+    pub mut val asyncBodyIds: Array[U64] = []
     pub mut val asyncResumeFn: Array[LLVMValueRef]
     // the promise-returning ENTRY symbol of each non-main async fn (`async fn doubler`
     // -> `pf<fi>`), its own small symbol table keyed by funcs index — kept SEPARATE from
@@ -791,7 +797,7 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+        asyncFnIdx=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
 }
 

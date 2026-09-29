@@ -309,6 +309,18 @@ for symbol in 'monoWork.bodyInstances' 'bodySignature' 'parameterPassings'; do
     fi
 done
 
+# Async declarations must not demand executable Mid or activation-local layout.
+python3 - <<'PYASYNCDECL'
+from pathlib import Path
+source = Path('src/Backend/Llvm/Async.pw').read_text()
+declarations = source.split('inout fn declareAsyncFns(', 1)[1].split('inout fn asyncSlotOf(', 1)[0]
+for forbidden in ['prepareMidAsyncFrame(', 'prepareAsyncMidCanonical(', 'prepareMidExecutable(']:
+    assert forbidden not in declarations, 'async declaration demands an executable body'
+emission = source.split('inout fn genLlvmAsyncFunc(', 1)[1].split('inout fn emitAsyncFns(', 1)[0]
+assert emission.index('prepareMidAsyncFrame(') < emission.index('self.beginFnBody(')
+assert 'genLlvmMidAsyncResume(c: inout c, slot: slot, activation: activation)' in emission
+PYASYNCDECL
+
 # An unused async declaration is not an executable root, just like an unused
 # synchronous function. This must hold in emitted LLVM, not just the scanner.
 async_directory=$(mktemp -d "${TMPDIR:-/tmp}/plew-mid-async-roots.XXXXXX")
