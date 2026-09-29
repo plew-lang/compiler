@@ -1,0 +1,26 @@
+// Native diagnostic harness: emit either the storage owner or a body module
+// referencing it. Link both outputs to exercise one shared global identity.
+import ../../../src/Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ../../../src/SourceAccess with { SourceAccess }
+import ../../../src/PreparedProgram with { PreparedProgram }
+import ../../../src/Backend with { lowerGlobalStorageLlvm, lowerPreparedLlvm, LlvmLoweringResult, LlvmGlobalStorage }
+import @Std/Process with { argAt }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler,
+        input: <FrontendInput.File path=argAt(1I64) />,
+        sources: <SourceAccess stdRoot=argAt(3I64).bytes() />).unwrap()
+    val prepared = PreparedProgram.prepare(c: inout compiler).unwrap()
+    if argAt(2I64) == "storage" {
+        match lowerGlobalStorageLlvm(c: inout compiler) {
+            LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        }
+    } else {
+        match lowerPreparedLlvm(c: inout compiler, prepared: prepared, globalStorage: <LlvmGlobalStorage.Reference />) {
+            LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        }
+    }
+}

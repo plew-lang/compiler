@@ -26,6 +26,12 @@ that the others passed.
 specification test. Some inputs import compiler internals. Classify by the
 assertion's responsibility, not prefixes such as `mid_` or the tool used.
 
+`compiler/codegen/test-global-modules.py` is a manual native diagnostic using
+`GlobalModules.pw`. Set `PLEWC` to the candidate and optionally `LLVM_CONFIG`.
+It links separate global-definition and executable modules, checks shared
+storage and initialization behavior, and saves evidence under
+`tmp/lazy-build/global-modules/`. It does not prove ORC execution or sanitizer safety.
+
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store
 accesses; use the standard ASan gate for memory-safety evidence. Tooling tests

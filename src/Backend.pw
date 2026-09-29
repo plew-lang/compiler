@@ -753,15 +753,11 @@ impl LlvmBuilder {
     factory owned(handle: LLVMBuilderRef) { return <LlvmBuilder handle=handle /> }
 }
 
-pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweringResult {
-    val ctx: LLVMContextRef = LLVMContextCreate()
-    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
-    val module = <LlvmModule.owned context=ctx module=m />
-    val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
-    // Layout-sensitive optimizers must use the same native ABI as the linker.
-    val targetTriple = LLVMGetDefaultTargetTriple()
-    LLVMSetTarget(m, targetTriple)
-    LLVMDisposeMessage(targetTriple)
+// One physical context shape for whole-program and requested modules. Native
+// handles are borrowed from the enclosing module/builder owners.
+fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
+               program: MidExecutableProgram = <MidExecutableProgram.empty />,
+               ambient: MidAmbientProgram = <MidAmbientProgram.empty />) -> LlvmCtx {
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
     val i64ty: LLVMTypeRef = LLVMInt64TypeInContext(ctx)
     mut val cloelems: Array[LLVMTypeRef] = []
@@ -781,9 +777,9 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweri
     promelems.append(ptrty)
     promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
-    mut val st: LlvmCtx = <LlvmCtx
-        ctx=ctx mod=m b=builder.handle ambientProgram=prepared.ambient
-        midProgram=prepared.executable
+    return <LlvmCtx
+        ctx=ctx mod=m b=builder ambientProgram=ambient
+        midProgram=program
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty closureTy=closureTy anyTy=anyTy anyVtResolution=[] anyVtVal=[]
@@ -796,6 +792,19 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweri
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+
+}
+
+pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage: LlvmGlobalStorage = <LlvmGlobalStorage.Definition />) -> LlvmLoweringResult {
+    val ctx: LLVMContextRef = LLVMContextCreate()
+    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
+    val module = <LlvmModule.owned context=ctx module=m />
+    val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
+    // Layout-sensitive optimizers must use the same native ABI as the linker.
+    val targetTriple = LLVMGetDefaultTargetTriple()
+    LLVMSetTarget(m, targetTriple)
+    LLVMDisposeMessage(targetTriple)
+    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle, program: prepared.executable, ambient: prepared.ambient)
 
     tracePhase(c: inout c, label: "mid:program:ready")
 
@@ -845,7 +854,7 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweri
     // initializer code. Every body sees the same complete storage map.
     if c.arena.globals.count() != 0U64 {
         val bodyId = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
-        match st.declareGlobalStorage(c: inout c, bodyId: bodyId) {
+        match st.declareGlobalStorage(c: inout c, bodyId: bodyId, storage: globalStorage) {
             Result.Ok(value: val ready) => {
                 if !ready {
                     return <LlvmLoweringResult.Failure diagnostic=c.diagnosticAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering") />
@@ -1011,6 +1020,42 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweri
         }
         if c.requireMid && st.midCoverageBodyIds.count() != 0U64 {
             return <LlvmLoweringResult.Failure diagnostic=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="LLVM backend: required Mid coverage is incomplete" /> />
+        }
+    }
+    return <LlvmLoweringResult.Success module=move module />
+}
+
+// A session publishes exactly one definition module; body modules only reference
+// that storage. This entry consumes frozen layout/storage contracts, emits no
+// executable code, and neither checks nor runs an initializer.
+pub enum LlvmGlobalStorage { Definition Reference }
+
+pub fn lowerGlobalStorageLlvm(c: inout Comp) -> LlvmLoweringResult {
+    val ctx = LLVMContextCreate()
+    val m = LLVMModuleCreateWithNameInContext(cstr(s: "plew.globals"), ctx)
+    val module = <LlvmModule.owned context=ctx module=m />
+    val builder = <LlvmBuilder.owned handle=LLVMCreateBuilderInContext(ctx) />
+    val targetTriple = LLVMGetDefaultTargetTriple()
+    LLVMSetTarget(m, targetTriple)
+    LLVMDisposeMessage(targetTriple)
+    mut val st = llvmContext(ctx: ctx, m: m, builder: builder.handle)
+    match st.registerFinalLayoutNames(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    match st.registerFinalStructBodies(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    if c.arena.globals.count() != 0U64 {
+        val bodyId = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        match st.declareGlobalStorage(c: inout c, bodyId: bodyId, storage: <LlvmGlobalStorage.Definition />) {
+            Result.Ok(value: val ready) => {
+                if !ready {
+                    return <LlvmLoweringResult.Failure diagnostic=c.diagnosticAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global storage requires finalized descriptors") />
+                }
+            }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
         }
     }
     return <LlvmLoweringResult.Success module=move module />

@@ -189,7 +189,10 @@ for forbidden in ['MidExecutableProgram', 'MidAmbientProgram', 'LLVMContextCreat
     assert forbidden not in declarations, f'declaration preparation crosses execution boundary: {forbidden}'
 assert 'MidExecutableProgram.prepareWithRequests(c: inout c, templates: inout templates, requests: inout requests)' in analysis
 assert 'import ./Backend' not in analysis and 'LLVMContextCreate(' not in analysis
-assert 'midProgram=prepared.executable' in entry and 'ambientProgram=prepared.ambient' in entry
+lowering = entry.split('pub fn lowerPreparedLlvm(', 1)[1].split('pub fn lowerGlobalStorageLlvm(', 1)[0]
+assert 'program: prepared.executable, ambient: prepared.ambient' in lowering
+context = entry.split('fn llvmContext(', 1)[1].split('pub fn lowerPreparedLlvm(', 1)[0]
+assert 'midProgram=program' in context and 'ambientProgram=ambient' in context
 for path in Path('src/Backend').rglob('*.pw'):
     body = re.sub(r'//[^\n]*', '', path.read_text())
     for symbol in ['buildParametricMidBody', 'buildMidBodyForInstance',
