@@ -1,0 +1,30 @@
+// Host registry: IDs cross the C boundary; Plew alone owns compiler state.
+import ./CheckedProgram with { CompilerSession }
+import @Std/Core with { MutableRef }
+
+mut val sessions: Dictionary[U64, MutableRef[CompilerSession]] = [:]
+mut val nextSessionId: U64 = 1U64
+
+pub fn registerCompilerSession(session: move CompilerSession) -> Optional[U64] {
+    // Never wrap or recycle an ID, including after the session is removed.
+    if nextSessionId == 18446744073709551615U64 { return <Optional.None /> }
+    val sessionId = nextSessionId
+    nextSessionId += 1U64
+    sessions[sessionId] = <MutableRef value=move session />
+    return <Optional.Some v=sessionId />
+}
+
+// A value snapshot keeps its shared cells alive. Later registry mutations do
+// not change a snapshot, so each native callback must fetch a fresh value.
+pub fn compilerSessionSnapshot() -> Dictionary[U64, MutableRef[CompilerSession]] {
+    return sessions
+}
+
+pub fn findCompilerSession(registry: Dictionary[U64, MutableRef[CompilerSession]], sessionId: U64) -> Optional[MutableRef[CompilerSession]] {
+    return registry.get(key: sessionId)
+}
+
+// The execution owner must first destroy ORC after callbacks have finished.
+pub fn unregisterCompilerSession(sessionId: U64) {
+    sessions.remove(key: sessionId)
+}

@@ -1,0 +1,64 @@
+import /CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+import /CheckedProgram with { CompilerSession, CompilerSessionResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Core with { assert, WeakRef }
+import @Std/Io with { print }
+
+fn registered(source: String) -> U64 {
+    match CompilerSession.open(input: <FrontendInput.Text path="registry.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val session) => {
+            return registerCompilerSession(session: move session).unwrap()
+        }
+    }
+}
+
+fn releasedSession() -> WeakRef[CompilerSession] {
+    val sessionId = registered(source: "fn main() {}")
+    val snapshot = compilerSessionSnapshot()
+    val held = findCompilerSession(registry: snapshot, sessionId: sessionId).unwrap()
+    val weak = held.asRef().weak()
+    unregisterCompilerSession(sessionId: sessionId)
+    match weak.upgrade() {
+        Optional.Some(v: _) => {}
+        Optional.None => { panic "snapshot lost its session" }
+    }
+    return weak
+}
+
+fn main() {
+    val weak = releasedSession()
+    match weak.upgrade() {
+        Optional.Some(v: _) => { panic "registry leaked a removed session" }
+        Optional.None => {}
+    }
+    val first = registered(source: "fn main() {}")
+    val second = registered(source: "fn main() { missing() }")
+    assert(first != second)
+    val snapshot = compilerSessionSnapshot()
+    val held = findCompilerSession(registry: snapshot, sessionId: first).unwrap()
+    unregisterCompilerSession(sessionId: first)
+    match findCompilerSession(registry: compilerSessionSnapshot(), sessionId: first) {
+        Optional.Some(v: _) => { panic "removed session found" }
+        Optional.None => {}
+    }
+    match held->prepareFunction(function: 0U64) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic diagnostic.message }
+    }
+    val other = findCompilerSession(registry: snapshot, sessionId: second).unwrap()
+    match other->prepareFunction(function: 0U64) {
+        Result.Ok(value: _) => { panic "session state was confused" }
+        Result.Err(error: _) => {}
+    }
+    val third = registered(source: "fn main() {}")
+    assert(third > second)
+    unregisterCompilerSession(sessionId: second)
+    unregisterCompilerSession(sessionId: third)
+    match findCompilerSession(registry: compilerSessionSnapshot(), sessionId: 0U64) {
+        Optional.Some(v: _) => { panic "unknown session found" }
+        Optional.None => {}
+    }
+    print("ok")
+}
