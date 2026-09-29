@@ -285,9 +285,7 @@ extern "C" long long plew_tool_main(long long count, char **arguments) {
     auto source = sourceAt(first++);
     resolveIfNeeded(self, source, temporary.path);
     if (mode == "run") {
-      auto binary = temporary.path / "app";
-      build(self, source, binary, temporary.path, false, trace);
-      std::vector<std::string> command = {binary.string()};
+      std::vector<std::string> command = {self, "--run-worker", source.string()};
       command.insert(command.end(), arguments + first, arguments + count);
       return run(command);
     }

@@ -1,7 +1,8 @@
 // Low-level compiler driver shared by the development and distributed entries.
 import @Std/Process with { argCount, argAt, exit }
-import ./Frontend with { Comp, analyzeFrontend }
-import ./FrontendDriver with { frontendRequest }
+import ./Frontend with { Comp, FrontendInput, analyzeFrontend }
+import ./FrontendDriver with { frontendRequest, configuredSourceAccess }
+import ./CompilerExecution with { executeProgram }
 import ./CheckedProgram with { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
 import ./Backend with { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
 import ./SourceAccess with { SourceAccess }
@@ -13,6 +14,10 @@ extern(c) {
 
 pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
     if argCount() > firstArgument {
+        if argAt(firstArgument) == "--run" {
+            runProgram(sources: sources, firstArgument: firstArgument + 1I64)
+            return
+        }
         if argAt(firstArgument) == "--check" {
             runCheck(sources: sources, firstArgument: firstArgument + 1I64)
             return
@@ -43,6 +48,21 @@ pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 
             exit(code: 1I64)
         }
     }
+}
+
+// Arguments after the source belong to the application, never the compiler.
+pub fn runProgram(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) {
+    if argCount() <= firstArgument { exit(code: 1I64) }
+    val input = <FrontendInput.File path=argAt(firstArgument) />
+    val configured = configuredSourceAccess(sources: sources)
+    mut val arguments: Array[String] = []
+    mut val index = firstArgument
+    while index < argCount() {
+        arguments.append(argAt(index))
+        index += 1I64
+    }
+    val status = executeProgram(input: input, sources: configured, arguments: arguments)
+    if status != 0I32 { exit(code: 1I64) }
 }
 
 // The frontend arena is scoped to lowering, not the lifetime of LLVM passes.

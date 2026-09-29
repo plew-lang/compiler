@@ -90,8 +90,10 @@ python3 ./scripts/support/trace-command.py "$TMP/instrument.err" -- "$OPT" -debu
 # instrumented compiler must live in compiler/ (removed on exit).
 # Keep ASan instrumentation and frame pointers, with the standard -O1 level
 # so the whole compile corpus can exercise a practical instrumented compiler.
-python3 ./scripts/support/watch-command.py -- "$LLVM/bin/clang++" -std=c++17 -O1 -fsanitize=address -fno-omit-frame-pointer -isystem "$LLVM/include" -c native/llvm_backend.cpp -o "$TMP/llvm-backend.o"
-python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.bc" "$RT" "$LIB" "$TMP/llvm-backend.o" -lc++ -o ./plewc_asan
+for source in llvm_backend compiler_callbacks compiler_execution; do
+    python3 ./scripts/support/watch-command.py -- "$LLVM/bin/clang++" -std=c++17 -O1 -fsanitize=address -fno-omit-frame-pointer -isystem "$LLVM/include" -c "native/$source.cpp" -o "$TMP/$source.o"
+done
+python3 ./scripts/support/trace-command.py "$TMP/link.err" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -O1 -fno-omit-frame-pointer -fsanitize=address -w "$TMP/pc.inst.bc" "$RT" "$LIB" "$TMP/llvm_backend.o" "$TMP/compiler_callbacks.o" "$TMP/compiler_execution.o" -lc++ -Wl,-export_dynamic -o ./plewc_asan
 trap 'rm -f ./plewc_asan' EXIT
 
 # Exercise ownership of the LLVM module and context through native output too.

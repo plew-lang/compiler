@@ -178,7 +178,9 @@ def build(args):
                                     recipe, {'sources': source_inputs, 'recipe': recipe,
                                              'archives': list(manifest['archives'].values()),
                                              'licenses': list(manifest['licenses'].values())}, notices)
-    native_sources = [('backend', ROOT / 'native/llvm_backend.cpp')]
+    native_sources = [('backend', ROOT / 'native/llvm_backend.cpp'),
+                      ('callbacks', ROOT / 'native/compiler_callbacks.cpp'),
+                      ('execution', ROOT / 'native/compiler_execution.cpp')]
     if args.distribution:
         native_sources += [('tool', ROOT / 'native/tool.cpp'), ('resources', output / 'resources.cpp')]
     for name, source in native_sources:
@@ -189,7 +191,7 @@ def build(args):
         libraries.insert(0, str(compiled))
     linker_driver = manifest['clang'] if lto else '/usr/bin/clang'
     run([linker_driver, deployment, str(output / 'compiler.o'), str(output / 'runtime.o'),
-         *libraries, *lto_flags, '-o', str(binary)], trace='link.log' if lto else None)
+         *libraries, *lto_flags, '-Wl,-export_dynamic', '-o', str(binary)], trace='link.log' if lto else None)
     print('[standalone] audit dynamic dependencies', file=sys.stderr, flush=True)
     inspection = subprocess.check_output(['/usr/bin/otool', '-L', str(binary)], text=True)
     (output / 'dependencies.txt').write_text(inspection)

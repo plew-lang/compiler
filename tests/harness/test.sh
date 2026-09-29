@@ -183,6 +183,12 @@ else
     fail=$((fail + 1)); failed="$failed cli-options"
 fi
 
+if PLEWC="$PLEWC" python3 -B ./tests/tooling/test-lazy-cli.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed lazy-cli"
+fi
+
 if sh ./tests/tooling/test-self-host-measurement.sh; then
     :
 else

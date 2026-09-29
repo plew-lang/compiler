@@ -9,7 +9,7 @@
 #   plew <file.pw> [-o <out>]        compile to a binary (default: ./<basename>)
 #   plew build <file.pw> [-o <out>]  same as above (explicit verb)
 #   plew check <file.pw>            check without machine code or app execution
-#   plew run <file.pw> [args...]     compile to a temp binary and run it
+#   plew run <file.pw> [args...]     execute with demand-driven checking and JIT
 #   plew gen <file.pw> [<file.pw>…]  run @[…] derive macros -> <file>.gen.pw (spec/16)
 #
 # Override the C compiler with $CC (default: clang).
@@ -140,6 +140,11 @@ if [ -n "$pkg" ] && [ ! -f "$pkg/Plew.lock" ] && grep -q 'git[[:space:]]*=' "$pk
 fi
 
 out=""
+if [ "$mode" = run ]; then
+    rm -rf "$tmp"
+    trap - EXIT
+    exec "$PLEWC" --run "$src" "$@"
+fi
 if [ "$mode" = build ]; then
     if [ "$1" = "-o" ]; then out=$2; shift 2; fi
     [ -n "$out" ] || out=$(basename "${src%.pw}")
@@ -148,11 +153,5 @@ fi
 "$PLEWC" --emit-object "$tmp/out.o" "$src"
 "$PLEWC" --runtime > "$tmp/rt.c"
 
-if [ "$mode" = run ]; then
-    bin="$tmp/a.out"
-    "$CC" -w "$tmp/out.o" "$tmp/rt.c" -o "$bin"
-    "$bin" "$@"
-else
-    "$CC" -w "$tmp/out.o" "$tmp/rt.c" -o "$out"
-    echo "plew: $src -> $out"
-fi
+"$CC" -w "$tmp/out.o" "$tmp/rt.c" -o "$out"
+echo "plew: $src -> $out"

@@ -12,6 +12,12 @@ pub struct FrontendRequest {
     pub val options: FrontendOptions
 }
 
+pub fn configuredSourceAccess(sources: SourceAccess) -> SourceAccess {
+    return <SourceAccess
+        stdRoot=if sources.stdRoot.count() != 0U64 { give sources.stdRoot } else { give computeStdRoot(arg0: argAt(0).bytes()) }
+        resources=sources.resources />
+}
+
 pub fn frontendRequest(sources: SourceAccess = <SourceAccess />, firstArgument: I64 = 1I64) -> FrontendRequest {
     // gen mode (spec/16): `plewc --gen <file>` synthesizes a derive-runner harness
     // instead of compiling the user program. The entry path then sits at argv[2].
@@ -67,10 +73,7 @@ pub fn frontendRequest(sources: SourceAccess = <SourceAccess />, firstArgument: 
     } else {
         give <FrontendInput.Text text=readStdin() path="<stdin>" />
     }
-    val configuredSources = <SourceAccess
-        stdRoot=if sources.stdRoot.count() != 0U64 { give sources.stdRoot } else { give computeStdRoot(arg0: argAt(0).bytes()) }
-        resources=sources.resources />
-    return <FrontendRequest input=input sources=configuredSources
+    return <FrontendRequest input=input sources=configuredSourceAccess(sources: sources)
         options=<FrontendOptions genMode=genMode tcLog=tcLog asan=asan traceCodegen=traceCodegen tracePhases=tracePhases emitMidCoverage=emitMidCoverage requireMid=requireMid /> />
 }
 
