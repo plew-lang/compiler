@@ -40,6 +40,12 @@ generated LLVM with the common runtime and libLLVM, then compile/run its stdout
 as LLVM. It verifies main-only generation with an invalid unused body and terminal
 session failure when that body is requested. It is not a full ORC execution gate.
 
+`compiler/codegen/test-orc-native.py` builds and executes `OrcNative.cpp` against
+the selected LLVM. `--asan` defaults to LLVM22 and checks bridge ownership with
+ASan/LSan; it does not instrument the generated JIT instructions. This manual
+diagnostic covers shared storage, existing host symbols and terminal failures,
+not frontend lazy requests or the product CLI.
+
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store
 accesses; use the standard ASan gate for memory-safety evidence. Tooling tests

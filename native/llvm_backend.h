@@ -2,6 +2,7 @@
 #define PLEW_LLVM_BACKEND_H
 
 #include <llvm-c/Core.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +17,20 @@ void plew_llvm_initialize_worker(int trace);
 // cpu is an explicit target CPU, or an empty string for LLVM's generic CPU.
 int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                           const char *cpu, int trace);
+
+// Single-threaded native execution session. It owns code, not a second Plew
+// runtime. Hosts explicitly supply symbols from the existing runtime instance.
+typedef struct PlewLlvmJit PlewLlvmJit;
+PlewLlvmJit *plew_llvm_jit_create(void);
+void plew_llvm_jit_destroy(PlewLlvmJit *jit);
+int plew_llvm_jit_define(PlewLlvmJit *jit, const char *name,
+                         uint64_t address, int callable);
+// Always consumes both handles, including on failure. They must be a matching
+// module/context pair owned exclusively by the caller before this call.
+int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
+                      LLVMContextRef context);
+// Returns zero on failure. Any failure makes this session terminal.
+uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name);
 
 #ifdef __cplusplus
 }
