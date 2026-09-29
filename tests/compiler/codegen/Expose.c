@@ -2,6 +2,8 @@
 extern int64_t exposedAdd(int64_t, int64_t);
 extern double exposedFloat(double);
 extern void exposedEmpty(void);
+extern void *exposedHandle(void *);
+extern const int32_t *exposedPointer(const int32_t *);
 extern void exposedWrite(int64_t *);
 extern int8_t exposedSignedByte(int8_t);
 extern uint16_t exposedUnsignedShort(uint16_t);
@@ -26,5 +28,8 @@ int32_t exerciseExposed(void) {
     if (exposedSingle(1.25f) != 1.25f || exposedSingle(-123.5f) != -123.5f) return 7;
     float single = 1.25f;
     if (exposedMutateSingle(&single) != 1.25f || single != 1.5f) return 8;
+    int32_t value = 42;
+    if (exposedHandle(&value) != &value || exposedHandle(0) != 0) return 9;
+    if (exposedPointer(&value) != &value || exposedPointer(0) != 0) return 10;
     return 0;
 }

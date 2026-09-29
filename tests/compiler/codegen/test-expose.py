@@ -24,7 +24,7 @@ def run(*args):
 fixture = root / 'tests/compiler/codegen/Expose.pw'
 compile_flags = ['--asan'] if options.asan else []
 raw = run(compiler, *compile_flags, '--require-mid', fixture).stdout
-for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean', 'exposedSingle', 'exposedMutateSingle']:
+for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean', 'exposedSingle', 'exposedMutateSingle', 'exposedHandle', 'exposedPointer']:
     assert re.search(rb'^define (?!internal)[^\n]*@' + name.encode() + rb'\(', raw, re.M), name
 # Use the selected target's C compiler as an ABI reference: successful low-bit
 # roundtrips alone do not prove the upper-register extension contract.

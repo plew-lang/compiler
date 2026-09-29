@@ -1,6 +1,7 @@
 import @Std/Core with { assert }
 
 extern(c) {
+    type ExposedHandle
     fn exerciseExposed() -> I32
     fn cSignedByte(value~: I8) -> I8
     fn cUnsignedShort(value~: U16) -> U16
@@ -23,6 +24,8 @@ expose fn exposedFloat(value~: F64) -> F64 {
 }
 
 expose fn exposedEmpty() {}
+expose fn exposedHandle(value~: ExposedHandle) -> ExposedHandle { return value }
+expose fn exposedPointer(value~: CPtr[I32]) -> CPtr[I32] { return value }
 
 expose fn exposedWrite(value~: inout I64) {
     value = 42I64
