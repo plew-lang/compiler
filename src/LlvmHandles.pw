@@ -1,0 +1,7 @@
+// Shared opaque identities at the native compiler boundary. No ownership or
+// runtime representation is exported with these borrowed C handles.
+pub extern(c) {
+    type LLVMContextRef
+    type LLVMModuleRef
+    type PlewLlvmJitRef
+}

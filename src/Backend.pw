@@ -1,3 +1,4 @@
+import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef }
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram }
 import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
@@ -470,13 +471,10 @@ pub impl LlvmCtx { factory }
 // Opaque handles are void* ABI-identical to the real LLVM `…Opaque *` typedefs,
 // so no <llvm-c/*.h> include is needed — the compiler self-emits the prototypes.
 extern(c) {
-    type LLVMContextRef
-    type LLVMModuleRef
     type LLVMTypeRef
     type LLVMValueRef
     type LLVMBasicBlockRef
     type LLVMBuilderRef
-    type PlewLlvmJitRef
     fn plew_pointer_equal(first~: LLVMTypeRef, second~: LLVMTypeRef) -> I32
 
     // Context / module.
@@ -738,6 +736,15 @@ pub unique struct LlvmModule {
             LLVMContextDispose(self.context)
         }
     }
+}
+
+// Consuming handoff to a C callback output pair. The module and context always
+// move together; the emptied Plew owner cannot subsequently be used.
+pub fn transferLlvmModule(module: move LlvmModule, targetModule: inout LLVMModuleRef, targetContext: inout LLVMContextRef) {
+    mut val owned = move module
+    targetModule = owned.module
+    targetContext = owned.context
+    owned.transferred = true
 }
 
 // Code and native contexts live until this owner is destroyed. It never owns a

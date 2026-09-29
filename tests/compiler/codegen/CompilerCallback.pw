@@ -1,0 +1,29 @@
+import /CompilerCallbacks as Callbacks
+import /CompilerSessions with { registerCompilerSession, compilerSessionSnapshot, findCompilerSession, unregisterCompilerSession }
+import /CheckedProgram with { CompilerSession, CompilerSessionResult }
+import /Frontend with { FrontendInput }
+import /SourceAccess with { SourceAccess }
+import @Std/Core with { assert }
+import @Std/Process with { argAt }
+import @Std/Io with { print }
+extern(c) {
+    fn exerciseCompilerCallback(session~: U64, body~: U64) -> I32
+    fn rejectCompilerCallback(session~: U64) -> I32
+}
+fn main() {
+    match CompilerSession.open(input: <FrontendInput.File path=argAt(2I64) />, sources: <SourceAccess stdRoot=argAt(1I64).bytes() />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            val sessionId = registerCompilerSession(session: move opened).unwrap()
+            val shared = findCompilerSession(registry: compilerSessionSnapshot(), sessionId: sessionId).unwrap()
+            val body = match shared->prepareFunction(function: 0U64) {
+                Result.Ok(value: val body) => { give body }
+                Result.Err(error: val diagnostic) => { panic diagnostic.message }
+            }
+            assert(exerciseCompilerCallback(sessionId, body.bodyId) == 0I32)
+            unregisterCompilerSession(sessionId: sessionId)
+            assert(rejectCompilerCallback(sessionId) == 0I32)
+        }
+    }
+    print("ok")
+}

@@ -1,0 +1,29 @@
+import ./CheckedProgram with { CompilerSession }
+import @Std/Core with { MutableRef }
+import ./CompilerSessions with { compilerSessionSnapshot, findCompilerSession }
+import ./Backend with { LlvmLoweringResult, transferLlvmModule }
+import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef }
+import ./Diag with { emitDiagnostic }
+import @Std/Io with { eprint }
+
+// Runs synchronously while the application is stopped. The host keeps ORC and
+// the registered session alive; the native bridge consumes the output pair.
+expose fn plew_compiler_prepare_body(sessionId~: U64, bodyId~: U64, module~: inout LLVMModuleRef, context~: inout LLVMContextRef) -> I32 {
+    val session: MutableRef[CompilerSession] = match findCompilerSession(registry: compilerSessionSnapshot(), sessionId: sessionId) {
+        Optional.Some(v: val session) => { give session }
+        Optional.None => {
+            eprint(text: "plew: unknown compiler session ID\n")
+            return 1I32
+        }
+    }
+    match session->lowerBody(bodyId: bodyId) {
+        LlvmLoweringResult.Success(module: val owned) => {
+            transferLlvmModule(module: move owned, targetModule: inout module, targetContext: inout context)
+            return 0I32
+        }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+            emitDiagnostic(diagnostic: diagnostic)
+            return 1I32
+        }
+    }
+}
