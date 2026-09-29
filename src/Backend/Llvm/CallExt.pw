@@ -21,16 +21,14 @@ pub impl LlvmCtx {
     // shared target extension policy; aggregates still require classification.
     inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Result[Bool, CompileDiagnostic] {
         if ref == 0U64 || ref >= c.arena.typeCount() { return <Result.Ok value=false /> }
-        val ty: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: ref))
+        val ty: LLVMTypeRef = (try self.cScalarType(c: inout c, ref: ref))
         val kind: U32 = LLVMGetTypeKind(ty)
         if kind == 12U32 { return <Result.Ok value=true /> }
         if kind == 8U32 {
             (try self.cIntegerExtension(c: inout c, ref: ref, physical: ty))
             return <Result.Ok value=true />
         }
-        val term: TypeRef = c.arena.typeAt(index: ref)
-        // F32 currently has a double Plew representation, not a C float ABI.
-        return <Result.Ok value=kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64") />
+        return <Result.Ok value=kind == 2U32 || kind == 3U32 />
     }
 
     inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Result[Bool, CompileDiagnostic] {
@@ -45,6 +43,7 @@ pub impl LlvmCtx {
         mut val index: U64 = 0U64
         while index < parameters.count() {
             if !(try self.resolvedCTypeSupported(c: inout c, ref: parameters[index])) { return <Result.Ok value=false /> }
+            (try self.cParameterType(c: inout c, ref: parameters[index], passing: c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)))
             index += 1U64
         }
         return <Result.Ok value=!declaration.hasRet || (try self.resolvedCTypeSupported(c: inout c, ref: selected.resultTypeRef)) />
@@ -65,11 +64,11 @@ pub impl LlvmCtx {
         mut val types: Array[LLVMTypeRef] = []
         mut val index: U64 = 0U64
         while index < parameters.count() {
-            types.append((try self.llvmTypeOfRef(c: inout c, ref: parameters[index])))
+            types.append((try self.cParameterType(c: inout c, ref: parameters[index], passing: c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index))))
             index += 1U64
         }
         mut val result: LLVMTypeRef = self.voidty
-        if declaration.hasRet { result = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
+        if declaration.hasRet { result = (try self.cScalarType(c: inout c, ref: selected.resultTypeRef)) }
         val signature: LLVMTypeRef = LLVMFunctionType(result, arrayCPtr(types), types.count(), 0I32)
         mut val symbol: Array[U8] = []
         index = 0U64

@@ -88,7 +88,16 @@ pub impl LlvmCtx {
         if LLVMGetNamedFunction(self.mod, arrayCPtr(name)) != 0U64 {
             return <Result.Err error=c.diagnosticAt(offset: declaration.nameStart, msg: "exposed name conflicts with an existing LLVM symbol") />
         }
-        val entry = LLVMAddFunction(self.mod, arrayCPtr(name), signature)
+        mut val parameters: Array[LLVMTypeRef] = []
+        index = 0U64
+        while index < prepared.parameterTypes.count() {
+            parameters.append((try self.cParameterType(c: inout c, ref: prepared.parameterTypes[index], passing: prepared.parameterPassings[index])))
+            index += 1U64
+        }
+        mut val returnType = self.voidty
+        if declaration.hasRet { returnType = (try self.cScalarType(c: inout c, ref: prepared.resultType)) }
+        val externalSignature = LLVMFunctionType(returnType, arrayCPtr(parameters), parameters.count(), 0I32)
+        val entry = LLVMAddFunction(self.mod, arrayCPtr(name), externalSignature)
         val block = LLVMAppendBasicBlockInContext(self.ctx, entry, anon())
         LLVMPositionBuilderAtEnd(self.b, block)
         mut val arguments: Array[LLVMValueRef] = []
@@ -96,13 +105,14 @@ pub impl LlvmCtx {
         while index < prepared.parameterTypes.count() {
             val argument = LLVMGetParam(entry, index)
             try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: LLVMTypeOf(argument), callSite: false)
-            arguments.append(argument)
+            arguments.append((try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument)))
             index += 1U64
         }
         val result = (try self.callValueFunction(signature: signature, function: target, arguments: arguments))
         if declaration.hasRet {
-            try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: LLVMTypeOf(result), callSite: false)
-            LLVMBuildRet(self.b, result)
+            val externalResult = (try self.scalarToC(c: inout c, ref: prepared.resultType, value: result))
+            try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: LLVMTypeOf(externalResult), callSite: false)
+            LLVMBuildRet(self.b, externalResult)
         }
         else { LLVMBuildRetVoid(self.b) }
         return <Result.Ok value=() />

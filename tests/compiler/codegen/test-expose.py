@@ -19,7 +19,7 @@ def run(*args):
 
 fixture = root / 'tests/compiler/codegen/Expose.pw'
 raw = run(compiler, '--require-mid', fixture).stdout
-for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean']:
+for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean', 'exposedSingle']:
     assert re.search(rb'^define (?!internal)[^\n]*@' + name.encode() + rb'\(', raw, re.M), name
 # Use the selected target's C compiler as an ABI reference: successful low-bit
 # roundtrips alone do not prove the upper-register extension contract.

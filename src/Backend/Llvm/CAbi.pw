@@ -1,5 +1,46 @@
 // Target C ABI rules shared by imported calls and exposed definitions.
 pub impl LlvmCtx {
+    inout fn cScalarType(c: inout Comp, ref: U64) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
+        if contract.underlying != 0U64 { return self.cScalarType(c: inout c, ref: contract.underlying) }
+        val logical = (try self.llvmTypeOfRef(c: inout c, ref: ref))
+        val type = c.arena.typeAt(index: contract.typeRef)
+        if LLVMGetTypeKind(logical) == 3U32 && rangeEquals(bytes: c.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "F32") {
+            return <Result.Ok value=LLVMFloatTypeInContext(self.ctx) />
+        }
+        return <Result.Ok value=logical />
+    }
+
+    inout fn cParameterType(c: inout Comp, ref: U64, passing: CallArgumentPassing) -> Result[LLVMTypeRef, CompileDiagnostic] {
+        val native = (try self.cScalarType(c: inout c, ref: ref))
+        match passing {
+            CallArgumentPassing.Inout => {
+                val logical = (try self.llvmTypeOfRef(c: inout c, ref: ref))
+                if plew_pointer_equal(native, logical) == 0I32 {
+                    return <Result.Err error=c.diagnosticAt(offset: c.arena.typeAt(index: ref).nameStart, msg: "C inout conversion between different memory representations is not implemented") />
+                }
+                return <Result.Ok value=self.ptrty />
+            }
+            _ => { return <Result.Ok value=native /> }
+        }
+    }
+
+    inout fn scalarToC(c: inout Comp, ref: U64, value: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if LLVMGetTypeKind(LLVMTypeOf(value)) == 3U32 {
+            val type = (try self.cScalarType(c: inout c, ref: ref))
+            if LLVMGetTypeKind(type) == 2U32 { return <Result.Ok value=LLVMBuildFPTrunc(self.b, value, type, anon()) /> }
+        }
+        return <Result.Ok value=value />
+    }
+
+    inout fn scalarFromC(c: inout Comp, ref: U64, value: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if LLVMGetTypeKind(LLVMTypeOf(value)) == 2U32 {
+            val type = (try self.llvmTypeOfRef(c: inout c, ref: ref))
+            if LLVMGetTypeKind(type) == 3U32 { return <Result.Ok value=LLVMBuildFPExt(self.b, value, type, anon()) /> }
+        }
+        return <Result.Ok value=value />
+    }
+
     inout fn cNarrowIntegerPolicy() -> LlvmCIntegerPolicy {
         match self.cIntegerPolicy { Optional.Some(v: val policy) => { return policy } _ => {} }
         val triple = stringFromCString(LLVMGetTarget(self.mod)).bytes()

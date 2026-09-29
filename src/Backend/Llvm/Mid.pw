@@ -2121,6 +2121,7 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            if callee.isExtern { value = (try self.scalarToC(c: inout c, ref: parameterRef, value: value)) }
             values.append(value)
             argumentI = argumentI + 1U64
         }
@@ -2140,6 +2141,7 @@ pub impl LlvmCtx {
             }
             if callee.hasRet { try self.attachCIntegerExtension(c: inout c, function: result, index: 0U64, ref: selected.resultTypeRef, physical: LLVMTypeOf(result), callSite: true) }
         }
+        if callee.isExtern && callee.hasRet { result = (try self.scalarFromC(c: inout c, ref: selected.resultTypeRef, value: result)) }
         if callee.hasRet || callee.isAsync {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
             llvmStore(self.b, self.midProjectCallResult(selected: selected, value: result), (try self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true)))

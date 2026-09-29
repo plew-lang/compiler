@@ -4,6 +4,7 @@ extern(c) {
     fn exerciseExposed() -> I32
     fn cSignedByte(value~: I8) -> I8
     fn cUnsignedShort(value~: U16) -> U16
+    fn cSingle(value~: F32) -> F32
     fn cBoolean(value~: Bool) -> Bool
 }
 
@@ -28,6 +29,7 @@ expose fn exposedWrite(value~: inout I64) {
 
 expose fn exposedSignedByte(value~: I8) -> I8 { return cSignedByte(value) }
 expose fn exposedUnsignedShort(value~: U16) -> U16 { return cUnsignedShort(value) }
+expose fn exposedSingle(value~: F32) -> F32 { return cSingle(value) }
 expose fn exposedBoolean(value~: Bool) -> Bool { return cBoolean(value) }
 
 fn main() {

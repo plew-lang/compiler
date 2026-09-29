@@ -495,6 +495,7 @@ extern(c) {
     fn LLVMInt16TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMFloatTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMDoubleTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
     fn LLVMConstRealOfStringAndSize(ty~: LLVMTypeRef, text~: CPtr[U8], len~: U64) -> LLVMValueRef
     fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
@@ -594,6 +595,8 @@ extern(c) {
     fn LLVMBuildAShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildICmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSelect(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenV~: LLVMValueRef, elseV~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildSIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
     fn LLVMBuildUIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
