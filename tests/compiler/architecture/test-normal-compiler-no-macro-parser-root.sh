@@ -19,7 +19,7 @@ done
 # Imports are only the surface symptom.  Final callable construction used to
 # seed every non-generic function in every loaded module, which made an unused
 # macro parser executable despite no normal compiler call reaching it.  The
-# executable root set is globals plus main (or the synthesized gen harness);
+# executable root set is globals, main and explicit external entries (or the gen harness);
 # calls then expand it to a closed body-instance graph.
 finalizer='src/Codegen/Mono/Call.pw'
 if rg -q 'if f\.typeParams\.count\(\) == 0U64 && !\(self\.methodRecvIsTrait\(f: f\)\)' "$finalizer"; then
@@ -31,9 +31,9 @@ if ! rg -q 'mut val isEntry: Bool = self\.nameIsMain\(f: f\)' "$finalizer"; then
     exit 1
 fi
 # Async now uses the same reachable body queue as synchronous functions.
-# Root only the selected entry; generation excludes the application main.
-if ! rg -Fq 'if isEntry {' "$finalizer" || rg -q 'if isEntry \|\|' "$finalizer"; then
-    echo "final callable construction must root only the selected entry" >&2
+# Root the selected entry and explicit exposes; generation excludes application roots.
+if ! rg -Fq 'if isEntry || (f.isExposed && !self.genMode) {' "$finalizer"; then
+    echo "final callable construction must root only the selected entry and explicit exposes" >&2
     exit 1
 fi
 if ! rg -Fq 'if self.genMode && isEntry && fi != self.genMainIdx {' "$finalizer"; then
