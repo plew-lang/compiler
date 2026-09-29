@@ -9,7 +9,10 @@ import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--requested', action='store_true', help='split each executable body into its own module')
+parser.add_argument('--synthetic', action='store_true', help='exercise closure environment drop and existential witness roots')
 options = parser.parse_args()
+if options.synthetic:
+    options.requested = True
 root = Path(__file__).resolve().parents[3]
 compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
 config = Path(os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config'))
@@ -17,7 +20,7 @@ bindir = Path(subprocess.check_output([str(config), '--bindir'], text=True).stri
 libdir = config.parent.parent / 'lib'
 if not (libdir / 'libLLVM.dylib').exists():
     libdir = Path(subprocess.check_output([str(config), '--libdir'], text=True).strip())
-evidence = root / 'tmp/lazy-build/global-modules'
+evidence = root / ('tmp/lazy-build/synthetic-modules' if options.synthetic else 'tmp/lazy-build/global-modules')
 evidence.mkdir(parents=True, exist_ok=True)
 
 
@@ -56,21 +59,28 @@ for name in ([] if options.requested else ['global_var', 'global_generic_init', 
 if options.requested:
     source = evidence / 'Requested.pw'
     source.write_text('extern(c) { fn putchar(character~: I32) -> I32 }\nval initial: I32 = 65I32\nstruct Letter { val code: I32 }\nimpl Letter { fn get() -> I32 { return self.code } }\nfn read() -> I32 { return initial }\nfn forward() -> I32 { return read() }\nfn main() { val letter = <Letter code=forward() /> val ignored = putchar(letter.get()) }\n')
+    if options.synthetic:
+        source.write_text('extern(c) { fn putchar(character~: I32) -> I32 }\ntrait Code { fn get() -> I32 }\nstruct Letter { val code: I32 }\nimpl Letter as Code { fn get() -> I32 { return self.code } }\nfn captured(code: I32) -> fn() -> I32 { return fn() -> I32 { return code } }\nfn main() { val closure = captured(code: 65I32) val first = putchar(closure()) val letter: any Code = <Letter code=66I32 /> val second = putchar(letter.get()) }\n')
     capture([evidence / 'harness', source, 'list', str(root / 'std') + '/'], 'requested.ids')
     ids = (evidence / 'requested.ids').read_text().split()
-    assert len(ids) == 5, 'fixture covers initialization, main, two functions and one method'
+    if not options.synthetic:
+        assert len(ids) == 5, 'fixture covers initialization, main, two functions and one method'
     modules = []
     for mode, body in [('storage', '')] + [('requested', body) for body in ids]:
         name = mode + body
         capture([evidence / 'harness', source, mode, str(root / 'std') + '/', body], name + '.ll')
         module = evidence / (name + '.ll')
         modules.append(module)
-        definitions = re.findall(r'^define[^\n]*@([^ (]+)', module.read_text(), re.M)
+        definitions = re.findall(r'^define(?! internal)[^\n]*@([^ (]+)', module.read_text(), re.M)
         assert len(definitions) == (1 if mode == 'requested' else 0), (body, definitions)
         results.append({'body': body, 'definitions': definitions})
     capture([bindir / 'clang', '-O0', *modules, evidence / 'runtime.c', '-o', evidence / 'requested-app'], 'requested.link')
     capture([evidence / 'requested-app'], 'requested.stdout')
-    assert (evidence / 'requested.stdout').read_bytes() == b'A'
+    assert (evidence / 'requested.stdout').read_bytes() == (b'AB' if options.synthetic else b'A')
     assert not (evidence / 'requested.stdout.log').read_bytes()
-    print('PASS five separately emitted bodies share globals and call each other', flush=True)
+    if options.synthetic:
+        symbols = [symbol for item in results for symbol in item['definitions']]
+        for prefix in ['__closure', 'pwclodrop', 'pfvt']:
+            assert any(symbol.startswith(prefix) for symbol in symbols), prefix
+    print('PASS separately emitted bodies: ' + str(len(ids)), flush=True)
 (evidence / ('requested-results.json' if options.requested else 'results.json')).write_text(json.dumps(results, indent=2) + '\n')

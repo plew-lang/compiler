@@ -13,7 +13,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, cFree, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, tracePhase, tracePhaseCount, tracePhaseProgress }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
@@ -846,7 +846,7 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
     }
-    // async fns: build each frame struct + resume fn, and a non-main entry symbol
+    // async fns: declare the resume fn and a non-main entry symbol
     // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
     // call). Done before bodies emit so main's resume can call them.
     match st.declareAsyncFns(c: inout c) {
@@ -856,6 +856,10 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram, globalStorage
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     match st.collectClosures(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+    }
+    match st.declareRequestedSynthetic(c: inout c) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
     }

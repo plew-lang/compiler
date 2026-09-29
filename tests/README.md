@@ -31,7 +31,9 @@ assertion's responsibility, not prefixes such as `mid_` or the tool used.
 It links separate global-definition and executable modules, checks shared
 storage and initialization behavior, and saves evidence under
 `tmp/lazy-build/global-modules/`. Its `--requested` mode checks one executable body per module, cross-module calls,
-and a shared global definition. It does not prove ORC execution or sanitizer safety.
+and a shared global definition. `--synthetic` exercises standalone closure-body,
+environment-drop and existential-witness requests. Neither mode proves ORC
+execution or sanitizer safety.
 
 `compiler/codegen/test-mid-return-transfer.py` is a manual diagnostic, not a
 standard gate. Its `--asan` option does not instrument Plew LLVM load/store

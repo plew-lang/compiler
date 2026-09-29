@@ -36,6 +36,37 @@ pub impl LlvmCtx {
         return self.valueAbis.count()
     }
 
+    // A synthetic body can be the demand root even when the expression that
+    // normally registers its thunk belongs to a different LLVM module.
+    inout fn declareRequestedSynthetic(c: inout Comp) -> Result[(), CompileDiagnostic] {
+        val bodyId = match self.emission {
+            LlvmBodyEmission.Whole => { return <Result.Ok value=() /> }
+            LlvmBodyEmission.Requested(bodyId: val requested) => { give requested }
+        }
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() {
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "LLVM backend: invalid requested body identity") />
+        }
+        match c.arena.bodyOrigin(bodyId: bodyId) {
+            BodyOrigin.Callable => {}
+            BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val closureBodyId) => {
+                val slot = self.closureSlot(bodyId: closureBodyId)
+                if slot >= self.closures.count() {
+                    return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "LLVM backend: requested environment drop has no closure signature") />
+                }
+                val ignored = (try self.declareClosureEnvironmentDrop(c: inout c, closureSlot: slot))
+            }
+            BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => {
+                val sourceRef = c.arena.finalExistentials[resolution].sourceRef
+                val structIndex = (try self.structIdxOfRef(c: inout c, ref: sourceRef))
+                if structIndex >= c.arena.structCount() {
+                    return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "LLVM backend: requested witness has no concrete struct layout") />
+                }
+                val ignored = (try self.buildAnyThunk(c: inout c, resolutionIndex: resolution, sidx: structIndex, idx: member))
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
     fn wholeProgram() -> Bool {
         match self.emission {
             LlvmBodyEmission.Whole => { return true }

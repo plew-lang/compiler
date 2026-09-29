@@ -27,6 +27,11 @@ pub impl LlvmCtx {
     inout fn buildAnyThunk(c: inout Comp, resolutionIndex: U64, sidx: U64, idx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val member = c.arena.finalExistentials[resolutionIndex].members[idx]
         if member.bodyId == 0U64 { return <Result.Ok value=LLVMConstNull(self.ptrty) /> }
+        for witness in self.existentialWitnesses {
+            if witness.resolution == resolutionIndex && witness.member == idx {
+                return <Result.Ok value=witness.function />
+            }
+        }
         // The erased ABI is a frontend fact. Only physical types are selected here.
         mut val ptys: Array[LLVMTypeRef] = [self.ptrty]
         mut val pi = 0U64
