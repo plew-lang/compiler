@@ -94,11 +94,16 @@ pub impl LlvmCtx {
         mut val arguments: Array[LLVMValueRef] = []
         index = 0U64
         while index < prepared.parameterTypes.count() {
-            arguments.append(LLVMGetParam(entry, index))
+            val argument = LLVMGetParam(entry, index)
+            try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: LLVMTypeOf(argument), callSite: false)
+            arguments.append(argument)
             index += 1U64
         }
         val result = (try self.callValueFunction(signature: signature, function: target, arguments: arguments))
-        if declaration.hasRet { LLVMBuildRet(self.b, result) }
+        if declaration.hasRet {
+            try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: LLVMTypeOf(result), callSite: false)
+            LLVMBuildRet(self.b, result)
+        }
         else { LLVMBuildRetVoid(self.b) }
         return <Result.Ok value=() />
     }

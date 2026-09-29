@@ -13,6 +13,7 @@ part ./Llvm/Arith
 part ./Llvm/Arrays
 part ./Llvm/ArrayOps
 part ./Llvm/CallBasic
+part ./Llvm/CAbi
 part ./Llvm/CallExt
 part ./Llvm/CallGeneric
 part ./Llvm/AssocFns

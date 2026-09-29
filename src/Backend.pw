@@ -180,6 +180,21 @@ struct LlvmAsyncFrame {
 
 pub enum LlvmBodyEmission { Whole Requested(bodyId: U64) }
 
+enum LlvmCIntegerPolicy { Extend Unextended BoolOnly Unsupported }
+
+fn llvmTargetComponent(bytes: Array[U8], component: String) -> Bool {
+    mut val start = 0U64
+    mut val index = 0U64
+    while index <= bytes.count() {
+        if index == bytes.count() || bytes[index] == 45U8 {
+            if rangeEquals(bytes: bytes, start: start, len: index - start, kw: component) { return true }
+            start = index + 1U64
+        }
+        index += 1U64
+    }
+    return false
+}
+
 struct LlvmCtx {
     val emission: LlvmBodyEmission = <LlvmBodyEmission.Whole />
     mut val requestedBodyEmitted: Bool = false
@@ -188,6 +203,7 @@ struct LlvmCtx {
     pub mut val ambientPermit: Optional[LLVMValueRef] = <Optional.None />
     pub mut val ambientScopes: Dictionary[U64, LlvmAmbientScope] = [:]
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
+    mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
     pub mut val valueAbis: Array[LlvmValueAbi] = []
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
@@ -518,6 +534,7 @@ extern(c) {
 
     // ASan gate (`--asan`): target triple + `sanitize_address` on every defined fn.
     type LLVMAttributeRef
+    fn LLVMGetTarget(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMSetTarget(m~: LLVMModuleRef, triple~: CPtr[U8])
     fn LLVMGetDefaultTargetTriple() -> CPtr[U8]
     fn LLVMGetEnumAttributeKindForName(name~: CPtr[U8], len~: U64) -> U32

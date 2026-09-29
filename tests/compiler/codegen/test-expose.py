@@ -19,8 +19,19 @@ def run(*args):
 
 fixture = root / 'tests/compiler/codegen/Expose.pw'
 raw = run(compiler, '--require-mid', fixture).stdout
-for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite']:
+for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'exposedSignedByte', 'exposedUnsignedShort', 'exposedBoolean']:
     assert re.search(rb'^define (?!internal)[^\n]*@' + name.encode() + rb'\(', raw, re.M), name
+# Use the selected target's C compiler as an ABI reference: successful low-bit
+# roundtrips alone do not prove the upper-register extension contract.
+c_reference = run(llvm_link.selected_clang(config), '-S', '-emit-llvm', '-O0', fixture.with_suffix('.c'), '-o', '-').stdout
+for imported, exposed in [('cSignedByte', 'exposedSignedByte'), ('cUnsignedShort', 'exposedUnsignedShort'), ('cBoolean', 'exposedBoolean')]:
+    reference = re.search(rb'^define[^\n]*@' + imported.encode() + rb'\([^\n]*', c_reference, re.M)
+    assert reference, imported
+    expected = re.findall(rb'\b(?:signext|zeroext)\b', reference.group())
+    for marker, name in [(b'define', exposed), (b'declare', imported), (b'call', imported)]:
+        signature = re.search(rb'[^\n]*\b' + marker + rb'[^\n]*@' + name.encode() + rb'\([^\n]*', raw)
+        assert signature, (marker, name)
+        assert re.findall(rb'\b(?:signext|zeroext)\b', signature.group()) == expected, signature.group()
 with tempfile.TemporaryDirectory(prefix='plew-expose-') as folder:
     directory = Path(folder)
     source = directory / 'source.ll'

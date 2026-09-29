@@ -2131,6 +2131,15 @@ pub impl LlvmCtx {
         } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
         else if useMethod { result = (try self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values)) }
         else { result = (try self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values)) }
+        if callee.isExtern {
+            argumentI = 0U64
+            while argumentI < values.count() {
+                val parameterRef = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+                try self.attachCIntegerExtension(c: inout c, function: result, index: argumentI + 1U64, ref: parameterRef, physical: LLVMTypeOf(values[argumentI]), callSite: true)
+                argumentI += 1U64
+            }
+            if callee.hasRet { try self.attachCIntegerExtension(c: inout c, function: result, index: 0U64, ref: selected.resultTypeRef, physical: LLVMTypeOf(result), callSite: true) }
+        }
         if callee.hasRet || callee.isAsync {
             val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
             llvmStore(self.b, self.midProjectCallResult(selected: selected, value: result), (try self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true)))

@@ -2,6 +2,9 @@ import @Std/Core with { assert }
 
 extern(c) {
     fn exerciseExposed() -> I32
+    fn cSignedByte(value~: I8) -> I8
+    fn cUnsignedShort(value~: U16) -> U16
+    fn cBoolean(value~: Bool) -> Bool
 }
 
 fn add(value: I64, amount: I64) -> I64 {
@@ -22,6 +25,10 @@ expose fn exposedEmpty() {}
 expose fn exposedWrite(value~: inout I64) {
     value = 42I64
 }
+
+expose fn exposedSignedByte(value~: I8) -> I8 { return cSignedByte(value) }
+expose fn exposedUnsignedShort(value~: U16) -> U16 { return cUnsignedShort(value) }
+expose fn exposedBoolean(value~: Bool) -> Bool { return cBoolean(value) }
 
 fn main() {
     assert(exposedAdd(12I64, 30I64) == 42I64)

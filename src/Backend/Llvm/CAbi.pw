@@ -1,0 +1,51 @@
+// Target C ABI rules shared by imported calls and exposed definitions.
+pub impl LlvmCtx {
+    inout fn cNarrowIntegerPolicy() -> LlvmCIntegerPolicy {
+        match self.cIntegerPolicy { Optional.Some(v: val policy) => { return policy } _ => {} }
+        val triple = stringFromCString(LLVMGetTarget(self.mod)).bytes()
+        val arm = llvmTargetComponent(bytes: triple, component: "arm64") || llvmTargetComponent(bytes: triple, component: "aarch64")
+        val x86 = llvmTargetComponent(bytes: triple, component: "x86_64")
+        mut val policy = <LlvmCIntegerPolicy.Unsupported />
+        if (arm || x86) && llvmTargetComponent(bytes: triple, component: "apple") {
+            policy = <LlvmCIntegerPolicy.Extend />
+        } else if x86 && (llvmTargetComponent(bytes: triple, component: "windows") || llvmTargetComponent(bytes: triple, component: "win32")) {
+            policy = <LlvmCIntegerPolicy.BoolOnly />
+        } else if llvmTargetComponent(bytes: triple, component: "linux") {
+            if x86 { policy = <LlvmCIntegerPolicy.Extend /> }
+            else if arm { policy = <LlvmCIntegerPolicy.Unextended /> }
+        }
+        self.cIntegerPolicy = <Optional.Some v=policy />
+        return policy
+    }
+
+    inout fn cIntegerExtension(c: inout Comp, ref: U64, physical: LLVMTypeRef) -> Result[U32, CompileDiagnostic] {
+        if LLVMGetTypeKind(physical) != 8U32 || LLVMGetIntTypeWidth(physical) >= 32U32 { return <Result.Ok value=0U32 /> }
+        match self.cNarrowIntegerPolicy() {
+            LlvmCIntegerPolicy.Unextended => { return <Result.Ok value=0U32 /> }
+            LlvmCIntegerPolicy.BoolOnly => { if LLVMGetIntTypeWidth(physical) != 1U32 { return <Result.Ok value=0U32 /> } }
+            LlvmCIntegerPolicy.Unsupported => { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "C narrow integer ABI is not supported for this target") /> }
+            LlvmCIntegerPolicy.Extend => {}
+        }
+        val contract = c.arena.finalDestructions[(try c.checkedFinalDestruction(typeRef: ref)) - 1U64]
+        if contract.underlying != 0U64 { return self.cIntegerExtension(c: inout c, ref: contract.underlying, physical: physical) }
+        val type = c.arena.typeAt(index: contract.typeRef)
+        val unsigned = LLVMGetIntTypeWidth(physical) == 1U32 || isUnsignedName(c: inout c, start: type.nameStart, len: type.nameLen)
+        mut val name = "signext"
+        if unsigned { name = "zeroext" }
+        val attribute = <CString.copied text=name />
+        return <Result.Ok value=LLVMGetEnumAttributeKindForName(attribute.ptr, 7U64) />
+    }
+
+    inout fn attachCIntegerExtension(c: inout Comp, function: LLVMValueRef, index: U64, ref: U64, physical: LLVMTypeRef, callSite: Bool) -> Result[(), CompileDiagnostic] {
+        val kind = (try self.cIntegerExtension(c: inout c, ref: ref, physical: physical))
+        if kind != 0U32 {
+            val attribute = LLVMCreateEnumAttribute(self.ctx, kind, 0U64)
+            if callSite { LLVMAddCallSiteAttribute(function, truncU32(n: index), attribute) }
+            else {
+                val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
+                LLVMAddAttributeAtIndex(handle, truncU32(n: index), attribute)
+            }
+        }
+        return <Result.Ok value=() />
+    }
+}

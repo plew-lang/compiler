@@ -17,15 +17,17 @@ pub impl LlvmCtx {
     }
 
     // C scalar/pointer ABI slice. Consume grounded types, never recover a
-    // signature from the spelling at a call site. Narrow integers require
-    // target ABI extension attributes; aggregates require C classification.
-    // Neither may silently inherit the ordinary Plew calling convention.
+    // signature from the spelling at a call site. Narrow integers use the
+    // shared target extension policy; aggregates still require classification.
     inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Result[Bool, CompileDiagnostic] {
         if ref == 0U64 || ref >= c.arena.typeCount() { return <Result.Ok value=false /> }
         val ty: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: ref))
         val kind: U32 = LLVMGetTypeKind(ty)
         if kind == 12U32 { return <Result.Ok value=true /> }
-        if kind == 8U32 { return <Result.Ok value=LLVMGetIntTypeWidth(ty) >= 32U32 /> }
+        if kind == 8U32 {
+            (try self.cIntegerExtension(c: inout c, ref: ref, physical: ty))
+            return <Result.Ok value=true />
+        }
         val term: TypeRef = c.arena.typeAt(index: ref)
         // F32 currently has a double Plew representation, not a C float ABI.
         return <Result.Ok value=kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64") />
@@ -77,6 +79,12 @@ pub impl LlvmCtx {
         }
         symbol.append(0U8)
         val function: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(symbol), signature)
+        index = 0U64
+        while index < parameters.count() {
+            try self.attachCIntegerExtension(c: inout c, function: function, index: index + 1U64, ref: parameters[index], physical: types[index], callSite: false)
+            index += 1U64
+        }
+        if declaration.hasRet { try self.attachCIntegerExtension(c: inout c, function: function, index: 0U64, ref: selected.resultTypeRef, physical: result, callSite: false) }
         self.declId.append(key)
         self.declFn.append(function)
         self.declTy.append(signature)
