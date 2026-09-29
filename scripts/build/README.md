@@ -89,7 +89,7 @@ The executable can also be installed directly.
 ## Commands and boundaries
 
 - `plew build file.pw [-o output]`, or `plew file.pw`, builds a native executable.
-- `plew run file.pw [args...]` retains the current AOT compile-and-run behavior.
+- `plew run file.pw [args...]` executes through the shared compiler session and LLVM ORC lazy JIT. Bodies are checked and generated on demand; a delayed diagnostic terminates the process with a nonzero status. AOT builds use the same runtime.
   The separately planned lazy run/check/Hot Restart implementation is not supplied
   by this packaging work.
 - `plew gen file.pw...` and `plew resolve [directory|file]` share the existing

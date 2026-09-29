@@ -23,7 +23,7 @@ char* plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap);
 unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }
 void plew_cFree(unsigned char* p){ free(p); }
 char* plew_stringFromCString(unsigned char* p){ if(!p) return plew_str_empty(); size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }
-void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }
+void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(elemSize*cap ? (size_t)(elemSize*cap) : 1)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }
 long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-3]:0; }
 long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }
 void plew_rawbuf_set_count(void* p, long long n){ if(p) ((long long*)p)[-2]=n; }
@@ -109,6 +109,7 @@ uint64_t plew_u64Div(uint64_t a, uint64_t b){ if(b==0) plew_panic_raw("division 
 uint64_t plew_u64Rem(uint64_t a, uint64_t b){ if(b==0) plew_panic_raw("remainder by zero",17); return a%b; }
 static int plew_argc = 0; static char** plew_argv = 0;
 void plew_set_args(int argc, char** argv){ plew_argc = argc; plew_argv = argv; }
+char** plew_exchange_args(int argc, char** argv, int* previous_count){ char** previous=plew_argv; *previous_count=plew_argc; plew_set_args(argc,argv); return previous; }
 long long plew_argCount(void){ return (long long)plew_argc; }
 char* plew_argAt(long long i){ if(i<0||i>=plew_argc) return plew_str_empty(); size_t n=strlen(plew_argv[i]); char* b=plew_str_buf((long long)n); memcpy(b,plew_argv[i],n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }
 void plew_writeByte(unsigned char b){ putchar((int)b); }
