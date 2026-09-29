@@ -328,11 +328,10 @@ struct LlvmCtx {
     // releasing the pointee value directly, and a capturing closure's env retains it.
     pub mut val locCellHome: Array[Bool]
     // module-level variables (spec/15), parallel arrays indexed by `Comp.arena.globals`
-    // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
-    // the binding's recovered local metadata (so `seedGlobals` can re-register each
-    // global as a local at every body entry, routing reads/writes/type-recovery
-    // through the normal local machinery). The init values are stored once, in
-    // declaration order, by `plew_init_globals`.
+    // position. `declareGlobalStorage` registers each address and frozen type before
+    // any executable body is lowered. Canonical Global places use this map; storage
+    // registration neither evaluates initializers nor emits their function body.
+    // `plew_init_globals` stores initial values once, in declaration order.
     pub mut val gvalRef: Array[LLVMValueRef] = []
     pub mut val gvalLty: Array[LLVMTypeRef] = []
     pub mut val gvalTref: Array[U64] = []
@@ -842,10 +841,20 @@ pub fn lowerPreparedLlvm(c: inout Comp, prepared: PreparedProgram) -> LlvmLoweri
     }
     tracePhase(c: inout c, label: "backend:declarations:done")
 
-    // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
-    // every global's initializer once) and record each global's metadata, BEFORE any
-    // function body so `seedGlobals` can re-bind them at every body entry. Done after
-    // pass-1 declarations so an initializer may call a user function.
+    // Global addresses and types are declarations, independent of executable
+    // initializer code. Every body sees the same complete storage map.
+    if c.arena.globals.count() != 0U64 {
+        val bodyId = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
+        match st.declareGlobalStorage(c: inout c, bodyId: bodyId) {
+            Result.Ok(value: val ready) => {
+                if !ready {
+                    return <LlvmLoweringResult.Failure diagnostic=c.diagnosticAt(offset: c.arena.globals[0U64].nameStart, msg: "internal error: global initializer requires verified Mid lowering") />
+                }
+            }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+    }
+    // AOT emits the initializer after declarations, before other executable bodies.
     match st.genLlvmInitGlobals(c: inout c) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }

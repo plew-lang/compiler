@@ -246,6 +246,9 @@ assert 'finalStorageIndex(' in storage and '.targetTypeRef' in storage
 assert 'arena.stmts' not in storage and 'semanticExprTerm(' not in storage
 initializer = entry.split('inout fn genLlvmInitGlobals(', 1)[1].split('inout fn genLlvmMain(', 1)[0]
 assert 'LLVMBuildRetVoid(' not in initializer, 'Mid already emits the initializer terminator'
+assert 'declareGlobalStorage(' not in initializer, 'initializer emission must not own storage registration'
+backend = Path('src/Backend.pw').read_text().split('pub fn lowerPreparedLlvm(', 1)[1]
+assert backend.index('st.declareGlobalStorage(') < backend.index('st.genLlvmInitGlobals(')
 PYGLOBAL
 
 # Enum payload layout is already concrete; emission cannot reopen binders.

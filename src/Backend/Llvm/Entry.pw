@@ -64,7 +64,7 @@ pub impl LlvmCtx {
         self.locCellHome = []
         val globalOwner: U64 = 18446744073709551615U64
         val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
-        val storageReady: Bool = (try self.declareGlobalStorage(c: inout c, bodyId: bodyId))
+        val storageReady: Bool = self.gvalRef.count() == c.arena.globals.count()
         mut val midReady: Bool = false
         if !storageReady {
             self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: globalOwner, reason: <MidLlvmPreflight.Terminator />)
