@@ -4,6 +4,7 @@
 // `Ir <- Frontend <- Mid <- Backend`.
 
 import ./Mid/Ir with { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidAggregateElementNode, MidSwitchCase, MidOperandNode, MidRvalueNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidCanonicalArena, MidCanonicalBody, MidClosureBody, canonicalMidBodyIsWellFormed, MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
+import ./Mid/DataflowState with { MidOwnershipStates, MidAccessibilityStates }
 import ./Mid/Drop with { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
 import ./Mid/Verify with { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }
@@ -11,6 +12,7 @@ import ./Mid/Instantiate with { MidInstantiateError, MidCanonicalInstantiation, 
 import ./Mid/Access with { MidAccessError, MidCanonicalAccessElaboration, elaborateCanonicalMidAccesses }
 
 pub import ./Mid/Ir with { MidEnumDestination, MidEnumDestinationNode, MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidAggregateElementNode, MidSwitchCase, MidOperandNode, MidRvalueNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidBlockNode, MidCanonicalArena, MidCanonicalBody, MidClosureBody, canonicalMidBodyIsWellFormed, MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
+pub import ./Mid/DataflowState with { MidOwnershipStates, MidAccessibilityStates }
 pub import ./Mid/Drop with { analyzeCanonicalMidOwnership, analyzeCanonicalMidAccessibility, elaborateCanonicalMidDrops }
 pub import ./Mid/Verify with { MidVerifyError, MidVerification, verifyCanonicalMidBody, verifyExecutableCanonicalMidBody }
 pub import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody, buildMidBodyForInstance, buildParametricMidClosureBody, ensureParametricMidClosureBody, buildParametricMidGlobalInit }

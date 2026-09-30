@@ -1,3 +1,4 @@
+import ./DataflowState with { MidOwnershipStates }
 import ./AccessScopes with { canonicalMidAccessScopesValid }
 // Structural and ownership verification for Mid IR. This consumes only Mid
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
@@ -155,7 +156,7 @@ fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
 
 // Caller-owned parameters/captures are guaranteed by the enclosing call.
 // Every other local read requires a live owner, including Copy and projections.
-fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: Array[MidOwnership], placeId: U64, block: U64) -> MidVerification {
+fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: MidOwnershipStates, placeId: U64, block: U64) -> MidVerification {
     if placeId == 0U64 || placeId > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val place = c.mid.places[placeId - 1U64]
     if place.rootTag == 2U64 {
@@ -182,7 +183,7 @@ fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: Array[MidOwnership
     return <MidVerification />
 }
 
-fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], operandId: U64, block: U64, stage: MidVerificationStage) -> MidVerification {
+fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: inout MidOwnershipStates, operandId: U64, block: U64, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     if operandId == 0U64 || operandId > c.mid.operands.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
@@ -282,13 +283,13 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
     if !canonicalMidPlaceIsWhole(arena: c.mid, place: place) { return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local /> }
     if place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     match states[place.local] {
-        MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+        MidOwnership.Owned => { states.set(index: place.local, state: <MidOwnership.Consumed />) }
         _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
     }
     return <MidVerification />
 }
 
-fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout Array[MidOwnership], rvalueId: U64, block: U64, isGrounded: Bool, stage: MidVerificationStage) -> MidVerification {
+fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: inout MidOwnershipStates, rvalueId: U64, block: U64, isGrounded: Bool, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
@@ -502,7 +503,7 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
 // or range; the production path can therefore discard MidBody after freeze.
 // TypeRef allocation IDs are not type identity: use the frontend semantic
 // equality query for transferred values, retaining nominal/view distinctions.
-fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout Array[MidOwnership], block: U64, stage: MidVerificationStage) -> MidVerification {
+fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: MidStatementNode, states: inout MidOwnershipStates, block: U64, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     val invalid = <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block />
     if statement.source == 0U64 || statement.source > c.mid.places.count() || statement.sourceTag > 1U64 || statement.enumDestinations.start > c.mid.enumDestinations.count() || statement.enumDestinations.len > c.mid.enumDestinations.count() - statement.enumDestinations.start { return invalid }
@@ -579,11 +580,11 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
         }
         index += 1U64
     }
-    states.set(i: source.local, value: <MidOwnership.Consumed />)
+    states.set(index: source.local, state: <MidOwnership.Consumed />)
     index = 0U64
     while index < statement.enumDestinations.len {
         val entry = c.mid.enumDestinations[statement.enumDestinations.start + index]
-        states.set(i: c.mid.places[entry.place - 1U64].local, value: <MidOwnership.Owned />)
+        states.set(index: c.mid.places[entry.place - 1U64].local, state: <MidOwnership.Owned />)
         index += 1U64
     }
     return <MidVerification />
@@ -815,7 +816,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
-    val incoming: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
+    val incoming: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
     val reachable = canonicalMidReachable(c: c, body: body)
 
     mut val hasAccessScopes = false
@@ -836,7 +837,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
             blockI += 1U64
             continue
         }
-        mut val states: Array[MidOwnership] = []
+        mut val states: MidOwnershipStates = <MidOwnershipStates.empty />
         if blockI < incoming.count() { states = incoming[blockI] }
         val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
         mut val statementI: U64 = 0U64
@@ -855,7 +856,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                     if destination.rootTag != 1U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     if destination.projections.len == 0U64 && destination.local < states.count() {
                         match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.LiveInitialization /> block=blockI local=destination.local /> } }
-                        if !c.mid.locals[body.locals.start + destination.local].isBorrowed { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                        if !c.mid.locals[body.locals.start + destination.local].isBorrowed { states.set(index: destination.local, state: <MidOwnership.Owned />) }
                     }
                 }
             }
@@ -868,7 +869,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                     return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local />
                 }
                 match states[destination.local] {
-                    MidOwnership.Consumed => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    MidOwnership.Consumed => { states.set(index: destination.local, state: <MidOwnership.Owned />) }
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 }
             }
@@ -890,17 +891,17 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                     if previous.tag != 3U64 || !canonicalMidSamePlace(c: c, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 }
                 match states[source.local] {
-                    MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
+                    MidOwnership.Owned => { states.set(index: source.local, state: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 }
                 if destination.rootTag == 2U64 { }
                 else if destination.projections.len == 0U64 {
                     // Before Drop elaboration, Overwrite owns the conditional
                     // release of the previous value as well as replacement.
-                    if stage.isDeclaration() { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    if stage.isDeclaration() { states.set(index: destination.local, state: <MidOwnership.Owned />) }
                     else {
                         match states[destination.local] {
-                            MidOwnership.Consumed => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                            MidOwnership.Consumed => { states.set(index: destination.local, state: <MidOwnership.Owned />) }
                             _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                         }
                     }
@@ -921,7 +922,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
                 if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 match states[source.local] {
-                    MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
+                    MidOwnership.Owned => { states.set(index: source.local, state: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 }
             }
@@ -950,7 +951,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 if place.rootTag == 2U64 { }
                 else if place.projections.len == 0U64 {
                     match states[place.local] {
-                        MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                        MidOwnership.Owned => { states.set(index: place.local, state: <MidOwnership.Consumed />) }
                         _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                     }
                 } else {
@@ -967,7 +968,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                     return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local />
                 }
                 match states[place.local] {
-                    MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                    MidOwnership.Owned => { states.set(index: place.local, state: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
             }
@@ -977,7 +978,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= states.count() || place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed || c.mid.locals[body.locals.start + place.local].isInout { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 if statement.flag >= body.locals.len || !c.mid.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
                 match states[place.local] {
-                    MidOwnership.MaybeOwned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                    MidOwnership.MaybeOwned => { states.set(index: place.local, state: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
             }
@@ -991,14 +992,14 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 // cleanup and flags; it does not decide whether this use lives.
                 if statement.tag == 12U64 {
                     if statement.bindingLocal >= states.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
-                    states.set(i: statement.bindingLocal, value: <MidOwnership.Consumed />)
+                    states.set(index: statement.bindingLocal, state: <MidOwnership.Consumed />)
                 } else {
                     if statement.scope >= body.scopes.len { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
                     val scope = c.mid.scopes[body.scopes.start + statement.scope]
                     if scope.firstLocal > states.count() || scope.localCount > states.count() - scope.firstLocal { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
                     mut val local = scope.firstLocal
                     while local < scope.firstLocal + scope.localCount {
-                        states.set(i: local, value: <MidOwnership.Consumed />)
+                        states.set(index: local, state: <MidOwnership.Consumed />)
                         local += 1U64
                     }
                 }
@@ -1043,7 +1044,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
                 if destination.projections.len == 0U64 && destination.local < states.count() {
                     match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.LiveInitialization /> block=blockI local=destination.local /> } }
-                    states.set(i: destination.local, value: <MidOwnership.Owned />)
+                    states.set(index: destination.local, state: <MidOwnership.Owned />)
                 }
             }
             if !canonicalMidTargetIsValid(body: body, target: term.target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
@@ -1059,7 +1060,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
             if destination.rootTag != 1U64 || destination.projections.len != 0U64 || destination.local >= states.count() || destination.local == owner.local { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
             match states[destination.local] { MidOwnership.Consumed => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> } }
             if executable && (!canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: owner.typeTerm) || !canonicalMidOwnershipContractIsReady(c: inout c, typeTerm: destination.typeTerm)) { return <MidVerification error=<MidVerifyError.MissingOwnershipContract /> block=blockI /> }
-            states.set(i: destination.local, value: <MidOwnership.Owned />)
+            states.set(index: destination.local, state: <MidOwnership.Owned />)
         }
         if term.tag == 6U64 || term.tag == 7U64 {
             val result: MidVerification = canonicalMidVerifyConsumeOperand(c: inout c, body: body, states: inout states, operandId: term.value, block: blockI, stage: stage)
