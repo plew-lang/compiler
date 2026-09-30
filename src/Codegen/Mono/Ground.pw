@@ -42,8 +42,11 @@ pub impl Comp {
             mut val ri: U64 = 0U64
             while ri < t.recordFieldTerms.len {
                 val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] { changed = true }
-                fields.append(next)
+                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] {
+                    if !changed { fields = self.arena.typeAt(index: ref).recordFieldTerms }
+                    fields[ri] = next
+                    changed = true
+                }
                 ri += 1U64
             }
             if changed { return self.rebuildRecordTypeTerm(t: self.arena.typeAt(index: ref), fieldTerms: fields) }
@@ -59,16 +62,21 @@ pub impl Comp {
             val receiver: U64 = if t.projectionReceiver != 0U64 { give t.projectionReceiver } else { give self.typeTermProjectionReceiver(t: self.arena.typeAt(index: ref)) }
             val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             mut val traitArgs: Array[U64] = []
-            mut val changed: Bool = groundedReceiver != receiver
+            mut val argumentsChanged: Bool = false
             mut val ai: U64 = 0U64
             while ai < t.assocTraitArgs.len {
                 val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai] { changed = true }
-                traitArgs.append(next)
+                if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai] {
+                    if !argumentsChanged { traitArgs = self.arena.typeAt(index: ref).assocTraitArgs }
+                    traitArgs[ai] = next
+                    argumentsChanged = true
+                }
                 ai += 1U64
             }
-            if !changed { return ref }
-            return self.rebuildProjectionTerm(t: self.arena.typeAt(index: ref), receiver: groundedReceiver, traitArgs: traitArgs)
+            if !argumentsChanged && groundedReceiver == receiver { return ref }
+            val original = self.arena.typeAt(index: ref)
+            if !argumentsChanged { traitArgs = original.assocTraitArgs }
+            return self.rebuildProjectionTerm(t: original, receiver: groundedReceiver, traitArgs: traitArgs)
         }
         // A binder replacement changes its head, never the source-set
         // attached to this occurrence. Preserve it recursively, including
@@ -116,22 +124,34 @@ pub impl Comp {
         }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
-        mut val changed: Bool = false
+        mut val argsChanged: Bool = false
+        mut val assocArgsChanged: Bool = false
         mut val i: U64 = 0U64
         while i < t.args.len {
             val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeArgumentPool[t.args.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != self.arena.typeArgumentPool[t.args.start + i] { changed = true }
-            args.append(next)
+            if next != self.arena.typeArgumentPool[t.args.start + i] {
+                if !argsChanged { args = self.arena.typeAt(index: ref).args }
+                args[i] = next
+                argsChanged = true
+            }
             i += 1U64
         }
         i = 0U64
         while i < t.assocTraitArgs.len {
             val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i] { changed = true }
-            assocArgs.append(next)
+            if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i] {
+                if !assocArgsChanged { assocArgs = self.arena.typeAt(index: ref).assocTraitArgs }
+                assocArgs[i] = next
+                assocArgsChanged = true
+            }
             i += 1U64
         }
-        if changed { return self.rebuildTypeTerm(t: self.arena.typeAt(index: ref), args: args, assocTraitArgs: assocArgs) }
+        if argsChanged || assocArgsChanged {
+            val original = self.arena.typeAt(index: ref)
+            if !argsChanged { args = original.args }
+            if !assocArgsChanged { assocArgs = original.assocTraitArgs }
+            return self.rebuildTypeTerm(t: original, args: args, assocTraitArgs: assocArgs)
+        }
         return ref
     }
 

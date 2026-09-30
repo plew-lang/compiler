@@ -46,5 +46,23 @@ fn main() {
         val bodyResult = compiler.groundTermForBody(ref: projected, environment: <InstanceEnvironment receiverRef=argument />, selfRef: argument, itemRef: argument).unwrap()
         if compiler.arena.typeAt(index: bodyResult).assocNameId != 31U64 { panic "body projection erased" }
     }
+    // Preserve unchanged prefixes, gaps and suffixes when a later child changes.
+    val mixed = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[argument, parameter, argument, parameter, foreign] />)
+    val mixedResult = compiler.groundTermInEnvironment(ref: mixed, params: [binder], values: [argument])
+    val mixedTerms = compiler.arena.typeAt(index: mixedResult).args
+    if mixedTerms.count() != 5U64 || mixedTerms[0] != argument || mixedTerms[2] != argument || mixedTerms[4] != foreign { panic "unchanged child positions lost" }
+    if !compiler.typeRefEq(a: mixedTerms[1], b: expected) || !compiler.typeRefEq(a: mixedTerms[3], b: expected) { panic "changed child positions lost" }
+    if compiler.arena.typeAt(index: mixed).args[1] != parameter { panic "source children mutated" }
+    val mixedRecord = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[] isRecord=true recordFieldLabels=[1U64, 2U64, 3U64] recordFieldTerms=[argument, parameter, foreign] />)
+    val mixedRecordResult = compiler.groundTermInEnvironment(ref: mixedRecord, params: [binder], values: [argument])
+    val fields = compiler.arena.typeAt(index: mixedRecordResult).recordFieldTerms
+    if fields.count() != 3U64 || fields[0] != argument || fields[2] != foreign || !compiler.typeRefEq(a: fields[1], b: expected) { panic "record child positions lost" }
+    val stable = compiler.pushType(t: <TypeRef nameStart=containerName.nameStart nameLen=containerName.nameLen args=[argument, foreign] />)
+    if compiler.groundTermInEnvironment(ref: stable, params: [binder], values: [argument]) != stable { panic "unchanged type rebuilt" }
+    // Receiver-only projection changes still retain its unchanged trait arguments.
+    val receiverOnly = compiler.pushType(t: <TypeRef nameStart=binderName.nameStart nameLen=binderName.nameLen args=[] projectionReceiver=parameter assocTraitId=30U64 assocNameId=31U64 assocTraitArgs=[argument, foreign] />)
+    val receiverOnlyResult = compiler.groundTermInEnvironment(ref: receiverOnly, params: [binder], values: [argument])
+    val receiverOnlyTerm = compiler.arena.typeAt(index: receiverOnlyResult)
+    if receiverOnlyTerm.assocTraitArgs.count() != 2U64 || receiverOnlyTerm.assocTraitArgs[0] != argument || receiverOnlyTerm.assocTraitArgs[1] != foreign { panic "unchanged projection arguments lost" }
     write(s: "ground-environment-views-ok\n")
 }
