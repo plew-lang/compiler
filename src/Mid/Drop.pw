@@ -841,8 +841,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
         val statementStart: U64 = arena.statements.count()
         mut val currentOwnership: Array[MidOwnership] = []
         if blockI < ownershipAfterCliffs.count() { currentOwnership = ownershipAfterCliffs[blockI] }
-        mut val currentAccessibility: Array[MidAccessibility] = []
-        if blockI < accessibility.count() { currentAccessibility = accessibility[blockI] }
 
         // Candidate cliffs were included in ownershipAfterCliffs.  Emit the
         // concrete operation selected by that state, then clear its flag so a
@@ -864,7 +862,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     }
                     currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
                 }
-                if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
                 arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />)
             }
             local = local + 1U64
@@ -884,7 +881,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     index += 1U64
                 }
                 canonicalMidConsumeEnum(arena: arena, statement: statement, states: inout currentOwnership)
-                canonicalMidConsumeEnumAccessibility(arena: arena, statement: statement, states: inout currentAccessibility)
             } else if statement.tag == 1U64 || statement.tag == 9U64 {
                 arena.statements.append(statement)
                 canonicalMidAppendMovedFlagClears(arena: inout arena, rvalueId: statement.value, sourceLocalCount: source.locals.len, plan: plan)
@@ -902,7 +898,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() && destination.local < source.locals.len && !arena.locals[source.locals.start + destination.local].isBorrowed && !assignedBorrow {
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
-                        if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                     }
                 }
             } else if statement.tag == 2U64 {
@@ -925,7 +920,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     val sourcePlace: MidPlaceNode = arena.places[statement.source - 1U64]
                     if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
                         currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
-                        if sourcePlace.local < currentAccessibility.count() { currentAccessibility.set(i: sourcePlace.local, value: <MidAccessibility.Unavailable />) }
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
@@ -933,7 +927,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
                         currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
-                        if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
                         if destination.local < source.locals.len && plan.needsFlag[destination.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
                     }
                 }
@@ -946,7 +939,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     val sourcePlace: MidPlaceNode = arena.places[statement.source - 1U64]
                     if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
                         currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
-                        if sourcePlace.local < currentAccessibility.count() { currentAccessibility.set(i: sourcePlace.local, value: <MidAccessibility.Unavailable />) }
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
@@ -956,7 +948,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     val place: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < currentOwnership.count() {
                         currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
-                        if place.local < currentAccessibility.count() { currentAccessibility.set(i: place.local, value: <MidAccessibility.Unavailable />) }
                         if place.local < source.locals.len && plan.needsFlag[place.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: place.local) isSet=false />) }
                     }
                 }
@@ -991,7 +982,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     }
                     if plan.needsFlag[local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />) }
                     currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
-                    if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
                 }
             } else if statement.tag == 6U64 {
                 if statement.scope < source.scopes.len {
@@ -1027,7 +1017,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                                 _ => {}
                             }
                             currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
-                            if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
                         }
                     }
                 }
