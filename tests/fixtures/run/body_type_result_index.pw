@@ -1,0 +1,35 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Ir with { Arena, BodyInstance, InstanceEnvironment }
+
+fn main() {
+    mut val arena = <Arena />
+    val first = arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+    val second = arena.registerBodyInstance(<BodyInstance fnIdx=1U64 environment=<InstanceEnvironment /> />)
+    mut val index = 1U64
+    while index <= 1000U64 {
+        arena.setBodyTypeTermResult(bodyId: first, typeTerm: index, resultType: index + 1U64)
+        arena.setBodyTypeTermResult(bodyId: second, typeTerm: index, resultType: index + 2U64)
+        arena.setBodyTypeRecipeResult(bodyId: first, recipeId: index, resultType: index + 3U64)
+        index += 1U64
+    }
+    val snapshot = arena
+    arena.setBodyTypeTermResult(bodyId: first, typeTerm: 1U64, resultType: 0U64)
+    assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).bodyId == first)
+    assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).resultType == 0U64)
+    assert(snapshot.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).resultType == 2U64)
+    index = 1U64
+    while index <= 1000U64 {
+        assert(snapshot.bodyTypeTermResult(bodyId: first, typeTerm: index).resultType == index + 1U64)
+        assert(arena.bodyTypeTermResult(bodyId: second, typeTerm: index).resultType == index + 2U64)
+        assert(arena.bodyTypeRecipeResult(bodyId: first, recipeId: index) == index + 3U64)
+        index += 1U64
+    }
+    assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1001U64).bodyId == 0U64)
+    arena.clearBodyTypeResults()
+    assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).bodyId == 0U64)
+    assert(snapshot.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).bodyId == first)
+    arena.setBodyTypeTermResult(bodyId: first, typeTerm: 1U64, resultType: 7U64)
+    assert(arena.bodyTypeTermResult(bodyId: first, typeTerm: 1U64).resultType == 7U64)
+    print("ok")
+}

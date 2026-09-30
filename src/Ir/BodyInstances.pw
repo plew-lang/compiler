@@ -62,8 +62,13 @@ pub impl Arena {
     }
 
     fn bodyTypeResultHash(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
-        val modulus = 4294967291U64
-        return (((bodyId % modulus) * 65537U64 + sourceId % modulus) * 3U64 + sourceKind) % modulus
+        // Fx-style word mixing (rust-lang/rustc-hash): these are internal IDs,
+        // not string keys. Rotate high entropy into bucket low bits.
+        val multiplier = 17380933483125451205U64
+        mut val hash = U64.wrappingMul(bodyId, multiplier)
+        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceKind), multiplier)
+        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceId), multiplier)
+        return (hash << 26U64) | (hash >> 38U64)
     }
 
     fn bodyTypeResultSlot(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
