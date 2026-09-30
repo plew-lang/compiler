@@ -130,7 +130,7 @@ impl DeclarationAccessState {
                         // contract, not an unknown but valid runtime effect.
                         if target.tag != 1U64 { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                         val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                        val template = c.callTemplateIndex(siteKey: key)
+                        val template = c.decls.callTemplateIndex(siteKey: key)
                         if template >= c.decls.callTemplates.count() { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
                         match c.decls.callTemplates[template].kind {
                             CallTemplateKind.Pending => { return <Result.Err error=<DeclarationAccessError.CallSelection body=self.owners[index] terminator=block.terminator /> /> }
@@ -313,7 +313,7 @@ pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, b
                 mut val receiverTag = 0U64
                 if target.tag == 1U64 {
                     val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                    val template = c.callTemplateIndex(siteKey: key)
+                    val template = c.decls.callTemplateIndex(siteKey: key)
                     if template < c.decls.callTemplates.count() {
                         match c.decls.callTemplates[template].kind {
                             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {

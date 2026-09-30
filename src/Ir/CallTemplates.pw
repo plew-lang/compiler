@@ -1,0 +1,32 @@
+// Exact lexical key identity and its derived lookup hash live with the key.
+pub impl CallSiteKey {
+    fn sameKey(other: CallSiteKey) -> Bool {
+        return self.ownerFnIdx == other.ownerFnIdx && self.originKind == other.originKind && self.originStart == other.originStart && self.originEnd == other.originEnd && self.originSerial == other.originSerial && self.slot == other.slot
+    }
+    fn lookupHash() -> U64 {
+        // See finalCalleeHash: every intermediate remains below 2^32 because
+        // arithmetic overflow is checked in the self-hosted compiler.
+        val modulus: U64 = 4294967291U64
+        mut val h: U64 = self.ownerFnIdx % modulus
+        h = ((h + self.originKind % modulus) * 65537U64) % modulus
+        h = ((h + self.originStart % modulus) * 65537U64) % modulus
+        h = ((h + self.originEnd % modulus) * 65537U64) % modulus
+        h = ((h + self.originSerial % modulus) * 65537U64) % modulus
+        h = ((h + self.slot % modulus) * 65537U64) % modulus
+        return h
+    }
+}
+
+pub impl Decls {
+    fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
+        val capacity: U64 = self.callTemplateIndexSlots.count()
+        if capacity == 0U64 { return self.callTemplates.count() }
+        mut val slot: U64 = siteKey.lookupHash() % capacity
+        while self.callTemplateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.callTemplateIndexSlots[slot] - 1U64
+            if self.callTemplates[entry].siteKey.sameKey(other: siteKey) { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.callTemplates.count()
+    }
+}

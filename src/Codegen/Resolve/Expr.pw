@@ -525,7 +525,7 @@ pub impl Comp {
     }
 
     fn sameCallSiteKey(a: CallSiteKey, b: CallSiteKey) -> Bool {
-        return a.ownerFnIdx == b.ownerFnIdx && a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
+        return a.sameKey(other: b)
     }
 
     // A CallTemplate's selection belongs to its lexical source declaration,
@@ -539,18 +539,7 @@ pub impl Comp {
         return a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
     }
 
-    fn callTemplateHash(siteKey: CallSiteKey) -> U64 {
-        // See finalCalleeHash: every intermediate remains below 2^32 because
-        // arithmetic overflow is checked in the self-hosted compiler.
-        val modulus: U64 = 4294967291U64
-        mut val h: U64 = siteKey.ownerFnIdx % modulus
-        h = ((h + siteKey.originKind % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originStart % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originEnd % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originSerial % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.slot % modulus) * 65537U64) % modulus
-        return h
-    }
+
 
     inout fn rebuildCallTemplateIndex(capacity: U64) {
         self.decls.callTemplateIndexSlots = []
@@ -566,7 +555,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.decls.callTemplates.count() {
             val siteKey: CallSiteKey = self.decls.callTemplates[entry].siteKey
-            mut val slot: U64 = self.callTemplateHash(siteKey: siteKey) % capacity
+            mut val slot: U64 = siteKey.lookupHash() % capacity
             while self.decls.callTemplateIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -675,7 +664,7 @@ pub impl Comp {
         val resultRecipe = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=template.siteKey />)
         self.decls.callTemplates.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
         val capacity: U64 = self.decls.callTemplateIndexSlots.count()
-        mut val slot: U64 = self.callTemplateHash(siteKey: template.siteKey) % capacity
+        mut val slot: U64 = template.siteKey.lookupHash() % capacity
         while self.decls.callTemplateIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -703,17 +692,7 @@ pub impl Comp {
         return self.decls.callTemplateBodyHeads.getOr(key: root, fallback: 0U64)
     }
 
-    fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
-        val capacity: U64 = self.decls.callTemplateIndexSlots.count()
-        if capacity == 0U64 { return self.decls.callTemplates.count() }
-        mut val slot: U64 = self.callTemplateHash(siteKey: siteKey) % capacity
-        while self.decls.callTemplateIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.decls.callTemplateIndexSlots[slot] - 1U64
-            if self.sameCallSiteKey(a: self.decls.callTemplates[entry].siteKey, b: siteKey) { return entry }
-            slot = (slot + 1U64) % capacity
-        }
-        return self.decls.callTemplates.count()
-    }
+
 
     // Direct calls use the same source algebra as operators. The argument
     // syntax is copied once at Record time; Mono later grounds this immutable
@@ -813,7 +792,7 @@ pub impl Comp {
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
         val templateTypeArgs: CallTemplateTypeArgumentRange = self.publishCallTemplateTypeArgs(args: calleeTypeArgs)
         val proofId: U64 = self.freezeStaticConformanceProof(proof: proof)
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm)
@@ -854,7 +833,7 @@ pub impl Comp {
         }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> expectedResultTerm=prior.expectedResultTerm />)
@@ -871,7 +850,7 @@ pub impl Comp {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
@@ -884,7 +863,7 @@ pub impl Comp {
     inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) -> Result[(), CompileDiagnostic] {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val key: CallSiteKey = (try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot))
-        val index: U64 = self.callTemplateIndex(siteKey: key)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: key)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Protocol receiver=receiver /> expectedResultTerm=prior.expectedResultTerm />)
@@ -995,7 +974,7 @@ pub impl Comp {
         if !(self.cur.recordCallTemplates) { return <Result.Ok value=() /> }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
             self.decls.callTemplates.set(i: index, value: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=<CallTemplateKind.Operator op=op operands=self.publishCallTemplateOperands(operands: operands) resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
@@ -1035,7 +1014,7 @@ pub impl Comp {
             }
         }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         // Context can be known before declaration-time call selection. This
         // is normal for a type-qualified generic associated factory in a
         // shared body: its concrete receiver is not selected until Mono, but
@@ -1109,7 +1088,7 @@ pub impl Comp {
 
     inout fn callTemplateForCurrentBody(exprId: U64) -> Result[CallTemplate, CompileDiagnostic] {
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[index] />}
         // See sameCallSiteOrigin: a callee-owned default expression is
         // materialized under its caller BodyInstance.  Reusing its immutable
@@ -1201,7 +1180,7 @@ pub impl Comp {
 
     inout fn callTemplateForSourceBody(fnIdx: U64, exprId: U64) -> Result[CallTemplate, CompileDiagnostic] {
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId))
-        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        val index: U64 = self.decls.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() { return <Result.Ok value=self.decls.callTemplates[index] />}
         return <Result.Ok value=<CallTemplate siteKey=siteKey /> />
     }

@@ -3,6 +3,7 @@ import @Std/Set with { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
 part ./Ir/Callables
+part ./Ir/CallTemplates
 part ./Ir/TraitOwners
 part ./Ir/Types
 part ./Ir/Conformances

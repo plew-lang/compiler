@@ -86,7 +86,7 @@ fn main() {
     if inferredArgument(c: inout c, pattern: recordPattern, expected: recordExpected, params: params) == callerTerm { write(s: "structural-record-children\n") }
     val relabelled = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[2U64] recordFieldTerms=[callerTerm] />)
     if inferredArgument(c: inout c, pattern: recordPattern, expected: relabelled, params: params) == 0U64 { write(s: "structural-record-labels\n") }
-    val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap())
+    val index = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap())
     val before = c.arena.exprs.count()
     if !c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64).unwrap() && c.arena.exprs.count() == before { write(s: "unprepared-no-publication\n") }
     val plainCallee = c.arena.functionCount()
@@ -141,7 +141,7 @@ fn main() {
     c.cur.recordCallTemplates = true
     val unresolved = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordCallTemplate(exprId: unresolved, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64]).unwrap()
-    val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved).unwrap())
+    val unresolvedIndex = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved).unwrap())
     val unresolvedCount = c.decls.callTemplates.count()
     if !c.completeRecordedDirectDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64).unwrap() && c.decls.callTemplates.count() == unresolvedCount { write(s: "unresolved-no-publication\n") }
     val method = c.pushExpr(e: <Expr.Method recv=expression nameStart=name.nameStart nameLen=name.nameLen args=args />)
@@ -162,6 +162,6 @@ fn main() {
     c.cur.recordCallTemplates = true
     val plainCall = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
     c.recordCallTemplate(exprId: plainCall, callee: plainCallee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: []).unwrap()
-    val plainIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall).unwrap())
+    val plainIndex = c.decls.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: plainCall).unwrap())
     if c.completeRecordedDirectDefaults(templateIndex: plainIndex, receiverTerm: 0U64).unwrap() { write(s: "zero-type-arguments-complete\n") }
 }

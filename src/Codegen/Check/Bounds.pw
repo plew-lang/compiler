@@ -1391,7 +1391,7 @@ pub impl Comp {
     // A declaration-time dependency reads the selected signature and its exact
     // substitutions. It never executes the producer or demands its body.
     inout fn closedSelectedCallResult(siteKey: CallSiteKey) -> Result[U64, CompileDiagnostic] {
-        val index = self.callTemplateIndex(siteKey: siteKey)
+        val index = self.decls.callTemplateIndex(siteKey: siteKey)
         if index >= self.decls.callTemplates.count() { return <Result.Ok value=0U64 /> }
         val template = self.decls.callTemplates[index]
         match template.kind {
