@@ -64,5 +64,10 @@ fn main() {
     val receiverOnlyResult = compiler.groundTermInEnvironment(ref: receiverOnly, params: [binder], values: [argument])
     val receiverOnlyTerm = compiler.arena.typeAt(index: receiverOnlyResult)
     if receiverOnlyTerm.assocTraitArgs.count() != 2U64 || receiverOnlyTerm.assocTraitArgs[0] != argument || receiverOnlyTerm.assocTraitArgs[1] != foreign { panic "unchanged projection arguments lost" }
+    for val untouched in [parameter, legacy, foreign, nested, record, projection, mixed, mixedRecord, receiverOnly] {
+        if compiler.groundTermInEnvironment(ref: untouched, params: [], values: []) != untouched { panic "empty substitution changed a type" }
+        if compiler.groundTermInEnvironment(ref: untouched, params: [binder], values: []) != untouched { panic "missing replacement changed a type" }
+        if compiler.groundTermInEnvironment(ref: untouched, params: [], values: [argument]) != untouched { panic "unbound replacement changed a type" }
+    }
     write(s: "ground-environment-views-ok\n")
 }

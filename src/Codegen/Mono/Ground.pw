@@ -20,6 +20,9 @@ pub impl Comp {
     // ParamId map is the authority.
     inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64], selfRef: U64 = 0U64, itemRef: U64 = 0U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
+        // An empty substitution cannot change any child. This is independent
+        // of closedness: unbound parameters and projections remain untouched.
+        if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
         val t = self.arena.typeTerms[ref]
         // Self and Item are proof-derived binders just like ParamId entries,
         // except their values live on the selected receiver proof rather than
