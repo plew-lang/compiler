@@ -85,9 +85,9 @@ pub impl LlvmCtx {
     // Eager declaration follows the frontend-closed executable body graph.
     inout fn declareGenMethods(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val index: U64 = 0U64
-        while index < c.monoWork.bodyInstances.count() {
+        while index < c.monoWork.bodyCount() {
             tracePhaseProgress(c: inout c, label: "backend:generic-method-declaring", count: index, stride: 64U64)
-            val bodyId = c.monoWork.bodyInstances[index]
+            val bodyId = c.monoWork.bodyAt(index: index)
             val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             if c.arena.bodyIsCallable(bodyId: bodyId) && body.fnIdx < c.arena.functionCount() {
                 val f = c.arena.functionAt(index: body.fnIdx)

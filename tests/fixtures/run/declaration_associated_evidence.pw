@@ -39,7 +39,7 @@ fn main() {
     assert(!compiler.viewedTypeConformsTraitConstraint(ref: binding.ty, constraint: target.constraint).unwrap())
     assert(compiler.activeProjectionProofs.count() == 0U64)
     assert(compiler.activeConformanceConditions.count() == 0U64)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     print("ok")
 }

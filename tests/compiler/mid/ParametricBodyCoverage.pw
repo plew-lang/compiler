@@ -13,7 +13,7 @@ fn main() {
     analyzeFrontendDeclarations(c: inout compiler,
         input: <FrontendInput.File path=argAt(1I64) />,
         sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     val instances = compiler.arena.bodyInstanceCount()
     compiler.traceCodegen = true
@@ -67,7 +67,7 @@ fn main() {
         }
         index += 1U64
     }
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     assert(compiler.arena.bodyInstanceCount() == instances)
     print("built")

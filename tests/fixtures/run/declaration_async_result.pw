@@ -34,7 +34,7 @@ fn main() {
         index += 1U64
     }
     assert(found)
-    assert(c.monoWork.bodyInstances.count() == 0U64)
+    assert(c.monoWork.bodyCount() == 0U64)
     assert(c.arena.finalDestructions.count() == 0U64)
     print("ok")
 }

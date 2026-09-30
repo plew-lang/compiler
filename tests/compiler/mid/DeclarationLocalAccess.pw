@@ -29,7 +29,7 @@ fn classification(result: Result[(), DeclarationAccessError]) -> U64 {
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     val identities = compiler.arena.bodyInstanceCount()
     mut val eager = compiler
@@ -44,10 +44,10 @@ fn main() {
     val result = classification(result: checkDeclarationLocalAccess(c: inout compiler, templates: inout demanded))
     val reference = classification(result: checkDeclarationLocalAccess(c: inout eager, templates: inout full))
     assert(result == reference)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     assert(compiler.arena.bodyInstanceCount() == identities)
-    assert(eager.monoWork.bodyInstances.count() == 0U64)
+    assert(eager.monoWork.bodyCount() == 0U64)
     assert(eager.arena.finalDestructions.count() == 0U64)
     assert(eager.arena.bodyInstanceCount() == identities)
     print(result)

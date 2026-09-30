@@ -16,8 +16,8 @@ pub impl LlvmCtx {
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
     inout fn declareAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val bodyIndex = 0U64
-        while bodyIndex < c.monoWork.bodyInstances.count() {
-            val bodyId = c.monoWork.bodyInstances[bodyIndex]
+        while bodyIndex < c.monoWork.bodyCount() {
+            val bodyId = c.monoWork.bodyAt(index: bodyIndex)
             bodyIndex += 1U64
             if !c.arena.bodyIsCallable(bodyId: bodyId) { continue }
             val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)

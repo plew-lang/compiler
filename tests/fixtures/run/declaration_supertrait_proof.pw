@@ -63,7 +63,7 @@ fn main() {
     }
     val invalid = query(compiler: inout compiler, assumptions: double, target: "Parent", argument: token, output: other)
     match invalid { StaticConformanceProof.Missing => {} _ => { panic "mixed inherited instances" } }
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     print("ok")
 }

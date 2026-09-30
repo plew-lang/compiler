@@ -10,6 +10,7 @@ part ./Ir/Types
 part ./Ir/Conformances
 part ./Ir/DeclarationNames
 part ./Ir/BodyInstances
+part ./Ir/MonoWork
 
 // @Ir — the pure IR data vocabulary of the Plew compiler: arena node types
 // (Expr/Stmt/TypeRef/… indexed by U64) and the arena/table sub-structs that make
@@ -3245,7 +3246,8 @@ pub struct MonoWork {
     // Worklist of 1-based Arena.bodyInstances ids. The body registry itself is
     // semantic analysis output; this queue is only the transient reachability
     // traversal used to populate it.
-    pub mut val bodyInstances: Array[U64] = []
+    mut val bodyRows: Array[U64] = []
+    mut val bodyMembership: Array[Bool] = []
     // transient: the expected type ref of the binding currently being scanned (a `let`
     // annotation), so an assoc-fn constructor whose type param comes only from context
     // (`Set.new()` / `Set.from([])`) registers its instance. Mirrors the backend's

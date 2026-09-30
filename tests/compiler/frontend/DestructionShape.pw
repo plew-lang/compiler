@@ -10,7 +10,7 @@ fn main() {
     analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />,
         sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
     val instances = compiler.arena.bodyInstanceCount()
-    val bodies = compiler.monoWork.bodyInstances.count()
+    val bodies = compiler.monoWork.bodyCount()
     val destructions = compiler.arena.finalDestructions.count()
     val structures = compiler.arena.structCount()
     val types = compiler.arena.typeCount()
@@ -50,7 +50,7 @@ fn main() {
     }
     assert(destructors > 0U64 && compared > 0U64)
     assert(compiler.arena.bodyInstanceCount() == instances)
-    assert(compiler.monoWork.bodyInstances.count() == bodies)
+    assert(compiler.monoWork.bodyCount() == bodies)
     assert(compiler.arena.finalDestructions.count() == destructions)
     assert(compiler.arena.structCount() == structures)
     print("destruction-shape:ok")

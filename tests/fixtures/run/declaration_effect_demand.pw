@@ -42,7 +42,7 @@ fn check(source: String, conflict: Bool, functions: U64) {
     val bodies = c.mid.bodies.count()
     val repeated = analyzeDeclarationGlobalAccessRoots(c: inout c, templates: inout templates, requests: inout requests, roots: roots).unwrap()
     if repeated.conflictingNode != analysis.conflictingNode || repeated.nodes.count() != analysis.nodes.count() || c.mid.bodies.count() != bodies { panic "effect request changed cached body snapshots" }
-    if c.monoWork.bodyInstances.count() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "effect request discovered executable code" }
+    if c.monoWork.bodyCount() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "effect request discovered executable code" }
 }
 
 fn main() {

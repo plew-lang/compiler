@@ -50,6 +50,6 @@ fn main() {
         iteration += 1U64
     }
     if c.lexicalBodyPreparations.count() != 3U64 { panic "request inspected unused callee or broken body" }
-    if c.monoWork.bodyInstances.count() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "declaration request discovered executable code" }
+    if c.monoWork.bodyCount() != 0U64 || c.arena.finalDestructions.count() != 0U64 { panic "declaration request discovered executable code" }
     print("ok")
 }

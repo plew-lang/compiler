@@ -77,7 +77,7 @@ fn main() {
         _ => { panic "terminating repeated edge was rejected" }
     }
     assert(compiler.activeConformanceConditions.count() == 0U64)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     print("ok")
 }

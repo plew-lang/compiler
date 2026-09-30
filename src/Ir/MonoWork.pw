@@ -1,0 +1,21 @@
+// The ordered worklist and its membership index share one owner. Body IDs
+// are dense, one-based Arena identities; the index is not semantic evidence.
+pub impl MonoWork {
+    fn bodyCount() -> U64 { return self.bodyRows.count() }
+    fn bodyAt(index: U64) -> U64 { return self.bodyRows[index] }
+    fn bodies() -> Array[U64] { return self.bodyRows }
+    fn containsBody(bodyId: U64) -> Bool {
+        return bodyId < self.bodyMembership.count() && self.bodyMembership[bodyId]
+    }
+    // Preserve append order and multiplicity. Callers decide whether an
+    // already registered body needs another work item, just as before.
+    inout fn appendBody(bodyId: U64) {
+        while self.bodyMembership.count() <= bodyId { self.bodyMembership.append(false) }
+        self.bodyMembership[bodyId] = true
+        self.bodyRows.append(bodyId)
+    }
+    inout fn clearBodies() {
+        self.bodyRows = []
+        self.bodyMembership = []
+    }
+}

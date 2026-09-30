@@ -15,7 +15,7 @@ fn main() {
     if !(analysis.obligations.count() > 0U64) { panic "boundary condition 16" }
     if !(c.mid.bodies.count() > 0U64) { panic "boundary condition 17" }
     if !(c.arena.bodyInstanceCount() == instances) { panic "boundary condition 18" }
-    if !(c.monoWork.bodyInstances.count() == 0U64) { panic "boundary condition 19" }
+    if !(c.monoWork.bodyCount() == 0U64) { panic "boundary condition 19" }
     if !(c.arena.finalDestructions.count() == 0U64) { panic "boundary condition 20" }
 
     mut val conflict = <Comp />
@@ -33,7 +33,7 @@ fn main() {
         Result.Ok(value: _) => { panic "unused global conflict accepted" }
     }
     if !(conflict.arena.bodyInstanceCount() == conflictInstances) { panic "boundary condition 36" }
-    if !(conflict.monoWork.bodyInstances.count() == 0U64) { panic "boundary condition 37" }
+    if !(conflict.monoWork.bodyCount() == 0U64) { panic "boundary condition 37" }
     if !(conflict.arena.finalDestructions.count() == 0U64) { panic "boundary condition 38" }
     print("ok")
 }

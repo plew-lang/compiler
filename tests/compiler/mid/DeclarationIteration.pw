@@ -6,7 +6,7 @@ import @Std/Process with { argAt }
 fn main() {
     mut val compiler = <Comp />
     val result = analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     assert(compiler.arena.finalDestructions.count() == 0U64)
     match result {
         Result.Ok(value: _) => { print("ok") }

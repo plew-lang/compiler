@@ -1086,12 +1086,8 @@ pub impl Comp {
         }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
-        mut val i: U64 = 0U64
-        while i < self.monoWork.bodyInstances.count() {
-            if self.monoWork.bodyInstances[i] == bodyId { return <Result.Ok value=bodyId />}
-            i += 1U64
-        }
-        self.monoWork.bodyInstances.append(bodyId)
+        if self.monoWork.containsBody(bodyId: bodyId) { return <Result.Ok value=bodyId /> }
+        self.monoWork.appendBody(bodyId: bodyId)
         try self.prepareFinalCallableSignature(bodyId: bodyId)
         return <Result.Ok value=bodyId />
     }
@@ -2813,7 +2809,7 @@ pub impl Comp {
                         }
                         val targetBody = self.arena.bodyInstanceAt(index: bodyId - 1U64)
                         val adapterBody = self.arena.registerBodyInstance(<BodyInstance fnIdx=targetBody.fnIdx environment=targetBody.environment />, origin: <BodyOrigin.ExistentialWitness resolution=index member=requirement />)
-                        self.monoWork.bodyInstances.append(adapterBody)
+                        self.monoWork.appendBody(bodyId: adapterBody)
                         member = <FinalExistentialMember adapterBodyId=adapterBody bodyId=bodyId receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result sourceResultType=sourceResult resultConversion=self.freezeValueConversionProof(proof: resultConversion) />
                     }
                     members.append(member)
@@ -5069,7 +5065,7 @@ pub impl Comp {
         self.arena.finalFors = []
         self.arena.finalForIndexSlots = []
         try self.finalizeDiscriminantType()
-        self.monoWork.bodyInstances = []
+        self.monoWork.clearBodies()
         // `collectFnInsts` is provisional layout discovery. Its source-shaped
         // instances are not executable identities and must not cross this
         // boundary: every reachable body is created directly by the selected
@@ -5148,7 +5144,7 @@ pub impl Comp {
     }
 
     fn hasFinalDependencies(state: FinalDependencies) -> Bool {
-        return state.signatures < self.monoWork.bodyInstances.count() || state.globals < self.selectedGlobalTargets.count() || state.aggregates < self.arena.finalAggregates.count() || state.calls < self.finalCalleeCount() || state.storages < self.arena.finalStorages.count()
+        return state.signatures < self.monoWork.bodyCount() || state.globals < self.selectedGlobalTargets.count() || state.aggregates < self.arena.finalAggregates.count() || state.calls < self.finalCalleeCount() || state.storages < self.arena.finalStorages.count()
     }
 
     // One wave preserves AOT worklist order. A lazy driver drains these waves
@@ -5196,8 +5192,8 @@ pub impl Comp {
         // ABI layouts may be needed before a source body is requested. Close
         // ownership for every registered signature, not only visited call sites.
         // Use a monotonic frontier so recursive signatures stay declaration-only.
-        while state.signatures < self.monoWork.bodyInstances.count() {
-            val bodyId = self.monoWork.bodyInstances[state.signatures]
+        while state.signatures < self.monoWork.bodyCount() {
+            val bodyId = self.monoWork.bodyAt(index: state.signatures)
             val signature = self.arena.bodySignature(bodyId: bodyId)
             try self.enqueueFinalDestruction(typeRef: signature.receiverType)
             for parameter in signature.parameterTypes { try self.enqueueFinalDestruction(typeRef: parameter) }
@@ -5275,9 +5271,9 @@ pub impl Comp {
         // every discovered type executable and reintroduced imported macro
         // parser bodies through their incidental collection-time layouts.
         mut val bodyI = 0U64
-        while bodyI < self.monoWork.bodyInstances.count() || self.hasFinalDependencies(state: dependencies) {
-            if bodyI < self.monoWork.bodyInstances.count() {
-                try self.requestFinalBody(bodyId: self.monoWork.bodyInstances[bodyI], requests: inout requests)
+        while bodyI < self.monoWork.bodyCount() || self.hasFinalDependencies(state: dependencies) {
+            if bodyI < self.monoWork.bodyCount() {
+                try self.requestFinalBody(bodyId: self.monoWork.bodyAt(index: bodyI), requests: inout requests)
                 bodyI += 1U64
             }
             try self.advanceFinalDependencies(state: inout dependencies)
@@ -5515,7 +5511,7 @@ pub impl Comp {
                 captureIndex += 1U64
             }
             self.arena.setBodySignature(bodyId: dropBodyId, parameters: captureTypes, passings: capturePassings, result: 0U64)
-            self.monoWork.bodyInstances.append(dropBodyId)
+            self.monoWork.appendBody(bodyId: dropBodyId)
         }
         mut val passings: Array[CallArgumentPassing] = []
         mut val parameterIndex = 0U64
@@ -5924,7 +5920,7 @@ pub impl Comp {
                 self.cur = saved
                 try result
                 if !ready && self.arena.bodySignature(bodyId: closureBodyId).ready {
-                    self.monoWork.bodyInstances.append(closureBodyId)
+                    self.monoWork.appendBody(bodyId: closureBodyId)
                 }
             }
             Expr.Unary(val op, val operand) => {

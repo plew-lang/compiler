@@ -16,7 +16,7 @@ fn check(compiler: inout Comp) {
     assert(!bound.constraint.positionalArgsOpen)
     assert(compiler.arena.typeAt(index: bound.constraint.key.positionalArgs[0U64]).nameId == compiler.internBytes(s: "String").nameId)
     assert(bound.offset != 0U64)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
 }
 fn main() {
     val source = "trait Marker[Input] {}\ntrait Container { type Element }\nstruct Box[T] { val value: T }\nimpl[T] Box[T] as Container where T: Marker[String] { type Element = T }\n"

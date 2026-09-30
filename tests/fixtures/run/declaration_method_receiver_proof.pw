@@ -32,6 +32,6 @@ fn main() {
     match associated { StaticConformanceProof.Missing => { panic "lost associated constraint" } _ => {} }
     val absent = compiler.traitPatternProof(baseRef: item, traitId: 0U64, traitOwner: marker, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />).unwrap()
     match absent { StaticConformanceProof.Missing => {} _ => { panic "invented receiver evidence" } }
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
     print("ok")
 }

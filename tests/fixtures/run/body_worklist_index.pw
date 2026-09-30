@@ -1,0 +1,29 @@
+import /Ir with { MonoWork }
+import @Std/Core with { assert }
+import @Std/Io with { print }
+fn main() {
+    mut val work = <MonoWork />
+    assert(!work.containsBody(bodyId: 0U64))
+    assert(!work.containsBody(bodyId: 1000U64))
+    work.appendBody(bodyId: 7U64)
+    work.appendBody(bodyId: 2U64)
+    work.appendBody(bodyId: 7U64)
+    assert(work.bodyCount() == 3U64)
+    assert(work.bodyAt(index: 0U64) == 7U64)
+    assert(work.bodyAt(index: 1U64) == 2U64)
+    assert(work.bodyAt(index: 2U64) == 7U64)
+    assert(!work.containsBody(bodyId: 6U64))
+    val snapshot = work
+    val rows = work.bodies()
+    work.appendBody(bodyId: 1000U64)
+    assert(work.containsBody(bodyId: 1000U64))
+    assert(!snapshot.containsBody(bodyId: 1000U64))
+    assert(snapshot.bodyCount() == 3U64 && rows.count() == 3U64)
+    work.clearBodies()
+    assert(work.bodyCount() == 0U64 && !work.containsBody(bodyId: 7U64))
+    assert(snapshot.containsBody(bodyId: 7U64))
+    work.appendBody(bodyId: 2U64)
+    assert(work.bodyCount() == 1U64 && work.containsBody(bodyId: 2U64))
+    assert(!work.containsBody(bodyId: 7U64))
+    print("ok")
+}

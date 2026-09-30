@@ -12,10 +12,10 @@ fn main() {
     mut val publication = <FinalizationPublication />
     val root = c.enqueueFinalBody(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
     c.requestFinalBody(bodyId: root, requests: inout requests).unwrap()
-    val maker = c.monoWork.bodyInstances[1U64]
+    val maker = c.monoWork.bodyAt(index: 1U64)
     c.requestFinalBody(bodyId: maker, requests: inout requests).unwrap()
     mut val closure = 0U64
-    for bodyId in c.monoWork.bodyInstances {
+    for bodyId in c.monoWork.bodies() {
         if c.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64 { closure = bodyId }
     }
     if closure == 0U64 { panic "closure signature not registered" }

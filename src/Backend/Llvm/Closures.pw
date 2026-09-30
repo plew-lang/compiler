@@ -196,9 +196,9 @@ pub impl LlvmCtx {
                 try self.declareClosure(c: inout c, semanticIndex: closureI, environment: <InstanceEnvironment />)
             } else {
                 mut val bodyI: U64 = 0U64
-                while bodyI < c.monoWork.bodyInstances.count() {
-                    val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyInstances[bodyI] - 1U64)
-                    if c.arena.bodyIsCallable(bodyId: c.monoWork.bodyInstances[bodyI]) && (try c.semanticBodyOwner(fnIdx: body.fnIdx)) == closure.ownerFnIdx {
+                while bodyI < c.monoWork.bodyCount() {
+                    val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyAt(index: bodyI) - 1U64)
+                    if c.arena.bodyIsCallable(bodyId: c.monoWork.bodyAt(index: bodyI)) && (try c.semanticBodyOwner(fnIdx: body.fnIdx)) == closure.ownerFnIdx {
                         try self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
                     }
                     bodyI += 1U64

@@ -14,7 +14,7 @@ fn main() {
             Result.Ok(value: _) => { assert(false) }
             Result.Err(error: val diagnostic) => { assert(diagnostic.message == "no matching function for this argument list") }
         }
-        assert(c.monoWork.bodyInstances.count() == 0U64)
+        assert(c.monoWork.bodyCount() == 0U64)
         assert(c.arena.finalDestructions.count() == 0U64)
     }
     print("ok")

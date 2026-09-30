@@ -24,7 +24,7 @@ fn partialBodies() {
     finalizeFrontendExecutables(c: inout compiler).unwrap()
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />
-    requests.request(c: inout compiler, templates: inout templates, bodyId: compiler.monoWork.bodyInstances[0U64]).unwrap()
+    requests.request(c: inout compiler, templates: inout templates, bodyId: compiler.monoWork.bodyAt(index: 0U64)).unwrap()
     val count = compiler.mid.bodies.count()
     val partial = analyzeMidGlobalAccess(c: inout compiler).unwrap()
     if partial.conflictingBody != 0U64 || partial.requiredBodies.count() < 2U64 { panic "missing call or destructor dependency" }

@@ -16,6 +16,6 @@ fn main() {
     assert(c.arena.typeAt(index: cursor).paramId == c.arena.typeAt(index: bound.paramTy).paramId)
     assert(c.typeRefEq(a: cursor, b: bound.paramTy))
     assert(c.viewedTypeConformsTraitConstraint(ref: cursor, constraint: bound.constraint, assumptions: c.functionBoundAssumptions(fnIdx: bound.fnIdx)).unwrap())
-    assert(c.monoWork.bodyInstances.count() == 0U64)
+    assert(c.monoWork.bodyCount() == 0U64)
     print("ok")
 }

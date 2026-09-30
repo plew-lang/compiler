@@ -11,7 +11,7 @@ fn instances() {
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />
     finalizeFrontendExecutables(c: inout compiler).unwrap()
-    val main = compiler.monoWork.bodyInstances[0U64]
+    val main = compiler.monoWork.bodyAt(index: 0U64)
     val first = requests.request(c: inout compiler, templates: inout templates, bodyId: main).unwrap()
     if compiler.mid.bodies[first.canonical.body - 1U64].bodyInstance != main { panic "wrong instance" }
     for body in compiler.mid.bodies {

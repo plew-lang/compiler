@@ -25,8 +25,8 @@ fn main() {
     c.inCollection = false
     c.requestFinalBody(bodyId: root, requests: inout requests).unwrap()
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "request leaked its context" }
-    if c.monoWork.bodyInstances.count() != 2U64 { panic "recursive registration duplicated bodies" }
-    val callee = c.monoWork.bodyInstances[1U64]
+    if c.monoWork.bodyCount() != 2U64 { panic "recursive registration duplicated bodies" }
+    val callee = c.monoWork.bodyAt(index: 1U64)
     if !c.arena.bodySignature(bodyId: callee).ready { panic "callee signature was deferred with body" }
     if c.lexicalBodyPreparations.count() != 1U64 { panic "caller demanded callee body" }
     val calls = c.finalCalleeCount()

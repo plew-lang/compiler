@@ -117,7 +117,7 @@ pub impl LlvmCtx {
     }
 
     inout fn declareProgramEntries(c: inout Comp) -> Result[(), CompileDiagnostic] {
-        for bodyId in c.monoWork.bodyInstances {
+        for bodyId in c.monoWork.bodies() {
             val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             if body.fnIdx < c.arena.functionCount() && c.nameIsMain(f: c.arena.functionAt(index: body.fnIdx)) {
                 val signature = self.mainFunctionType()

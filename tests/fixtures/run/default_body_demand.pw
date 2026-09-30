@@ -43,7 +43,7 @@ fn check(source: String) {
         Result.Ok(value: _) => { panic "whole target accepted invalid default" }
         Result.Err(error: val error) => { if error.message != diagnostic { panic "demand and whole target disagree" } }
     }
-    if demanded.monoWork.bodyInstances.count() != 0U64 || demanded.arena.finalDestructions.count() != 0U64 { panic "default request discovered executable code" }
+    if demanded.monoWork.bodyCount() != 0U64 || demanded.arena.finalDestructions.count() != 0U64 { panic "default request discovered executable code" }
 }
 fn main() {
     check(source: "struct Left {} struct Right {} struct P { val value: Left = <Right /> } fn main() {}")

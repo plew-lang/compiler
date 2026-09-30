@@ -13,7 +13,7 @@ fn checkBoundary(source: String, expected: String) {
         sources: <SourceAccess stdRoot=[] />).unwrap()
     mut val templates = <MidFunctionTemplates />
     prepareDeclarationProgram(c: inout compiler, templates: inout templates).unwrap()
-    if compiler.monoWork.bodyInstances.count() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 {
+    if compiler.monoWork.bodyCount() != 0U64 || compiler.arena.finalDestructions.count() != 0U64 {
         panic "static checking discovered executable bodies"
     }
     match finalizeFrontendExecutables(c: inout compiler) {

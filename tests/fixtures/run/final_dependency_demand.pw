@@ -29,11 +29,11 @@ fn main() {
     c.publishFinalCallables(state: inout publication).unwrap()
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "initializer request leaked context" }
     val initialCalls = c.finalCalleeCount()
-    val initialBodies = c.monoWork.bodyInstances.count()
+    val initialBodies = c.monoWork.bodyCount()
     if initialCalls == 0U64 || initialBodies == 0U64 { panic "global initializer did not prepare dependencies" }
     c.prepareFinalInitializers(state: inout dependencies).unwrap()
     c.closeFinalDependencies(state: inout dependencies).unwrap()
-    if c.finalCalleeCount() != initialCalls || c.monoWork.bodyInstances.count() != initialBodies { panic "global initializer repeated" }
+    if c.finalCalleeCount() != initialCalls || c.monoWork.bodyCount() != initialBodies { panic "global initializer repeated" }
     val maker = c.enqueueFinalBody(fnIdx: owner(c: inout c, name: "make"), args: [], recvInstRef: 0U64).unwrap()
     c.requestFinalBody(bodyId: maker, requests: inout requests).unwrap()
     c.closeFinalDependencies(state: inout dependencies).unwrap()

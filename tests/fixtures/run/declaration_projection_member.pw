@@ -14,10 +14,10 @@ fn main() {
             Result.Ok(value: _) => { assert(false) }
             Result.Err(error: val diagnostic) => { assert(diagnostic.message == "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") }
         }
-        assert(c.monoWork.bodyInstances.count() == 0U64)
+        assert(c.monoWork.bodyCount() == 0U64)
     }
     mut val valid = <Comp />
     analyzeFrontendDeclarations(c: inout valid, input: <FrontendInput.Text text="trait Parser { type Output }\nfn valid[T](value: T#Parser.Output) where T: Parser {}\n" path="valid.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    assert(valid.monoWork.bodyInstances.count() == 0U64)
+    assert(valid.monoWork.bodyCount() == 0U64)
     print("ok")
 }

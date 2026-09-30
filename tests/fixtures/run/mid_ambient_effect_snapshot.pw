@@ -12,7 +12,7 @@ fn main() {
     finalizeFrontendExecutables(c: inout compiler).unwrap()
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />
-    val main = compiler.monoWork.bodyInstances[0U64]
+    val main = compiler.monoWork.bodyAt(index: 0U64)
     requests.request(c: inout compiler, templates: inout templates, bodyId: main).unwrap()
     val before = compiler.mid.bodies.count()
     val snapshot = requests.snapshot().unwrap()

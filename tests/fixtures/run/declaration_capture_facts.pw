@@ -17,6 +17,6 @@ fn main() {
         SemanticClosureCaptureMode.CellBorrow => {}
         _ => { panic "mutable capture lost shared storage" }
     }
-    assert(c.monoWork.bodyInstances.count() == 0U64)
+    assert(c.monoWork.bodyCount() == 0U64)
     print("ok")
 }

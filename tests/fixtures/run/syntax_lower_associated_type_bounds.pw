@@ -24,7 +24,7 @@ fn check(compiler: inout Comp) {
     assert(!first.constraint.positionalArgsOpen)
     assert(compiler.arena.typeTerms[first.constraint.key.positionalArgs[0U64]].paramId == parameter.paramId)
     assert(first.offset != 0U64)
-    assert(compiler.monoWork.bodyInstances.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
 }
 fn main() {
     val source = "trait Marker {}\ntrait Cursor[Input] { type Item }\ntrait Collection[T] { type Item type Iter: Cursor[T, Item=Item] + Marker type Other: Cursor[T, Item=T] }\n"

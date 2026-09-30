@@ -15,7 +15,7 @@ fn main() {
             match prepareCheckedProgram(checked: move program) {
                 ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
                 ExecutableCompilationResult.Success(compilation: val compilation) => {
-                    if compilation.compiler.monoWork.bodyInstances.count() == 0U64 { panic "no executable prepared" }
+                    if compilation.compiler.monoWork.bodyCount() == 0U64 { panic "no executable prepared" }
                 }
             }
         }

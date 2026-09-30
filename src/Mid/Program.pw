@@ -120,7 +120,7 @@ pub impl MidExecutableProgram {
         // Named bodies and synthetic adapters are in the executable worklist.
         // Global initialization and finalized closure signatures are separate
         // frontend roots, not source declarations guessed to be reachable.
-        mut val worklist = c.monoWork.bodyInstances
+        mut val worklist = c.monoWork.bodies()
         if c.arena.globals.count() != 0U64 {
             val globalBody = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
             if globalBody == 0U64 { return <Result.Err error=<MidProgramError.MissingSignature bodyId=0U64 /> /> }

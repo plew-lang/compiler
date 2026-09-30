@@ -92,7 +92,7 @@ pub impl CompilerSession {
     // Registration is a signature/identity snapshot, not an execution grant.
     // IDs are meaningful only in this session. Global startup is separate from
     // this callable worklist and is checked by every preparation request.
-    fn registeredBodies() -> Array[U64] { return self.compiler.monoWork.bodyInstances }
+    fn registeredBodies() -> Array[U64] { return self.compiler.monoWork.bodies() }
 
     inout fn prepareBody(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
         match self.executionFailure {
