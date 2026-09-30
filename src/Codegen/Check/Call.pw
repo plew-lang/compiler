@@ -462,7 +462,7 @@ pub impl Comp {
                                 mut val headMethodOwn: Bool = false
                                 if p.ty != 0U64 {
                                     val nConf: U64 = self.recvOwnParamCount(rt: rt)
-                                    val headId: U64 = self.arena.typeAt(index: p.ty).nameId
+                                    val headId: U64 = self.arena.typeTerms[p.ty].nameId
                                     mut val mk: U64 = nConf
                                     while mk < mf.typeParams.count() {
                                         if self.funcBindAt(binds: mf.typeParams, index: mk).nameId == headId {

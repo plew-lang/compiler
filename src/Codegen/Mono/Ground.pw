@@ -663,8 +663,8 @@ pub impl Comp {
         // a compound element (`Ref[I32]`, `Array[I32]`, `Box[I32]`) gets a mangled
         // name span + its ref, matching the parser's recordArrayElem (so the runtime
         // and use sites agree); a simple element uses its head name.
-        mut val nStart: U64 = self.arena.typeAt(index: re).nameStart
-        mut val nLen: U64 = self.arena.typeAt(index: re).nameLen
+        mut val nStart: U64 = self.arena.typeTerms[re].nameStart
+        mut val nLen: U64 = self.arena.typeTerms[re].nameLen
         mut val fRef: U64 = 0
         if (try self.isCompoundType(ref: re)) {
             val mn: Bind = (try self.appendMangleSpan(ref: re))
@@ -909,7 +909,7 @@ pub impl Comp {
     // program's type nesting is far below 64.
     inout fn checkInstDepth(ref: U64) -> Result[(), CompileDiagnostic] {
         if self.tyRefDepth(ref: ref) > 64U64 {
-            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)") />
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ref].nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)") />
         }
         return <Result.Ok value=() />
     }
@@ -1355,7 +1355,7 @@ pub impl Comp {
                     j += 1
                 }
                 if self.instArgCollidesParamName(instRef: ref) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ref).nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ref].nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type") />
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {

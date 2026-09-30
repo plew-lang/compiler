@@ -415,7 +415,7 @@ pub impl Comp {
                     val lo: Local = self.cur.locals[li]
                     out = lo.ty
                     if lo.isArray {
-                        if out == 0U64 || out >= self.arena.typeCount() || !(rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: out).nameStart, len: self.arena.typeAt(index: out).nameLen, kw: "Array")) {
+                        if out == 0U64 || out >= self.arena.typeCount() || !(rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[out].nameStart, len: self.arena.typeTerms[out].nameLen, kw: "Array")) {
                             val elem: U64 = out
                             if elem != 0U64 { out = self.arrayRefOfElem(elemRef: elem) }
                         }
@@ -3829,7 +3829,7 @@ pub impl Comp {
                 }
             }
             Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: val args) => {
-                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeAt(index: recvRef).isAny {
+                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeTerms[recvRef].isAny {
                     val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
                     if traitIdx >= self.decls.traitCount() || reqSlot == 0U64 {
@@ -3843,7 +3843,7 @@ pub impl Comp {
                 match fieldSelection.target { CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => { return <Result.Ok value=fieldSelection />} _ => {} }
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: val args) => {
-                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeAt(index: recvRef).isAny {
+                if recvRef != 0U64 && recvRef < self.arena.typeCount() && self.arena.typeTerms[recvRef].isAny {
                     val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
                     if traitIdx < self.decls.traitCount() && reqSlot != 0U64 {
@@ -4170,7 +4170,7 @@ pub impl Comp {
                         callee = (try self.proofConcreteWitness(proof: self.cur.bodyEnvironment.proof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                         if callee >= self.arena.functionCount() {
                             val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traitAt(index: traitIdx).nameStart)
-                            val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.typeCount() { give self.arena.typeAt(index: proofReceiver).viewExtId } else { give 0U64 }
+                            val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.typeCount() { give self.arena.typeTerms[proofReceiver].viewExtId } else { give 0U64 }
                             if req.isAssoc {
                                 callee = (try self.resolveAssocForResolvedReceiver(surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
                             } else {
@@ -4340,7 +4340,7 @@ pub impl Comp {
                     val recvRef: U64 = (try self.groundedBodyReceiverRef(exprId: recv))
                     resolvedReceiverRef = recvRef
                     if recvRef != 0U64 && recvRef < self.arena.typeCount() {
-                        if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: recvRef).nameStart, len: self.arena.typeAt(index: recvRef).nameLen, kw: "Self") {
+                        if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[recvRef].nameStart, len: self.arena.typeTerms[recvRef].nameLen, kw: "Self") {
                             return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "internal diagnostic: final method receiver remained Self after body substitution") />
                         }
                     }
@@ -4374,9 +4374,9 @@ pub impl Comp {
                         self.traceMonoTypeHead(ref: recvRef)
                         if recvRef < self.arena.typeCount() {
                             eprint(text: " any=")
-                            if self.arena.typeAt(index: recvRef).isAny { eprint(text: "1") } else { eprint(text: "0") }
+                            if self.arena.typeTerms[recvRef].isAny { eprint(text: "1") } else { eprint(text: "0") }
                             eprint(text: " param=")
-                            eprintU64(n: self.arena.typeAt(index: recvRef).paramId)
+                            eprintU64(n: self.arena.typeTerms[recvRef].paramId)
                         }
                         eprint(text: "\n")
                     }
@@ -6310,7 +6310,7 @@ pub impl Comp {
                         }
                     }
                     mut val iteratorRef: U64 = initialRef
-                    if initialRef != 0U64 && initialRef < self.arena.typeCount() && !(self.arena.typeAt(index: initialRef).isAny) {
+                    if initialRef != 0U64 && initialRef < self.arena.typeCount() && !(self.arena.typeTerms[initialRef].isAny) {
                         val noArgs: Array[Arg] = []
                         val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
                         mut val iteratorFn: U64 = self.arena.functionCount()
@@ -6383,7 +6383,7 @@ pub impl Comp {
                             try self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef resultRef=initialRef target=<CallTarget.NoCallable /> />)
                         }
                         val nextName = self.internBytes(s: "next")
-                        if iteratorRef != 0U64 && self.arena.typeAt(index: iteratorRef).isAny {
+                        if iteratorRef != 0U64 && self.arena.typeTerms[iteratorRef].isAny {
                             val traitIndex = self.finalAnyTraitIdx(anyRef: iteratorRef)
                             val nextSlot = self.finalAnyRequirementSlot(anyRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
                             if traitIndex >= self.decls.traitCount() || nextSlot == 0U64 {

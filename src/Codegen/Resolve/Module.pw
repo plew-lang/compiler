@@ -924,8 +924,8 @@ pub impl Comp {
         mut val recvStart: U64 = rt.nameStart
         mut val recvLen: U64 = rt.nameLen
         if rt.kind == 3 && rt.ref != 0U64 && rt.ref < self.arena.typeCount() {
-            recvStart = self.arena.typeAt(index: rt.ref).nameStart
-            recvLen = self.arena.typeAt(index: rt.ref).nameLen
+            recvStart = self.arena.typeTerms[rt.ref].nameStart
+            recvLen = self.arena.typeTerms[rt.ref].nameLen
         }
         mut val mfi: U64 = self.arena.functionCount()
         // Always start from the complete view set.  A multi-view TypeRef deliberately
@@ -1239,14 +1239,14 @@ pub impl Comp {
         if errRef >= self.arena.typeCount() {
             return <Result.Ok value=self.arena.functionCount() />
         }
-        val eNameId: U64 = self.arena.typeAt(index: errRef).nameId
+        val eNameId: U64 = self.arena.typeTerms[errRef].nameId
         if eNameId == 0U64 {
             return <Result.Ok value=self.arena.functionCount() />
         }
         if srcRef >= self.arena.typeCount() {
             return <Result.Ok value=self.arena.functionCount() />
         }
-        val srcNameId: U64 = self.arena.typeAt(index: srcRef).nameId
+        val srcNameId: U64 = self.arena.typeTerms[srcRef].nameId
         if srcNameId == 0U64 {
             return <Result.Ok value=self.arena.functionCount() />
         }

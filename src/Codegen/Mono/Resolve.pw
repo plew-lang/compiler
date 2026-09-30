@@ -451,8 +451,8 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return false
         }
-        val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.paramId == 0U64 && t.args.count() == 0U64 {
+        val t = self.arena.typeTerms[ref]
+        if t.paramId == 0U64 && t.args.len == 0U64 {
             return false
         }
         return self.genericEnumIndexForType(ref: ref) < self.arena.enumCount()

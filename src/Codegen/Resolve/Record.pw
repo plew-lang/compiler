@@ -427,7 +427,7 @@ pub impl Comp {
             self.traceMonoTypeHead(ref: receiverTerm)
             if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                 eprint(text: " receiver-any=")
-                if self.arena.typeAt(index: receiverTerm).isAny { eprint(text: "true") }
+                if self.arena.typeTerms[receiverTerm].isAny { eprint(text: "true") }
                 else { eprint(text: "false") }
             }
             eprint(text: "\n")
@@ -493,7 +493,7 @@ pub impl Comp {
                 // Do not defer an invalid written call to Mono's invariant check.
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && self.syntheticRequiredTraitOwner(exprId: exprId) == 0U64 {
                     if !(try self.recordedCallIsSelected(exprId: exprId)) {
-                        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeAt(index: receiverTerm).isAny {
+                        if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTerms[receiverTerm].isAny {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
                         } else {
                             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
@@ -616,7 +616,7 @@ pub impl Comp {
             return 0U64
         }
         if self.methodRecvIsTrait(f: f) {
-            if f.recvTy != 0U64 && self.arena.typeAt(index: f.recvTy).paramId != 0U64 { return f.recvTy }
+            if f.recvTy != 0U64 && self.arena.typeTerms[f.recvTy].paramId != 0U64 { return f.recvTy }
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
             mut val ti: U64 = 0U64
             while ti < self.decls.traitCount() {
@@ -739,7 +739,7 @@ pub impl Comp {
                             val declaredFields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
-                    } else if resultTerm < self.arena.typeCount() && !(self.arena.typeAt(index: resultTerm).isRecord) {
+                    } else if resultTerm < self.arena.typeCount() && !(self.arena.typeTerms[resultTerm].isRecord) {
                         val structIndex: U64 = self.structIndexForType(ref: self.fieldStorageTypeRef(receiverRef: resultTerm))
                         if structIndex < self.arena.structCount() {
                             val declaredFields: Array[FieldDef] = self.arena.structAt(index: structIndex).fields
@@ -754,7 +754,7 @@ pub impl Comp {
                 // that order here, alongside each selected destination slot.
                 // Structural records have canonical layout slots but retain
                 // their written evaluation order; layout is not evaluation.
-                if !self.arena.typeAt(index: resultTerm).isRecord {
+                if !self.arena.typeTerms[resultTerm].isRecord {
                     mut val position: U64 = 1U64
                     while position < elements.count() {
                         val element = elements[position]

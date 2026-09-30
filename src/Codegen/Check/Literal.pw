@@ -504,7 +504,7 @@ pub impl Comp {
         while gi < ginf.count() {
             mut val needsGround: Bool = ginf[gi] == 0U64
             if !(needsGround) {
-                if self.arena.typeAt(index: ginf[gi]).nameLen == 0U64 {
+                if self.arena.typeTerms[ginf[gi]].nameLen == 0U64 {
                     needsGround = true
                 }
             }

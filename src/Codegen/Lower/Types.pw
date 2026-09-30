@@ -167,7 +167,7 @@ pub impl Comp {
     inout fn recordTypeKey(pty: PType) -> Array[U8] {
         mut val out: Array[U8] = []
         if pty.ref < self.arena.typeCount() {
-            if self.arena.typeAt(index: pty.ref).isSendable {
+            if self.arena.typeTerms[pty.ref].isSendable {
                 appendBytes(into: inout out, from: "sendable ".bytes())
             }
         }

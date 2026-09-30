@@ -66,7 +66,7 @@ pub impl Comp {
         val protocolItem: U64 = (try self.iterableProtocolItemTerm(iterTerm: et.ref))
         if protocolItem != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: protocolItem) />}
         val noArgs: Array[Arg] = []
-        if et.ref != 0U64 && et.ref < self.arena.typeCount() && self.arena.typeAt(index: et.ref).isAny {
+        if et.ref != 0U64 && et.ref < self.arena.typeCount() && self.arena.typeTerms[et.ref].isAny {
             val item = self.existentialIterationItemTerm(receiver: et.ref)
             if item != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: item) /> }
             return <Result.Err error=self.diagnosticAt(offset: et.nameStart, msg: "for-loop requires an Iterable or Iterator") />

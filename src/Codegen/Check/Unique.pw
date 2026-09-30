@@ -511,7 +511,7 @@ pub impl Comp {
             if self.typeTermIsUnique(ref: ae.fieldStart) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.
-                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: ae.fieldStart).declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ae.fieldStart].declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
             }
             i += 1
         }
@@ -548,7 +548,7 @@ pub impl Comp {
                                 // the arena TypeRef has no use-site offset — anchor at the
                                 // unique type's own DECLARATION (a real file:line) instead of
                                 // the interned arg span, which maps to no source file.
-                                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: t.args[j]).declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
+                                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[t.args[j]].declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
                             }
                         }
                         j += 1

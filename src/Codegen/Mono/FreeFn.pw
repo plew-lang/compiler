@@ -485,7 +485,7 @@ pub impl Comp {
         while i < inferred.count() {
             mut val needsGround: Bool = inferred[i] == 0U64
             if !(needsGround) {
-                if self.arena.typeAt(index: inferred[i]).nameLen == 0U64 {
+                if self.arena.typeTerms[inferred[i]].nameLen == 0U64 {
                     needsGround = true
                 }
             }

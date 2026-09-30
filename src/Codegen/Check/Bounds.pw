@@ -16,7 +16,7 @@ pub impl Comp {
         if function.recvTy == 0U64 || function.recvTy >= self.arena.typeCount() { return false }
         val traitIndex = self.decls.traitIndexByOffset(offset: function.recvStart)
         if traitIndex >= self.decls.traitCount() { return false }
-        return self.arena.typeAt(index: function.recvTy).paramId != 0U64 && self.arena.typeAt(index: function.recvTy).paramId == self.decls.traitAt(index: traitIndex).selfParamId
+        return self.arena.typeTerms[function.recvTy].paramId != 0U64 && self.arena.typeTerms[function.recvTy].paramId == self.decls.traitAt(index: traitIndex).selfParamId
     }
 
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
@@ -190,7 +190,7 @@ pub impl Comp {
     }
 
     inout fn existentialIterationItemTerm(receiver: U64) -> U64 {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeAt(index: receiver).isAny { return 0U64 }
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || !self.arena.typeTerms[receiver].isAny { return 0U64 }
         return self.existentialIterationItemInBound(bound: <TraitBound subject=receiver constraint=self.existentialTraitConstraint(ref: receiver) offset=self.arena.typeAt(index: receiver).siteOffset />)
     }
 
@@ -209,7 +209,7 @@ pub impl Comp {
         val owner = self.coreTraitOwner(name: "Iterator")
         mut val valid = false
         if cursor != 0U64 && cursor < self.arena.typeCount() && owner != 0U64 {
-            if self.arena.typeAt(index: cursor).isAny {
+            if self.arena.typeTerms[cursor].isAny {
                 val cursorItem = self.existentialIterationItemInBound(bound: <TraitBound subject=cursor constraint=self.existentialTraitConstraint(ref: cursor) offset=offset />, requiredOwner: owner)
                 valid = cursorItem != 0U64 && self.typeRefEq(a: cursorItem, b: item)
             } else {
@@ -915,7 +915,7 @@ pub impl Comp {
         while k < tps.count() {
             if tps[k].nameId == prId {
                 if k < targs.count() {
-                    return self.arena.typeAt(index: targs[k]).nameId
+                    return self.arena.typeTerms[targs[k]].nameId
                 }
             }
             k += 1
@@ -962,7 +962,7 @@ pub impl Comp {
             if arrTarg != 0U64 {
                 if pw.tyIsArray {
                     val elemRef: U64 = self.arena.typeAt(index: arrTarg).args[0]
-                    if pw.tyNameId == self.arena.typeAt(index: elemRef).nameId {
+                    if pw.tyNameId == self.arena.typeTerms[elemRef].nameId {
                         i += 1
                     } else {
                         return false
@@ -1489,10 +1489,10 @@ pub impl Comp {
             match template.kind {
                 CallTemplateKind.Protocol(receiver: val receiver) => {
                     val term = try self.closedProtocolReceiver(receiver: receiver)
-                    if term != 0U64 && self.arena.typeAt(index: term).isAny {
+                    if term != 0U64 && self.arena.typeTerms[term].isAny {
                         try self.checkExistentialIterationReceiver(receiver: term, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
                     }
-                    if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeAt(index: term).isAny {
+                    if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeTerms[term].isAny {
                         val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
                         val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
                         val arguments = self.pushArgs(args: [])

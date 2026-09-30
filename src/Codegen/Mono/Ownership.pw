@@ -56,7 +56,7 @@ pub impl Comp {
             val call = contract.deinitCall
             if call.bodyId != 0U64 {
                 if !self.finalDestructorCallIsValid(call: call) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.arena.typeAt(index: contract.typeRef).nameStart, msg: "internal error: destructor requires a finalized borrowed receiver and a nullary Unit body") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[contract.typeRef].nameStart, msg: "internal error: destructor requires a finalized borrowed receiver and a nullary Unit body") />
                 }
                 val finalized = <FinalDestructorCall bodyId=call.bodyId receiverType=call.receiverType receiverPassing=call.receiverPassing ready=true />
                 self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
@@ -113,7 +113,7 @@ pub impl Comp {
         val identity = self.finalDestructionIndex(typeRef: typeRef)
         if identity != 0U64 && self.arena.finalDestructions[identity - 1U64].ready { return <Result.Ok value=identity /> }
         mut val offset = 0U64
-        if typeRef < self.arena.typeCount() { offset = self.arena.typeAt(index: typeRef).nameStart }
+        if typeRef < self.arena.typeCount() { offset = self.arena.typeTerms[typeRef].nameStart }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: ownership action has no finalized classification") />
     }
 
@@ -237,7 +237,7 @@ pub impl Comp {
         mut val children = shape.fieldTypes
         mut val dynamicPayload = false
         if shape.underlying != 0U64 { children = [shape.underlying] }
-        else if !self.arena.typeAt(index: typeRef).isRecord {
+        else if !self.arena.typeTerms[typeRef].isRecord {
             match (try self.arcClassOfRef(ref: typeRef)) {
                 ArcClass.BufferLike(elem: val element) => { children.append(element) }
                 ArcClass.RefCell(inst: val instance) => { children.append(self.arena.typeAt(index: instance).args[0U64]) }

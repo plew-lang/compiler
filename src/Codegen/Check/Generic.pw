@@ -814,7 +814,7 @@ pub impl Comp {
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {
-            if self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[expectedRef].paramId) || self.isSelfTypeInProvided(start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen) {
+            if self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: self.arena.typeTerms[expectedRef].paramId) || self.isSelfTypeInProvided(start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen) {
                 match self.arena.exprs[valueExpr] {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                         if !(isBool) {
@@ -866,7 +866,7 @@ pub impl Comp {
         // an array literal in an `Array[E]` position: recurse element-wise (inferType
         // reports an array literal as unknown, so check each element against E).
         if expectedRef < self.arena.typeCount() {
-            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen, kw: "Array") {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen, kw: "Array") {
                 if self.arena.typeAt(index: expectedRef).args.count() > 0U64 {
                     match self.arena.exprs[valueExpr] {
                         Expr.Array(val elems) => {
@@ -1070,7 +1070,7 @@ pub impl Comp {
     // supertrait paths and declaration owners retain their identities.
     inout fn checkAbstractIterationReceiver(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
         if receiver == 0U64 || receiver >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.arena.typeAt(index: receiver).isAny {
+        if self.arena.typeTerms[receiver].isAny {
             return self.checkExistentialIterationReceiver(receiver: receiver, fnIdx: self.cur.checkFn, offset: offset)
         }
         if self.typeTermIsClosed(ref: receiver) { return <Result.Ok value=() /> }

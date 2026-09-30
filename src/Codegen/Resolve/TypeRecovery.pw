@@ -157,7 +157,7 @@ pub impl Comp {
         if a >= self.arena.typeCount() || b >= self.arena.typeCount() {
             return false
         }
-        if self.arena.typeAt(index: a).isAny || self.arena.typeAt(index: b).isAny {
+        if self.arena.typeTerms[a].isAny || self.arena.typeTerms[b].isAny {
             return false
         }
         if self.isFnType(ref: a) || self.isFnType(ref: b) {
@@ -232,7 +232,7 @@ pub impl Comp {
             // them through the same complete TypeRef identity used for fn
             // types instead of letting the fallback erase the capability.
             if ti.ref != 0U64 && p.ty != 0U64 && ti.ref < self.arena.typeCount() && p.ty < self.arena.typeCount() {
-                if self.arena.typeAt(index: ti.ref).isAny || self.arena.typeAt(index: p.ty).isAny {
+                if self.arena.typeTerms[ti.ref].isAny || self.arena.typeTerms[p.ty].isAny {
                     return <Result.Ok value=self.typeRefEq(a: ti.ref, b: p.ty) />
                 }
             }
@@ -347,7 +347,7 @@ pub impl Comp {
                         val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
                         if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
                             allMatch = false
-                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.typeCount() && (self.arena.typeAt(index: actual.ref).isAny || expectedTerm.isAny)) {
+                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.typeCount() && (self.arena.typeTerms[actual.ref].isAny || expectedTerm.isAny)) {
                             if !(self.typeRefEq(a: actual.ref, b: expected)) {
                                 allMatch = false
                             }

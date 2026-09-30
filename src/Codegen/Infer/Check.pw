@@ -23,7 +23,7 @@ pub impl Comp {
         // empty `[]` here used to coincidentally read count 0 in a let binding yet reinterpret
         // to garbage as an argument; reject it with a clear pointer to `[:]`.
         if expectedRef < self.arena.typeCount() {
-            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeAt(index: expectedRef).nameStart, len: self.arena.typeAt(index: expectedRef).nameLen, kw: "Dictionary") {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.typeTerms[expectedRef].nameStart, len: self.arena.typeTerms[expectedRef].nameLen, kw: "Dictionary") {
                 match self.arena.exprs[valueExpr] {
                     Expr.Array(elems: _) => {
                         if !(self.tcLog) {
@@ -48,7 +48,7 @@ pub impl Comp {
         // the old nominal-layout comparison, which would discard the Record
         // node merely because the literal had no independent annotation.
         if expectedRef < self.arena.typeCount() {
-            if self.arena.typeAt(index: expectedRef).isRecord {
+            if self.arena.typeTerms[expectedRef].isRecord {
                 match self.arena.exprs[valueExpr] {
                     Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return <Result.Ok value=() /> }
                     _ => {}
@@ -217,7 +217,7 @@ pub impl Comp {
         // `Add[Money]` on a primitive int. typesCompatible preserves numeric widths
         // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
         // may legitimately differ) is excluded here — its witness is checked elsewhere.
-        val lNum: Bool = self.isIntType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen) || self.isFloatType(start: self.arena.typeAt(index: l).nameStart, len: self.arena.typeAt(index: l).nameLen)
+        val lNum: Bool = self.isIntType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen) || self.isFloatType(start: self.arena.typeTerms[l].nameStart, len: self.arena.typeTerms[l].nameLen)
         if lNum {
             try self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "binop")
         }
