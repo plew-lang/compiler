@@ -1045,7 +1045,7 @@ pub impl Comp {
     // Preserve an opaque projection when a bound does not give an equality;
     // scalarInfo would silently discard that type in an unused generic body.
     inout fn symbolicIterationItemTerm(receiver: U64) -> Result[U64, CompileDiagnostic] {
-        if receiver == 0U64 || receiver >= self.arena.typeCount() || self.typeTermIsClosed(ref: receiver) { return <Result.Ok value=0U64 /> }
+        if receiver == 0U64 || receiver >= self.arena.typeCount() || self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=0U64 /> }
         val receiverType = self.arena.typeAt(index: receiver)
         if receiverType.isAny { return <Result.Ok value=0U64 /> }
         val item = self.internBytes(s: "Item")
@@ -1073,7 +1073,7 @@ pub impl Comp {
         if self.arena.typeTerms[receiver].isAny {
             return self.checkExistentialIterationReceiver(receiver: receiver, fnIdx: self.cur.checkFn, offset: offset)
         }
-        if self.typeTermIsClosed(ref: receiver) { return <Result.Ok value=() /> }
+        if self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=() /> }
         if (try self.symbolicIterationItemTerm(receiver: receiver)) != 0U64 { return <Result.Ok value=() /> }
         val arguments = self.pushArgs(args: [])
         val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)

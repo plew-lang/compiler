@@ -1019,7 +1019,7 @@ pub impl LlvmCtx {
         mut val typeArgument = 0U64
         while typeArgument < selected.calleeTypeArgs.len {
             val term = c.finalCalleeTypeArgAt(args: selected.calleeTypeArgs, index: typeArgument)
-            if term == 0U64 || !c.typeTermIsClosed(ref: term) { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
+            if term == 0U64 || !c.arena.typeIsClosed(ref: term) { return <Result.Ok value=<MidCallPreflight.GenericArguments /> /> }
             typeArgument += 1U64
         }
         if term.args.len != callee.params.count() || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }

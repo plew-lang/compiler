@@ -158,13 +158,6 @@ pub impl Comp {
         return ref
     }
 
-    // Closedness is structural evidence, not an opportunity to resolve a
-    // projection or reinterpret a spelling in an ambient generic scope.
-    // Unit is the zero type term (including a function result child).
-    fn typeTermIsClosed(ref: U64) -> Bool {
-        return self.arena.typeIsClosed(ref: ref)
-    }
-
     // Only the frontend normalizes projections. Record the original term,
     // never the fresh IDs allocated by substitution or projection rebuilding.
     inout fn groundAndRecordBodyType(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, bodyId: U64) -> Result[U64, CompileDiagnostic] {
@@ -176,7 +169,7 @@ pub impl Comp {
     }
 
     inout fn recordBodyTypeTermResult(bodyId: U64, source: U64, result: U64) {
-        if bodyId == 0U64 || source == 0U64 || source >= self.arena.typeTerms.count() || self.typeTermIsClosed(ref: source) || !self.typeTermIsClosed(ref: result) { return }
+        if bodyId == 0U64 || source == 0U64 || source >= self.arena.typeTerms.count() || self.arena.typeIsClosed(ref: source) || !self.arena.typeIsClosed(ref: result) { return }
         self.arena.setBodyTypeTermResult(bodyId: bodyId, typeTerm: source, resultType: result)
         val term = self.arena.typeTerms[source]
         if result == 0U64 || term.paramId != 0U64 || term.assocNameId != 0U64 { return }

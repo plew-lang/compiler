@@ -230,7 +230,7 @@ pub impl Comp {
     // terms/recipes as obligations rather than interpreting them as empty shapes.
     // No layout is collected and no executable body or destruction is enqueued.
     inout fn closedDestructionDependencies(typeRef: U64) -> Result[DestructionDependencies, CompileDiagnostic] {
-        if typeRef == 0U64 || !self.typeTermIsClosed(ref: typeRef) {
+        if typeRef == 0U64 || !self.arena.typeIsClosed(ref: typeRef) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: destruction dependency query requires a closed type") />
         }
         val shape = self.closedDestructionShape(typeRef: typeRef)

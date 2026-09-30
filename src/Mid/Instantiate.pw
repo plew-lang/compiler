@@ -74,7 +74,7 @@ fn instantiateMidTerm(c: inout Comp, typeTerm: U64, bodyId: U64, environment: Bo
     if fact.bodyId == 0U64 {
         result = c.groundTermInEnvironment(ref: typeTerm, params: environment.environment.params, values: environment.environment.args, selfRef: environment.environment.receiverRef, itemRef: 0U64)
     }
-    if !c.typeTermIsClosed(ref: result) {
+    if !c.arena.typeIsClosed(ref: result) {
         if c.traceCodegen {
             eprint(text: "[mid-type] missing body=")
             eprintU64(n: bodyId)

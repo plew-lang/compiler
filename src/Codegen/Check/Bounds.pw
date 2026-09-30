@@ -1403,15 +1403,15 @@ pub impl Comp {
                 if args.count() != function.typeParams.count() { return <Result.Ok value=0U64 /> }
                 mut val argument = 0U64
                 while argument < args.count() {
-                    if args[argument] == 0U64 || !self.typeTermIsClosed(ref: args[argument]) { return <Result.Ok value=0U64 /> }
+                    if args[argument] == 0U64 || !self.arena.typeIsClosed(ref: args[argument]) { return <Result.Ok value=0U64 /> }
                     argument += 1U64
                 }
                 val receiver = template.receiverTypeTerm
-                if (function.hasRecv || function.isAssoc) && (receiver == 0U64 || !self.typeTermIsClosed(ref: receiver)) { return <Result.Ok value=0U64 /> }
+                if (function.hasRecv || function.isAssoc) && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=0U64 /> }
                 val environment = try self.bodyInstanceEnvironment(fnIdx: callee, args: args, recvInstRef: receiver, selectedProof: self.thawStaticConformanceProof(id: proofId))
                 try self.checkSelectedCallableBounds(fnIdx: callee, args: args, receiver: environment.receiverRef)
                 val result = try self.groundedSelectedCalleeReturn(callee: callee, environment: environment)
-                if result == 0U64 || !self.typeTermIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
+                if result == 0U64 || !self.arena.typeIsClosed(ref: result) { return <Result.Ok value=0U64 /> }
                 return <Result.Ok value=result />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, resultTerm: val result) => {
@@ -1428,7 +1428,7 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                if hasResult && result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
+                if hasResult && result != 0U64 && self.arena.typeIsClosed(ref: result) { return <Result.Ok value=result /> }
             }
             CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: val target) => {
                 mut val result = 0U64
@@ -1442,7 +1442,7 @@ pub impl Comp {
                             if slot <= requirements.count() {
                                 val requirement = self.traitReqAt(reqs: requirements, index: slot - 1U64)
                                 val receiverTerm = try self.closedProtocolReceiver(receiver: receiver)
-                                if self.hasDeclaredCallResult(function: requirement) && receiverTerm != 0U64 && self.typeTermIsClosed(ref: receiverTerm) {
+                                if self.hasDeclaredCallResult(function: requirement) && receiverTerm != 0U64 && self.arena.typeIsClosed(ref: receiverTerm) {
                                     result = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
                                 }
                             }
@@ -1453,7 +1453,7 @@ pub impl Comp {
                     val arguments = self.arena.typeAt(index: signature).args
                     if arguments.count() != 0U64 { result = arguments[0U64] }
                 }
-                if result != 0U64 && self.typeTermIsClosed(ref: result) { return <Result.Ok value=result /> }
+                if result != 0U64 && self.arena.typeIsClosed(ref: result) { return <Result.Ok value=result /> }
             }
             _ => {}
         }
@@ -1492,7 +1492,7 @@ pub impl Comp {
                     if term != 0U64 && self.arena.typeTerms[term].isAny {
                         try self.checkExistentialIterationReceiver(receiver: term, fnIdx: template.siteKey.ownerFnIdx, offset: template.siteKey.originStart)
                     }
-                    if term != 0U64 && self.typeTermIsClosed(ref: term) && !self.arena.typeTerms[term].isAny {
+                    if term != 0U64 && self.arena.typeIsClosed(ref: term) && !self.arena.typeTerms[term].isAny {
                         val iteratorName = self.kwSpan(kw: "iterator", kwLen: 8U64)
                         val nextName = self.kwSpan(kw: "next", kwLen: 4U64)
                         val arguments = self.pushArgs(args: [])

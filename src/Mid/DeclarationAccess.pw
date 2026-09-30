@@ -162,7 +162,7 @@ impl DeclarationAccessState {
     }
 
     inout fn destruction(c: Comp, caller: U64, term: U64, recipe: U64 = 0U64) {
-        if recipe != 0U64 || (term != 0U64 && !c.typeTermIsClosed(ref: term)) {
+        if recipe != 0U64 || (term != 0U64 && !c.arena.typeIsClosed(ref: term)) {
             self.obligations.append(<DeclarationAccessObligation.Destruction body=caller typeTerm=term typeRecipe=recipe />)
             return
         }
