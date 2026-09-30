@@ -277,7 +277,7 @@ pub impl Comp {
             return <Result.Ok value=false />
         }
         // same head: a generic head must agree on its type arguments.
-        if te.args.len == tin.args.len {
+        if te.args.len != 0U64 && te.args.len == tin.args.len {
             // covariant container erasure (spec/08, SE-0309): an arg widening concrete->`any P`
             // (`Dictionary[K, S]` -> `Dictionary[K, any P]`) is a genuine per-position REPACK,
             // which the backend performs only for `Array` and generic enums (Optional/Result/…).
