@@ -277,8 +277,8 @@ pub impl Comp {
         // same source question as normal view formation, not infer it from a
         // callable witness that happens to exist in the extension.
         mut val ci: U64 = 0U64
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
+        while ci < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: ci)
             if cf.extId == extId {
                 val subjectOwner: U64 = cf.subjectTraitOwner
                 mut val bi: U64 = 0U64

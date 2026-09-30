@@ -469,8 +469,8 @@ pub impl Comp {
     }
 
     inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
-        if conformIdx >= self.decls.conforms.count() { return <Result.Ok value=<WitnessMatch /> />}
-        val cf: Conform = self.decls.conforms[conformIdx]
+        if conformIdx >= self.decls.conformCount() { return <Result.Ok value=<WitnessMatch /> />}
+        val cf: Conform = self.decls.conformAt(index: conformIdx)
         return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
 
@@ -752,8 +752,8 @@ pub impl Comp {
         mut val originIsTraitSubject: Bool = false
         if f.isProvided && f.originConformIdx != 0U64 {
             val ci: U64 = f.originConformIdx - 1U64
-            if ci < self.decls.conforms.count() {
-                val origin: Conform = self.decls.conforms[ci]
+            if ci < self.decls.conformCount() {
+                val origin: Conform = self.decls.conformAt(index: ci)
                 originIsTraitSubject = origin.subjectTraitOwner != 0U64
             }
         }
@@ -767,8 +767,8 @@ pub impl Comp {
             mut val traitArgs: PatternTypeInput = <PatternTypeInput.Values values=[] />
             if f.originConformIdx != 0U64 {
                 val ci: U64 = f.originConformIdx - 1U64
-                if ci < self.decls.conforms.count() {
-                    val origin: Conform = self.decls.conforms[ci]
+                if ci < self.decls.conformCount() {
+                    val origin: Conform = self.decls.conformAt(index: ci)
                     traitId = origin.traitId
                     traitOwner = origin.traitStart
                     traitArgs = <PatternTypeInput.Conformance range=origin.traitArgs />
@@ -806,8 +806,8 @@ pub impl Comp {
 
     inout fn checkConformanceRegistration(cf: Conform) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val prior: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val prior: Conform = self.decls.conformAt(index: i)
             if !prior.derived {
                 // As with methods, a named extension is one source-selectable
                 // bundle, not one bundle per defining module.  Its conformance
@@ -833,7 +833,7 @@ pub impl Comp {
 
     inout fn registerDeclaredConformance(cf: Conform) -> Result[(), CompileDiagnostic] {
         try self.checkConformanceRegistration(cf: cf)
-        self.decls.conforms.append(cf)
+        self.decls.registerConform(cf)
         return <Result.Ok value=() />
     }
 

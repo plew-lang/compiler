@@ -69,8 +69,8 @@ pub impl Comp {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qM: U64 = intern(c: inout self, start: mStart, len: mLen)
         mut val ci: U64 = 0
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
+        while ci < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: ci)
             if cf.typeId == qRecv {
                 mut val ti: U64 = 0
                 while ti < self.decls.traitCount() {

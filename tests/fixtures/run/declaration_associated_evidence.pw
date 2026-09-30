@@ -7,7 +7,7 @@ fn main() {
     val source = "trait Required {}\ntrait Source { type Item: Required }\ntrait Container { type Item }\nstruct Box[T] {}\nimpl[T] Box[T] as Container where T: Source { type Item=T#Source.Item }\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="evidence.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    val conform = compiler.decls.conforms[0U64]
+    val conform = compiler.decls.conformAt(index: 0U64)
     val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: conform.assocBindingIds, index: 0U64)]
     val assumptions = compiler.conformanceDeclarationAssumptions(conformIndex: 0U64)
     val target = compiler.traitAssociatedBoundAt(bounds: compiler.decls.traitAt(index: 1U64).assocBounds, index: 0U64)

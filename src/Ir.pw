@@ -5,6 +5,7 @@ part ./Ir/AccessCandidates
 part ./Ir/Callables
 part ./Ir/TraitOwners
 part ./Ir/Types
+part ./Ir/Conformances
 part ./Ir/DeclarationNames
 part ./Ir/BodyInstances
 
@@ -3043,7 +3044,8 @@ pub struct Decls {
     mut val callableNameHeads: Array[U64] = []
     mut val callableNameTails: Array[U64] = []
     mut val callableNameNext: Array[U64] = []
-    pub mut val conforms: Array[Conform] = []
+    mut val conformRows: Array[Conform] = []
+    mut val traitSubjectConformIndices: Array[U64] = []
     // Typed immutable payload pools for scalar Conform rows. See the range
     // descriptors above; consumers must read them through Comp's range readers
     // instead of copying a declaration aggregate out of conforms.

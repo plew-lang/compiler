@@ -1,0 +1,29 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Ir with { Decls, Conform }
+
+fn declaration(owner: U64, identity: U64, derived: Bool) -> Conform {
+    return <Conform sourceModule=0U64 typeStart=identity typeLen=1U64 typeId=identity subjectTraitOwner=owner traitStart=99U64 traitLen=1U64 traitId=99U64 derived=derived />
+}
+
+fn main() {
+    mut val declarations = <Decls />
+    declarations.registerConform(declaration(owner: 0U64, identity: 10U64, derived: false))
+    declarations.registerConform(declaration(owner: 11U64, identity: 11U64, derived: false))
+    declarations.registerConform(declaration(owner: 0U64, identity: 12U64, derived: true))
+    val snapshot = declarations
+    declarations.registerConform(declaration(owner: 13U64, identity: 13U64, derived: true))
+    assert(declarations.conformCount() == 4U64)
+    assert(declarations.traitSubjectConformCount() == 2U64)
+    assert(declarations.traitSubjectConformIndexAt(index: 0U64) == 1U64)
+    assert(declarations.traitSubjectConformIndexAt(index: 1U64) == 3U64)
+    assert(declarations.conformAt(index: 3U64).derived)
+    assert(snapshot.conformCount() == 3U64)
+    assert(snapshot.traitSubjectConformCount() == 1U64)
+    mut val fork = snapshot
+    fork.registerConform(declaration(owner: 14U64, identity: 14U64, derived: false))
+    assert(fork.conformAt(index: 3U64).typeId == 14U64)
+    assert(declarations.conformAt(index: 3U64).typeId == 13U64)
+    assert(snapshot.traitSubjectConformCount() == 1U64)
+    print("ok")
+}

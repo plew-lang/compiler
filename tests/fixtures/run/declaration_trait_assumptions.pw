@@ -7,8 +7,8 @@ import /Ir with { StaticConformanceProof, PatternTypeInput, PatternBindInput, De
 fn conformance(compiler: inout Comp, name: String) -> U64 {
     val id = compiler.internBytes(s: name).nameId
     mut val index = 0U64
-    while index < compiler.decls.conforms.count() {
-        if compiler.decls.conforms[index].typeId == id { return index }
+    while index < compiler.decls.conformCount() {
+        if compiler.decls.conformAt(index: index).typeId == id { return index }
         index += 1U64
     }
     panic "missing fixture declaration"
@@ -20,18 +20,18 @@ fn main() {
     val source = "trait Required {}\ntrait Source[Arg] { type Item }\ntrait Middle[Arg] { type Item }\ntrait Target[Arg] { type Item }\ntrait Scope {}\nstruct Token {}\nstruct Other {}\nimpl Token as Required {}\nstruct Box[T] {}\nimpl[T] Box[T] as Source[T] where T: Required { type Item = T }\nimpl[P] Source[P] as Middle[P] where P: Required { type Item = P }\nimpl[Q] Middle[Q] as Target[Q] { type Item = Q }\nstruct Context[A] {}\nimpl[A] Context[A] as Scope where A: Required {}\nstruct Abstract[A] {}\nimpl[A] Abstract[A] as Scope where A: Source[Token] {}\nstruct Wrong[A] {}\nimpl[A] Wrong[A] as Scope where A: Source[Other] {}\nstruct Associated[A] {}\nimpl[A] Associated[A] as Scope where A: Source[Token, Item = Other] {}\nstruct Layer[T] {}\ntrait CycleA[T] {}\ntrait CycleB[T] {}\nimpl[T] CycleA[T] as CycleB[T] {}\nimpl[T] CycleB[Layer[T]] as CycleA[T] {}\nstruct Shrinking[R] {}\nimpl[R] Shrinking[R] as Scope where R: CycleA[Layer[Layer[Token]]] {}\n"
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="assumptions.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    val context = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Context")]
+    val context = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Context"))
     val facts = compiler.conformanceBoundAssumptions(bounds: context.bounds)
     val bound = compiler.declarationBound(source: facts[0U64])
     assert(compiler.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint, assumptions: facts).unwrap())
     assert(!compiler.viewedTypeConformsTraitConstraint(ref: bound.subject, constraint: bound.constraint).unwrap())
-    val abstract = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Abstract")]
+    val abstract = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Abstract"))
     val abstractFacts = compiler.conformanceBoundAssumptions(bounds: abstract.bounds)
     val abstractBound = compiler.declarationBound(source: abstractFacts[0U64])
-    val wrong = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Wrong")]
+    val wrong = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Wrong"))
     val wrongFacts = compiler.conformanceBoundAssumptions(bounds: wrong.bounds)
     val wrongBound = compiler.declarationBound(source: wrongFacts[0U64])
-    val associated = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Associated")]
+    val associated = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Associated"))
     val associatedFacts = compiler.conformanceBoundAssumptions(bounds: associated.bounds)
     val associatedBound = compiler.declarationBound(source: associatedFacts[0U64])
     assert(compiler.viewedTypeConformsTraitConstraint(ref: associatedBound.subject, constraint: associatedBound.constraint, assumptions: associatedFacts).unwrap())
@@ -60,11 +60,11 @@ fn main() {
     assert(compiler.sameStaticConformanceProof(a: proof, b: restored))
     val rejected = compiler.traitPatternProof(baseRef: wrongBound.subject, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=wrongBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: wrongFacts).unwrap()
     assert(missing(proof: rejected))
-    val box = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Box")]
+    val box = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Box"))
     val receiver = compiler.groundTermInEnvironment(ref: box.subjectTy, params: compiler.copyConformBinds(binds: box.typeParams), values: [bound.subject])
     val nested = compiler.traitPatternProof(baseRef: receiver, traitId: targetId, traitOwner: targetOwner, traitArgs: <PatternTypeInput.Values values=[bound.subject] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: [item], assocValues: [bound.subject], assumptions: facts).unwrap()
     assert(!missing(proof: nested))
-    val shrinking = compiler.decls.conforms[conformance(compiler: inout compiler, name: "Shrinking")]
+    val shrinking = compiler.decls.conformAt(index: conformance(compiler: inout compiler, name: "Shrinking"))
     val shrinkingFacts = compiler.conformanceBoundAssumptions(bounds: shrinking.bounds)
     val shrinkingBound = compiler.declarationBound(source: shrinkingFacts[0U64])
     val smaller = compiler.traitPatternProof(baseRef: shrinkingBound.subject, traitId: 0U64, traitOwner: shrinkingBound.constraint.key.owner, traitArgs: <PatternTypeInput.Values values=abstractBound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: shrinkingFacts).unwrap()

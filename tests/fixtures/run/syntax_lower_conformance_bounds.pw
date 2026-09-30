@@ -3,8 +3,8 @@ import @Plew/Syntax as Syntax
 import @Std/Core with { assert }
 import @Std/Io with { print }
 fn check(compiler: inout Comp) {
-    assert(compiler.decls.conforms.count() == 1U64)
-    val conformance = compiler.decls.conforms[0U64]
+    assert(compiler.decls.conformCount() == 1U64)
+    val conformance = compiler.decls.conformAt(index: 0U64)
     assert(conformance.witnessFuncIds.len == 0U64)
     assert(conformance.bounds.len == 1U64)
     val bound = compiler.conformBoundAt(bounds: conformance.bounds, index: 0U64)

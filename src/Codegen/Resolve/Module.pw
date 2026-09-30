@@ -572,8 +572,8 @@ pub impl Comp {
         }
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0U64
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == recvId && cf.traitStart == traitOwner {
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] view-source matching conformance key\n")

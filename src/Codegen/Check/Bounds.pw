@@ -44,7 +44,7 @@ pub impl Comp {
         match source {
             DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
-            DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conforms.count() }
+            DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conformCount() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
             DeclarationBoundRef.MethodReceiver(val index) => { return self.functionHasTraitReceiver(fnIdx: index) }
         }
@@ -63,7 +63,7 @@ pub impl Comp {
                 return <TraitBound subject=bound.subject constraint=bound.constraint offset=bound.offset />
             }
             DeclarationBoundRef.TraitSubject(val index) => {
-                val conformance = self.decls.conforms[index]
+                val conformance = self.decls.conformAt(index: index)
                 val owner = conformance.subjectTraitOwner
                 return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
@@ -515,8 +515,8 @@ pub impl Comp {
                 match baseProof {
                     StaticConformanceProof.AssumedBound(source: val boundRef) => {
                         mut val ci: U64 = 0U64
-                        while ci < self.decls.conforms.count() {
-                            val edge: Conform = self.decls.conforms[ci]
+                        while ci < self.decls.conformCount() {
+                            val edge: Conform = self.decls.conformAt(index: ci)
                             if edge.subjectTraitOwner != 0U64 && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
                                 val selectedWitness = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
                                 if selectedWitness.conformIdx == 0U64 || !(try self.witnessConditionsSatisfied(witness: selectedWitness, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) { ci += 1U64 continue }
@@ -679,7 +679,7 @@ pub impl Comp {
     }
 
     inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {
-        val conformance = self.decls.conforms[conformIndex]
+        val conformance = self.decls.conformAt(index: conformIndex)
         mut val result = self.conformanceBoundAssumptions(bounds: conformance.bounds)
         if conformance.subjectTraitOwner != 0U64 { result.append(<DeclarationBoundRef.TraitSubject index=conformIndex />) }
         return result
@@ -815,8 +815,8 @@ pub impl Comp {
                     // dropping them made `Index.Output` appear as the bare
                     // `Index[]` projection and forced later phases to guess.
                     StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
-                        val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
+                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
+                        val conform: Conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
                         val receiver: U64 = (try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness))
@@ -829,7 +829,7 @@ pub impl Comp {
                     // the path's first edge would incorrectly retain source
                     // trait arguments after a rewriting conformance.
                     StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminalConformIdx) => {
-                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
+                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 />}
                         mut val terminal: WitnessMatch = <WitnessMatch />
                         mut val edgeIdx: U64 = 0U64
                         while edgeIdx < edges.count() {
@@ -837,7 +837,7 @@ pub impl Comp {
                             edgeIdx += 1U64
                         }
                         if terminal.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
-                        val conform: Conform = self.decls.conforms[terminalConformIdx - 1U64]
+                        val conform: Conform = self.decls.conformAt(index: terminalConformIdx - 1U64)
                         val traitDef: TraitDef = self.decls.traitAt(index: traitIdx)
                         if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 />}
                         val receiver: U64 = (try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: terminal))
@@ -1194,8 +1194,8 @@ pub impl Comp {
 
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
         mut val ci: U64 = 0
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
+        while ci < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: ci)
             if cf.derived {
                 // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
                 // trait is compiler-known — exempt from unknown-trait/completeness.
@@ -1274,12 +1274,12 @@ pub impl Comp {
         // No structural shortcut for Eq/Ord: every conformance is an explicit `impl` (spec/12,
         // operators are trait sugar). Primitives conform via their real `impl I64 as Eq`/`as
         // Ord` witnesses in Core/Num.pw, String via `impl String as Eq` in Core — all recorded
-        // in decls.conforms below. A type with no witness (String/Bool have no `Ord`) correctly
+        // in the conformance table below. A type with no witness (String/Bool have no `Ord`) correctly
         // fails the bound, the same clean reject a missing struct/enum witness gives.
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             // A named extension contributes a conformance only through its
             // explicit view.  Letting it satisfy a bare bound leaks opt-in
             // meaning from `value#Ext` into plain `value`.
@@ -1334,8 +1334,8 @@ pub impl Comp {
     inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if cf.typeId == qType {
                 if rangeEquals(bytes: self.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: traitName) {
                     return true

@@ -1,0 +1,15 @@
+// Rows and their subject-domain index share one append-only owner. Candidate
+// indices are original row IDs, preserving witness provenance and cycle scopes.
+pub impl Decls {
+    fn conformCount() -> U64 { return self.conformRows.count() }
+    fn conformAt(index: U64) -> Conform { return self.conformRows[index] }
+    fn traitSubjectConformCount() -> U64 { return self.traitSubjectConformIndices.count() }
+    fn traitSubjectConformIndexAt(index: U64) -> U64 { return self.traitSubjectConformIndices[index] }
+
+    inout fn registerConform(declaration~: Conform) {
+        if declaration.subjectTraitOwner != 0U64 {
+            self.traitSubjectConformIndices.append(self.conformRows.count())
+        }
+        self.conformRows.append(declaration)
+    }
+}

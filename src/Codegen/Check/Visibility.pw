@@ -946,8 +946,8 @@ pub impl Comp {
             fi += 1
         }
         mut val ci: U64 = 0
-        while ci < self.decls.conforms.count() {
-            try self.checkPublicConformanceSurface(surfaces: inout surfaces, cf: self.decls.conforms[ci])
+        while ci < self.decls.conformCount() {
+            try self.checkPublicConformanceSurface(surfaces: inout surfaces, cf: self.decls.conformAt(index: ci))
             ci += 1
         }
         return <Result.Ok value=() />

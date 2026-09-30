@@ -17,8 +17,8 @@ pub impl Comp {
         mut val firstTraitOwner: U64 = 0U64
         mut val firstTraitArity: U64 = 0U64
         mut val i: U64 = 0U64
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == typeId && cf.traitStart == traitOwner {
                 val applies: Bool = self.conformanceSubjectMatches(cf: cf, typeRef: typeRef)
                 if applies {
@@ -373,8 +373,8 @@ pub impl Comp {
 
     inout fn checkBlanketHeadless() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if !(cf.derived) {
                 if self.moduleOf(offset: cf.typeStart) == 0U64 {
                     if self.isBlanketConform(cf: cf) {

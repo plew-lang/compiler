@@ -1086,8 +1086,8 @@ pub impl Comp {
             StaticConformanceProof.ConcreteWitness(val witness) => {
                 if witness.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
                 val ci: U64 = witness.conformIdx - 1U64
-                if ci >= self.decls.conforms.count() { return <Result.Ok value=0U64 />}
-                val cf: Conform = self.decls.conforms[ci]
+                if ci >= self.decls.conformCount() { return <Result.Ok value=0U64 />}
+                val cf: Conform = self.decls.conformAt(index: ci)
                 if cf.traitStart != traitOwner { return <Result.Ok value=0U64 />}
                 mut val found: U64 = 0U64
                 mut val count: U64 = 0U64
@@ -1116,8 +1116,8 @@ pub impl Comp {
             StaticConformanceProof.TraitPath(val edges, val terminalConformIdx) => {
                 if terminalConformIdx == 0U64 { return <Result.Ok value=0U64 />}
                 val ci: U64 = terminalConformIdx - 1U64
-                if ci >= self.decls.conforms.count() { return <Result.Ok value=0U64 />}
-                val cf: Conform = self.decls.conforms[ci]
+                if ci >= self.decls.conformCount() { return <Result.Ok value=0U64 />}
+                val cf: Conform = self.decls.conformAt(index: ci)
                 if cf.traitStart != traitOwner { return <Result.Ok value=0U64 />}
                 mut val edgeIdx: U64 = 0U64
                 mut val terminal: WitnessMatch = <WitnessMatch />

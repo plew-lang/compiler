@@ -6,8 +6,11 @@ import /Ir with { StaticConformanceProof, PatternTypeInput, PatternBindInput, De
 
 fn facts(compiler: inout Comp, name: String) -> Array[DeclarationBoundRef] {
     val identity = compiler.internBytes(s: name).nameId
-    for val conformance in compiler.decls.conforms {
+    mut val conformanceIndex = 0U64
+    while conformanceIndex < compiler.decls.conformCount() {
+        val conformance = compiler.decls.conformAt(index: conformanceIndex)
         if conformance.typeId == identity { return compiler.conformanceBoundAssumptions(bounds: conformance.bounds) }
+        conformanceIndex += 1U64
     }
     panic "missing scope"
 }

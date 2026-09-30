@@ -402,10 +402,10 @@ pub impl Comp {
         val subject = self.arena.typeAt(index: typeRef)
         val typeId = intern(c: inout self, start: subject.nameStart, len: subject.nameLen)
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            if self.decls.conforms[i].typeId == typeId && self.conformanceSubjectMatches(cf: self.decls.conforms[i], typeRef: typeRef) {
-                if self.decls.conforms[i].traitStart == traitOwner {
-                    if self.decls.conforms[i].viewRootId == 0U64 {
+        while i < self.decls.conformCount() {
+            if self.decls.conformAt(index: i).typeId == typeId && self.conformanceSubjectMatches(cf: self.decls.conformAt(index: i), typeRef: typeRef) {
+                if self.decls.conformAt(index: i).traitStart == traitOwner {
+                    if self.decls.conformAt(index: i).viewRootId == 0U64 {
                         return true
                     }
                 }
@@ -426,11 +426,11 @@ pub impl Comp {
         val subject = self.arena.typeAt(index: typeRef)
         val typeId = intern(c: inout self, start: subject.nameStart, len: subject.nameLen)
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            if self.decls.conforms[i].typeId == typeId && self.conformanceSubjectMatches(cf: self.decls.conforms[i], typeRef: typeRef) {
-                if self.decls.conforms[i].traitStart == traitOwner {
-                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.decls.conforms[i].traitArgs />) {
-                        if self.decls.conforms[i].viewRootId == 0U64 {
+        while i < self.decls.conformCount() {
+            if self.decls.conformAt(index: i).typeId == typeId && self.conformanceSubjectMatches(cf: self.decls.conformAt(index: i), typeRef: typeRef) {
+                if self.decls.conformAt(index: i).traitStart == traitOwner {
+                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.decls.conformAt(index: i).traitArgs />) {
+                        if self.decls.conformAt(index: i).viewRootId == 0U64 {
                             return true
                         }
                     }
@@ -457,8 +457,8 @@ pub impl Comp {
         }
         // A conformance-only extension is still a named source surface.
         i = 0U64
-        while i < self.decls.conforms.count() {
-            if self.decls.conforms[i].extId == qId {
+        while i < self.decls.conformCount() {
+            if self.decls.conformAt(index: i).extId == qId {
                 return true
             }
             i += 1U64
@@ -504,8 +504,8 @@ pub impl Comp {
         // real source surface: `value#Ext` is needed to expose that conformance
         // to a bound even when no member happens to be declared in the bundle.
         i = 0U64
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if cf.extId == qExt {
                 if cf.typeId == qType && (typeRef == 0U64 || cf.subjectTy == 0U64) {
                     return <Result.Ok value=true />
@@ -540,8 +540,8 @@ pub impl Comp {
     inout fn subjectPathCount(typeRef: U64, traitOwner: U64, aTraitArgs: PatternTypeInput, patternParams: PatternBindInput) -> U64 {
         mut val count: U64 = 0
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[i]
+        while i < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: i)
             if !(cf.derived) && cf.extId == 0U64 {
                 if cf.traitStart == traitOwner && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
                     if cf.subjectTraitOwner != 0U64 {
@@ -563,12 +563,12 @@ pub impl Comp {
         val guardHi: U64 = self.arena.functionCount()
         mut val changed: Bool = true
         while changed {
-            val before: U64 = self.decls.conforms.count()
+            val before: U64 = self.decls.conformCount()
             // re-read the live count each pass: a conformance conferred earlier this pass
             // is a valid candidate for a later hop (transitivity).
             mut val ci: U64 = 0
-            while ci < self.decls.conforms.count() {
-                val cf: Conform = self.decls.conforms[ci]
+            while ci < self.decls.conformCount() {
+                val cf: Conform = self.decls.conformAt(index: ci)
                 // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
                 // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
                 // those stay view-gated (`value#Ext`), handled by the extension machinery —
@@ -576,8 +576,8 @@ pub impl Comp {
                 if cf.extId == 0U64 && cf.subjectTraitOwner != 0U64 {
                     // candidate concrete types: those conforming to the subject trait B.
                     mut val cj: U64 = 0
-                    while cj < self.decls.conforms.count() {
-                        val cand: Conform = self.decls.conforms[cj]
+                    while cj < self.decls.conformCount() {
+                        val cand: Conform = self.decls.conformAt(index: cj)
                         if cand.traitStart == cf.typeStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=cand.traitArgs />) {
                             if cand.subjectTraitOwner == 0U64 {
                                 // the view-root under which we confer A on T via this impl
@@ -601,7 +601,7 @@ pub impl Comp {
                 }
                 ci += 1
             }
-            changed = self.decls.conforms.count() > before
+            changed = self.decls.conformCount() > before
         }
         return <Result.Ok value=() />
     }
@@ -626,10 +626,10 @@ pub impl Comp {
 
     inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.decls.conforms.count() {
-            if self.decls.conforms[i].typeId == typeId {
-                if self.decls.conforms[i].traitId == traitId {
-                    if self.decls.conforms[i].viewRootId == viewRootId {
+        while i < self.decls.conformCount() {
+            if self.decls.conformAt(index: i).typeId == typeId {
+                if self.decls.conformAt(index: i).traitId == traitId {
+                    if self.decls.conformAt(index: i).viewRootId == viewRootId {
                         return true
                     }
                 }
@@ -706,7 +706,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.conforms.append(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
+            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
         }
         return <Result.Ok value=() />
     }
@@ -714,8 +714,8 @@ pub impl Comp {
     inout fn instantiateProvidedMethods() -> Result[(), CompileDiagnostic] {
         val nFuncs: U64 = self.arena.functionCount()
         mut val ci: U64 = 0
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
+        while ci < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: ci)
             // a view-rooted conform (spec/09 chain conflict) is reached only via
             // `value#root`; its trait's provided methods must not land on the bare
             // surface. The witness methods are already conferred (applyBlanketTo, tagged
@@ -783,14 +783,14 @@ pub impl Comp {
                             val originConformIdx: U64 = ci + 1U64
                             mut val sourceConformIdx: U64 = 0U64
                             mut val sourceConform: U64 = 0U64
-                            while sourceConform < self.decls.conforms.count() {
-                                val sourceIds: Array[U64] = self.copyConformFuncIds(ids: self.decls.conforms[sourceConform].witnessFuncIds)
+                            while sourceConform < self.decls.conformCount() {
+                                val sourceIds: Array[U64] = self.copyConformFuncIds(ids: self.decls.conformAt(index: sourceConform).witnessFuncIds)
                                 mut val sourceWi: U64 = 0U64
                                 while sourceWi < sourceIds.count() {
                                     if sourceIds[sourceWi] == fi {
-                                        originTraitId = self.decls.conforms[sourceConform].traitId
-                                        originTraitOwner = self.decls.conforms[sourceConform].traitStart
-                                        originTraitArity = self.decls.conforms[sourceConform].traitArgs.count()
+                                        originTraitId = self.decls.conformAt(index: sourceConform).traitId
+                                        originTraitOwner = self.decls.conformAt(index: sourceConform).traitStart
+                                        originTraitArity = self.decls.conformAt(index: sourceConform).traitArgs.count()
                                         sourceConformIdx = sourceConform + 1U64
                                     }
                                     sourceWi += 1U64

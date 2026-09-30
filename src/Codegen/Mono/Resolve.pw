@@ -64,8 +64,8 @@ pub impl Comp {
     // instance in a proof path.  The edge's own impl binders are the only
     // variables that can bind; the incoming path arguments are rigid.
     inout fn traitSubjectWitnessMatch(conformIdx: U64, subjectArgs: Array[U64], selfRef: U64) -> WitnessMatch {
-        if conformIdx >= self.decls.conforms.count() { return <WitnessMatch /> }
-        val cf: Conform = self.decls.conforms[conformIdx]
+        if conformIdx >= self.decls.conformCount() { return <WitnessMatch /> }
+        val cf: Conform = self.decls.conformAt(index: conformIdx)
         if cf.subjectArgs.count() != subjectArgs.count() { return <WitnessMatch /> }
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
@@ -159,8 +159,8 @@ pub impl Comp {
     // witness. An active obligation is not evidence for itself. Preserve stack
     // cleanup on diagnostics as well as success/failure.
     inout fn witnessConditionsSatisfied(witness: WitnessMatch, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
-        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() { return <Result.Ok value=false /> }
-        val source = self.decls.conforms[witness.conformIdx - 1U64]
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=false /> }
+        val source = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if source.derived { return <Result.Ok value=false /> }
         if source.bounds.len == 0U64 { return <Result.Ok value=true /> }
         mut val index = 0U64
@@ -297,8 +297,8 @@ pub impl Comp {
             }
         }
         mut val ci: U64 = 0U64
-        while ci < self.decls.conforms.count() {
-            val cf: Conform = self.decls.conforms[ci]
+        while ci < self.decls.conformCount() {
+            val cf: Conform = self.decls.conformAt(index: ci)
             if !cf.derived && cf.subjectTraitOwner == 0U64 && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
                 val witness: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true))
                 if witness.conformIdx != 0U64 {
@@ -347,8 +347,8 @@ pub impl Comp {
                 }
             }
             ci = 0U64
-            while ci < self.decls.conforms.count() {
-                val edge: Conform = self.decls.conforms[ci]
+            while ci < self.decls.conformCount() {
+                val edge: Conform = self.decls.conformAt(index: ci)
                 if edge.subjectTraitOwner != 0U64 && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
                     val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs, selfRef: baseRef)
                     if witness.conformIdx != 0U64 && !self.traitProofPathContains(edges: state.edges, witness: witness) {
