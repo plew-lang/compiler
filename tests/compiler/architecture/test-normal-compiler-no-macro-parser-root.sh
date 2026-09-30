@@ -40,7 +40,7 @@ if ! rg -Fq 'if self.genMode && isEntry && fi != self.genMainIdx {' "$finalizer"
     echo "generation must exclude the application entry" >&2
     exit 1
 fi
-if ! rg -q 'while bodyIndex < c\.monoWork\.bodyInstances\.count\(\)' src/Backend/Llvm/Async.pw; then
+if ! rg -q 'while bodyIndex < c\.monoWork\.bodyCount\(\)' src/Backend/Llvm/Async.pw; then
     echo "async declarations must consume the reachable body queue" >&2
     exit 1
 fi
@@ -54,7 +54,7 @@ fi
 # Declaring a method from every genInst recreates unfinalized bodies after Mono
 # has closed the graph, so this must iterate the same BodyInstance table.
 methods='src/Backend/Llvm/GenMethods.pw'
-if ! rg -q 'while [A-Za-z_][A-Za-z_0-9]* < c\.monoWork\.bodyInstances\.count\(\)' "$methods"; then
+if ! rg -q 'while [A-Za-z_][A-Za-z_0-9]* < c\.monoWork\.bodyCount\(\)' "$methods"; then
     echo "generic-method declaration is not driven by final body instances" >&2
     exit 1
 fi
@@ -91,7 +91,7 @@ PYBODY
 # generic body after finalization; that is exactly the carrier which hid the
 # macro-parser reachability pollution.
 free_fns='src/Backend/Llvm/ProvidedFns.pw'
-if ! rg -q 'while bodyIndex < c\.monoWork\.bodyInstances\.count\(\)' "$free_fns"; then
+if ! rg -q 'while bodyIndex < c\.monoWork\.bodyCount\(\)' "$free_fns"; then
     echo "free-function declaration is not driven by the finalized body closure" >&2
     exit 1
 fi
@@ -117,7 +117,7 @@ if rg -q 'while fi < c\.arena\.funcs\.count\(\)' "$closures"; then
     echo "closure collection still scans every function declaration" >&2
     exit 1
 fi
-if ! rg -q 'while bodyI < c\.monoWork\.bodyInstances\.count\(\)' "$closures"; then
+if ! rg -q 'while bodyI < c\.monoWork\.bodyCount\(\)' "$closures"; then
     echo "closure collection is not driven by final body instances" >&2
     exit 1
 fi

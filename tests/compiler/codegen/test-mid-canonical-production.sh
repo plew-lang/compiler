@@ -302,7 +302,7 @@ if rg -n 'while .*functionCount|funcParamAt|\.params\b|asyncParamTy|findBodyInst
     echo "async emission must consume reachable bodies and frozen signatures" >&2
     exit 1
 fi
-for symbol in 'monoWork.bodyInstances' 'bodySignature' 'parameterPassings'; do
+for symbol in 'monoWork.bodyCount(' 'bodySignature' 'parameterPassings'; do
     if ! grep -F "$symbol" src/Backend/Llvm/Async.pw >/dev/null; then
         echo "async finalized entry contract is missing $symbol" >&2
         exit 1
