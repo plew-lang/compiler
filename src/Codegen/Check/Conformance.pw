@@ -545,7 +545,7 @@ pub impl Comp {
             val f: Func = self.arena.functionAt(index: i)
             if f.hasRecv {
                 if f.selfMove {
-                    if !(self.typeTermIsUnique(ref: f.recvTy)) {
+                    if !(self.arena.typeTermIsUnique(ref: f.recvTy)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "`move fn` (consuming self) is only allowed on a unique type") />
                     }
                 }

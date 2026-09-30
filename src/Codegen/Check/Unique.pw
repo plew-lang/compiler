@@ -10,7 +10,7 @@
 pub impl Comp {
     inout fn typeIsTransitivelyUnique(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
-        if self.typeTermIsUnique(ref: ref) { return true }
+        if self.arena.typeTermIsUnique(ref: ref) { return true }
         val underlying = self.newtypeUnderlying(ref: ref)
         if underlying != 0U64 { return self.typeIsTransitivelyUnique(ref: underlying) }
         val si: U64 = self.structIndexForType(ref: ref)
@@ -474,7 +474,7 @@ pub impl Comp {
                 // Declaration identity is resolved before this check. A generic
                 // application is unique because of its nominal declaration,
                 // not because a name-only lookup happens to find an instance.
-                if self.typeTermIsUnique(ref: term) {
+                if self.arena.typeTermIsUnique(ref: term) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
                         return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)") />
@@ -508,7 +508,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
-            if self.typeTermIsUnique(ref: ae.fieldStart) {
+            if self.arena.typeTermIsUnique(ref: ae.fieldStart) {
                 // the collected Bind span is interned — anchor at the unique type's
                 // own declaration (a real file:line) instead.
                 return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTerms[ae.fieldStart].declOffset, msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]") />
@@ -544,7 +544,7 @@ pub impl Comp {
                     while j < t.args.count() {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])
                         if ai.kind == 2 {
-                            if self.typeTermIsUnique(ref: t.args[j]) {
+                            if self.arena.typeTermIsUnique(ref: t.args[j]) {
                                 // the arena TypeRef has no use-site offset — anchor at the
                                 // unique type's own DECLARATION (a real file:line) instead of
                                 // the interned arg span, which maps to no source file.

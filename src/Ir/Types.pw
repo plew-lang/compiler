@@ -178,3 +178,20 @@ pub impl Arena {
         return true
     }
 }
+
+pub impl Arena {
+    // Ownership is a property of the selected nominal declaration. Spelling
+    // cannot identify a declaration across modules or generic binders.
+    fn typeTermIsUnique(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.typeTerms.count() { return false }
+        val term = self.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 || term.isRecord || term.isAny || !term.hasDecl { return false }
+        val underlying = self.newtypeUnderlyingByOffset(offset: term.declOffset)
+        if underlying != 0U64 { return self.typeTermIsUnique(ref: underlying) }
+        val structure = self.structIndexByOffset(offset: term.declOffset)
+        if structure < self.structCount() { return self.structAt(index: structure).isUnique }
+        val enumeration = self.enumIndexByOffset(offset: term.declOffset)
+        if enumeration < self.enumCount() { return self.enumAt(index: enumeration).isUnique }
+        return false
+    }
+}

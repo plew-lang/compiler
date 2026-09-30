@@ -304,7 +304,7 @@ pub impl Comp {
                 // (per-path move/drop handling); mirrors genStmt's Give guard.
                 val gvt: TypeInfo = (try self.typeOf(id: value))
                 if gvt.kind == 2 {
-                    if self.typeTermIsUnique(ref: self.typedIrRefOfInfo(ti: gvt)) {
+                    if self.arena.typeTermIsUnique(ref: self.typedIrRefOfInfo(ti: gvt)) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: value), msg: "a value-position if/match cannot yield a unique value yet; use a statement form") />
                     }
                 }

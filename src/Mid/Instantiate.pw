@@ -1272,7 +1272,7 @@ pub fn materializeCanonicalMidCall(c: inout Comp, term: MidTerminatorNode, local
                     // caller's original binding instead.
                     if source.tag != 1U64 && source.tag != 5U64 && source.tag != 6U64 && source.tag != 7U64 { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
                     if targetType == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallConversionSource /> /> }
-                    if c.typeTermIsUnique(ref: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
+                    if c.arena.typeTermIsUnique(ref: targetType) { return <MidCanonicalCallMaterialization error=<MidInstantiateError.CallResolutionPassing /> /> }
                     c.mid.places.append(<MidPlaceNode local=nextLocal typeTerm=targetType />)
                     nextLocal += 1U64
                     val temporaryPlace: U64 = c.mid.places.count()

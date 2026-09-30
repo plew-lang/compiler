@@ -212,7 +212,7 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
     if stage.isDeclaration() && operand.tag == 1U64 {
         if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
         val source = c.mid.places[operand.place - 1U64]
-        if c.typeTermIsUnique(ref: source.typeTerm) { return <MidVerification error=<MidVerifyError.UniqueCopy /> block=block local=source.local /> }
+        if c.arena.typeTermIsUnique(ref: source.typeTerm) { return <MidVerification error=<MidVerifyError.UniqueCopy /> block=block local=source.local /> }
     }
     if executable && operand.tag == 1U64 {
         if operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }

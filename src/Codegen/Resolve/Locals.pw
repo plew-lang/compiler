@@ -130,7 +130,7 @@ pub impl Comp {
         if lo.moved {
             return
         }
-        if self.typeTermIsUnique(ref: lo.ty) {
+        if self.arena.typeTermIsUnique(ref: lo.ty) {
             self.verifyMarkMoved(idx: idx)
         }
     }
