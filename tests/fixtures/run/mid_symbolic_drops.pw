@@ -25,8 +25,13 @@ fn checkBranch(branch: MidTerminator, tag: U64, identity: U64, bothConsumed: Boo
     ] />
     val source = arena.store(body: body)
     assert(arena.isWellFormed(body: source), message: "source CFG")
+    val placesBefore = arena.places.count()
     val rewritten = elaborateCanonicalMidDrops(arena: inout arena, canonical: source)
     assert(rewritten.body != 0U64, message: "symbolic branch preserved")
+    // Dead cleanup must not allocate an unused destination for every local.
+    val addedPlaces = arena.places.count() - placesBefore
+    if bothConsumed { assert(addedPlaces == 0U64) }
+    else { assert(addedPlaces == 1U64) }
     assert(arena.isWellFormed(body: rewritten))
     val result = arena.bodies[rewritten.body - 1U64]
     val first = arena.terminators[arena.blocks[result.blocks.start].terminator - 1U64]

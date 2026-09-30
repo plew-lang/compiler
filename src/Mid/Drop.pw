@@ -720,6 +720,8 @@ fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCano
     return incoming
 }
 
+// Allocate a destination only when emitting an instruction that uses it.
+// Consumed/uninitialized locals at repeated scope exits need no arena row.
 fn canonicalMidAppendRootPlace(arena: inout MidCanonicalArena, body: MidBodyNode, local: U64) -> U64 {
     if local >= body.locals.len { return 0U64 }
     val declaration = arena.locals[body.locals.start + local]
@@ -837,11 +839,16 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
         mut val local: U64 = 0U64
         while local < source.locals.len && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
             if plan.needsFlag[local] && plan.cliffAtEntry[blockI][local] {
-                val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
                 if local < currentOwnership.count() {
                     match currentOwnership[local] {
-                        MidOwnership.Owned => { arena.statements.append(<MidStatementNode tag=3U64 destination=place />) }
-                        MidOwnership.MaybeOwned => { arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                        MidOwnership.Owned => {
+                            val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                            arena.statements.append(<MidStatementNode tag=3U64 destination=place />)
+                        }
+                        MidOwnership.MaybeOwned => {
+                            val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                            arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />)
+                        }
                         _ => {}
                     }
                     currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
@@ -945,7 +952,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
             } else if statement.tag == 12U64 {
                 local = statement.bindingLocal
                 if local < source.locals.len && local < currentOwnership.count() {
-                    val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
                     match currentOwnership[local] {
                         // A capture cell's logical value is not its
                         // lexical owner. Scope cleanup releases the
@@ -954,12 +960,21 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                         MidOwnership.Owned => {
                             val declaration: MidLocalDecl = arena.locals[source.locals.start + local]
                             if declaration.isBorrowed || declaration.isInout { }
-                            else if declaration.isCaptureCell { arena.statements.append(<MidStatementNode tag=10U64 destination=place />) }
-                            else { arena.statements.append(<MidStatementNode tag=3U64 destination=place />) }
+                            else if declaration.isCaptureCell {
+                                val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                arena.statements.append(<MidStatementNode tag=10U64 destination=place />)
+                            }
+                            else {
+                                val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                arena.statements.append(<MidStatementNode tag=3U64 destination=place />)
+                            }
                         }
                         MidOwnership.MaybeOwned => {
                             val declaration: MidLocalDecl = arena.locals[source.locals.start + local]
-                            if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] { arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                            if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] {
+                                val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />)
+                            }
                         }
                         _ => {}
                     }
@@ -974,7 +989,6 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                     while local > scope.firstLocal {
                         local = local - 1U64
                         if local < source.locals.len && local < currentOwnership.count() {
-                            val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
                             match currentOwnership[local] {
                                 // A capture cell's logical value is not its
                                 // lexical owner. Scope cleanup releases the
@@ -983,12 +997,21 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                                 MidOwnership.Owned => {
                                     val declaration: MidLocalDecl = arena.locals[source.locals.start + local]
                                     if declaration.isBorrowed || declaration.isInout { }
-                                    else if declaration.isCaptureCell { arena.statements.append(<MidStatementNode tag=10U64 destination=place />) }
-                                    else { arena.statements.append(<MidStatementNode tag=3U64 destination=place />) }
+                                    else if declaration.isCaptureCell {
+                                        val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                        arena.statements.append(<MidStatementNode tag=10U64 destination=place />)
+                                    }
+                                    else {
+                                        val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                        arena.statements.append(<MidStatementNode tag=3U64 destination=place />)
+                                    }
                                 }
                                 MidOwnership.MaybeOwned => {
                                     val declaration: MidLocalDecl = arena.locals[source.locals.start + local]
-                                    if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] { arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                                    if !declaration.isBorrowed && !declaration.isInout && plan.needsFlag[local] {
+                                        val place: U64 = canonicalMidAppendRootPlace(arena: inout arena, body: source, local: local)
+                                        arena.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />)
+                                    }
                                 }
                                 _ => {}
                             }

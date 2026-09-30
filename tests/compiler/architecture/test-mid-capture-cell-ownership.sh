@@ -15,11 +15,18 @@ require() {
 require 'InitializeCaptureCell(destination: MidPlace, value: MidRvalue)' src/Mid/Ir.pw
 require 'ReleaseCaptureCell(place: MidPlace)' src/Mid/Ir.pw
 require 'MidStatement.InitializeCaptureCell' src/Mid/Build.pw
-require 'else if declaration.isCaptureCell { arena.statements.append(<MidStatementNode tag=10U64 destination=place />) }' src/Mid/Drop.pw
 # Canonical storage uses tags, not the draft enum at the LLVM boundary.
 python3 - <<'PYCELL'
 from pathlib import Path
 import re
+drop = Path('src/Mid/Drop.pw').read_text()
+# Cleanup must release the cell itself; allow destination materialization and
+# formatting within the branch rather than pinning a source line verbatim.
+cell_cleanup = re.findall(r'else if declaration\.isCaptureCell\s*\{([^{}]*)\}', drop)
+assert cell_cleanup, 'capture-cell cleanup branch'
+for cleanup in cell_cleanup:
+    assert re.search(r'arena\.statements\.append\(<MidStatementNode\s+tag=10U64\s+destination=place\s*/>\)', cleanup), 'capture-cell release operation'
+    assert 'tag=3U64' not in cleanup, 'logical drop cannot replace cell release'
 ir = Path('src/Mid/Ir.pw').read_text()
 llvm = Path('src/Backend/Llvm/Mid.pw').read_text()
 for operation, tag in [('InitializeCaptureCell', 9), ('ReleaseCaptureCell', 10)]:
