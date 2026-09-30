@@ -1,35 +1,13 @@
 // Canonical declaration identity and spelling candidates have separate indexes.
 // Registration order and first-registration precedence belong to this owner.
-impl Decls {
-    fn traitOwnerOffsetPosition(offset: U64) -> U64 {
-        mut val lower = 0U64
-        mut val upper = self.traitOwnerOffsets.count()
-        while lower < upper {
-            val middle = lower + (upper - lower) / 2U64
-            if self.traitOwnerOffsets[middle] < offset { lower = middle + 1U64 }
-            else { upper = middle }
-        }
-        return lower
-    }
-}
 pub impl Decls {
     inout fn registerTraitOwner(owner~: TraitOwner) {
-        val position = self.traitOwnerOffsetPosition(offset: owner.nameStart)
-        if position < self.traitOwnerOffsets.count() && self.traitOwnerOffsets[position] == owner.nameStart { return }
+        if self.traitOwnerByOffset.getOr(key: owner.nameStart, fallback: 0U64) != 0U64 { return }
         val entry = self.traitOwnerRows.count() + 1U64
         val tail = self.traitOwnerNameTails.getOr(key: owner.nameId, fallback: 0U64)
         self.traitOwnerRows.append(owner)
         self.traitOwnerNameNext.append(0U64)
-        self.traitOwnerOffsets.append(owner.nameStart)
-        self.traitOwnerOffsetRows.append(entry - 1U64)
-        mut val cursor = self.traitOwnerOffsets.count() - 1U64
-        while cursor > position {
-            self.traitOwnerOffsets[cursor] = self.traitOwnerOffsets[cursor - 1U64]
-            self.traitOwnerOffsetRows[cursor] = self.traitOwnerOffsetRows[cursor - 1U64]
-            cursor -= 1U64
-        }
-        self.traitOwnerOffsets[position] = owner.nameStart
-        self.traitOwnerOffsetRows[position] = entry - 1U64
+        self.traitOwnerByOffset[owner.nameStart] = entry
         if tail == 0U64 {
             self.traitOwnerNameHeads[owner.nameId] = entry
         } else {
@@ -44,11 +22,8 @@ pub impl Decls {
         return self.traitOwnerNameHeads.getOr(key: nameId, fallback: 0U64) != 0U64
     }
     fn traitOwnerIndex(offset: U64) -> U64 {
-        val count = self.traitOwnerOffsets.count()
-        if count == 0U64 { return self.traitOwnerRows.count() }
-        if offset < self.traitOwnerOffsets[0U64] || offset > self.traitOwnerOffsets[count - 1U64] { return self.traitOwnerRows.count() }
-        val position = self.traitOwnerOffsetPosition(offset: offset)
-        if position < count && self.traitOwnerOffsets[position] == offset { return self.traitOwnerOffsetRows[position] }
+        val entry = self.traitOwnerByOffset.getOr(key: offset, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
         return self.traitOwnerRows.count()
     }
     fn firstTraitOwnerNamed(nameId: U64) -> U64 {
