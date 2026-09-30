@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import /Ir with { Decls, FuncBound }
+
+fn main() {
+    mut val declarations = <Decls />
+    if declarations.firstFunctionBound(fnIdx: 7U64) != declarations.functionBoundCount() { panic "empty lookup" }
+    declarations.registerFunctionBound(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=7U64 paramTy=11U64 />)
+    declarations.registerFunctionBound(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=0U64 paramTy=13U64 />)
+    declarations.registerFunctionBound(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=7U64 paramTy=17U64 />)
+    if declarations.firstFunctionBound(fnIdx: 7U64) != 0U64 || declarations.nextFunctionBound(index: 0U64) != 2U64 { panic "registration order" }
+    if declarations.firstFunctionBound(fnIdx: 0U64) != 1U64 || declarations.nextFunctionBound(index: 1U64) != 3U64 { panic "owner isolation" }
+    val snapshot = declarations
+    declarations.registerFunctionBound(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=7U64 paramTy=19U64 />)
+    declarations.registerFunctionBound(<FuncBound paramStart=0U64 paramLen=0U64 fnIdx=18446744073709551615U64 paramTy=23U64 />)
+    if snapshot.functionBoundCount() != 3U64 || snapshot.nextFunctionBound(index: 2U64) != 3U64 { panic "snapshot changed" }
+    if declarations.nextFunctionBound(index: 2U64) != 3U64 || declarations.nextFunctionBound(index: 3U64) != 5U64 { panic "late registration" }
+    if declarations.firstFunctionBound(fnIdx: 18446744073709551615U64) != 4U64 { panic "sparse owner" }
+    if declarations.firstFunctionBound(fnIdx: 99U64) != 5U64 { panic "missing owner" }
+    if declarations.functionBoundAt(index: 0U64).paramTy != 11U64 || declarations.functionBoundAt(index: 2U64).paramTy != 17U64 { panic "evidence row changed" }
+    print("function-bound-index-ok")
+}

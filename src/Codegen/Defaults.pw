@@ -395,7 +395,7 @@ pub impl Comp {
     inout fn prepareDefaultArgumentGenerators() -> Result[(), CompileDiagnostic] {
         if self.decls.defaultGeneratorRanges.count() != 0U64 { return <Result.Ok value=() /> }
         val declarationLimit: U64 = self.arena.functionCount()
-        val boundLimit: U64 = self.decls.funcBounds.count()
+        val boundLimit: U64 = self.decls.functionBoundCount()
         mut val owners: Array[U64] = []
         mut val owner: U64 = 0U64
         while owner < declarationLimit {
@@ -446,14 +446,14 @@ pub impl Comp {
     inout fn copyDefaultGeneratorBounds(boundLimit: U64, owners: Array[U64]) {
         mut val index: U64 = 0U64
         while index < boundLimit {
-            val bound: FuncBound = self.decls.funcBounds[index]
+            val bound: FuncBound = self.decls.functionBoundAt(index: index)
             if bound.fnIdx < owners.count() && owners[bound.fnIdx] == bound.fnIdx {
                 val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[bound.fnIdx]
                 mut val parameterIndex: U64 = 0U64
                 while parameterIndex < range.len {
                     val functionId: U64 = self.decls.defaultGeneratorFunctions[range.start + parameterIndex]
                     if functionId != 0U64 {
-                        self.decls.funcBounds.append(<FuncBound fnIdx=functionId - 1U64 paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint />)
+                        self.decls.registerFunctionBound(<FuncBound fnIdx=functionId - 1U64 paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint />)
                     }
                     parameterIndex += 1U64
                 }

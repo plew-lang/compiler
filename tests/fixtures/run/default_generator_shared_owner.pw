@@ -23,8 +23,8 @@ fn main() {
         hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body
         hasRecv=true recvStart=41U64 recvLen=1U64 selfInout=false selfMove=false
         isAssoc=false isAsync=false isExtern=false isProvided=true lexicalOwnerFnId=1U64 provTraitOwner=31U64 />)
-    c.decls.funcBounds.append(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
-    c.decls.funcBounds.append(<FuncBound fnIdx=1U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
+    c.decls.registerFunctionBound(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
+    c.decls.registerFunctionBound(<FuncBound fnIdx=1U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
     if c.semanticBodyOwner(fnIdx: 1U64).unwrap() == 0U64 { write(s: "source-owner\n") }
     c.prepareDefaultArgumentGenerators().unwrap()
     val original = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
@@ -32,7 +32,7 @@ fn main() {
     if original == placed { write(s: "shared-declaration\n") }
     if c.arena.functionCount() == 3U64 { write(s: "one-record-body\n") }
     if c.arena.functionAt(index: placed).lexicalOwnerFnId == 1U64 { write(s: "lexical-source-owner\n") }
-    if c.decls.funcBounds.count() == 3U64 && c.decls.funcBounds[2U64].fnIdx == original { write(s: "source-bounds-once\n") }
+    if c.decls.functionBoundCount() == 3U64 && c.decls.functionBoundAt(index: 2U64).fnIdx == original { write(s: "source-bounds-once\n") }
     match c.defaultGeneratorTypeArguments(callee: 1U64, generator: placed, args: [99U64, 17U64]) {
         Optional.Some(val v) => {
             if v.count() == 1U64 && v[0U64] == 17U64 { write(s: "lexical-binder-projection\n") }

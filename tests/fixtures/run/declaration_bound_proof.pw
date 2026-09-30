@@ -5,7 +5,7 @@ import /Ir with { SupertraitRef, WitnessMatch, DeclarationBoundRef, TraitConstra
 fn main() {
     mut val compiler: Comp = <Comp />
     val constraint = <TraitConstraint key=<TraitInstanceKey owner=17U64 positionalArgs=[19U64] /> positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=23U64 value=29U64 span=31U64 />] />
-    compiler.decls.funcBounds.append(<FuncBound fnIdx=3U64 paramStart=5U64 paramLen=1U64 paramTy=7U64 constraint=constraint />)
+    compiler.decls.registerFunctionBound(<FuncBound fnIdx=3U64 paramStart=5U64 paramLen=1U64 paramTy=7U64 constraint=constraint />)
     val range = compiler.pushConformBounds(bounds: [<ConformBound subject=11U64 constraint=constraint offset=13U64 />])
     val function = <DeclarationBoundRef.Function index=0U64 />
     val conformance = <DeclarationBoundRef.Conformance index=range.start />

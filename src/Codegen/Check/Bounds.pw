@@ -21,10 +21,10 @@ pub impl Comp {
 
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         mut val result: Array[DeclarationBoundRef] = []
-        mut val index = 0U64
-        while index < self.decls.funcBounds.count() {
-            if self.decls.funcBounds[index].fnIdx == fnIdx { result.append(<DeclarationBoundRef.Function index=index />) }
-            index += 1U64
+        mut val index = self.decls.firstFunctionBound(fnIdx: fnIdx)
+        while index < self.decls.functionBoundCount() {
+            result.append(<DeclarationBoundRef.Function index=index />)
+            index = self.decls.nextFunctionBound(index: index)
         }
         if self.functionHasTraitReceiver(fnIdx: fnIdx) { result.append(<DeclarationBoundRef.MethodReceiver index=fnIdx />) }
         return result
@@ -42,7 +42,7 @@ pub impl Comp {
 
     fn declarationBoundIsValid(source: DeclarationBoundRef) -> Bool {
         match source {
-            DeclarationBoundRef.Function(val index) => { return index < self.decls.funcBounds.count() }
+            DeclarationBoundRef.Function(val index) => { return index < self.decls.functionBoundCount() }
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conforms.count() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidence.count() }
@@ -55,7 +55,7 @@ pub impl Comp {
     inout fn declarationBound(source: DeclarationBoundRef) -> TraitBound {
         match source {
             DeclarationBoundRef.Function(val index) => {
-                val bound = self.decls.funcBounds[index]
+                val bound = self.decls.functionBoundAt(index: index)
                 return <TraitBound subject=bound.paramTy constraint=bound.constraint offset=bound.paramStart />
             }
             DeclarationBoundRef.Conformance(val index) => {
@@ -306,10 +306,10 @@ pub impl Comp {
     // proof match deliberately compares the resolved owner and positional
     // terms only.
     inout fn assumedBoundProof(fnIdx: U64, receiverRef: U64, constraint: TraitConstraint) -> StaticConformanceProof {
-        mut val i: U64 = 0U64
-        while i < self.decls.funcBounds.count() {
-            val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
+        mut val i: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+        while i < self.decls.functionBoundCount() {
+            val bound: FuncBound = self.decls.functionBoundAt(index: i)
+            if bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
                 mut val same: Bool = true
                 mut val ai: U64 = 0U64
                 while ai < constraint.key.positionalArgs.count() {
@@ -318,7 +318,7 @@ pub impl Comp {
                 }
                 if same { return <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=i /> /> }
             }
-            i += 1U64
+            i = self.decls.nextFunctionBound(index: i)
         }
         return <StaticConformanceProof.Missing />
     }
@@ -1559,14 +1559,14 @@ pub impl Comp {
     // retain their bound-aware abstract checking and later instance obligations.
     // This pass never registers an executable body or resolves a new callee.
     inout fn checkRecordedCallTemplateBounds() -> Result[(), CompileDiagnostic] {
-        if self.decls.funcBounds.count() == 0U64 { return <Result.Ok value=() /> }
+        if self.decls.functionBoundCount() == 0U64 { return <Result.Ok value=() /> }
         mut val constrained: Array[Bool] = []
         mut val index = 0U64
         while index < self.arena.functionCount() { constrained.append(false)
             index += 1U64 }
         index = 0U64
-        while index < self.decls.funcBounds.count() {
-            val bound = self.decls.funcBounds[index]
+        while index < self.decls.functionBoundCount() {
+            val bound = self.decls.functionBoundAt(index: index)
             if bound.fnIdx < constrained.count() { constrained.set(i: bound.fnIdx, value: true) }
             index += 1U64
         }
@@ -1589,9 +1589,9 @@ pub impl Comp {
 
     inout fn checkOneFnInstBounds(fin: FnInst, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         val f: Func = self.arena.functionAt(index: fin.fnIdx)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fin.fnIdx)
+        while bi < self.decls.functionBoundCount() {
+            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
             if fb.fnIdx == fin.fnIdx {
                 val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: fin.args)
                 if fb.paramTy != 0U64 {
@@ -1602,7 +1602,7 @@ pub impl Comp {
                             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`") />
                         }
                     }
-                    bi += 1
+                    bi = self.decls.nextFunctionBound(index: bi)
                 } else {
                 mut val pi: U64 = 0
                 while pi < f.typeParams.count() {
@@ -1623,10 +1623,10 @@ pub impl Comp {
                     }
                     pi += 1
                 }
-                bi += 1
+                bi = self.decls.nextFunctionBound(index: bi)
                 }
             } else {
-                bi += 1
+                bi = self.decls.nextFunctionBound(index: bi)
             }
         }
         return <Result.Ok value=() />
@@ -1669,9 +1669,9 @@ pub impl Comp {
             }
             mi += 1U64
         }
-        mut val bi: U64 = 0U64
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+        while bi < self.decls.functionBoundCount() {
+            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
             if fb.fnIdx == fnIdx {
                 val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: values)
                 mut val lhs: U64 = 0U64
@@ -1692,7 +1692,7 @@ pub impl Comp {
                     }
                 }
             }
-            bi += 1U64
+            bi = self.decls.nextFunctionBound(index: bi)
         }
         return <Result.Ok value=() />
     }

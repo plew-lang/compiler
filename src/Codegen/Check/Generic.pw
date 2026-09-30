@@ -216,9 +216,9 @@ pub impl Comp {
     inout fn boundProvidesMethod(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+        while bi < self.decls.functionBoundCount() {
+            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val owner: U64 = fb.constraint.key.owner
@@ -227,16 +227,16 @@ pub impl Comp {
                     }
                 }
             }
-            bi += 1
+            bi = self.decls.nextFunctionBound(index: bi)
         }
         return false
     }
 
     inout fn boundHasTraitNamed(fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+        while bi < self.decls.functionBoundCount() {
+            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val owner: U64 = fb.constraint.key.owner
@@ -245,7 +245,7 @@ pub impl Comp {
                     }
                 }
             }
-            bi += 1
+            bi = self.decls.nextFunctionBound(index: bi)
         }
         return false
     }
@@ -258,16 +258,16 @@ pub impl Comp {
             val f: Func = self.arena.functionAt(index: fi)
             if f.extId == extId && self.methodRecvIsTrait(f: f) {
                 val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.typeAt(index: f.recvTy))
-                mut val bi: U64 = 0U64
-                while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds[bi]
+                mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+                while bi < self.decls.functionBoundCount() {
+                    val bound: FuncBound = self.decls.functionBoundAt(index: bi)
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         val boundOwner: U64 = bound.constraint.key.owner
                         if boundOwner == f.provTraitOwner {
                             if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=recvArgs />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
                         }
                     }
-                    bi += 1U64
+                    bi = self.decls.nextFunctionBound(index: bi)
                 }
             }
             fi += 1U64
@@ -281,9 +281,9 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[ci]
             if cf.extId == extId {
                 val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
-                mut val bi: U64 = 0U64
-                while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds[bi]
+                mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
+                while bi < self.decls.functionBoundCount() {
+                    val bound: FuncBound = self.decls.functionBoundAt(index: bi)
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         // Both ids are resolved during lowering.  Compare them rather
                         // than their source spans: a bound may use an imported alias.
@@ -291,7 +291,7 @@ pub impl Comp {
                             if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
                         }
                     }
-                    bi += 1U64
+                    bi = self.decls.nextFunctionBound(index: bi)
                 }
             }
             ci += 1U64

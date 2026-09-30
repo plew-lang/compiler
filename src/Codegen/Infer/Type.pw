@@ -317,9 +317,9 @@ pub impl Comp {
         }
         val qTp: U64 = source.nameId
         val constraint: TraitConstraint = self.existentialTraitConstraintFor(t: trait)
-        mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count() {
-            val fb: FuncBound = self.decls.funcBounds[bi]
+        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: self.cur.checkFn)
+        while bi < self.decls.functionBoundCount() {
+            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
             if fb.fnIdx == self.cur.checkFn {
                 if fb.paramNameId == qTp {
                     if constraint.key.owner != 0U64 && fb.constraint.key.owner == constraint.key.owner && fb.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
@@ -347,7 +347,7 @@ pub impl Comp {
                                 if provided.member == constraint.assocPredicates[need].member {
                                     if self.typeRefEq(a: provided.value, b: constraint.assocPredicates[need].value) { found = true }
                                 }
-                                bi += 1U64
+                                bi = self.decls.nextFunctionBound(index: bi)
                             }
                             if !found { matches = false }
                             need += 1U64
@@ -358,7 +358,7 @@ pub impl Comp {
                     }
                 }
             }
-            bi += 1U64
+            bi = self.decls.nextFunctionBound(index: bi)
         }
         return false
     }

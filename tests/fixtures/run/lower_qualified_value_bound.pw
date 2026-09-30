@@ -17,7 +17,7 @@ fn main() {
     val argument = <TypeAst name="I64" args=[] span=empty />
     val bound = <TypeAst name="Models" nameSpan=qualifier args=[] span=qualifier namePath=[<NameSegmentAst name="Models" nameSpan=qualifier />, <NameSegmentAst name="Read" nameSpan=traitName args=[argument] />] />
     compiler.appendFuncBounds(fnIdx: 0U64, params: ["T"], traits: ["Models"], traitTypes: [bound]).unwrap()
-    val constraint = compiler.decls.funcBounds[0U64].constraint
+    val constraint = compiler.decls.functionBoundAt(index: 0U64).constraint
     print(constraint.key.owner == owner.nameStart)
     print(constraint.key.positionalArgs.count())
 }
