@@ -1,0 +1,27 @@
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { TypeRef }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val name = compiler.internBytes(s: "Nominal")
+    val plain = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
+    val duplicate = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 viewIds=[7U64, 7U64] />)
+    val single = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 viewIds=[7U64] />)
+    val other = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=101U64 />)
+    assert(compiler.typesCompatible(expected: plain, inferred: plain).unwrap())
+    assert(compiler.typesCompatible(expected: duplicate, inferred: single).unwrap())
+    assert(compiler.typesCompatible(expected: single, inferred: duplicate).unwrap())
+    assert(!compiler.typesCompatible(expected: plain, inferred: single).unwrap())
+    assert(!compiler.typesCompatible(expected: plain, inferred: other).unwrap())
+    val record = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=[1U64, 2U64] recordFieldTerms=[plain, single] />)
+    val recordEquivalent = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=[1U64, 2U64] recordFieldTerms=[plain, duplicate] />)
+    val recordDifferent = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=[1U64, 3U64] recordFieldTerms=[plain, single] />)
+    val malformed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=[1U64] recordFieldTerms=[plain, single] />)
+    assert(compiler.typesCompatible(expected: record, inferred: recordEquivalent).unwrap())
+    assert(!compiler.typesCompatible(expected: record, inferred: recordDifferent).unwrap())
+    assert(!compiler.typesCompatible(expected: record, inferred: malformed).unwrap())
+    print("ok")
+}

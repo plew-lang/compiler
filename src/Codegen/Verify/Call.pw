@@ -19,7 +19,7 @@ pub impl Comp {
         return self.knownNamedTypeIdAt(offset: declaration.nameStart)
     }
 
-    inout fn knownNamedTypeIdForTerm(type: TypeRef) -> U64 {
+    inout fn knownNamedTypeIdForTerm(type: TypeTerm) -> U64 {
         if type.hasDecl { return self.knownNamedTypeIdAt(offset: type.declOffset) }
         return self.knownNamedTypeId(start: type.nameStart, len: type.nameLen)
     }

@@ -67,7 +67,14 @@ pub impl Comp {
         return <Result.Ok value=self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen) />
     }
 
-    inout fn isConcreteType(type: TypeRef) -> Bool {
+    // The empty-view case needs no owned array. Preserve the existing set
+    // semantics (including duplicate IDs) for the non-empty representation.
+    inout fn sameCompatibilityViewSet(expectedRef: U64, inferredRef: U64) -> Bool {
+        if self.arena.typeTerms[expectedRef].viewIds.len == 0U64 && self.arena.typeTerms[inferredRef].viewIds.len == 0U64 { return true }
+        return self.sameViewIdSet(a: self.arena.typeAt(index: expectedRef).viewIds, b: self.arena.typeAt(index: inferredRef).viewIds)
+    }
+
+    inout fn isConcreteType(type: TypeTerm) -> Bool {
         if self.isPrimType(start: type.nameStart, len: type.nameLen) {
             return true
         }
@@ -93,8 +100,8 @@ pub impl Comp {
         if exp >= self.arena.typeCount() {
             return <Result.Ok value=true />
         }
-        val te: TypeRef = self.arena.typeAt(index: exp)
-        val tin: TypeRef = self.arena.typeAt(index: inferred)
+        val te = self.arena.typeTerms[exp]
+        val tin = self.arena.typeTerms[inferred]
         if te.isSendable && !((try self.typeRefIsSendable(ref: inferred))) {
             return <Result.Ok value=false />
         }
@@ -106,8 +113,8 @@ pub impl Comp {
             // existing `any` source is left to the conservative pass-through.
             if te.isAny {
                 if !(tin.isAny) {
-                    if self.isActiveTypeParam(t: tin) {
-                        if !(self.activeTypeParamConformsToTrait(source: tin, trait: te)) {
+                    if self.isActiveTypeParam(t: self.arena.typeAt(index: inferred)) {
+                        if !(self.activeTypeParamConformsToTrait(source: self.arena.typeAt(index: inferred), trait: self.arena.typeAt(index: exp))) {
                             return <Result.Ok value=false />
                         }
                         return <Result.Ok value=true />
@@ -158,7 +165,7 @@ pub impl Comp {
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.
-                return <Result.Ok value=te.paramId == tin.paramId && te.viewExtId == tin.viewExtId && self.sameViewIdSet(a: te.viewIds, b: tin.viewIds) />
+                return <Result.Ok value=te.paramId == tin.paramId && te.viewExtId == tin.viewExtId && self.sameCompatibilityViewSet(expectedRef: exp, inferredRef: inferred) />
             }
             // T vs a CONCRETE type -> incompatible; T vs unknown / another param -> lenient.
             if self.isConcreteType(type: tin) {
@@ -219,30 +226,30 @@ pub impl Comp {
                 return <Result.Ok value=(try self.recordsCompatible(teRef: er, tinRef: ir)) />
             }
         }
-        return <Result.Ok value=(try self.compatNamed(expectedRef: exp, te: te, tin: tin)) />
+        return <Result.Ok value=(try self.compatNamed(expectedRef: exp, inferredRef: inferred, te: te, tin: tin)) />
     }
 
     // Structural field-by-field compatibility of two Record TypeTerms.
     inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Result[Bool, CompileDiagnostic] {
-        val te: TypeRef = self.arena.typeAt(index: teRef)
-        val tin: TypeRef = self.arena.typeAt(index: tinRef)
+        val te = self.arena.typeTerms[teRef]
+        val tin = self.arena.typeTerms[tinRef]
         if !(te.isRecord) || !(tin.isRecord) { return <Result.Ok value=false />}
-        if te.recordFieldLabels.count() != tin.recordFieldLabels.count() || te.recordFieldTerms.count() != tin.recordFieldTerms.count() || te.recordFieldLabels.count() != te.recordFieldTerms.count() {
+        if te.recordFieldLabels.len != tin.recordFieldLabels.len || te.recordFieldTerms.len != tin.recordFieldTerms.len || te.recordFieldLabels.len != te.recordFieldTerms.len {
             return <Result.Ok value=false />
         }
         // Constructors sort labels, so the corresponding structural children
         // occupy the same index.  Field values themselves are checked by
         // tcCheckMakeFields.
         mut val i: U64 = 0
-        while i < te.recordFieldTerms.count() {
-            if i >= te.recordFieldLabels.count() || i >= tin.recordFieldLabels.count() || te.recordFieldLabels[i] != tin.recordFieldLabels[i] { return <Result.Ok value=false />}
+        while i < te.recordFieldTerms.len {
+            if i >= te.recordFieldLabels.len || i >= tin.recordFieldLabels.len || self.arena.typeRecordLabelPool[te.recordFieldLabels.start + i] != self.arena.typeRecordLabelPool[tin.recordFieldLabels.start + i] { return <Result.Ok value=false />}
             // a record/tuple field widening concrete->`any P` has no backend repack (records are
             // not a covariant container the erasure handles), so reject it rather than silently
             // miscompile the differing field layout (spec/08; mirrors compatNamed's gate).
-            if self.argWidensToAny(expectedArg: te.recordFieldTerms[i], inferredArg: tin.recordFieldTerms[i]) {
+            if self.argWidensToAny(expectedArg: self.arena.typeRecordFieldPool[te.recordFieldTerms.start + i], inferredArg: self.arena.typeRecordFieldPool[tin.recordFieldTerms.start + i]) {
                 return <Result.Ok value=false />
             }
-            if !((try self.typesCompatible(expected: te.recordFieldTerms[i], inferred: tin.recordFieldTerms[i]))) {
+            if !((try self.typesCompatible(expected: self.arena.typeRecordFieldPool[te.recordFieldTerms.start + i], inferred: self.arena.typeRecordFieldPool[tin.recordFieldTerms.start + i]))) {
                 return <Result.Ok value=false />
             }
             i += 1
@@ -250,7 +257,7 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
-    inout fn compatNamed(expectedRef: U64, te: TypeRef, tin: TypeRef) -> Result[Bool, CompileDiagnostic] {
+    inout fn compatNamed(expectedRef: U64, inferredRef: U64, te: TypeTerm, tin: TypeTerm) -> Result[Bool, CompileDiagnostic] {
         if te.hasDecl && tin.hasDecl {
             if te.declOffset != tin.declOffset { return <Result.Ok value=false /> }
         } else {
@@ -266,11 +273,11 @@ pub impl Comp {
         // Once the nominal heads are known, a view is part of semantic type
         // identity even when the payload layout is unchanged. Unresolved
         // foreign binders above remain the responsibility of substitution.
-        if te.viewExtId != tin.viewExtId || !self.sameViewIdSet(a: te.viewIds, b: tin.viewIds) {
+        if te.viewExtId != tin.viewExtId || !self.sameCompatibilityViewSet(expectedRef: expectedRef, inferredRef: inferredRef) {
             return <Result.Ok value=false />
         }
         // same head: a generic head must agree on its type arguments.
-        if te.args.count() == tin.args.count() {
+        if te.args.len == tin.args.len {
             // covariant container erasure (spec/08, SE-0309): an arg widening concrete->`any P`
             // (`Dictionary[K, S]` -> `Dictionary[K, any P]`) is a genuine per-position REPACK,
             // which the backend performs only for `Array` and generic enums (Optional/Result/…).
@@ -281,13 +288,13 @@ pub impl Comp {
                 headErasable = self.genericEnumIndexForType(ref: expectedRef) < self.arena.enumCount()
             }
             mut val i: U64 = 0
-            while i < te.args.count() {
+            while i < te.args.len {
                 if !(headErasable) {
-                    if self.argWidensToAny(expectedArg: te.args[i], inferredArg: tin.args[i]) {
+                    if self.argWidensToAny(expectedArg: self.arena.typeArgumentPool[te.args.start + i], inferredArg: self.arena.typeArgumentPool[tin.args.start + i]) {
                         return <Result.Ok value=false />
                     }
                 }
-                if !((try self.typesCompatible(expected: te.args[i], inferred: tin.args[i]))) {
+                if !((try self.typesCompatible(expected: self.arena.typeArgumentPool[te.args.start + i], inferred: self.arena.typeArgumentPool[tin.args.start + i]))) {
                     return <Result.Ok value=false />
                 }
                 i += 1
@@ -303,8 +310,8 @@ pub impl Comp {
         if expectedArg >= self.arena.typeCount() || inferredArg >= self.arena.typeCount() {
             return false
         }
-        val ea: TypeRef = self.arena.typeAt(index: expectedArg)
-        val ia: TypeRef = self.arena.typeAt(index: inferredArg)
+        val ea = self.arena.typeTerms[expectedArg]
+        val ia = self.arena.typeTerms[inferredArg]
         if !(ea.isAny) || ia.isAny {
             return false
         }
