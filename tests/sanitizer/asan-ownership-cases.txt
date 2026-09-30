@@ -41,3 +41,4 @@ tests/fixtures/run/mid_dataflow_states.pw
 tests/fixtures/run/mid_drop_sparse_cliffs.pw
 tests/fixtures/run/type_term_closedness.pw
 tests/fixtures/run/conformance_registration_index.pw
+tests/fixtures/run/body_type_result_index.pw

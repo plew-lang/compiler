@@ -56,68 +56,16 @@ pub impl Arena {
         self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true parameterTypes=parameters parameterPassings=passings resultType=result bodyResultType=result closureSignatureId=index />
     }
 
-    inout fn clearBodyTypeResults() {
-        self.bodyTypeResults = []
-        self.bodyTypeResultIndexSlots = []
-    }
-
-    fn bodyTypeResultHash(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
-        // Fx-style word mixing (rust-lang/rustc-hash): these are internal IDs,
-        // not string keys. Rotate high entropy into bucket low bits.
-        val multiplier = 17380933483125451205U64
-        mut val hash = U64.wrappingMul(bodyId, multiplier)
-        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceKind), multiplier)
-        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceId), multiplier)
-        return (hash << 26U64) | (hash >> 38U64)
-    }
-
-    fn bodyTypeResultSlot(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
-        val capacity = self.bodyTypeResultIndexSlots.count()
-        mut val slot = self.bodyTypeResultHash(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId) % capacity
-        while self.bodyTypeResultIndexSlots[slot] != 0U64 {
-            val row = self.bodyTypeResults[self.bodyTypeResultIndexSlots[slot] - 1U64]
-            if row.bodyId == bodyId && row.sourceKind == sourceKind && row.sourceId == sourceId { return slot }
-            slot = (slot + 1U64) % capacity
-        }
-        return slot
-    }
-
-    inout fn ensureBodyTypeResultIndex() {
-        val count = self.bodyTypeResults.count() + 1U64
-        val previous = self.bodyTypeResultIndexSlots.count()
-        if previous != 0U64 && count * 2U64 < previous { return }
-        val capacity = if previous == 0U64 { give 64U64 } else { give previous * 2U64 }
-        self.bodyTypeResultIndexSlots = []
-        mut val slot = 0U64
-        while slot < capacity { self.bodyTypeResultIndexSlots.append(0U64) slot += 1U64 }
-        mut val index = 0U64
-        while index < self.bodyTypeResults.count() {
-            val row = self.bodyTypeResults[index]
-            val target = self.bodyTypeResultSlot(bodyId: row.bodyId, sourceKind: row.sourceKind, sourceId: row.sourceId)
-            self.bodyTypeResultIndexSlots[target] = index + 1U64
-            index += 1U64
-        }
-    }
+    inout fn clearBodyTypeResults() { self.bodyTypeResults.clear() }
 
     inout fn setBodyTypeResult(bodyId: U64, sourceKind: U64, sourceId: U64, resultType: U64) {
         if bodyId == 0U64 || bodyId > self.bodyInstances.count() || sourceId == 0U64 { return }
-        self.ensureBodyTypeResultIndex()
-        val slot = self.bodyTypeResultSlot(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId)
-        val entry = self.bodyTypeResultIndexSlots[slot]
-        val row = <BodyTypeResult bodyId=bodyId sourceKind=sourceKind sourceId=sourceId resultType=resultType />
-        if entry != 0U64 { self.bodyTypeResults[entry - 1U64] = row }
-        else {
-            self.bodyTypeResults.append(row)
-            self.bodyTypeResultIndexSlots[slot] = self.bodyTypeResults.count()
-        }
+        self.bodyTypeResults.set(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId, resultType: resultType)
     }
 
     fn bodyTypeResult(bodyId: U64, sourceKind: U64, sourceId: U64) -> BodyTypeResult {
-        if bodyId == 0U64 || bodyId > self.bodyInstances.count() || sourceId == 0U64 || self.bodyTypeResultIndexSlots.count() == 0U64 { return <BodyTypeResult /> }
-        val slot = self.bodyTypeResultSlot(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId)
-        val entry = self.bodyTypeResultIndexSlots[slot]
-        if entry == 0U64 { return <BodyTypeResult /> }
-        return self.bodyTypeResults[entry - 1U64]
+        if bodyId == 0U64 || bodyId > self.bodyInstances.count() || sourceId == 0U64 { return <BodyTypeResult /> }
+        return self.bodyTypeResults.get(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId)
     }
 
     inout fn setBodyTypeRecipeResult(bodyId: U64, recipeId: U64, resultType: U64) {
@@ -143,4 +91,72 @@ pub impl Arena {
     fn nextBodyInstanceForFunction(bodyId: U64) -> U64 {
         return self.bodyFunctionNext[bodyId - 1U64]
     }
+}
+
+// The result rows and buckets are one value. Probing needs this table only,
+// rather than an Arena snapshot containing every unrelated frontend pool.
+impl BodyTypeResultTable {
+    inout fn clear() {
+        self.rows = []
+        self.slots = []
+    }
+
+    fn hash(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
+        // Fx-style word mixing (rust-lang/rustc-hash): these are internal IDs,
+        // not string keys. Rotate high entropy into bucket low bits.
+        val multiplier = 17380933483125451205U64
+        mut val hash = U64.wrappingMul(bodyId, multiplier)
+        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceKind), multiplier)
+        hash = U64.wrappingMul(U64.wrappingAdd(hash, sourceId), multiplier)
+        return (hash << 26U64) | (hash >> 38U64)
+    }
+
+    fn slot(bodyId: U64, sourceKind: U64, sourceId: U64) -> U64 {
+        val capacity = self.slots.count()
+        mut val slot = self.hash(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId) % capacity
+        while self.slots[slot] != 0U64 {
+            val row = self.rows[self.slots[slot] - 1U64]
+            if row.bodyId == bodyId && row.sourceKind == sourceKind && row.sourceId == sourceId { return slot }
+            slot = (slot + 1U64) % capacity
+        }
+        return slot
+    }
+
+    inout fn ensureCapacity() {
+        val count = self.rows.count() + 1U64
+        val previous = self.slots.count()
+        if previous != 0U64 && count * 2U64 < previous { return }
+        val capacity = if previous == 0U64 { give 64U64 } else { give previous * 2U64 }
+        self.slots = []
+        mut val slot = 0U64
+        while slot < capacity { self.slots.append(0U64) slot += 1U64 }
+        mut val index = 0U64
+        while index < self.rows.count() {
+            val row = self.rows[index]
+            val target = self.slot(bodyId: row.bodyId, sourceKind: row.sourceKind, sourceId: row.sourceId)
+            self.slots[target] = index + 1U64
+            index += 1U64
+        }
+    }
+
+    inout fn set(bodyId: U64, sourceKind: U64, sourceId: U64, resultType: U64) {
+        self.ensureCapacity()
+        val slot = self.slot(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId)
+        val entry = self.slots[slot]
+        val row = <BodyTypeResult bodyId=bodyId sourceKind=sourceKind sourceId=sourceId resultType=resultType />
+        if entry != 0U64 { self.rows[entry - 1U64] = row }
+        else {
+            self.rows.append(row)
+            self.slots[slot] = self.rows.count()
+        }
+    }
+
+    fn get(bodyId: U64, sourceKind: U64, sourceId: U64) -> BodyTypeResult {
+        if self.slots.count() == 0U64 { return <BodyTypeResult /> }
+        val slot = self.slot(bodyId: bodyId, sourceKind: sourceKind, sourceId: sourceId)
+        val entry = self.slots[slot]
+        if entry == 0U64 { return <BodyTypeResult /> }
+        return self.rows[entry - 1U64]
+    }
+
 }

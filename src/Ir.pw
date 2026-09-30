@@ -2107,6 +2107,12 @@ pub impl BodySignature { factory }
 
 // Frontend-published concrete results for a body-owned recipe or type term.
 // Scalar rows keep reading a fact independent of recipe/AST ownership.
+pub struct BodyTypeResultTable {
+    mut val slots: Array[U64] = []
+    mut val rows: Array[BodyTypeResult] = []
+}
+impl BodyTypeResultTable { factory }
+
 pub struct BodyTypeResult {
     pub val bodyId: U64 = 0U64
     pub val sourceKind: U64 = 0U64
@@ -2575,8 +2581,7 @@ pub struct Arena {
     mut val bodyInstances: Array[BodyInstance] = []
     mut val bodyOrigins: Array[BodyOrigin] = []
     mut val bodySignatures: Array[BodySignature] = []
-    mut val bodyTypeResultIndexSlots: Array[U64] = []
-    mut val bodyTypeResults: Array[BodyTypeResult] = []
+    mut val bodyTypeResults: BodyTypeResultTable = <BodyTypeResultTable />
     mut val closureSignatures: Array[ClosureSignature] = []
     mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]
     mut val bodyFunctionTails: Dictionary[U64, U64] = [:]
