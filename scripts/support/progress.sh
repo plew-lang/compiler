@@ -9,7 +9,7 @@
 set -u
 
 if (( $# == 0 )); then
-  print -u2 "usage: ./scripts/diagnostics/progress.sh <command> [args...]"
+  print -u2 "usage: ./scripts/support/progress.sh <command> [args...]"
   exit 64
 fi
 

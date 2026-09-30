@@ -1,9 +1,9 @@
 # Test layout and ownership
 
 Run the standard profiles from the meta repository: `./validate test`, `gen`,
-`deps`, and `asan`. The compiler repository's root shell wrappers remain public
-entry points. Each profile has a different contract; passing one does not imply
-that the others passed.
+`deps`, and `asan`. In a standalone compiler checkout, use the scripts in
+`tests/harness/` directly. Each profile has a different contract; passing one
+does not imply that the others passed.
 
 ## Where tests belong
 
