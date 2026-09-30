@@ -1,0 +1,53 @@
+// Sparse cliff candidates retain local identity and emission order. The
+// unselected locals must not acquire drops merely because they fill a gap.
+import @Std/Core with { assert }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Mid/Ir with { MidBody, MidBlock, MidLocalDecl, MidPlace, MidOperand, MidConstant, MidRvalue, MidStatement, MidTerminator }
+import /Mid/Drop with { elaborateCanonicalMidDrops }
+import /Mid/Verify with { MidVerifyError, verifyCanonicalMidBody }
+
+fn main() {
+    mut val locals: Array[MidLocalDecl] = []
+    mut val index = 0U64
+    while index < 70U64 {
+        locals.append(<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />)
+        index += 1U64
+    }
+    val condition = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+    val value = <MidRvalue.Use operand=condition />
+    val body = <MidBody locals=locals blocks=[
+        <MidBlock terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[1U64] otherwise=2U64 /> />,
+        <MidBlock statements=[
+            <MidStatement.Assign destination=<MidPlace local=2U64 /> value=value />,
+            <MidStatement.Assign destination=<MidPlace local=65U64 /> value=value />
+        ] terminator=<MidTerminator.Goto target=3U64 /> />,
+        <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />,
+        <MidBlock terminator=<MidTerminator.Return /> />
+    ] />
+    mut val compiler = <Comp />
+    val source = compiler.mid.store(body: body)
+    val result = elaborateCanonicalMidDrops(arena: inout compiler.mid, canonical: source)
+    assert(compiler.mid.isWellFormed(body: result))
+    match verifyCanonicalMidBody(c: inout compiler, canonical: result).error {
+        MidVerifyError.None => {}
+        _ => { panic "sparse cliff verification" }
+    }
+    val rewritten = compiler.mid.bodies[result.body - 1U64]
+    val join = compiler.mid.blocks[rewritten.blocks.start + 3U64]
+    mut val dropped: Array[U64] = []
+    index = 0U64
+    while index < join.statements.len {
+        val statement = compiler.mid.statements[join.statements.start + index]
+        if statement.tag == 3U64 || statement.tag == 4U64 {
+            assert(statement.tag == 4U64)
+            dropped.append(compiler.mid.places[statement.destination - 1U64].local)
+        }
+        index += 1U64
+    }
+    assert(dropped.count() == 2U64)
+    assert(dropped[0U64] == 2U64 && dropped[1U64] == 65U64)
+    val original = compiler.mid.bodies[source.body - 1U64]
+    assert(compiler.mid.blocks[original.blocks.start + 3U64].statements.len == 0U64)
+    print("sparse-cliffs-ok")
+}

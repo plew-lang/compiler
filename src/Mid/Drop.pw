@@ -462,10 +462,18 @@ fn canonicalMidCliffFromPredecessors(body: MidBodyNode, predecessors: MidDropPre
 // are pass-local analysis state, not part of the canonical body schema.
 struct MidCanonicalDropPlan {
     pub val needsFlag: Array[Bool] = []
-    pub val hasCliffs: Bool = false
-    pub val cliffAtEntry: Array[Array[Bool]] = []
+    // Per-block slices into ascending local IDs. Absent candidates take no
+    // per-local storage, and consumers visit only actual cliff candidates.
+    pub val cliffAtEntry: Array[MidRange] = []
+    pub val cliffLocals: Array[U64] = []
 }
-pub impl MidCanonicalDropPlan { factory }
+pub impl MidCanonicalDropPlan {
+    factory
+    fn entryCliffs(block: U64) -> MidRange {
+        if block >= self.cliffAtEntry.count() { return <MidRange start=0U64 len=0U64 /> }
+        return self.cliffAtEntry[block]
+    }
+}
 
 fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, ownership: Array[MidOwnershipStates], accessibility: Array[MidAccessibilityStates]) -> MidCanonicalDropPlan {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalDropPlan /> }
@@ -480,15 +488,15 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
         needsFlag.append(false)
         localI = localI + 1U64
     }
-    mut val cliffs: Array[Array[Bool]] = []
-    mut val hasCliffs = false
+    mut val cliffs: Array[MidRange] = []
+    mut val cliffLocals: Array[U64] = []
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         mut val blockOwnership: MidOwnershipStates = <MidOwnershipStates.empty />
         if blockI < ownership.count() { blockOwnership = ownership[blockI] }
         mut val blockAccessibility: MidAccessibilityStates = <MidAccessibilityStates.empty />
         if blockI < accessibility.count() { blockAccessibility = accessibility[blockI] }
-        mut val blockCliffs: Array[Bool] = []
+        val cliffStart = cliffLocals.count()
         localI = 0U64
         while localI < body.locals.len {
             mut val cliff: Bool = false
@@ -514,8 +522,7 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
                     _ => {}
                 }
             }
-            if cliff { hasCliffs = true }
-            blockCliffs.append(cliff)
+            if cliff { cliffLocals.append(localI) }
             localI += 1U64
         }
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
@@ -535,10 +542,10 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
             }
             statementI = statementI + 1U64
         }
-        cliffs.append(blockCliffs)
+        cliffs.append(<MidRange start=cliffStart len=cliffLocals.count() - cliffStart />)
         blockI = blockI + 1U64
     }
-    return <MidCanonicalDropPlan needsFlag=needsFlag hasCliffs=hasCliffs cliffAtEntry=cliffs />
+    return <MidCanonicalDropPlan needsFlag=needsFlag cliffAtEntry=cliffs cliffLocals=cliffLocals />
 }
 
 // Flag locals are appended after the source local prefix.  Their mapping is
@@ -636,10 +643,12 @@ fn canonicalMidAppendMovedFlagClears(arena: inout MidCanonicalArena, rvalueId: U
 // ownership effect needed for this conservative planning pass.
 fn canonicalMidTransferBlockAfterCliffs(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: MidOwnershipStates, plan: MidCanonicalDropPlan, blockI: U64) -> MidOwnershipStates {
     mut val afterCliffs: MidOwnershipStates = input
-    mut val local: U64 = 0U64
-    while local < afterCliffs.count() && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
-        if plan.cliffAtEntry[blockI][local] { afterCliffs.set(index: local, state: <MidOwnership.Consumed />) }
-        local = local + 1U64
+    val cliffs = plan.entryCliffs(block: blockI)
+    mut val index = 0U64
+    while index < cliffs.len {
+        val local = plan.cliffLocals[cliffs.start + index]
+        if local < afterCliffs.count() { afterCliffs.set(index: local, state: <MidOwnership.Consumed />) }
+        index += 1U64
     }
     return canonicalMidTransferBlock(arena: arena, body: body, block: block, input: afterCliffs)
 }
@@ -804,7 +813,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
     val plan: MidCanonicalDropPlan = canonicalMidDropPlan(arena: arena, canonical: canonical, ownership: ownership, accessibility: accessibility)
     // With no added cliff, the transfer function and entry state are unchanged.
     // Reuse their fixed point; plans that consume owners still require refinement.
-    val ownershipAfterCliffs: Array[MidOwnershipStates] = if plan.hasCliffs {
+    val ownershipAfterCliffs: Array[MidOwnershipStates] = if plan.cliffLocals.count() != 0U64 {
         give canonicalMidOwnershipAfterCliffs(arena: arena, canonical: canonical, plan: plan)
     } else {
         give ownership
@@ -828,9 +837,12 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
         // Candidate cliffs were included in ownershipAfterCliffs.  Emit the
         // concrete operation selected by that state, then clear its flag so a
         // loop backedge cannot replay the same conditional destruction.
+        val cliffs = plan.entryCliffs(block: blockI)
+        mut val cliffIndex = 0U64
         mut val local: U64 = 0U64
-        while local < source.locals.len && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
-            if plan.needsFlag[local] && plan.cliffAtEntry[blockI][local] {
+        while cliffIndex < cliffs.len {
+            local = plan.cliffLocals[cliffs.start + cliffIndex]
+            if local < source.locals.len && plan.needsFlag[local] {
                 if local < currentOwnership.count() {
                     match currentOwnership[local] {
                         MidOwnership.Owned => {
@@ -847,7 +859,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                 }
                 arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />)
             }
-            local = local + 1U64
+            cliffIndex += 1U64
         }
 
         mut val statementI: U64 = 0U64
