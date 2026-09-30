@@ -4,8 +4,8 @@ import ./AccessScopes with { canonicalMidAccessScopesValid }
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
 import ../Frontend with { Comp }
-import ../Ir with { MatchSource, SemanticMatchKind, SemanticMatchPayload }
-import ./Ir with { canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
+import ../Ir with { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
+import ./Ir with { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
 import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
 import ./Drop with { analyzeCanonicalMidOwnership }
 
@@ -51,18 +51,18 @@ pub impl MidVerification { factory }
 // Compare storage after access elaboration, not source syntax: an Index
 // getter result is an independent local, while inout's accessPlace names the
 // reserved container. Shared-cell identity needs the separate alias tier.
-pub fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Bool {
+pub fn canonicalMidValuePlacesOverlap(arena: MidCanonicalArena, leftId: U64, rightId: U64) -> Bool {
     if leftId == 0U64 || rightId == 0U64 { return false }
-    val left = c.mid.places[leftId - 1U64]
-    val right = c.mid.places[rightId - 1U64]
-    if canonicalMidPlaceHasDeref(c: c, place: left) || canonicalMidPlaceHasDeref(c: c, place: right) { return false }
+    val left = arena.places[leftId - 1U64]
+    val right = arena.places[rightId - 1U64]
+    if canonicalMidPlaceHasDeref(arena: arena, place: left) || canonicalMidPlaceHasDeref(arena: arena, place: right) { return false }
     if left.rootTag != right.rootTag { return false }
     if left.rootTag == 1U64 && left.local != right.local { return false }
     if left.rootTag == 2U64 && left.globalTarget != right.globalTarget { return false }
     mut val index = 0U64
     while index < left.projections.len && index < right.projections.len {
-        val projection = c.mid.projections[left.projections.start + index]
-        val other = c.mid.projections[right.projections.start + index]
+        val projection = arena.projections[left.projections.start + index]
+        val other = arena.projections[right.projections.start + index]
         // Index reservations conflict at container granularity. Only a
         // physical field divergence proves disjointness within one root.
         if projection.tag == 2U64 || other.tag == 2U64 { return true }
@@ -73,20 +73,20 @@ pub fn canonicalMidValuePlacesOverlap(c: Comp, leftId: U64, rightId: U64) -> Boo
     return true
 }
 
-fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode, receiverTag: U64) -> Bool {
+fn canonicalMidReceiverConflicts(arena: MidCanonicalArena, term: MidTerminatorNode, receiverTag: U64) -> Bool {
     if term.callReceiver == 0U64 { return false }
-    val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+    val receiver = arena.callReceivers[term.callReceiver - 1U64]
     if receiver.tag != 2U64 { return false }
-    val operand = c.mid.operands[receiver.operand - 1U64]
+    val operand = arena.operands[receiver.operand - 1U64]
     val mode = if receiverTag == 0U64 { give operand.tag } else { give receiverTag }
     if mode != 3U64 || operand.place == 0U64 { return false }
     mut val index = 0U64
     while index < term.args.len {
-        val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        val argument = arena.operands[arena.callArguments[term.args.start + index] - 1U64]
         if argument.tag == 4U64 || argument.tag == 2U64 {
             mut val storage = argument.place
             if argument.accessPlace != 0U64 { storage = argument.accessPlace }
-            if canonicalMidValuePlacesOverlap(c: c, leftId: operand.place, rightId: storage) { return true }
+            if canonicalMidValuePlacesOverlap(arena: arena, leftId: operand.place, rightId: storage) { return true }
         }
         index += 1U64
     }
@@ -95,25 +95,25 @@ fn canonicalMidReceiverConflicts(c: Comp, term: MidTerminatorNode, receiverTag: 
 
 // Only language borrows participate here. A guaranteed by-value operand
 // already denotes a snapshot, even though its physical passing is Read.
-fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode, receiverTag: U64) -> Bool {
+fn canonicalMidBorrowArgumentConflicts(arena: MidCanonicalArena, term: MidTerminatorNode, receiverTag: U64) -> Bool {
     mut val index = 0U64
     while index < term.args.len {
-        val operand = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        val operand = arena.operands[arena.callArguments[term.args.start + index] - 1U64]
         if operand.tag == 3U64 && operand.borrowsStorage {
             if term.callReceiver != 0U64 {
-                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                val receiver = arena.callReceivers[term.callReceiver - 1U64]
                 if receiver.tag == 2U64 {
-                    val other = c.mid.operands[receiver.operand - 1U64]
+                    val other = arena.operands[receiver.operand - 1U64]
                     val mode = if receiverTag == 0U64 { give other.tag } else { give receiverTag }
                     if (mode == 2U64 || mode == 4U64) && other.place != 0U64 {
                         val storage = if other.accessPlace != 0U64 { give other.accessPlace } else { give other.place }
-                        if canonicalMidValuePlacesOverlap(c: c, leftId: operand.place, rightId: storage) { return true }
+                        if canonicalMidValuePlacesOverlap(arena: arena, leftId: operand.place, rightId: storage) { return true }
                     }
                 }
             }
             mut val otherIndex = 0U64
             while otherIndex < term.args.len {
-                if canonicalMidReadWriteOverlap(c: c, read: operand, other: c.mid.operands[c.mid.callArguments[term.args.start + otherIndex] - 1U64]) { return true }
+                if canonicalMidReadWriteOverlap(arena: arena, read: operand, other: arena.operands[arena.callArguments[term.args.start + otherIndex] - 1U64]) { return true }
                 otherIndex += 1U64
             }
         }
@@ -125,29 +125,29 @@ fn canonicalMidBorrowArgumentConflicts(c: Comp, term: MidTerminatorNode, receive
 // The caller supplies an already-selected receiver mode for parametric calls.
 // Zero consumes the executable operand's mode. Access markers without a place
 // remain for access elaboration; this query proves conflicts, not full validity.
-pub fn canonicalMidCallAccessError(c: Comp, term: MidTerminatorNode, receiverTag: U64 = 0U64) -> MidVerifyError {
-    if canonicalMidBorrowArgumentConflicts(c: c, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingBorrowAccess /> }
-    if canonicalMidReceiverConflicts(c: c, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingReceiverAccess /> }
+pub fn canonicalMidCallAccessError(arena: MidCanonicalArena, term: MidTerminatorNode, receiverTag: U64 = 0U64) -> MidVerifyError {
+    if canonicalMidBorrowArgumentConflicts(arena: arena, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingBorrowAccess /> }
+    if canonicalMidReceiverConflicts(arena: arena, term: term, receiverTag: receiverTag) { return <MidVerifyError.ConflictingReceiverAccess /> }
     return <MidVerifyError.None />
 }
 
-fn canonicalMidReadWriteOverlap(c: Comp, read: MidOperandNode, other: MidOperandNode) -> Bool {
+fn canonicalMidReadWriteOverlap(arena: MidCanonicalArena, read: MidOperandNode, other: MidOperandNode) -> Bool {
     if other.tag != 4U64 && other.tag != 2U64 { return false }
     mut val storage = other.place
     if other.accessPlace != 0U64 { storage = other.accessPlace }
-    return canonicalMidValuePlacesOverlap(c: c, leftId: read.place, rightId: storage)
+    return canonicalMidValuePlacesOverlap(arena: arena, leftId: read.place, rightId: storage)
 }
 
 // A global root is a typed address selected by the frontend.  It is not an
 // implicit local: only Copy/Borrow may read it, and the sole write protocol is
 // a mutable Global Drop immediately followed by Overwrite.  The ownership
 // vector intentionally has no entry for it.
-fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
+fn canonicalMidGlobalRootIsValid(globals: Array[Global], place: MidPlaceNode) -> Bool {
     if place.rootTag != 2U64 { return false }
     if place.typeTerm == 0U64 { return false }
     mut val index: U64 = 0U64
-    while index < c.arena.globals.count() {
-        val global = c.arena.globals[index]
+    while index < globals.count() {
+        val global = globals[index]
         if global.nameStart == place.globalTarget { return global.mutable == place.globalMutable }
         index += 1U64
     }
@@ -156,24 +156,24 @@ fn canonicalMidGlobalRootIsValid(c: Comp, place: MidPlaceNode) -> Bool {
 
 // Caller-owned parameters/captures are guaranteed by the enclosing call.
 // Every other local read requires a live owner, including Copy and projections.
-fn canonicalMidVerifyRead(c: Comp, body: MidBodyNode, states: MidOwnershipStates, placeId: U64, block: U64) -> MidVerification {
-    if placeId == 0U64 || placeId > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
-    val place = c.mid.places[placeId - 1U64]
+fn canonicalMidVerifyRead(arena: MidCanonicalArena, globals: Array[Global], body: MidBodyNode, states: MidOwnershipStates, placeId: U64, block: U64) -> MidVerification {
+    if placeId == 0U64 || placeId > arena.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
+    val place = arena.places[placeId - 1U64]
     if place.rootTag == 2U64 {
-        if !canonicalMidGlobalRootIsValid(c: c, place: place) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block /> }
+        if !canonicalMidGlobalRootIsValid(globals: globals, place: place) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block /> }
     } else {
         if place.rootTag != 1U64 || place.local >= body.locals.len || place.local >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
-        val local = c.mid.locals[body.locals.start + place.local]
+        val local = arena.locals[body.locals.start + place.local]
         if !local.isBorrowed && !(local.isParameter && !local.ownsAtEntry && !local.isInout) {
             match states[place.local] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> } }
         }
     }
     mut val index = 0U64
     while index < place.projections.len {
-        val projection = c.mid.projections[place.projections.start + index]
+        val projection = arena.projections[place.projections.start + index]
         if projection.tag == 2U64 {
             if projection.indexLocal >= body.locals.len || projection.indexLocal >= states.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
-            val local = c.mid.locals[body.locals.start + projection.indexLocal]
+            val local = arena.locals[body.locals.start + projection.indexLocal]
             if !local.isBorrowed && !(local.isParameter && !local.ownsAtEntry) {
                 match states[projection.indexLocal] { MidOwnership.Owned => {} _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=projection.indexLocal /> } }
             }
@@ -192,7 +192,7 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
         if operand.accessCandidate >= c.decls.accessCandidateCount() || operand.preparedInputs.start > body.locals.len || operand.preparedInputs.len > body.locals.len - operand.preparedInputs.start {
             return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block />
         }
-        val owner = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: operand.accessOwner, block: block)
+        val owner = canonicalMidVerifyRead(arena: c.mid, globals: c.arena.globals, body: body, states: states, placeId: operand.accessOwner, block: block)
         match owner.error { MidVerifyError.None => {} _ => { return owner } }
         // Only the published key/reference homes survive to the access. The
         // range also contains intermediate results already consumed by them.
@@ -252,7 +252,7 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=storage.local /> }
                 }
             }
-        } else if !canonicalMidGlobalRootIsValid(c: c, place: storage) { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
+        } else if !canonicalMidGlobalRootIsValid(globals: c.arena.globals, place: storage) { return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block /> }
     }
     if operand.tag == 3U64 {
         if operand.capability != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
@@ -272,7 +272,7 @@ fn canonicalMidVerifyConsumeOperand(c: inout Comp, body: MidBodyNode, states: in
         }
     }
     if operand.tag >= 1U64 && operand.tag <= 4U64 {
-        val read = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: operand.place, block: block)
+        val read = canonicalMidVerifyRead(arena: c.mid, globals: c.arena.globals, body: body, states: states, placeId: operand.place, block: block)
         match read.error { MidVerifyError.None => {} _ => { return read } }
     }
     if operand.tag != 2U64 { return <MidVerification /> }
@@ -294,7 +294,7 @@ fn canonicalMidVerifyConsumeRvalue(c: inout Comp, body: MidBodyNode, states: ino
     if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block /> }
     val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
     if value.place != 0U64 {
-        val read = canonicalMidVerifyRead(c: c, body: body, states: states, placeId: value.place, block: block)
+        val read = canonicalMidVerifyRead(arena: c.mid, globals: c.arena.globals, body: body, states: states, placeId: value.place, block: block)
         match read.error { MidVerifyError.None => {} _ => { return read } }
     }
     if executable && value.tag == 6U64 && !canonicalMidConversionContractsAreReady(c: inout c, proofId: value.conversion) {
@@ -364,10 +364,10 @@ fn canonicalMidWritablePhysicalPath(c: Comp, body: MidBodyNode, place: MidPlaceN
     return true
 }
 
-fn canonicalMidPlaceHasDeref(c: Comp, place: MidPlaceNode) -> Bool {
+fn canonicalMidPlaceHasDeref(arena: MidCanonicalArena, place: MidPlaceNode) -> Bool {
     mut val index: U64 = 0U64
     while index < place.projections.len {
-        if c.mid.projections[place.projections.start + index].tag == 3U64 { return true }
+        if arena.projections[place.projections.start + index].tag == 3U64 { return true }
         index += 1U64
     }
     return false
@@ -378,28 +378,28 @@ fn canonicalMidPlaceHasDeref(c: Comp, place: MidPlaceNode) -> Bool {
 // Compare the closed rows instead of relying on arena identity.  This stays in
 // the canonical verifier: draft Mid is intentionally pre-drop-elaboration and
 // therefore cannot yet require the compiler-generated Drop.
-fn canonicalMidSamePlace(c: Comp, leftId: U64, rightId: U64) -> Bool {
-    if leftId == 0U64 || rightId == 0U64 || leftId > c.mid.places.count() || rightId > c.mid.places.count() { return false }
-    val left: MidPlaceNode = c.mid.places[leftId - 1U64]
-    val right: MidPlaceNode = c.mid.places[rightId - 1U64]
+fn canonicalMidSamePlace(arena: MidCanonicalArena, leftId: U64, rightId: U64) -> Bool {
+    if leftId == 0U64 || rightId == 0U64 || leftId > arena.places.count() || rightId > arena.places.count() { return false }
+    val left: MidPlaceNode = arena.places[leftId - 1U64]
+    val right: MidPlaceNode = arena.places[rightId - 1U64]
     if left.rootTag != right.rootTag || left.local != right.local || left.globalTarget != right.globalTarget || left.globalMutable != right.globalMutable || left.typeTerm != right.typeTerm || left.projections.len != right.projections.len { return false }
     mut val projectionI: U64 = 0U64
     while projectionI < left.projections.len {
-        val leftProjection: MidProjectionNode = c.mid.projections[left.projections.start + projectionI]
-        val rightProjection: MidProjectionNode = c.mid.projections[right.projections.start + projectionI]
+        val leftProjection: MidProjectionNode = arena.projections[left.projections.start + projectionI]
+        val rightProjection: MidProjectionNode = arena.projections[right.projections.start + projectionI]
         if leftProjection.sourceTerm != rightProjection.sourceTerm || leftProjection.tag != rightProjection.tag || leftProjection.index != rightProjection.index || leftProjection.indexLocal != rightProjection.indexLocal || leftProjection.typeTerm != rightProjection.typeTerm || leftProjection.isBoxed != rightProjection.isBoxed { return false }
         projectionI = projectionI + 1U64
     }
     return true
 }
 
-fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) -> MidVerification {
-    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
-    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidVerification {
+    if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
+    val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     mut val flags: Array[U64] = []
     mut val local: U64 = 0U64
     while local < body.locals.len {
-        if c.mid.locals[body.locals.start + local].isDropFlag { flags.append(local) }
+        if arena.locals[body.locals.start + local].isDropFlag { flags.append(local) }
         local = local + 1U64
     }
     if body.entry >= body.blocks.len { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
@@ -424,12 +424,12 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
         while blockI < body.blocks.len {
             if reachable[blockI] {
                 mut val outgoing: Array[Bool] = incoming[blockI]
-                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+                val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
                 mut val statementI: U64 = 0U64
                 while statementI < block.statements.len {
-                    val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+                    val statement: MidStatementNode = arena.statements[block.statements.start + statementI]
                     if statement.tag == 5U64 {
-                        if statement.flag >= body.locals.len || !c.mid.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
+                        if statement.flag >= body.locals.len || !arena.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
                         mut val flagI: U64 = 0U64
                         while flagI < flags.count() {
                             if flags[flagI] == statement.flag { outgoing.set(i: flagI, value: true) }
@@ -438,11 +438,11 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
                     }
                     statementI = statementI + 1U64
                 }
-                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
-                    val term = c.mid.terminators[block.terminator - 1U64]
+                if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
+                    val term = arena.terminators[block.terminator - 1U64]
                     mut val successorI: U64 = 0U64
                     while successorI < term.successorCount() {
-                        val target: U64 = c.mid.successorAt(term: term, index: successorI)
+                        val target: U64 = arena.successorAt(term: term, index: successorI)
                         if !canonicalMidTargetIsValid(body: body, target: target) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=blockI /> }
                         if !reachable[target] {
                             incoming.set(i: target, value: outgoing)
@@ -471,10 +471,10 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
     while blockI < body.blocks.len {
         if reachable[blockI] {
             mut val initialized: Array[Bool] = incoming[blockI]
-            val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+            val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
             mut val statementI: U64 = 0U64
             while statementI < block.statements.len {
-                val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+                val statement: MidStatementNode = arena.statements[block.statements.start + statementI]
                 if statement.tag == 5U64 {
                     mut val flagI: U64 = 0U64
                     while flagI < flags.count() {
@@ -483,7 +483,7 @@ fn verifyCanonicalMidFlagInitialization(c: Comp, canonical: MidCanonicalBody) ->
                     }
                 }
                 if statement.tag == 4U64 {
-                    if statement.flag >= body.locals.len || !c.mid.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
+                    if statement.flag >= body.locals.len || !arena.locals[body.locals.start + statement.flag].isDropFlag { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockI local=statement.flag /> }
                     mut val flagI: U64 = 0U64
                     while flagI < flags.count() {
                         if flags[flagI] == statement.flag && !initialized[flagI] { return <MidVerification error=<MidVerifyError.UninitializedDropFlag /> block=blockI local=statement.flag /> }
@@ -656,7 +656,7 @@ fn canonicalMidConversionContractsAreReady(c: inout Comp, proofId: U64) -> Bool 
 }
 
 // Enumerate reachable blocks once; dead code carries no runtime obligation.
-pub fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
+pub fn canonicalMidReachable(arena: MidCanonicalArena, body: MidBodyNode) -> Array[Bool] {
     mut val reached: Array[Bool] = []
     mut val index = 0U64
     while index < body.blocks.len { reached.append(false)
@@ -665,11 +665,11 @@ pub fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
     reached.set(i: body.entry, value: true)
     index = 0U64
     while index < queue.count() {
-        val block = c.mid.blocks[body.blocks.start + queue[index]]
-        val term = c.mid.terminators[block.terminator - 1U64]
+        val block = arena.blocks[body.blocks.start + queue[index]]
+        val term = arena.terminators[block.terminator - 1U64]
         mut val edge: U64 = 0U64
         while edge < term.successorCount() {
-            val target = c.mid.successorAt(term: term, index: edge)
+            val target = arena.successorAt(term: term, index: edge)
             edge += 1U64
             if target < reached.count() && !reached[target] { reached.set(i: target, value: true)
                 queue.append(target) }
@@ -679,32 +679,32 @@ pub fn canonicalMidReachable(c: Comp, body: MidBodyNode) -> Array[Bool] {
     return reached
 }
 
-fn canonicalMidFlagPlace(c: Comp, placeId: U64, owner: U64) -> Bool {
-    if placeId == 0U64 || placeId > c.mid.places.count() { return false }
-    val place = c.mid.places[placeId - 1U64]
-    return place.rootTag == 1U64 && place.local == owner && canonicalMidPlaceIsWhole(arena: c.mid, place: place)
+fn canonicalMidFlagPlace(arena: MidCanonicalArena, placeId: U64, owner: U64) -> Bool {
+    if placeId == 0U64 || placeId > arena.places.count() { return false }
+    val place = arena.places[placeId - 1U64]
+    return place.rootTag == 1U64 && place.local == owner && canonicalMidPlaceIsWhole(arena: arena, place: place)
 }
 
-fn canonicalMidFlagOperand(c: Comp, operandId: U64, owner: U64, state: U64) -> U64 {
-    if operandId == 0U64 || operandId > c.mid.operands.count() { return state }
-    val operand = c.mid.operands[operandId - 1U64]
-    if operand.tag == 2U64 && canonicalMidFlagPlace(c: c, placeId: operand.place, owner: owner) { return state % 2U64 }
+fn canonicalMidFlagOperand(arena: MidCanonicalArena, operandId: U64, owner: U64, state: U64) -> U64 {
+    if operandId == 0U64 || operandId > arena.operands.count() { return state }
+    val operand = arena.operands[operandId - 1U64]
+    if operand.tag == 2U64 && canonicalMidFlagPlace(arena: arena, placeId: operand.place, owner: owner) { return state % 2U64 }
     return state
 }
 
-fn canonicalMidFlagRvalue(c: Comp, valueId: U64, owner: U64, state: U64) -> U64 {
-    if valueId == 0U64 || valueId > c.mid.rvalues.count() { return state }
-    val value = c.mid.rvalues[valueId - 1U64]
-    mut val result = canonicalMidFlagOperand(c: c, operandId: value.operand, owner: owner, state: state)
+fn canonicalMidFlagRvalue(arena: MidCanonicalArena, valueId: U64, owner: U64, state: U64) -> U64 {
+    if valueId == 0U64 || valueId > arena.rvalues.count() { return state }
+    val value = arena.rvalues[valueId - 1U64]
+    mut val result = canonicalMidFlagOperand(arena: arena, operandId: value.operand, owner: owner, state: state)
     mut val index = 0U64
     if value.tag >= 3U64 && value.tag <= 5U64 {
         while index < value.elements.len {
-            result = canonicalMidFlagOperand(c: c, operandId: c.mid.aggregateElements[value.elements.start + index].operand, owner: owner, state: result)
+            result = canonicalMidFlagOperand(arena: arena, operandId: arena.aggregateElements[value.elements.start + index].operand, owner: owner, state: result)
             index += 1U64
         }
     } else if value.tag == 19U64 {
         while index < value.elements.len {
-            result = canonicalMidFlagOperand(c: c, operandId: c.mid.closureCaptures[value.elements.start + index].operand, owner: owner, state: result)
+            result = canonicalMidFlagOperand(arena: arena, operandId: arena.closureCaptures[value.elements.start + index].operand, owner: owner, state: result)
             index += 1U64
         }
     }
@@ -715,20 +715,20 @@ fn canonicalMidFlagRvalue(c: Comp, valueId: U64, owner: U64, state: U64) -> U64 
 // Joining these pairs, rather than separate may-owned and may-true facts,
 // preserves their correlation through diamonds and loops. Each block/pair is
 // visited at most once. Flag initialization is checked independently above.
-fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerification {
+fn verifyCanonicalMidFlagOwnership(arena: MidCanonicalArena, body: MidBodyNode) -> MidVerification {
     mut val owners: Array[U64] = []
     mut val index = 0U64
     while index < body.locals.len { owners.append(body.locals.len)
         index += 1U64 }
     mut val blockIndex = 0U64
     while blockIndex < body.blocks.len {
-        val block = c.mid.blocks[body.blocks.start + blockIndex]
+        val block = arena.blocks[body.blocks.start + blockIndex]
         index = 0U64
         while index < block.statements.len {
-            val statement = c.mid.statements[block.statements.start + index]
+            val statement = arena.statements[block.statements.start + index]
             if statement.tag == 4U64 {
-                if statement.flag >= owners.count() || statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex /> }
-                val owner = c.mid.places[statement.destination - 1U64].local
+                if statement.flag >= owners.count() || statement.destination == 0U64 || statement.destination > arena.places.count() { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex /> }
+                val owner = arena.places[statement.destination - 1U64].local
                 if owners[statement.flag] != body.locals.len && owners[statement.flag] != owner { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex local=statement.flag /> }
                 owners.set(i: statement.flag, value: owner)
             }
@@ -742,7 +742,7 @@ fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerificatio
         if owner == body.locals.len { flag += 1U64
             continue }
         mut val initial = 0U64
-        if c.mid.locals[body.locals.start + owner].ownsAtEntry { initial = 2U64 }
+        if arena.locals[body.locals.start + owner].ownsAtEntry { initial = 2U64 }
         mut val visited: Array[Bool] = []
         index = 0U64
         while index < body.blocks.len * 4U64 { visited.append(false)
@@ -755,49 +755,49 @@ fn verifyCanonicalMidFlagOwnership(c: Comp, body: MidBodyNode) -> MidVerificatio
             blockIndex = queue[next] / 4U64
             mut val state = queue[next] % 4U64
             next += 1U64
-            val block = c.mid.blocks[body.blocks.start + blockIndex]
+            val block = arena.blocks[body.blocks.start + blockIndex]
             index = 0U64
             while index < block.statements.len {
-                val statement = c.mid.statements[block.statements.start + index]
+                val statement = arena.statements[block.statements.start + index]
                 if statement.tag == 5U64 && statement.flag == flag {
                     state = (state / 2U64) * 2U64
                     if statement.isSet { state += 1U64 }
                 } else if statement.tag == 1U64 || statement.tag == 9U64 {
-                    state = canonicalMidFlagRvalue(c: c, valueId: statement.value, owner: owner, state: state)
-                    if canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
+                    state = canonicalMidFlagRvalue(arena: arena, valueId: statement.value, owner: owner, state: state)
+                    if canonicalMidFlagPlace(arena: arena, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
                 } else if statement.tag == 2U64 || statement.tag == 8U64 {
-                    if canonicalMidFlagPlace(c: c, placeId: statement.source, owner: owner) { state = state % 2U64 }
-                    if statement.tag == 2U64 && canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
+                    if canonicalMidFlagPlace(arena: arena, placeId: statement.source, owner: owner) { state = state % 2U64 }
+                    if statement.tag == 2U64 && canonicalMidFlagPlace(arena: arena, placeId: statement.destination, owner: owner) { state = state % 2U64 + 2U64 }
                 } else if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
-                    if canonicalMidFlagPlace(c: c, placeId: statement.destination, owner: owner) {
+                    if canonicalMidFlagPlace(arena: arena, placeId: statement.destination, owner: owner) {
                         if statement.tag == 4U64 && statement.flag == flag && state != 0U64 && state != 3U64 { return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=blockIndex local=flag /> }
                         state = state % 2U64
                     }
                 } else if statement.tag == 13U64 {
-                    if canonicalMidFlagPlace(c: c, placeId: statement.source, owner: owner) { state = state % 2U64 }
+                    if canonicalMidFlagPlace(arena: arena, placeId: statement.source, owner: owner) { state = state % 2U64 }
                     mut val output = 0U64
                     while output < statement.enumDestinations.len {
-                        if canonicalMidFlagPlace(c: c, placeId: c.mid.enumDestinations[statement.enumDestinations.start + output].place, owner: owner) { state = state % 2U64 + 2U64 }
+                        if canonicalMidFlagPlace(arena: arena, placeId: arena.enumDestinations[statement.enumDestinations.start + output].place, owner: owner) { state = state % 2U64 + 2U64 }
                         output += 1U64
                     }
                 }
                 index += 1U64
             }
-            val term = c.mid.terminators[block.terminator - 1U64]
-            state = canonicalMidFlagOperand(c: c, operandId: term.discriminant, owner: owner, state: state)
-            state = canonicalMidFlagOperand(c: c, operandId: term.value, owner: owner, state: state)
+            val term = arena.terminators[block.terminator - 1U64]
+            state = canonicalMidFlagOperand(arena: arena, operandId: term.discriminant, owner: owner, state: state)
+            state = canonicalMidFlagOperand(arena: arena, operandId: term.value, owner: owner, state: state)
             if term.tag == 4U64 {
-                if term.callReceiver != 0U64 { state = canonicalMidFlagOperand(c: c, operandId: c.mid.callReceivers[term.callReceiver - 1U64].operand, owner: owner, state: state) }
+                if term.callReceiver != 0U64 { state = canonicalMidFlagOperand(arena: arena, operandId: arena.callReceivers[term.callReceiver - 1U64].operand, owner: owner, state: state) }
                 index = 0U64
                 while index < term.args.len {
-                    state = canonicalMidFlagOperand(c: c, operandId: c.mid.callArguments[term.args.start + index], owner: owner, state: state)
+                    state = canonicalMidFlagOperand(arena: arena, operandId: arena.callArguments[term.args.start + index], owner: owner, state: state)
                     index += 1U64
                 }
             }
-            if (term.tag == 4U64 || term.tag == 10U64) && canonicalMidFlagPlace(c: c, placeId: term.destination, owner: owner) { state = state % 2U64 + 2U64 }
+            if (term.tag == 4U64 || term.tag == 10U64) && canonicalMidFlagPlace(arena: arena, placeId: term.destination, owner: owner) { state = state % 2U64 + 2U64 }
             mut val edge: U64 = 0U64
             while edge < term.successorCount() {
-                val target = c.mid.successorAt(term: term, index: edge)
+                val target = arena.successorAt(term: term, index: edge)
                 edge += 1U64
                 val entry = target * 4U64 + state
                 if target < body.blocks.len && !visited[entry] { visited.set(i: entry, value: true)
@@ -813,11 +813,11 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val executable = stage.isExecutable()
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     if !c.mid.isWellFormed(body: canonical) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
-    val flags: MidVerification = verifyCanonicalMidFlagInitialization(c: c, canonical: canonical)
+    val flags: MidVerification = verifyCanonicalMidFlagInitialization(arena: c.mid, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
     val incoming: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
-    val reachable = canonicalMidReachable(c: c, body: body)
+    val reachable = canonicalMidReachable(arena: c.mid, body: body)
 
     mut val hasAccessScopes = false
     mut val blockI: U64 = 0U64
@@ -879,16 +879,16 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
                 if !canonicalMidWritablePhysicalPath(c: c, body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
-                if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(globals: c.arena.globals, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
                 // Global storage has no local ownership state.  Its old value
                 // is nevertheless observable through ARC/deinit, so the
                 // completed body must prove the lowering's explicit release
                 // immediately before transferring the replacement.
-                if !stage.isDeclaration() && (destination.rootTag == 2U64 || canonicalMidPlaceHasDeref(c: c, place: destination)) {
+                if !stage.isDeclaration() && (destination.rootTag == 2U64 || canonicalMidPlaceHasDeref(arena: c.mid, place: destination)) {
                     if statementI == 0U64 { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                     val previous: MidStatementNode = c.mid.statements[block.statements.start + statementI - 1U64]
-                    if previous.tag != 3U64 || !canonicalMidSamePlace(c: c, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
+                    if previous.tag != 3U64 || !canonicalMidSamePlace(arena: c.mid, leftId: previous.destination, rightId: statement.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(index: source.local, state: <MidOwnership.Consumed />) }
@@ -920,7 +920,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 if body.sourceFunction != 18446744073709551615U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(c: c, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if destination.rootTag != 2U64 || destination.projections.len != 0U64 || !canonicalMidGlobalRootIsValid(globals: c.arena.globals, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 match states[source.local] {
                     MidOwnership.Owned => { states.set(index: source.local, state: <MidOwnership.Consumed />) }
                     _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
@@ -940,13 +940,13 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 // A pointee drop is only the release half of a replacement,
                 // never disposal of a separately owned aggregate/root.
                 val writableBorrow: Bool = place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isInout
-                if canonicalMidPlaceHasDeref(c: c, place: place) || writableBorrow {
+                if canonicalMidPlaceHasDeref(arena: c.mid, place: place) || writableBorrow {
                     if statementI + 1U64 >= block.statements.len { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                     val following = c.mid.statements[block.statements.start + statementI + 1U64]
-                    if following.tag != 2U64 || !canonicalMidSamePlace(c: c, leftId: statement.destination, rightId: following.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                    if following.tag != 2U64 || !canonicalMidSamePlace(arena: c.mid, leftId: statement.destination, rightId: following.destination) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 }
                 if place.rootTag == 2U64 {
-                    if !place.globalMutable || !canonicalMidGlobalRootIsValid(c: c, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                    if !place.globalMutable || !canonicalMidGlobalRootIsValid(globals: c.arena.globals, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 } else if place.rootTag != 1U64 || place.local >= states.count() || place.local >= body.locals.len || c.mid.locals[body.locals.start + place.local].isBorrowed { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 if place.rootTag == 2U64 { }
                 else if place.projections.len == 0U64 {
@@ -1037,7 +1037,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 argumentI = argumentI + 1U64
             }
             if executable {
-                val conflict = canonicalMidCallAccessError(c: c, term: term)
+                val conflict = canonicalMidCallAccessError(arena: c.mid, term: term)
                 match conflict { MidVerifyError.None => {} _ => { return <MidVerification error=conflict block=blockI /> } }
             }
             if term.destination != 0U64 && term.destination <= c.mid.places.count() {
@@ -1081,5 +1081,5 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     // Discover metadata in the mandatory walk, including dead blocks. Never
     // trust an authored absence flag to bypass capability verification.
     if executable && hasAccessScopes && !canonicalMidAccessScopesValid(arena: c.mid, body: body) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
-    return verifyCanonicalMidFlagOwnership(c: c, body: body)
+    return verifyCanonicalMidFlagOwnership(arena: c.mid, body: body)
 }

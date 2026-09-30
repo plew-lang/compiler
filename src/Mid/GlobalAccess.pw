@@ -106,7 +106,7 @@ pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, 
     index = 0U64
     while index < c.mid.globalAccessBodies.count() {
         val body = c.mid.bodies[c.mid.globalAccessBodies[index] - 1U64]
-        val reachable = canonicalMidReachable(c: c, body: body)
+        val reachable = canonicalMidReachable(arena: c.mid, body: body)
         mut val blockIndex = 0U64
         while blockIndex < body.blocks.len {
             if reachable[blockIndex] {

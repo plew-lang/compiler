@@ -93,7 +93,7 @@ impl DeclarationAccessState {
     // resulting snapshot and mutates this analysis's graph and obligations.
     inout fn scanBody(c: Comp, index: U64, canonical: MidCanonicalBody) -> Result[(), DeclarationAccessError] {
         val body = c.mid.bodies[canonical.body - 1U64]
-        val reachable = canonicalMidReachable(c: c, body: body)
+        val reachable = canonicalMidReachable(arena: c.mid, body: body)
         mut val blockIndex = 0U64
         while blockIndex < body.blocks.len {
             if reachable[blockIndex] {
@@ -302,7 +302,7 @@ fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool 
 pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
     match built.error { MidBuildError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> } }
     val body = c.mid.bodies[built.canonical.body - 1U64]
-    val reachable = canonicalMidReachable(c: c, body: body)
+    val reachable = canonicalMidReachable(arena: c.mid, body: body)
     mut val index = 0U64
     while index < body.blocks.len {
         if reachable[index] {
@@ -327,7 +327,7 @@ pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, b
                         }
                     }
                 }
-                val conflict = canonicalMidCallAccessError(c: c, term: term, receiverTag: receiverTag)
+                val conflict = canonicalMidCallAccessError(arena: c.mid, term: term, receiverTag: receiverTag)
                 match conflict { MidVerifyError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=conflict /> /> } }
             }
         }
