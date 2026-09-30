@@ -1,0 +1,46 @@
+import @Std/Io with { print }
+
+fn divU8(numerator~: U8, denominator~: U8) -> U8 { return numerator / denominator }
+fn remU8(numerator~: U8, denominator~: U8) -> U8 { return numerator % denominator }
+fn divU16(numerator~: U16, denominator~: U16) -> U16 { return numerator / denominator }
+fn remU16(numerator~: U16, denominator~: U16) -> U16 { return numerator % denominator }
+fn divU32(numerator~: U32, denominator~: U32) -> U32 { return numerator / denominator }
+fn remU32(numerator~: U32, denominator~: U32) -> U32 { return numerator % denominator }
+fn divU64(numerator~: U64, denominator~: U64) -> U64 { return numerator / denominator }
+fn remU64(numerator~: U64, denominator~: U64) -> U64 { return numerator % denominator }
+fn divI8(numerator~: I8, denominator~: I8) -> I8 { return numerator / denominator }
+fn remI8(numerator~: I8, denominator~: I8) -> I8 { return numerator % denominator }
+fn divI16(numerator~: I16, denominator~: I16) -> I16 { return numerator / denominator }
+fn remI16(numerator~: I16, denominator~: I16) -> I16 { return numerator % denominator }
+fn divI32(numerator~: I32, denominator~: I32) -> I32 { return numerator / denominator }
+fn remI32(numerator~: I32, denominator~: I32) -> I32 { return numerator % denominator }
+fn divI64(numerator~: I64, denominator~: I64) -> I64 { return numerator / denominator }
+fn remI64(numerator~: I64, denominator~: I64) -> I64 { return numerator % denominator }
+
+fn main() {
+    if divU8(123U8, 7U8) != 17U8 || remU8(123U8, 7U8) != 4U8 { panic "positive U8" }
+    if divU8(255U8, 32U8) != 7U8 || remU8(255U8, 32U8) != 31U8 { panic "maximum U8" }
+    if divU16(123U16, 7U16) != 17U16 || remU16(123U16, 7U16) != 4U16 { panic "positive U16" }
+    if divU16(65535U16, 32U16) != 2047U16 || remU16(65535U16, 32U16) != 31U16 { panic "maximum U16" }
+    if divU32(123U32, 7U32) != 17U32 || remU32(123U32, 7U32) != 4U32 { panic "positive U32" }
+    if divU32(4294967295U32, 32U32) != 134217727U32 || remU32(4294967295U32, 32U32) != 31U32 { panic "maximum U32" }
+    if divU64(123U64, 7U64) != 17U64 || remU64(123U64, 7U64) != 4U64 { panic "positive U64" }
+    if divU64(18446744073709551615U64, 32U64) != 576460752303423487U64 || remU64(18446744073709551615U64, 32U64) != 31U64 { panic "maximum U64" }
+    if divI8(123I8, 7I8) != 17I8 || remI8(123I8, 7I8) != 4I8 { panic "positive I8" }
+    val minimumI8: I8 = 0I8 - 127I8 - 1I8
+    if remI8(minimumI8, -1I8) != 0I8 || divI8(minimumI8, 1I8) != minimumI8 { panic "minimum I8" }
+    if divI8(-123I8, 7I8) != -17I8 || remI8(-123I8, 7I8) != -4I8 || divI8(123I8, -7I8) != -17I8 || remI8(123I8, -7I8) != 4I8 { panic "signed I8" }
+    if divI16(123I16, 7I16) != 17I16 || remI16(123I16, 7I16) != 4I16 { panic "positive I16" }
+    val minimumI16: I16 = 0I16 - 32767I16 - 1I16
+    if remI16(minimumI16, -1I16) != 0I16 || divI16(minimumI16, 1I16) != minimumI16 { panic "minimum I16" }
+    if divI16(-123I16, 7I16) != -17I16 || remI16(-123I16, 7I16) != -4I16 || divI16(123I16, -7I16) != -17I16 || remI16(123I16, -7I16) != 4I16 { panic "signed I16" }
+    if divI32(123I32, 7I32) != 17I32 || remI32(123I32, 7I32) != 4I32 { panic "positive I32" }
+    val minimumI32: I32 = 0I32 - 2147483647I32 - 1I32
+    if remI32(minimumI32, -1I32) != 0I32 || divI32(minimumI32, 1I32) != minimumI32 { panic "minimum I32" }
+    if divI32(-123I32, 7I32) != -17I32 || remI32(-123I32, 7I32) != -4I32 || divI32(123I32, -7I32) != -17I32 || remI32(123I32, -7I32) != 4I32 { panic "signed I32" }
+    if divI64(123I64, 7I64) != 17I64 || remI64(123I64, 7I64) != 4I64 { panic "positive I64" }
+    val minimumI64: I64 = 0I64 - 9223372036854775807I64 - 1I64
+    if remI64(minimumI64, -1I64) != 0I64 || divI64(minimumI64, 1I64) != minimumI64 { panic "minimum I64" }
+    if divI64(-123I64, 7I64) != -17I64 || remI64(-123I64, 7I64) != -4I64 || divI64(123I64, -7I64) != -17I64 || remI64(123I64, -7I64) != 4I64 { panic "signed I64" }
+    print("checked-division-ok")
+}
