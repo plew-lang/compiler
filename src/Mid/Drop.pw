@@ -1,4 +1,3 @@
-import ./DataflowState with { MidOwnershipStates, MidAccessibilityStates }
 // Ownership dataflow for Mid IR. This pass consumes only the canonical arena;
 // it does not inspect AST, recover a type, or emit LLVM. Build creates operations;
 // this pass computes their ownership consequences for drop elaboration and the
@@ -14,17 +13,17 @@ fn canonicalMidIsLocalRoot(place: MidPlaceNode) -> Bool {
     return place.rootTag == 1U64
 }
 
-fn canonicalMidConsumeOperand(arena: MidCanonicalArena, states: inout MidOwnershipStates, operandId: U64) {
+fn canonicalMidConsumeOperand(arena: MidCanonicalArena, states: inout Array[MidOwnership], operandId: U64) {
     if operandId == 0U64 || operandId > arena.operands.count() { return }
     val operand: MidOperandNode = arena.operands[operandId - 1U64]
     if operand.tag != 2U64 || operand.place == 0U64 || operand.place > arena.places.count() { return }
     val place: MidPlaceNode = arena.places[operand.place - 1U64]
     if canonicalMidIsLocalRoot(place: place) && canonicalMidPlaceIsWhole(arena: arena, place: place) && place.local < states.count() {
-        states.set(index: place.local, state: <MidOwnership.Consumed />)
+        states.set(i: place.local, value: <MidOwnership.Consumed />)
     }
 }
 
-fn canonicalMidConsumeRvalue(arena: MidCanonicalArena, states: inout MidOwnershipStates, rvalueId: U64) {
+fn canonicalMidConsumeRvalue(arena: MidCanonicalArena, states: inout Array[MidOwnership], rvalueId: U64) {
     if rvalueId == 0U64 || rvalueId > arena.rvalues.count() { return }
     val value: MidRvalueNode = arena.rvalues[rvalueId - 1U64]
     if value.operand != 0U64 { canonicalMidConsumeOperand(arena: arena, states: inout states, operandId: value.operand) }
@@ -45,38 +44,38 @@ fn canonicalMidConsumeRvalue(arena: MidCanonicalArena, states: inout MidOwnershi
     }
 }
 
-fn canonicalMidConsumeEnum(arena: MidCanonicalArena, statement: MidStatementNode, states: inout MidOwnershipStates) {
+fn canonicalMidConsumeEnum(arena: MidCanonicalArena, statement: MidStatementNode, states: inout Array[MidOwnership]) {
     if statement.source == 0U64 || statement.source > arena.places.count() { return }
     val source = arena.places[statement.source - 1U64]
-    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(index: source.local, state: <MidOwnership.Consumed />) }
+    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(i: source.local, value: <MidOwnership.Consumed />) }
     if statement.enumDestinations.start > arena.enumDestinations.count() || statement.enumDestinations.len > arena.enumDestinations.count() - statement.enumDestinations.start { return }
     mut val index: U64 = 0U64
     while index < statement.enumDestinations.len {
         val entry = arena.enumDestinations[statement.enumDestinations.start + index]
         if entry.place == 0U64 || entry.place > arena.places.count() { return }
         val place = arena.places[entry.place - 1U64]
-        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(index: place.local, state: <MidOwnership.Owned />) }
+        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidOwnership.Owned />) }
         index += 1U64
     }
 }
 
-fn canonicalMidConsumeEnumAccessibility(arena: MidCanonicalArena, statement: MidStatementNode, states: inout MidAccessibilityStates) {
+fn canonicalMidConsumeEnumAccessibility(arena: MidCanonicalArena, statement: MidStatementNode, states: inout Array[MidAccessibility]) {
     if statement.source == 0U64 || statement.source > arena.places.count() { return }
     val source = arena.places[statement.source - 1U64]
-    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(index: source.local, state: <MidAccessibility.Unavailable />) }
+    if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < states.count() { states.set(i: source.local, value: <MidAccessibility.Unavailable />) }
     if statement.enumDestinations.start > arena.enumDestinations.count() || statement.enumDestinations.len > arena.enumDestinations.count() - statement.enumDestinations.start { return }
     mut val index: U64 = 0U64
     while index < statement.enumDestinations.len {
         val entry = arena.enumDestinations[statement.enumDestinations.start + index]
         if entry.place == 0U64 || entry.place > arena.places.count() { return }
         val place = arena.places[entry.place - 1U64]
-        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(index: place.local, state: <MidAccessibility.Available />) }
+        if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidAccessibility.Available />) }
         index += 1U64
     }
 }
 
-fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: MidOwnershipStates) -> MidOwnershipStates {
-    mut val out: MidOwnershipStates = input
+fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: Array[MidOwnership]) -> Array[MidOwnership] {
+    mut val out: Array[MidOwnership] = input
     mut val statementI: U64 = 0U64
     while statementI < block.statements.len {
         val statement: MidStatementNode = arena.statements[block.statements.start + statementI]
@@ -90,17 +89,17 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
             }
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !arena.locals[body.locals.start + destination.local].isBorrowed && !assignedBorrow { out.set(index: destination.local, state: <MidOwnership.Owned />) }
+                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() && destination.local < body.locals.len && !arena.locals[body.locals.start + destination.local].isBorrowed && !assignedBorrow { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
         if statement.tag == 2U64 {
             if statement.source != 0U64 && statement.source <= arena.places.count() {
                 val source: MidPlaceNode = arena.places[statement.source - 1U64]
-                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(index: source.local, state: <MidOwnership.Consumed />) }
+                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
             }
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() { out.set(index: destination.local, state: <MidOwnership.Owned />) }
+                if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
         }
         // InitializeGlobal consumes its temporary local into the program-lifetime
@@ -109,23 +108,23 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
         if statement.tag == 8U64 {
             if statement.source != 0U64 && statement.source <= arena.places.count() {
                 val source: MidPlaceNode = arena.places[statement.source - 1U64]
-                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(index: source.local, state: <MidOwnership.Consumed />) }
+                if canonicalMidIsLocalRoot(place: source) && source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
             }
         }
         if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val place: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < out.count() { out.set(index: place.local, state: <MidOwnership.Consumed />) }
+                if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidOwnership.Consumed />) }
             }
         }
         if statement.tag == 12U64 && statement.bindingLocal < out.count() {
-            out.set(index: statement.bindingLocal, state: <MidOwnership.Consumed />)
+            out.set(i: statement.bindingLocal, value: <MidOwnership.Consumed />)
         }
         if statement.tag == 6U64 && statement.scope < body.scopes.len {
             val scope: MidScope = arena.scopes[body.scopes.start + statement.scope]
             mut val local: U64 = scope.firstLocal
             while local < scope.firstLocal + scope.localCount && local < out.count() {
-                out.set(index: local, state: <MidOwnership.Consumed />)
+                out.set(i: local, value: <MidOwnership.Consumed />)
                 local = local + 1U64
             }
         }
@@ -147,7 +146,7 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
         }
         if term.destination != 0U64 && term.destination <= arena.places.count() {
             val destination: MidPlaceNode = arena.places[term.destination - 1U64]
-            if destination.projections.len == 0U64 && destination.local < out.count() { out.set(index: destination.local, state: <MidOwnership.Owned />) }
+            if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
         }
     }
     return out
@@ -156,19 +155,25 @@ fn canonicalMidTransferBlock(arena: MidCanonicalArena, body: MidBodyNode, block:
 
 // Canonical ownership analysis consumes only scalar rows/ranges. Its nested
 // Arrays are transient fixed-point work state, never a body representation.
-pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[MidOwnershipStates] {
+pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidOwnership]] {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    mut val incoming: Array[MidOwnershipStates] = []
+    mut val incoming: Array[Array[MidOwnership]] = []
     mut val reachable: Array[Bool] = []
-    val empty = <MidOwnershipStates.filled count=body.locals.len state=<MidOwnership.Consumed /> />
-    mut val initial = empty
+    mut val initial: Array[MidOwnership] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.set(index: localI, state: <MidOwnership.Owned />) }
+        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
+        localI = localI + 1U64
+    }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidOwnership] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidOwnership.Consumed />)
         localI += 1U64
     }
-    // Compact value snapshots keep every successor's updates independent.
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         incoming.append(empty)
@@ -194,7 +199,7 @@ pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCano
         next += 1U64
         pending.set(i: blockI, value: false)
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
-        val out: MidOwnershipStates = canonicalMidTransferBlock(arena: arena, body: body, block: block, input: incoming[blockI])
+        val out: Array[MidOwnership] = canonicalMidTransferBlock(arena: arena, body: body, block: block, input: incoming[blockI])
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
             val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
@@ -209,7 +214,7 @@ pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCano
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        mut val merged: MidOwnershipStates = incoming[successor]
+                        mut val merged: Array[MidOwnership] = incoming[successor]
                         if midJoinOwnershipStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
@@ -226,16 +231,16 @@ pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCano
     return incoming
 }
 
-fn canonicalMidMakeOperandUnavailable(arena: MidCanonicalArena, states: inout MidAccessibilityStates, operandId: U64) {
+fn canonicalMidMakeOperandUnavailable(arena: MidCanonicalArena, states: inout Array[MidAccessibility], operandId: U64) {
     if operandId == 0U64 || operandId > arena.operands.count() { return }
     val operand: MidOperandNode = arena.operands[operandId - 1U64]
     if operand.tag == 2U64 && operand.place != 0U64 && operand.place <= arena.places.count() {
         val place: MidPlaceNode = arena.places[operand.place - 1U64]
-        if place.projections.len == 0U64 && place.local < states.count() { states.set(index: place.local, state: <MidAccessibility.Unavailable />) }
+        if place.projections.len == 0U64 && place.local < states.count() { states.set(i: place.local, value: <MidAccessibility.Unavailable />) }
     }
 }
 
-fn canonicalMidMakeRvalueUnavailable(arena: MidCanonicalArena, states: inout MidAccessibilityStates, rvalueId: U64) {
+fn canonicalMidMakeRvalueUnavailable(arena: MidCanonicalArena, states: inout Array[MidAccessibility], rvalueId: U64) {
     if rvalueId == 0U64 || rvalueId > arena.rvalues.count() { return }
     val value: MidRvalueNode = arena.rvalues[rvalueId - 1U64]
     if value.operand != 0U64 { canonicalMidMakeOperandUnavailable(arena: arena, states: inout states, operandId: value.operand) }
@@ -255,8 +260,8 @@ fn canonicalMidMakeRvalueUnavailable(arena: MidCanonicalArena, states: inout Mid
     }
 }
 
-fn canonicalMidAccessibilityTransfer(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: MidAccessibilityStates) -> MidAccessibilityStates {
-    mut val out: MidAccessibilityStates = input
+fn canonicalMidAccessibilityTransfer(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: Array[MidAccessibility]) -> Array[MidAccessibility] {
+    mut val out: Array[MidAccessibility] = input
     mut val statementI: U64 = 0U64
     while statementI < block.statements.len {
         val statement: MidStatementNode = arena.statements[block.statements.start + statementI]
@@ -265,39 +270,39 @@ fn canonicalMidAccessibilityTransfer(arena: MidCanonicalArena, body: MidBodyNode
             canonicalMidMakeRvalueUnavailable(arena: arena, states: inout out, rvalueId: statement.value)
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val place: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if place.projections.len == 0U64 && place.local < out.count() { out.set(index: place.local, state: <MidAccessibility.Available />) }
+                if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidAccessibility.Available />) }
             }
         }
         if statement.tag == 2U64 {
             if statement.source != 0U64 && statement.source <= arena.places.count() {
                 val source: MidPlaceNode = arena.places[statement.source - 1U64]
-                if source.projections.len == 0U64 && source.local < out.count() { out.set(index: source.local, state: <MidAccessibility.Unavailable />) }
+                if source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidAccessibility.Unavailable />) }
             }
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if destination.projections.len == 0U64 && destination.local < out.count() { out.set(index: destination.local, state: <MidAccessibility.Available />) }
+                if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
             }
         }
         if statement.tag == 8U64 {
             if statement.source != 0U64 && statement.source <= arena.places.count() {
                 val source: MidPlaceNode = arena.places[statement.source - 1U64]
-                if source.projections.len == 0U64 && source.local < out.count() { out.set(index: source.local, state: <MidAccessibility.Unavailable />) }
+                if source.projections.len == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidAccessibility.Unavailable />) }
             }
         }
         if statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
             if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                 val place: MidPlaceNode = arena.places[statement.destination - 1U64]
-                if place.projections.len == 0U64 && place.local < out.count() { out.set(index: place.local, state: <MidAccessibility.Unavailable />) }
+                if place.projections.len == 0U64 && place.local < out.count() { out.set(i: place.local, value: <MidAccessibility.Unavailable />) }
             }
         }
         if statement.tag == 12U64 && statement.bindingLocal < out.count() {
-            out.set(index: statement.bindingLocal, state: <MidAccessibility.Unavailable />)
+            out.set(i: statement.bindingLocal, value: <MidAccessibility.Unavailable />)
         }
         if statement.tag == 6U64 && statement.scope < body.scopes.len {
             val scope: MidScope = arena.scopes[body.scopes.start + statement.scope]
             mut val local: U64 = scope.firstLocal
             while local < scope.firstLocal + scope.localCount && local < out.count() {
-                out.set(index: local, state: <MidAccessibility.Unavailable />)
+                out.set(i: local, value: <MidAccessibility.Unavailable />)
                 local = local + 1U64
             }
         }
@@ -319,25 +324,31 @@ fn canonicalMidAccessibilityTransfer(arena: MidCanonicalArena, body: MidBodyNode
         }
         if term.destination != 0U64 && term.destination <= arena.places.count() {
             val destination: MidPlaceNode = arena.places[term.destination - 1U64]
-            if destination.projections.len == 0U64 && destination.local < out.count() { out.set(index: destination.local, state: <MidAccessibility.Available />) }
+            if destination.projections.len == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidAccessibility.Available />) }
         }
     }
     return out
 }
 
-pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[MidAccessibilityStates] {
+pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[Array[MidAccessibility]] {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    mut val incoming: Array[MidAccessibilityStates] = []
+    mut val incoming: Array[Array[MidAccessibility]] = []
     mut val reachable: Array[Bool] = []
-    val empty = <MidAccessibilityStates.filled count=body.locals.len state=<MidAccessibility.Unavailable /> />
-    mut val initial = empty
+    mut val initial: Array[MidAccessibility] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.set(index: localI, state: <MidAccessibility.Available />) }
+        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.append(<MidAccessibility.Available />) } else { initial.append(<MidAccessibility.Unavailable />) }
+        localI = localI + 1U64
+    }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidAccessibility] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidAccessibility.Unavailable />)
         localI += 1U64
     }
-    // Compact value snapshots keep every successor's updates independent.
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         incoming.append(empty)
@@ -363,7 +374,7 @@ pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: Mid
         next += 1U64
         pending.set(i: blockI, value: false)
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
-        val out: MidAccessibilityStates = canonicalMidAccessibilityTransfer(arena: arena, body: body, block: block, input: incoming[blockI])
+        val out: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(arena: arena, body: body, block: block, input: incoming[blockI])
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
             val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
@@ -378,7 +389,7 @@ pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: Mid
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        mut val merged: MidAccessibilityStates = incoming[successor]
+                        mut val merged: Array[MidAccessibility] = incoming[successor]
                         if midJoinAccessibilityStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
@@ -398,15 +409,15 @@ pub fn analyzeCanonicalMidAccessibility(arena: MidCanonicalArena, canonical: Mid
 // Immutable CFG facts shared by all local queries in this drop plan.
 struct MidDropPredecessors {
     pub val blocks: Array[Array[U64]] = []
-    pub val ownership: Array[MidOwnershipStates] = []
-    pub val accessibility: Array[MidAccessibilityStates] = []
+    pub val ownership: Array[Array[MidOwnership]] = []
+    pub val accessibility: Array[Array[MidAccessibility]] = []
 }
 pub impl MidDropPredecessors { factory }
 
-fn canonicalMidDropPredecessors(arena: MidCanonicalArena, body: MidBodyNode, ownership: Array[MidOwnershipStates], accessibility: Array[MidAccessibilityStates]) -> MidDropPredecessors {
+fn canonicalMidDropPredecessors(arena: MidCanonicalArena, body: MidBodyNode, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidDropPredecessors {
     mut val predecessors: Array[Array[U64]] = []
-    mut val exits: Array[MidOwnershipStates] = []
-    mut val accessExits: Array[MidAccessibilityStates] = []
+    mut val exits: Array[Array[MidOwnership]] = []
+    mut val accessExits: Array[Array[MidAccessibility]] = []
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         predecessors.append([])
@@ -467,7 +478,7 @@ struct MidCanonicalDropPlan {
 }
 pub impl MidCanonicalDropPlan { factory }
 
-fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, ownership: Array[MidOwnershipStates], accessibility: Array[MidAccessibilityStates]) -> MidCanonicalDropPlan {
+fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidCanonicalDropPlan {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalDropPlan /> }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
     // Most bodies never ask a predecessor question. Do not recompute every
@@ -484,9 +495,9 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
     mut val hasCliffs = false
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
-        mut val blockOwnership: MidOwnershipStates = <MidOwnershipStates.empty />
+        mut val blockOwnership: Array[MidOwnership] = []
         if blockI < ownership.count() { blockOwnership = ownership[blockI] }
-        mut val blockAccessibility: MidAccessibilityStates = <MidAccessibilityStates.empty />
+        mut val blockAccessibility: Array[MidAccessibility] = []
         if blockI < accessibility.count() { blockAccessibility = accessibility[blockI] }
         mut val blockCliffs: Array[Bool] = []
         localI = 0U64
@@ -634,29 +645,35 @@ fn canonicalMidAppendMovedFlagClears(arena: inout MidCanonicalArena, rvalueId: U
 // rows instead of materializing a draft MidBody solely for this analysis.
 // ConditionalDrop consumes in either run-time arm, which is exactly the
 // ownership effect needed for this conservative planning pass.
-fn canonicalMidTransferBlockAfterCliffs(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: MidOwnershipStates, plan: MidCanonicalDropPlan, blockI: U64) -> MidOwnershipStates {
-    mut val afterCliffs: MidOwnershipStates = input
+fn canonicalMidTransferBlockAfterCliffs(arena: MidCanonicalArena, body: MidBodyNode, block: MidBlockNode, input: Array[MidOwnership], plan: MidCanonicalDropPlan, blockI: U64) -> Array[MidOwnership] {
+    mut val afterCliffs: Array[MidOwnership] = input
     mut val local: U64 = 0U64
     while local < afterCliffs.count() && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
-        if plan.cliffAtEntry[blockI][local] { afterCliffs.set(index: local, state: <MidOwnership.Consumed />) }
+        if plan.cliffAtEntry[blockI][local] { afterCliffs.set(i: local, value: <MidOwnership.Consumed />) }
         local = local + 1U64
     }
     return canonicalMidTransferBlock(arena: arena, body: body, block: block, input: afterCliffs)
 }
 
-fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCanonicalBody, plan: MidCanonicalDropPlan) -> Array[MidOwnershipStates] {
+fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCanonicalBody, plan: MidCanonicalDropPlan) -> Array[Array[MidOwnership]] {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return [] }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    mut val incoming: Array[MidOwnershipStates] = []
+    mut val incoming: Array[Array[MidOwnership]] = []
     mut val reachable: Array[Bool] = []
-    val empty = <MidOwnershipStates.filled count=body.locals.len state=<MidOwnership.Consumed /> />
-    mut val initial = empty
+    mut val initial: Array[MidOwnership] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
-        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.set(index: localI, state: <MidOwnership.Owned />) }
+        if arena.locals[body.locals.start + localI].ownsAtEntry || arena.locals[body.locals.start + localI].isInout { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
+        localI = localI + 1U64
+    }
+    // Every block starts with the same value. Array CoW keeps later
+    // updates independent without rebuilding the initial row per block.
+    mut val empty: Array[MidOwnership] = []
+    localI = 0U64
+    while localI < body.locals.len {
+        empty.append(<MidOwnership.Consumed />)
         localI += 1U64
     }
-    // Compact value snapshots keep every successor's updates independent.
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         incoming.append(empty)
@@ -682,7 +699,7 @@ fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCano
         next += 1U64
         pending.set(i: blockI, value: false)
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
-        val out: MidOwnershipStates = canonicalMidTransferBlockAfterCliffs(arena: arena, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
+        val out: Array[MidOwnership] = canonicalMidTransferBlockAfterCliffs(arena: arena, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
         if block.terminator != 0U64 && block.terminator <= arena.terminators.count() {
             val term = arena.terminators[block.terminator - 1U64]
             mut val successorI: U64 = 0U64
@@ -697,7 +714,7 @@ fn canonicalMidOwnershipAfterCliffs(arena: MidCanonicalArena, canonical: MidCano
                             pending.set(i: successor, value: true)
                         }
                     } else {
-                        mut val merged: MidOwnershipStates = incoming[successor]
+                        mut val merged: Array[MidOwnership] = incoming[successor]
                         if midJoinOwnershipStates(states: inout merged, incoming: out) {
                             incoming.set(i: successor, value: merged)
                             if !pending[successor] {
@@ -799,12 +816,12 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
 pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalBody body=0U64 /> }
     val source: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    val ownership: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)
-    val accessibility: Array[MidAccessibilityStates] = analyzeCanonicalMidAccessibility(arena: arena, canonical: canonical)
+    val ownership: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)
+    val accessibility: Array[Array[MidAccessibility]] = analyzeCanonicalMidAccessibility(arena: arena, canonical: canonical)
     val plan: MidCanonicalDropPlan = canonicalMidDropPlan(arena: arena, canonical: canonical, ownership: ownership, accessibility: accessibility)
     // With no added cliff, the transfer function and entry state are unchanged.
     // Reuse their fixed point; plans that consume owners still require refinement.
-    val ownershipAfterCliffs: Array[MidOwnershipStates] = if plan.hasCliffs {
+    val ownershipAfterCliffs: Array[Array[MidOwnership]] = if plan.hasCliffs {
         give canonicalMidOwnershipAfterCliffs(arena: arena, canonical: canonical, plan: plan)
     } else {
         give ownership
@@ -822,7 +839,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
     while blockI < source.blocks.len {
         val block: MidBlockNode = arena.blocks[source.blocks.start + blockI]
         val statementStart: U64 = arena.statements.count()
-        mut val currentOwnership: MidOwnershipStates = <MidOwnershipStates.empty />
+        mut val currentOwnership: Array[MidOwnership] = []
         if blockI < ownershipAfterCliffs.count() { currentOwnership = ownershipAfterCliffs[blockI] }
 
         // Candidate cliffs were included in ownershipAfterCliffs.  Emit the
@@ -843,7 +860,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                         }
                         _ => {}
                     }
-                    currentOwnership.set(index: local, state: <MidOwnership.Consumed />)
+                    currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
                 }
                 arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />)
             }
@@ -880,7 +897,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                 if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                     val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() && destination.local < source.locals.len && !arena.locals[source.locals.start + destination.local].isBorrowed && !assignedBorrow {
-                        currentOwnership.set(index: destination.local, state: <MidOwnership.Owned />)
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                     }
                 }
             } else if statement.tag == 2U64 {
@@ -902,14 +919,14 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                 if statement.source != 0U64 && statement.source <= arena.places.count() {
                     val sourcePlace: MidPlaceNode = arena.places[statement.source - 1U64]
                     if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
-                        currentOwnership.set(index: sourcePlace.local, state: <MidOwnership.Consumed />)
+                        currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
                 if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                     val destination: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: destination) && destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
-                        currentOwnership.set(index: destination.local, state: <MidOwnership.Owned />)
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
                         if destination.local < source.locals.len && plan.needsFlag[destination.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
                     }
                 }
@@ -921,7 +938,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                 if statement.source != 0U64 && statement.source <= arena.places.count() {
                     val sourcePlace: MidPlaceNode = arena.places[statement.source - 1U64]
                     if canonicalMidIsLocalRoot(place: sourcePlace) && sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
-                        currentOwnership.set(index: sourcePlace.local, state: <MidOwnership.Consumed />)
+                        currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
                         if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
                     }
                 }
@@ -930,7 +947,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                 if statement.destination != 0U64 && statement.destination <= arena.places.count() {
                     val place: MidPlaceNode = arena.places[statement.destination - 1U64]
                     if canonicalMidIsLocalRoot(place: place) && place.projections.len == 0U64 && place.local < currentOwnership.count() {
-                        currentOwnership.set(index: place.local, state: <MidOwnership.Consumed />)
+                        currentOwnership.set(i: place.local, value: <MidOwnership.Consumed />)
                         if place.local < source.locals.len && plan.needsFlag[place.local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: place.local) isSet=false />) }
                     }
                 }
@@ -964,7 +981,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                         _ => {}
                     }
                     if plan.needsFlag[local] { arena.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />) }
-                    currentOwnership.set(index: local, state: <MidOwnership.Consumed />)
+                    currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
                 }
             } else if statement.tag == 6U64 {
                 if statement.scope < source.scopes.len {
@@ -999,7 +1016,7 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
                                 }
                                 _ => {}
                             }
-                            currentOwnership.set(index: local, state: <MidOwnership.Consumed />)
+                            currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
                         }
                     }
                 }
@@ -1048,11 +1065,72 @@ pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: Mid
     return resultId
 }
 
-// The domain types own the same lattice joins in compact word form.
-fn midJoinOwnershipStates(states: inout MidOwnershipStates, incoming: MidOwnershipStates) -> Bool {
-    return states.join(incoming: incoming)
+// Shared lattice joins for canonical ownership and accessibility.
+fn midJoinOwnershipStates(states: inout Array[MidOwnership], incoming: Array[MidOwnership]) -> Bool {
+    mut val changed: Bool = false
+    mut val index: U64 = 0U64
+    while index < states.count() {
+        val before: MidOwnership = states[index]
+        val joined: MidOwnership = midOwnershipJoin(left: before, right: incoming[index])
+        val differs: Bool = match before {
+            MidOwnership.Owned => match joined { MidOwnership.Owned => false, _ => true },
+            MidOwnership.Consumed => match joined { MidOwnership.Consumed => false, _ => true },
+            MidOwnership.MaybeOwned => match joined { MidOwnership.MaybeOwned => false, _ => true }
+        }
+        if differs {
+            states.set(i: index, value: joined)
+            changed = true
+        }
+        index += 1U64
+    }
+    return changed
 }
 
-fn midJoinAccessibilityStates(states: inout MidAccessibilityStates, incoming: MidAccessibilityStates) -> Bool {
-    return states.join(incoming: incoming)
+fn midJoinAccessibilityStates(states: inout Array[MidAccessibility], incoming: Array[MidAccessibility]) -> Bool {
+    mut val changed: Bool = false
+    mut val index: U64 = 0U64
+    while index < states.count() {
+        val before: MidAccessibility = states[index]
+        val joined: MidAccessibility = midAccessibilityJoin(left: before, right: incoming[index])
+        val differs: Bool = match before {
+            MidAccessibility.Available => match joined { MidAccessibility.Available => false, _ => true },
+            MidAccessibility.Unavailable => match joined { MidAccessibility.Unavailable => false, _ => true }
+        }
+        if differs {
+            states.set(i: index, value: joined)
+            changed = true
+        }
+        index += 1U64
+    }
+    return changed
+}
+
+fn midOwnershipJoin(left: MidOwnership, right: MidOwnership) -> MidOwnership {
+    match left {
+        MidOwnership.Owned => {
+            match right {
+                MidOwnership.Owned => { return <MidOwnership.Owned /> }
+                _ => { return <MidOwnership.MaybeOwned /> }
+            }
+        }
+        MidOwnership.Consumed => {
+            match right {
+                MidOwnership.Consumed => { return <MidOwnership.Consumed /> }
+                _ => { return <MidOwnership.MaybeOwned /> }
+            }
+        }
+        MidOwnership.MaybeOwned => { return <MidOwnership.MaybeOwned /> }
+    }
+}
+
+fn midAccessibilityJoin(left: MidAccessibility, right: MidAccessibility) -> MidAccessibility {
+    match left {
+        MidAccessibility.Available => {
+            match right {
+                MidAccessibility.Available => { return <MidAccessibility.Available /> }
+                _ => { return <MidAccessibility.Unavailable /> }
+            }
+        }
+        MidAccessibility.Unavailable => { return <MidAccessibility.Unavailable /> }
+    }
 }

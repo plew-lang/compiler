@@ -36,4 +36,3 @@ tests/fixtures/run/closure_shadow_capture.pw
 tests/fixtures/run/closure_write_capture.pw
 tests/fixtures/run/closure_capture_receiver_arc.pw
 tests/fixtures/run/closure_generic_capture_identity.pw
-tests/fixtures/run/mid_dataflow_states.pw
