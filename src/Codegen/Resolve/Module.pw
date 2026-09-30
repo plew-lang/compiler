@@ -1148,7 +1148,7 @@ pub impl Comp {
         val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -1159,7 +1159,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return false
     }
