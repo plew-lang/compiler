@@ -517,8 +517,8 @@ pub impl Comp {
                 // `T` precisely when the current declaration proves T: B.
                 // This is a trait-pattern source, so receiver head spelling
                 // must not be compared to T.
-                if typeRef != 0U64 && (self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64) {
-                    val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
+                if typeRef != 0U64 && cf.subjectTraitOwner != 0U64 {
+                    val subjectOwner: U64 = cf.subjectTraitOwner
                     val proof: StaticConformanceProof = (try self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />))
                     match proof {
                         StaticConformanceProof.Missing => {}
@@ -544,7 +544,7 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) && cf.extId == 0U64 {
                 if cf.traitStart == traitOwner && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
-                    if (self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64) {
+                    if cf.subjectTraitOwner != 0U64 {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
                         if self.conformExistsTraitInstance(typeRef: typeRef, traitOwner: cf.typeStart, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
                             count += 1
@@ -573,13 +573,13 @@ pub impl Comp {
                 // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
                 // those stay view-gated (`value#Ext`), handled by the extension machinery —
                 // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
-                if cf.extId == 0U64 && (self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64) {
+                if cf.extId == 0U64 && cf.subjectTraitOwner != 0U64 {
                     // candidate concrete types: those conforming to the subject trait B.
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
                         if cand.traitStart == cf.typeStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=cand.traitArgs />) {
-                            if !((self.canonicalTraitOwner(start: cand.typeStart, len: cand.typeLen) != 0U64)) {
+                            if cand.subjectTraitOwner == 0U64 {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
                                 // is already view-rooted (T reaches B only via #root), the
@@ -706,7 +706,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.conforms.append(<Conform sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
+            self.decls.conforms.append(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
         }
         return <Result.Ok value=() />
     }
@@ -803,7 +803,7 @@ pub impl Comp {
                             // authored body's lexical Self; concrete surfaces
                             // use the selected nominal receiver pattern.
                             mut val receiverTerm = cf.subjectTy
-                            if (self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != 0U64) { receiverTerm = f.recvTy }
+                            if cf.subjectTraitOwner != 0U64 { receiverTerm = f.recvTy }
                             val copyIdx: U64 = self.arena.functionCount()
                             self.arena.registerFunction(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId lexicalOwnerFnId=lexicalOwner recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=receiverTerm recvPatternParams=self.pushFuncBinds(binds: self.copyConformBinds(binds: cf.typeParams)) recvTraitArgs=f.recvTraitArgs typeParams=self.pushFuncBinds(binds: copiedTP) params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
                             try self.registerCallable(funcIdx: copyIdx)

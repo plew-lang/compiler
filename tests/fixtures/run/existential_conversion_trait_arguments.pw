@@ -15,7 +15,7 @@ fn main() {
     val stringType = compiler.simpleTypeRef(nameStart: string.nameStart, nameLen: string.nameLen)
     val parameters = compiler.pushTraitBinds(binds: [<Bind nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId fieldStart=0U64 fieldLen=0U64 />])
     compiler.decls.registerTrait(<TraitDef nameStart=trait.nameStart nameLen=trait.nameLen nameId=trait.nameId typeParams=parameters />)
-    compiler.decls.conforms.append(<Conform sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTy=source traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId traitArgs=compiler.pushConformTypes(types: [integerType]) derived=false />)
+    compiler.decls.conforms.append(<Conform subjectTraitOwner=0U64 sourceModule=0U64 typeStart=subject.nameStart typeLen=subject.nameLen typeId=subject.nameId subjectTy=source traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId traitArgs=compiler.pushConformTypes(types: [integerType]) derived=false />)
     val target = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integerType] isAny=true hasDecl=true declOffset=trait.nameStart />)
     val wrongTarget = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[stringType] isAny=true hasDecl=true declOffset=trait.nameStart />)
     match compiler.callArgumentConversion(sourceRef: source, targetRef: target).unwrap() {

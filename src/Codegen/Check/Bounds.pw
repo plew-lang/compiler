@@ -64,7 +64,7 @@ pub impl Comp {
             }
             DeclarationBoundRef.TraitSubject(val index) => {
                 val conformance = self.decls.conforms[index]
-                val owner = self.canonicalTraitOwner(start: conformance.typeStart, len: conformance.typeLen)
+                val owner = conformance.subjectTraitOwner
                 return <TraitBound subject=conformance.subjectTy constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidence[index].bound }
@@ -517,7 +517,7 @@ pub impl Comp {
                         mut val ci: U64 = 0U64
                         while ci < self.decls.conforms.count() {
                             val edge: Conform = self.decls.conforms[ci]
-                            if (self.canonicalTraitOwner(start: edge.typeStart, len: edge.typeLen) != 0U64) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
+                            if edge.subjectTraitOwner != 0U64 && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
                                 val selectedWitness = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: bound.constraint.key.positionalArgs, selfRef: receiverRef)
                                 if selectedWitness.conformIdx == 0U64 || !(try self.witnessConditionsSatisfied(witness: selectedWitness, assumptions: self.functionBoundAssumptions(fnIdx: fnIdx))) { ci += 1U64 continue }
                                 mut val ti: U64 = 0U64
@@ -681,7 +681,7 @@ pub impl Comp {
     inout fn conformanceDeclarationAssumptions(conformIndex: U64) -> Array[DeclarationBoundRef] {
         val conformance = self.decls.conforms[conformIndex]
         mut val result = self.conformanceBoundAssumptions(bounds: conformance.bounds)
-        if self.canonicalTraitOwner(start: conformance.typeStart, len: conformance.typeLen) != 0U64 { result.append(<DeclarationBoundRef.TraitSubject index=conformIndex />) }
+        if conformance.subjectTraitOwner != 0U64 { result.append(<DeclarationBoundRef.TraitSubject index=conformIndex />) }
         return result
     }
 

@@ -1187,6 +1187,10 @@ pub struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val typeId: U64
+    // Resolved trait-subject identity, or zero for a value-type subject.
+    // Lowering decides this once; proof queries must not rediscover the
+    // subject category from its source spelling or a missing value TypeRef.
+    pub val subjectTraitOwner: U64
     // Full structured subject type. The legacy typeId/typeArity pair is kept for
     // older conformance walks, but declaration registration must distinguish
     // `Box[I64]` from `Box[String]` and alpha-equivalent generic subjects.

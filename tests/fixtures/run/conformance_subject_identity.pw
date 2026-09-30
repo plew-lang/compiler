@@ -9,7 +9,7 @@ fn main() {
     val trait = compiler.internBytes(s: "Readable")
     val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=100U64 />)
     val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=200U64 />)
-    compiler.decls.conforms.append(<Conform sourceModule=0U64 typeStart=name.nameStart typeLen=name.nameLen typeId=name.nameId subjectTy=first traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId derived=false />)
+    compiler.decls.conforms.append(<Conform subjectTraitOwner=0U64 sourceModule=0U64 typeStart=name.nameStart typeLen=name.nameLen typeId=name.nameId subjectTy=first traitStart=trait.nameStart traitLen=trait.nameLen traitId=trait.nameId derived=false />)
     print(compiler.conformExists(typeRef: first, traitOwner: trait.nameStart))
     print(compiler.conformExists(typeRef: second, traitOwner: trait.nameStart))
     print(compiler.conformExistsTraitInstance(typeRef: first, traitOwner: trait.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />))
