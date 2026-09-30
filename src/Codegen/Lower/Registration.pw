@@ -40,11 +40,11 @@ pub impl Comp {
 
     inout fn binderIndex(params: PatternBindInput, nameId: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.patternBindCount(input: params) {
-            if self.patternBindAt(input: params, index: i).nameId == nameId { return i }
+        while i < params.count() {
+            if params.at(index: i, declarations: self.decls, functions: self.arena).nameId == nameId { return i }
             i += 1U64
         }
-        return self.patternBindCount(input: params)
+        return params.count()
     }
 
     // Semantic binder identity is lexical ParamId. NameId remains only the
@@ -56,11 +56,11 @@ pub impl Comp {
 
     inout fn binderIndexIdentity(params: PatternBindInput, identity: U64) -> U64 {
         mut val i: U64 = 0U64
-        while i < self.patternBindCount(input: params) {
-            if self.binderIdentity(b: self.patternBindAt(input: params, index: i)) == identity { return i }
+        while i < params.count() {
+            if self.binderIdentity(b: params.at(index: i, declarations: self.decls, functions: self.arena)) == identity { return i }
             i += 1U64
         }
-        return self.patternBindCount(input: params)
+        return params.count()
     }
 
     // View source order is presentation only.  Compare the selector names as a
@@ -185,16 +185,16 @@ pub impl Comp {
     // A type parameter is a free unification variable only in its bare form;
     // `T#P` / projections retain their structural view/projection constraints.
     inout fn plainBinder(ref: U64, params: PatternBindInput) -> U64 {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return self.patternBindCount(input: params) }
+        if ref == 0U64 || ref >= self.arena.typeCount() { return params.count() }
         val term: TypeTerm = self.arena.typeTerms[ref]
-        if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return self.patternBindCount(input: params) }
+        if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return params.count() }
         if term.paramId != 0U64 {
             mut val i: U64 = 0U64
-            while i < self.patternBindCount(input: params) {
-                if self.patternBindAt(input: params, index: i).paramId == term.paramId { return i }
+            while i < params.count() {
+                if params.at(index: i, declarations: self.decls, functions: self.arena).paramId == term.paramId { return i }
                 i += 1U64
             }
-            return self.patternBindCount(input: params)
+            return params.count()
         }
         return self.binderIndex(params: params, nameId: term.nameId)
     }
@@ -233,8 +233,8 @@ pub impl Comp {
         mut val params: PatternBindInput = aParams
         if refSide != 0U64 { params = bParams }
         val bi: U64 = self.plainBinder(ref: ref, params: params)
-        if bi < self.patternBindCount(input: params) {
-            if refSide == side && self.binderIdentity(b: self.patternBindAt(input: params, index: bi)) == binderId { return true }
+        if bi < params.count() {
+            if refSide == side && self.binderIdentity(b: params.at(index: bi, declarations: self.decls, functions: self.arena)) == binderId { return true }
             // Corresponding generic parameters in two same-shape overloads are
             // one logical variable for overlap purposes (T in each signature),
             // even though their source binders are distinct records.
@@ -242,7 +242,7 @@ pub impl Comp {
             if side != 0U64 { targetParams = bParams }
             val targetIdx: U64 = self.binderIndexIdentity(params: targetParams, identity: binderId)
             if refSide != side && targetIdx == bi { return true }
-            val bound: U64 = self.unificationBindingIndex(binds: binds, side: refSide, binderId: self.binderIdentity(b: self.patternBindAt(input: params, index: bi)))
+            val bound: U64 = self.unificationBindingIndex(binds: binds, side: refSide, binderId: self.binderIdentity(b: params.at(index: bi, declarations: self.decls, functions: self.arena)))
             if bound < binds.count() {
                 return self.occursInPattern(side: side, binderId: binderId, ref: binds[bound].ref, refSide: binds[bound].refSide, aParams: aParams, bParams: bParams, binds: binds)
             }
@@ -273,11 +273,11 @@ pub impl Comp {
         if bSide != 0U64 { bScope = bParams }
         val av: U64 = self.plainBinder(ref: a, params: aScope)
         val bv: U64 = self.plainBinder(ref: b, params: bScope)
-        if av < self.patternBindCount(input: aScope) && bv < self.patternBindCount(input: bScope) {
+        if av < aScope.count() && bv < bScope.count() {
             return av == bv
         }
-        if av < self.patternBindCount(input: aScope) {
-            val binderId: U64 = self.binderIdentity(b: self.patternBindAt(input: aScope, index: av))
+        if av < aScope.count() {
+            val binderId: U64 = self.binderIdentity(b: aScope.at(index: av, declarations: self.decls, functions: self.arena))
             val found: U64 = self.unificationBindingIndex(binds: binds, side: aSide, binderId: binderId)
             if found < binds.count() {
                 return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
@@ -286,7 +286,7 @@ pub impl Comp {
             binds.append(<UnifyBind side=aSide nameId=binderId ref=b refSide=bSide />)
             return true
         }
-        if bv < self.patternBindCount(input: bScope) {
+        if bv < bScope.count() {
             return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
         }
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
@@ -336,11 +336,11 @@ pub impl Comp {
     // matcher so closure propagation, bounds, and views cannot each regress
     // to a count-only comparison.
     inout fn traitInstanceArgsMatch(pattern: PatternTypeInput, patternParams: PatternBindInput, actual: PatternTypeInput) -> Bool {
-        if self.patternTypeCount(input: pattern) != self.patternTypeCount(input: actual) { return false }
+        if pattern.count() != actual.count() { return false }
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
-        while i < self.patternTypeCount(input: pattern) {
-            if !(self.unifyPatterns(a: self.patternTypeAt(input: pattern, index: i), aSide: 0U64, b: self.patternTypeAt(input: actual, index: i), bSide: 1U64, aParams: patternParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return false }
+        while i < pattern.count() {
+            if !(self.unifyPatterns(a: pattern.at(index: i, declarations: self.decls), aSide: 0U64, b: actual.at(index: i, declarations: self.decls), bSide: 1U64, aParams: patternParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return false }
             i += 1U64
         }
         return true
@@ -384,10 +384,10 @@ pub impl Comp {
             val b: UnifyBind = binds[i]
             if b.side == 0U64 {
                 val slot: U64 = self.binderIndexIdentity(params: typeParams, identity: b.nameId)
-                if slot < self.patternBindCount(input: typeParams) {
+                if slot < typeParams.count() {
                     val old: U64 = self.witnessBindIndex(binds: out, binder: slot)
                     if old == out.count() {
-                        out.append(<WitnessBind binder=slot paramId=self.patternBindAt(input: typeParams, index: slot).paramId term=b.ref />)
+                        out.append(<WitnessBind binder=slot paramId=typeParams.at(index: slot, declarations: self.decls, functions: self.arena).paramId term=b.ref />)
                     }
                 }
             }
@@ -402,7 +402,7 @@ pub impl Comp {
     // matches receiver and trait arguments under a shared substitution, and it
     // returns that substitution instead of erasing it to a Bool.
     inout fn conformancePatternWitnessMatch(conformIdx: U64, subjectId: U64, subjectTy: U64, subjectArgs: PatternTypeInput, typeParams: PatternBindInput, declaredTraitArgs: PatternTypeInput, typeRef: U64, traitArgs: PatternTypeInput, traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
-        if !traitArgsOpen && self.patternTypeCount(input: declaredTraitArgs) != self.patternTypeCount(input: traitArgs) { return <Result.Ok value=<WitnessMatch /> />}
+        if !traitArgsOpen && declaredTraitArgs.count() != traitArgs.count() { return <Result.Ok value=<WitnessMatch /> />}
         // Match the inherited implementation against its physical subject,
         // but preserve the authored receiver as Self in the returned proof.
         mut val matchRef: U64 = typeRef
@@ -436,20 +436,20 @@ pub impl Comp {
             if actualId == 0U64 {
                 actualId = intern(c: inout self, start: actual.nameStart, len: actual.nameLen)
             }
-            if subjectId != actualId || self.patternTypeCount(input: subjectArgs) != actual.args.count() { return <Result.Ok value=<WitnessMatch /> />}
+            if subjectId != actualId || subjectArgs.count() != actual.args.count() { return <Result.Ok value=<WitnessMatch /> />}
             mut val si: U64 = 0U64
-            while si < self.patternTypeCount(input: subjectArgs) {
-                if !(self.unifyPatterns(a: self.patternTypeAt(input: subjectArgs, index: si), aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
+            while si < subjectArgs.count() {
+                if !(self.unifyPatterns(a: subjectArgs.at(index: si, declarations: self.decls), aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
                 si += 1U64
             }
         }
         if !traitArgsOpen {
             mut val i: U64 = 0U64
-            while i < self.patternTypeCount(input: declaredTraitArgs) {
+            while i < declaredTraitArgs.count() {
                 val partial: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: typeParams, binds: binds)
                 val selected: WitnessMatch = <WitnessMatch conformIdx=partial.conformIdx binds=partial.binds selfRef=typeRef />
-                val declared: U64 = (try self.groundWitnessTypeTerm(ref: self.patternTypeAt(input: declaredTraitArgs, index: i), params: typeParams, matchResult: selected))
-                if !(self.unifyPatterns(a: declared, aSide: 0U64, b: self.patternTypeAt(input: traitArgs, index: i), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
+                val declared: U64 = (try self.groundWitnessTypeTerm(ref: declaredTraitArgs.at(index: i, declarations: self.decls), params: typeParams, matchResult: selected))
+                if !(self.unifyPatterns(a: declared, aSide: 0U64, b: traitArgs.at(index: i, declarations: self.decls), bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <Result.Ok value=<WitnessMatch /> />}
                 i += 1U64
             }
         }

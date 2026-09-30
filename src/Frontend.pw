@@ -814,11 +814,11 @@ pub impl Comp {
     // trait-subject proof edges -- alpha equality would incorrectly reject
     // the ordinary instance B[I64].
     inout fn typeRefListPatternMatches(pattern: PatternTypeInput, patternParams: PatternBindInput, actual: PatternTypeInput) -> Bool {
-        if self.patternTypeCount(input: pattern) != self.patternTypeCount(input: actual) { return false }
+        if pattern.count() != actual.count() { return false }
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
-        while i < self.patternTypeCount(input: pattern) {
-            if !(self.unifyPatterns(a: self.patternTypeAt(input: pattern, index: i), aSide: 0U64, b: self.patternTypeAt(input: actual, index: i), bSide: 1U64, aParams: patternParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
+        while i < pattern.count() {
+            if !(self.unifyPatterns(a: pattern.at(index: i, declarations: self.decls), aSide: 0U64, b: actual.at(index: i, declarations: self.decls), bSide: 1U64, aParams: patternParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) {
                 return false
             }
             i += 1U64
@@ -975,7 +975,6 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 
 part ./Parser/Decl
 part ./Codegen/Existentials
-part ./Codegen/PatternInputs
 part ./Codegen/Arc
 part ./Codegen/Emit
 part ./Codegen/Resolve

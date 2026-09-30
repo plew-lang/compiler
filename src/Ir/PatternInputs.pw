@@ -1,0 +1,34 @@
+// Matching inputs carry storage provenance; readers borrow the current owners
+// only for this read, never retaining a pool snapshot across type inference.
+pub impl PatternBindInput {
+    fn count() -> U64 {
+        match self {
+            PatternBindInput.Values(val values) => { return values.count() }
+            PatternBindInput.Conformance(val range) => { return range.len }
+            PatternBindInput.Function(val range) => { return range.len }
+        }
+    }
+    fn at(index: U64, declarations: Decls, functions: Arena) -> Bind {
+        if index >= self.count() { panic "pattern binder index out of bounds" }
+        match self {
+            PatternBindInput.Values(val values) => { return values[index] }
+            PatternBindInput.Conformance(val range) => { return declarations.conformBindPool[range.start + index] }
+            PatternBindInput.Function(val range) => { return functions.funcBindAt(binds: range, index: index) }
+        }
+    }
+}
+pub impl PatternTypeInput {
+    fn count() -> U64 {
+        match self {
+            PatternTypeInput.Values(val values) => { return values.count() }
+            PatternTypeInput.Conformance(val range) => { return range.len }
+        }
+    }
+    fn at(index: U64, declarations: Decls) -> U64 {
+        if index >= self.count() { panic "pattern type index out of bounds" }
+        match self {
+            PatternTypeInput.Values(val values) => { return values[index] }
+            PatternTypeInput.Conformance(val range) => { return declarations.conformTypePool[range.start + index] }
+        }
+    }
+}

@@ -3,8 +3,8 @@ import /Ir with { Bind, TypeRef, UnifyBind, PatternBindInput, PatternTypeInput }
 import @Std/Io with { write }
 
 fn check(compiler: inout Comp, parameters: PatternBindInput, declared: PatternTypeInput, actual: PatternTypeInput, variable: U64, concrete: U64, nested: U64) {
-    if compiler.patternBindCount(input: parameters) != 1U64 { panic "binder count" }
-    if compiler.patternBindAt(input: parameters, index: 0U64).paramId != 71U64 { panic "binder identity" }
+    if parameters.count() != 1U64 { panic "binder count" }
+    if parameters.at(index: 0U64, declarations: compiler.decls, functions: compiler.arena).paramId != 71U64 { panic "binder identity" }
     mut val bindings: Array[UnifyBind] = []
     if !compiler.unifyPatterns(a: variable, aSide: 0U64, b: concrete, bSide: 1U64, aParams: parameters, bParams: <PatternBindInput.Values values=[] />, binds: inout bindings) { panic "matching failed" }
     if bindings.count() != 1U64 || bindings[0U64].ref != concrete { panic "substitution" }

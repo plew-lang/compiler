@@ -366,7 +366,7 @@ pub impl Comp {
     }
 
     inout fn traitCycleConstructorCount(ref: U64, params: PatternBindInput) -> U64 {
-        if self.plainBinder(ref: ref, params: params) < self.patternBindCount(input: params) { return 0U64 }
+        if self.plainBinder(ref: ref, params: params) < params.count() { return 0U64 }
         if ref == 0U64 || ref >= self.arena.typeCount() { return 1U64 }
         val t: TypeRef = self.arena.typeAt(index: ref)
         mut val count: U64 = 1U64
