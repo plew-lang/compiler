@@ -811,7 +811,7 @@ pub impl Comp {
     }
 
     inout fn groundRecordStruct(ref: U64) -> Result[U64, CompileDiagnostic] {
-        val t: TypeRef = self.arena.typeAt(index: ref)
+        val t = self.arena.typeTerms[ref]
         if t.nameLen == 0U64 {
             return <Result.Ok value=ref />
         }
@@ -842,15 +842,15 @@ pub impl Comp {
             }
             appendBytes(into: inout cn, from: ":".bytes())
             mut val fieldTerm: U64 = fd.ty
-            if t.isRecord && j < t.recordFieldTerms.count() {
-                fieldTerm = t.recordFieldTerms[j]
+            if t.isRecord && j < t.recordFieldTerms.len {
+                fieldTerm = self.arena.typeRecordFieldPool[t.recordFieldTerms.start + j]
             }
             val g: U64 = (try self.groundTypeRef(ref: fieldTerm))
             if g != fd.ty {
                 changed = true
             }
             appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
-            val gt: TypeRef = self.arena.typeAt(index: g)
+            val gt = self.arena.typeTerms[g]
             gfields.append(<FieldDef nameStart=fd.nameStart nameLen=fd.nameLen nameId=fd.nameId tyStart=gt.nameStart tyLen=gt.nameLen tyNameId=intern(c: inout self, start: gt.nameStart, len: gt.nameLen) tyIsArray=fd.tyIsArray ty=g isMut=fd.isMut hasDefault=fd.hasDefault defaultVal=fd.defaultVal vis=fd.vis />)
             j += 1
         }
@@ -885,11 +885,10 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return 0
         }
-        val t: TypeRef = self.arena.typeAt(index: ref)
         mut val d: U64 = 0
         mut val i: U64 = 0
-        while i < self.typeTermChildCount(t: t) {
-            val ad: U64 = self.tyRefDepth(ref: self.typeTermChildRef(t: t, index: i))
+        while i < self.typeTermRefChildCount(ref: ref) {
+            val ad: U64 = self.tyRefDepth(ref: self.typeTermRefChildRef(ref: ref, index: i))
             if ad > d {
                 d = ad
             }
@@ -914,25 +913,28 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return <Result.Ok value=ref />
         }
-        val t: TypeRef = self.arena.typeAt(index: ref)
+        val t = self.arena.typeTerms[ref]
         if t.isRecord {
-            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return <Result.Ok value=ref />}
+            if t.recordFieldLabels.len != t.recordFieldTerms.len { return <Result.Ok value=ref />}
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
-            while ri < t.recordFieldTerms.count() {
-                val next: U64 = (try self.groundTypeRef(ref: t.recordFieldTerms[ri]))
-                if next != t.recordFieldTerms[ri] { changed = true }
-                fields.append(next)
+            while ri < t.recordFieldTerms.len {
+                val next: U64 = (try self.groundTypeRef(ref: self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri]))
+                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] {
+                    if !changed { fields = self.arena.typeAt(index: ref).recordFieldTerms }
+                    fields[ri] = next
+                    changed = true
+                }
                 ri += 1U64
             }
             if !changed { return <Result.Ok value=ref />}
-            return <Result.Ok value=self.rebuildRecordTypeTerm(t: t, fieldTerms: fields) />
+            return <Result.Ok value=self.rebuildRecordTypeTerm(t: self.arena.typeAt(index: ref), fieldTerms: fields) />
         }
         if t.assocNameId != 0U64 {
             return <Result.Ok value=(try self.resolveTy(tyRef: ref)) />
         }
-        if t.args.count() == 0U64 {
+        if t.args.len == 0U64 {
             val rg: U64 = (try self.groundRecordStruct(ref: ref))
             if rg != ref {
                 return <Result.Ok value=rg />
@@ -942,12 +944,13 @@ pub impl Comp {
         mut val newArgs: Array[U64] = []
         mut val changed: Bool = false
         mut val i: U64 = 0
-        while i < t.args.count() {
-            val g: U64 = (try self.groundTypeRef(ref: t.args[i]))
-            if g != t.args[i] {
+        while i < t.args.len {
+            val g: U64 = (try self.groundTypeRef(ref: self.arena.typeArgumentPool[t.args.start + i]))
+            if g != self.arena.typeArgumentPool[t.args.start + i] {
+                if !changed { newArgs = self.arena.typeAt(index: ref).args }
+                newArgs[i] = g
                 changed = true
             }
-            newArgs.append(g)
             i += 1
         }
         if changed {
@@ -955,7 +958,8 @@ pub impl Comp {
             // view, existential, nominal declaration and projection trait
             // owner — survives, so later proof/Mid consumers never need to
             // recover a declaration from spelling.
-            return <Result.Ok value=self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />) />
+            val original = self.arena.typeAt(index: ref)
+            return <Result.Ok value=self.rebuildTypeTerm(t: original, args: newArgs, assocTraitArgs: original.assocTraitArgs) />
         }
         return <Result.Ok value=ref />
     }
