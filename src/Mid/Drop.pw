@@ -497,8 +497,8 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
         mut val blockAccessibility: MidAccessibilityStates = <MidAccessibilityStates.empty />
         if blockI < accessibility.count() { blockAccessibility = accessibility[blockI] }
         val cliffStart = cliffLocals.count()
-        localI = 0U64
-        while localI < body.locals.len {
+        localI = blockOwnership.nextMaybeOwned(start: 0U64)
+        while localI < body.locals.len && localI < blockOwnership.count() {
             mut val cliff: Bool = false
             if localI < blockOwnership.count() && localI < blockAccessibility.count() {
                 match blockOwnership[localI] {
@@ -523,7 +523,7 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
                 }
             }
             if cliff { cliffLocals.append(localI) }
-            localI += 1U64
+            localI = blockOwnership.nextMaybeOwned(start: localI + 1U64)
         }
         val block: MidBlockNode = arena.blocks[body.blocks.start + blockI]
         mut val statementI: U64 = 0U64
@@ -534,10 +534,10 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
             }
             if statement.tag == 6U64 && statement.scope < body.scopes.len {
                 val scope: MidScope = arena.scopes[body.scopes.start + statement.scope]
-                localI = scope.firstLocal
+                localI = blockOwnership.nextMaybeOwned(start: scope.firstLocal)
                 while localI < scope.firstLocal + scope.localCount && localI < body.locals.len && localI < blockOwnership.count() {
                     match blockOwnership[localI] { MidOwnership.MaybeOwned => { needsFlag.set(i: localI, value: true) } _ => {} }
-                    localI = localI + 1U64
+                    localI = blockOwnership.nextMaybeOwned(start: localI + 1U64)
                 }
             }
             statementI = statementI + 1U64

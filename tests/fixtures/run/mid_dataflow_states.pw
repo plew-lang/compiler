@@ -15,6 +15,16 @@ fn available(state: MidAccessibility) -> Bool {
         MidAccessibility.Unavailable => { return false }
     }
 }
+fn checkMaybeOwners(states: MidOwnershipStates) {
+    mut val start = 0U64
+    while start <= states.count() + 1U64 {
+        mut val expected = start
+        if expected > states.count() { expected = states.count() }
+        while expected < states.count() && ownershipCode(state: states[expected]) != 3U64 { expected += 1U64 }
+        if states.nextMaybeOwned(start: start) != expected { panic "uncertain owner enumeration" }
+        start += 1U64
+    }
+}
 fn main() {
     val sizes = [0U64, 1U64, 31U64, 32U64, 33U64, 63U64, 64U64, 65U64, 129U64]
     val ownership = [<MidOwnership.Owned />, <MidOwnership.Consumed />, <MidOwnership.MaybeOwned />]
@@ -31,6 +41,8 @@ fn main() {
                 if changed != (count != 0U64 && expected != ownershipCode(state: left)) { panic "ownership join change" }
                 if states.join(incoming: incoming) { panic "ownership join not idempotent" }
                 if states.count() != count { panic "ownership domain length" }
+                checkMaybeOwners(states: states)
+                checkMaybeOwners(states: before)
                 mut val index = 0U64
                 while index < count {
                     if ownershipCode(state: states[index]) != expected { panic "ownership join value" }
@@ -70,6 +82,7 @@ fn main() {
         }
         val snapshot = states
         val accessSnapshot = access
+        checkMaybeOwners(states: snapshot)
         index = 0U64
         while index < count {
             states.set(index: index, state: <MidOwnership.MaybeOwned />)

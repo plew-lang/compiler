@@ -39,6 +39,27 @@ pub impl MidOwnershipStates {
             _ => { panic "invalid ownership state" }
         }
     }
+    // Enumerate uncertain owners without decoding every local. In each
+    // two-bit lane only 11 has both bits set; padding remains zero.
+    fn nextMaybeOwned(start: U64) -> U64 {
+        if start >= self.localCount { return self.localCount }
+        mut val word = start >> 5U64
+        mut val offset = start & 31U64
+        while word < self.words.count() {
+            val bits = self.words[word]
+            mut val candidates = ((bits & (bits >> 1U64)) & 6148914691236517205U64) >> (offset << 1U64)
+            if candidates != 0U64 {
+                while (candidates & 1U64) == 0U64 {
+                    candidates = candidates >> 2U64
+                    offset += 1U64
+                }
+                return (word << 5U64) + offset
+            }
+            word += 1U64
+            offset = 0U64
+        }
+        return self.localCount
+    }
     inout fn set(index: U64, state: MidOwnership) {
         if index >= self.localCount { panic "ownership state index out of bounds" }
         val word = (index >> 5U64)
