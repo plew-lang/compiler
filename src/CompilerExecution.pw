@@ -4,7 +4,7 @@ import ./CompilerSessions with { registerCompilerSession, compilerSessionSnapsho
 import ./CheckedProgram with { CompilerSession, CompilerSessionResult }
 import ./Frontend with { FrontendInput, FrontendOptions }
 import ./SourceAccess with { SourceAccess }
-import ./Backend with { LlvmJit, LlvmJitCreation, LlvmLoweringResult }
+import ./Backend with { LlvmJit, LlvmJitCreation, LlvmLoweringResult, ProgramArguments }
 import ./Diag with { emitDiagnostic }
 import @Std/Io with { eprint }
 import @Std/Core with { MutableRef }
@@ -19,6 +19,7 @@ unique struct SessionRegistration {
 // deliberately a one-execution process owner, not an in-process restart API.
 unique struct ProcessExecution {
     mut val jit: LlvmJit
+    val arguments: ProgramArguments
     val registration: SessionRegistration
 }
 mut val processExecution: Optional[MutableRef[ProcessExecution]] = <Optional.None />
@@ -47,7 +48,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
             match LlvmJit.create() {
                 LlvmJitCreation.Failure => { eprint(text: "plew: JIT creation failed\n") return 1I32 }
                 LlvmJitCreation.Success(jit: val created) => {
-                    val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created registration=move registration /> />
+                    val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created arguments=<ProgramArguments.copied arguments=arguments /> registration=move registration /> />
                     processExecution = <Optional.Some v=execution />
                     match shared->lowerDeclarations() {
                         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) return 1I32 }
@@ -61,7 +62,7 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
                             if execution->jit.add(module: move module) != 0I32 { return 1I32 }
                         }
                     }
-                    return execution->jit.run(arguments: arguments)
+                    return execution->jit.run(arguments: borrow execution->arguments)
                 }
             }
         }

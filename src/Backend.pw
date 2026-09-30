@@ -1,4 +1,4 @@
-import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef }
+import ./LlvmHandles with { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
 import ./Mid/Ambient with { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 import ./Mid/Program with { MidExecutableProgram }
 import ./PreparedProgram with { PreparedProgram, programPreparationDiagnostic }
@@ -499,7 +499,9 @@ extern(c) {
     fn plew_llvm_jit_add(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef) -> I32
     fn plew_llvm_jit_define(jit~: PlewLlvmJitRef, name~: CPtr[U8], address~: U64, callable~: I32) -> I32
     fn plew_compiler_jit_declarations(jit~: PlewLlvmJitRef, module~: LLVMModuleRef, context~: LLVMContextRef, session~: U64) -> I32
-    fn plew_compiler_jit_main(jit~: PlewLlvmJitRef, count~: U64, arguments~: CPtr[CPtr[U8]]) -> I32
+    fn plew_compiler_arguments_create(count~: U64, arguments~: CPtr[CPtr[U8]]) -> PlewProgramArgumentsRef
+    fn plew_compiler_arguments_destroy(arguments~: PlewProgramArgumentsRef)
+    fn plew_compiler_jit_main(jit~: PlewLlvmJitRef, arguments~: PlewProgramArgumentsRef) -> I32
     fn plew_llvm_jit_lookup(jit~: PlewLlvmJitRef, name~: CPtr[U8]) -> U64
     fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
     fn LLVMDisposeMessage(msg~: CPtr[U8])
@@ -757,6 +759,22 @@ pub fn transferLlvmModule(module: move LlvmModule, targetModule: inout LLVMModul
     owned.transferred = true
 }
 
+// Stable C argv storage. Its owner, rather than the main call's stack,
+// determines when the shared runtime's previous argument binding is restored.
+pub unique struct ProgramArguments {
+    val handle: PlewProgramArgumentsRef
+    deinit { plew_compiler_arguments_destroy(self.handle) }
+}
+pub impl ProgramArguments {
+    factory copied(arguments: Array[String]) {
+        mut val pointers: Array[CPtr[U8]] = []
+        for argument in arguments { pointers.append(cString(argument)) }
+        val handle = plew_compiler_arguments_create(pointers.count(), arrayCPtr(pointers))
+        for pointer in pointers { cFree(pointer) }
+        return <ProgramArguments handle=handle />
+    }
+}
+
 // Code and native contexts live until this owner is destroyed. It never owns a
 // second runtime; registered addresses refer to the embedding host's instance.
 pub unique struct LlvmJit {
@@ -788,12 +806,8 @@ pub impl LlvmJit {
         return plew_compiler_jit_declarations(self.handle, owned.module, owned.context, sessionId)
     }
 
-    inout fn run(arguments: Array[String]) -> I32 {
-        mut val pointers: Array[CPtr[U8]] = []
-        for argument in arguments { pointers.append(cString(argument)) }
-        val result = plew_compiler_jit_main(self.handle, pointers.count(), arrayCPtr(pointers))
-        for pointer in pointers { cFree(pointer) }
-        return result
+    inout fn run(arguments: borrow ProgramArguments) -> I32 {
+        return plew_compiler_jit_main(self.handle, arguments.handle)
     }
 
     inout fn define(name: String, address: U64, callable: Bool) -> I32 {

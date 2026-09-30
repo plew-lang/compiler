@@ -1219,6 +1219,13 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        if !self.genMode {
+            if exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
+            match self.expressionTypeUses.get(key: exprId) {
+                Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
+                Optional.None => {}
+            }
+        }
         // Recording owns its destination slot. Parent expressions can be
         // newer than every child; type publication must not depend on an
         // unrelated expression having already extended this table.
@@ -2055,6 +2062,12 @@ pub impl Comp {
     }
 
     inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
+        if !self.genMode {
+            match self.blockTypeUses.get(key: blkId) {
+                Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
+                Optional.None => {}
+            }
+        }
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {

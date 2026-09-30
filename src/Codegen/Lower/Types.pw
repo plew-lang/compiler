@@ -435,7 +435,9 @@ pub impl Comp {
     }
 
     inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
-        return <Result.Ok value=(try self.lowerTypeCore(t: (try self.normalizeProjectionTypeActive(t: t)))) />
+        val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionTypeActive(t: t))))
+        self.loweringTypeUses.append(type.ref)
+        return <Result.Ok value=type />
     }
 
     inout fn lowerTypeCore(t: TypeAst) -> Result[PType, CompileDiagnostic] {
@@ -610,7 +612,9 @@ pub impl Comp {
     // associated projections resolve to a local trait span rather than cloning
     // a normalized TypeAst.
     inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
-        return self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id))
+        val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
+        self.loweringTypeUses.append(type.ref)
+        return <Result.Ok value=type />
     }
 
     inout fn lowerSyntaxTypeNode(t: SyntaxType) -> Result[PType, CompileDiagnostic] {

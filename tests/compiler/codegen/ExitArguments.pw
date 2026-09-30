@@ -1,0 +1,7 @@
+import @Std/Process with { argCount }
+import @Std/Io with { print }
+extern(c) { fn test_register_exit_arguments() }
+fn main() {
+    print(argCount())
+    test_register_exit_arguments()
+}

@@ -23,6 +23,11 @@ int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
 // Immutable empty instruction name, borrowed for the process lifetime.
 const unsigned char *plew_llvm_empty_name(void);
 typedef struct PlewLlvmJit PlewLlvmJit;
+typedef struct PlewProgramArguments PlewProgramArguments;
+PlewProgramArguments *plew_compiler_arguments_create(uint64_t count, char **values);
+void plew_compiler_arguments_destroy(PlewProgramArguments *arguments);
+int plew_compiler_jit_main(PlewLlvmJit *jit, PlewProgramArguments *arguments);
+
 PlewLlvmJit *plew_llvm_jit_create(void);
 void plew_llvm_jit_destroy(PlewLlvmJit *jit);
 int plew_llvm_jit_failed(const PlewLlvmJit *jit);

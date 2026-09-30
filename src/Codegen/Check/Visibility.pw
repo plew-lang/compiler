@@ -188,44 +188,49 @@ pub impl Comp {
     // imported too. Types are scoped separately (their resolution sites); member/method
     // visibility is a separate axis.
     inout fn checkUseVisibility() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.exprs.count() {
-            match self.arena.exprs[i] {
-                Expr.Call(val nameStart, val nameLen, val args) => {
-                    val useMod: U64 = self.moduleOf(offset: nameStart)
-                    // The name is in scope iff some free fn of this name is visible from the
-                    // call's module (scoped resolution). If so, any remaining mismatch is an
-                    // overload/label/type error reported elsewhere — not a visibility issue.
-                    if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.functionCount() {
-                        if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
-                            // a free fn of this name exists only in other (loaded) modules and
-                            // was not imported here — the use needs an import.
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)") />
-                        } else {
-                            // no free fn of this name anywhere: a local/closure/builtin, or an
-                            // `@Std` intrinsic the backend intercepts by raw name (print /
-                            // write / exit / …). The latter is NOT ambient (spec/15: only lang
-                            // items are) and must be imported.
-                            if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
-                                if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)") />
-                                }
+        mut val index = 0U64
+        while index < self.arena.exprs.count() {
+            try self.checkExpressionVisibility(exprId: index)
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkExpressionVisibility(exprId: U64) -> Result[(), CompileDiagnostic] {
+        match self.arena.exprs[exprId] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val useMod: U64 = self.moduleOf(offset: nameStart)
+                // The name is in scope iff some free fn of this name is visible from the
+                // call's module (scoped resolution). If so, any remaining mismatch is an
+                // overload/label/type error reported elsewhere — not a visibility issue.
+                if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.functionCount() {
+                    if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
+                        // a free fn of this name exists only in other (loaded) modules and
+                        // was not imported here — the use needs an import.
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)") />
+                    } else {
+                        // no free fn of this name anywhere: a local/closure/builtin, or an
+                        // `@Std` intrinsic the backend intercepts by raw name (print /
+                        // write / exit / …). The latter is NOT ambient (spec/15: only lang
+                        // items are) and must be imported.
+                        if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
+                            if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)") />
                             }
                         }
-                    } else {
-                        // a free fn of this name IS visible, but the call's labels may match only
-                        // a same-named fn PRIVATE to another module (an imported same-named export
-                        // shadows the name by text). `findFunc` correctly rejects it — report the
-                        // (name, module) visibility failure cleanly instead of an opaque backend
-                        // error (spec/15).
-                        if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)") />
-                        }
                     }
-                    i += 1
+                } else {
+                    // a free fn of this name IS visible, but the call's labels may match only
+                    // a same-named fn PRIVATE to another module (an imported same-named export
+                    // shadows the name by text). `findFunc` correctly rejects it — report the
+                    // (name, module) visibility failure cleanly instead of an opaque backend
+                    // error (spec/15).
+                    if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)") />
+                    }
                 }
-                _ => { i += 1 }
             }
+            _ => {}
         }
         return <Result.Ok value=() />
     }
@@ -329,17 +334,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Type-side diagnostic arm of scoped resolution (spec/15), as a single choke-point pass:
-    // EVERY user-written type annotation in the program is one TypeRef in c.arena.types,
-    // stamped by the sole lowering choke point `lowerType` with its real source offset
-    // (siteOffset). So one uniform walk covers every site — function params/returns, struct &
-    // enum fields, local `val x: T`, newtype underlyings, trait requirement signatures, `as`
-    // casts, explicit type arguments, closure signatures, and any future syntax — with no site
-    // left to enumerate by hand. Generic arguments need no special recursion: each is itself a
-    // TypeRef in the arena, visited by the same loop. siteOffset 0 marks a synthetic TypeRef
-    // (compiler-built) or a type-parameter head — both skipped.
-    // Projection membership depends on the selected trait declaration, not
-    // on the eventual receiver substitution or conformance witness.
     inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
         if type.assocNameId == 0U64 || type.assocTraitId == 0U64 { return <Result.Ok value=() /> }
         val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
@@ -354,17 +348,33 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: type.siteOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") />
     }
 
-    inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.typeCount() {
-            val t: TypeRef = self.arena.typeAt(index: i)
-            try self.checkProjectionMember(type: t)
-            if t.siteOffset != 0U64 {
-                if self.offsetIsLoaded(offset: t.siteOffset) {
-                    try self.checkTypeName(siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
-                }
+    // A single authored use has identical semantics at declaration load and
+    // lexical body request. Projection and visibility checks precede consumers.
+    inout fn checkSourceTypeUses(types: Array[U64]) -> Result[(), CompileDiagnostic] {
+        for ref in types {
+            if !self.checkedTypeUses.contains(ref) {
+                try self.checkAnyTypeFormation(ref: ref)
+                try self.checkTypeUseVisibility(ref: ref)
+                self.checkedTypeUses.insert(ref)
             }
-            i += 1
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkTypeUseVisibility(ref: U64) -> Result[(), CompileDiagnostic] {
+        val type = self.arena.typeAt(index: ref)
+        try self.checkProjectionMember(type: type)
+        if type.siteOffset != 0U64 && self.offsetIsLoaded(offset: type.siteOffset) {
+            try self.checkTypeName(siteOffset: type.siteOffset, start: type.nameStart, len: type.nameLen)
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.arena.typeCount() {
+            try self.checkTypeUseVisibility(ref: index)
+            index += 1U64
         }
         return <Result.Ok value=() />
     }

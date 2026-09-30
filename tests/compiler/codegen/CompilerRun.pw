@@ -5,13 +5,14 @@ import /SourceAccess with { SourceAccess }
 import @Std/Process with { argAt, argCount, exit }
 import @Std/Core with { assert }
 fn execute() -> I32 {
-    val original = argAt(0I64)
-    val count = argCount()
+    val target = argAt(2I64)
     val status = executeProgram(input: <FrontendInput.File path=argAt(2I64) />,
         sources: <SourceAccess stdRoot=argAt(1I64).bytes() />,
         arguments: [argAt(2I64), "example"])
-    assert(argCount() == count)
-    assert(argAt(0I64) == original)
+    // The process owner survives main return, including its application argv.
+    assert(argCount() == 2I64)
+    assert(argAt(0I64) == target)
+    assert(argAt(1I64) == "example")
     return status
 }
 fn whileBorrowed(value: inout I64, action: fn() -> I32) -> I32 {

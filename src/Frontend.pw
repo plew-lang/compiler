@@ -167,6 +167,14 @@ pub struct Comp {
     // Session-local outcomes of lexical preparation, not whole-body ownership
     // or effect proofs. Failure must remain failure even after template closure.
     pub mut val lexicalBodyPreparations: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
+    // Lowering assigns authored type uses to their declaration, expression or
+    // block. Record requests local uses; declaration loading checks only the
+    // remaining signature/field uses. Synthetic types are not new source uses.
+    pub mut val loweringTypeUses: Array[U64] = []
+    pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
+    pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
+    pub mut val checkedTypeUses: Set[U64] = Set.new()
+    pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
     pub mut val preparedGlobalTargets: Array[U64] = []
@@ -1698,7 +1706,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     try c.checkConformances()
     // Existential formation (spec/08) requires a known trait and complete
     // type-argument/associated-type bindings; operations are checked at use.
-    try c.checkAnyFormation()
+    if c.genMode { try c.checkAnyFormation() }
     // Candidate-table registration has already enforced declaration collisions
     // while lowering. The remaining checks concern non-table semantic rules.
     try c.checkDuplicateTraitReqs()
@@ -1710,8 +1718,13 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // among the exported (loaded) declarations.
     try c.checkImports()
     try c.detectImportCycles()
-    try c.checkUseVisibility()
-    try c.checkTypeVisibility()
+    c.sourceExpressionLimit = c.arena.exprs.count()
+    if c.genMode {
+        try c.checkUseVisibility()
+        try c.checkTypeVisibility()
+    } else {
+        try c.checkSourceTypeUses(types: c.loweringTypeUses)
+    }
     c.resolveTypeDeclIdentities()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is

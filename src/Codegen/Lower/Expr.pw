@@ -69,6 +69,21 @@ pub impl Comp {
     }
 
     inout fn lowerExpr(e: ExprAst, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        val parent = self.loweringTypeUses
+        self.loweringTypeUses = []
+        val result = self.lowerExprScoped(e: e, ctxRef: ctxRef)
+        val uses = self.loweringTypeUses
+        self.loweringTypeUses = parent
+        match result {
+            Result.Ok(value: val node) => {
+                if uses.count() != 0U64 { self.expressionTypeUses[node] = uses }
+            }
+            Result.Err(error: _) => {}
+        }
+        return result
+    }
+
+    inout fn lowerExprScoped(e: ExprAst, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         mut val result: U64 = 0
         match e {
             ExprAst.IntLit(val value, val isBool, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
@@ -403,6 +418,21 @@ pub impl Comp {
     // ExprAst/String tree from the immutable syntax arena.  More expression
     // categories are added before the normal loader is switched to SyntaxFile.
     inout fn lowerSyntaxExpr(id: ExprId, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        val parent = self.loweringTypeUses
+        self.loweringTypeUses = []
+        val result = self.lowerSyntaxExprScoped(id: id, ctxRef: ctxRef)
+        val uses = self.loweringTypeUses
+        self.loweringTypeUses = parent
+        match result {
+            Result.Ok(value: val node) => {
+                if uses.count() != 0U64 { self.expressionTypeUses[node] = uses }
+            }
+            Result.Err(error: _) => {}
+        }
+        return result
+    }
+
+    inout fn lowerSyntaxExprScoped(id: ExprId, ctxRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
         mut val result: U64 = 0U64
         match e.kind {

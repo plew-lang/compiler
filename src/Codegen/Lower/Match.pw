@@ -926,6 +926,21 @@ pub impl Comp {
     // shared lowerer counterpart above. Complex statement desugarings are
     // added here before this path becomes the normal loader.
     inout fn lowerSyntaxBlock(id: BlockId) -> Result[U64, CompileDiagnostic] {
+        val parent = self.loweringTypeUses
+        self.loweringTypeUses = []
+        val result = self.lowerSyntaxBlockScoped(id: id)
+        val uses = self.loweringTypeUses
+        self.loweringTypeUses = parent
+        match result {
+            Result.Ok(value: val node) => {
+                if uses.count() != 0U64 { self.blockTypeUses[node] = uses }
+            }
+            Result.Err(error: _) => {}
+        }
+        return result
+    }
+
+    inout fn lowerSyntaxBlockScoped(id: BlockId) -> Result[U64, CompileDiagnostic] {
         val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: id)
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0U64
@@ -1254,6 +1269,21 @@ pub impl Comp {
     }
 
     inout fn lowerBlock(b: BlockAst) -> Result[U64, CompileDiagnostic] {
+        val parent = self.loweringTypeUses
+        self.loweringTypeUses = []
+        val result = self.lowerBlockScoped(b: b)
+        val uses = self.loweringTypeUses
+        self.loweringTypeUses = parent
+        match result {
+            Result.Ok(value: val node) => {
+                if uses.count() != 0U64 { self.blockTypeUses[node] = uses }
+            }
+            Result.Err(error: _) => {}
+        }
+        return result
+    }
+
+    inout fn lowerBlockScoped(b: BlockAst) -> Result[U64, CompileDiagnostic] {
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0
         while i < b.stmts.count() {
