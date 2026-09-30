@@ -1,0 +1,4 @@
+import /Ir with { TypeTerm }
+fn main() {
+    val forged = <TypeTerm nameStart=0U64 nameLen=0U64 closedness=1U64 paramId=1U64 />
+}

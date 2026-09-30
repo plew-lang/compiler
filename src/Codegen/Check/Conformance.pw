@@ -355,6 +355,13 @@ pub impl Comp {
         mut val graph = <TraitCycleGraph />
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
+            // Only trait subjects are vertices. Lowering already classified
+            // this identity; avoid copying value conformances and querying
+            // the trait index again. Trait edges retain all validation below.
+            if self.decls.conforms[ci].subjectTraitOwner == 0U64 {
+                ci += 1U64
+                continue
+            }
             val edge = self.decls.conforms[ci]
             if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
                 graph.append(conformIndex: ci, source: edge.typeStart, target: edge.traitStart)

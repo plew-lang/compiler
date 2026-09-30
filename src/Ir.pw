@@ -175,7 +175,7 @@ pub struct TypeTerm {
     pub val assocTraitDeclOffset: U64 = 0U64
     pub val siteOffset: U64 = 0U64
 }
-pub impl TypeTerm { factory }
+impl TypeTerm { factory }
 
 // A structured type reference: a head type name span plus a list of type
 // arguments (indices into Comp.arena.types). Non-generic types have an empty args
