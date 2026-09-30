@@ -7,7 +7,7 @@
 
 pub impl Comp {
     inout fn typeInfoOfRef(ref: U64) -> TypeInfo {
-        val t: TypeRef = self.arena.typeAt(index: ref)
+        val t = self.arena.typeTerms[ref]
         // A projection is a structured semantic term even when its receiver
         // has no ordinary type arguments.  Do not collapse
         // `Parser#Convert[T].Output` to a bare Parser TypeInfo: generic-body
@@ -15,7 +15,7 @@ pub impl Comp {
         if t.assocNameId != 0U64 {
             return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
         }
-        if t.args.count() == 0 {
+        if t.args.len == 0 {
             // an argless existential (`any Dup`): the isAny ref IS the type identity —
             // name-only recovery would degrade it to the plain trait name.
             if t.isAny {
@@ -32,7 +32,7 @@ pub impl Comp {
             // `Array[E]` ref alongside (TOTAL-REF, same as the array-local branch):
             // a field/method on an Array-typed `Self` value (`lhs.data` in Array's
             // own Eq witness) needs the instance ref to resolve.
-            val el: TypeRef = self.arena.typeAt(index: t.args[0])
+            val el = self.arena.typeTerms[self.arena.typeArgumentPool[t.args.start]]
             val ab: TypeInfo = self.typeInfoOfName(start: el.nameStart, len: el.nameLen, isArray: true)
             return <TypeInfo kind=3 nameStart=ab.nameStart nameLen=ab.nameLen ref=ref />
         }
