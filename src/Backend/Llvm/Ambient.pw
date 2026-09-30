@@ -58,7 +58,7 @@ pub impl LlvmCtx {
 
     inout fn midAmbientCheck(c: inout Comp, body: MidBodyNode, place: MidPlaceNode, writes: Bool) -> Result[(), CompileDiagnostic] {
         if !self.ambientProgram.enabled { return <Result.Ok value=() /> }
-        val path = self.ambientBody.path(c: c, body: body, place: place)
+        val path = self.ambientBody.path(arena: c.mid, body: body, place: place)
         mut val index = 0U64
         while index < path.count() {
             mut val values = (try self.ambientStorageValues(c: inout c, body: body, place: place, storage: path[index], writes: writes && index + 1U64 == path.count()))
@@ -76,7 +76,7 @@ pub impl LlvmCtx {
         val placeId = if operand.accessPlace == 0U64 { give operand.place } else { give operand.accessPlace }
         if placeId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val place = c.mid.places[placeId - 1U64]
-        val path = self.ambientBody.path(c: c, body: body, place: place)
+        val path = self.ambientBody.path(arena: c.mid, body: body, place: place)
         if path.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val types = [self.ptrty, self.i64ty, self.ptrty, self.ptrty, self.i64ty, self.i64ty, self.ptrty]
         val record = match allocation {

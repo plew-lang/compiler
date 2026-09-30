@@ -4,7 +4,7 @@ import ../Diag with { CompileDiagnostic }
 // Paths describe physical fields, never byte intervals (including zero-sized
 // fields). An index reserves its container, not an element address.
 import ../Frontend with { Comp }
-import ./Ir with { MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
+import ./Ir with { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRange, MidTerminatorNode }
 import ./Program with { MidExecutableProgram }
 import ./AmbientEffects with { MidAmbientEffects }
 
@@ -17,17 +17,17 @@ pub impl MidAmbientStorage { factory }
 
 // Read each earlier reference slot before dereferencing it. The final entry
 // describes the requested access; preceding entries are short read accesses.
-pub fn midAmbientStoragePath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
+pub fn midAmbientStoragePath(arena: MidCanonicalArena, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
     mut val result: Array[MidAmbientStorage] = []
     mut val kind = 0U64
     if place.rootTag == 2U64 && place.globalMutable { kind = 2U64 }
-    if place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isCaptureCell { kind = 3U64 }
+    if place.rootTag == 1U64 && place.local < body.locals.len && arena.locals[body.locals.start + place.local].isCaptureCell { kind = 3U64 }
     mut val rootLength = 0U64
     mut val pathStart = 0U64
     mut val pathEnd = place.projections.len
     mut val index = 0U64
     while index < place.projections.len {
-        val projection = c.mid.projections[place.projections.start + index]
+        val projection = arena.projections[place.projections.start + index]
         if projection.tag == 2U64 && index < pathEnd { pathEnd = index }
         if projection.tag == 3U64 {
             if kind != 0U64 {
@@ -65,7 +65,7 @@ pub struct MidAmbientBodyPlan {
 pub impl MidAmbientBodyPlan {
     factory empty() { return <MidAmbientBodyPlan heads=[:] entries=[] /> }
     fn hasStorage() -> Bool { return self.entries.count() != 0U64 }
-    fn path(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
+    fn path(arena: MidCanonicalArena, body: MidBodyNode, place: MidPlaceNode) -> Array[MidAmbientStorage] {
         mut val entry = self.heads.getOr(key: ambientPlaceKey(place: place), fallback: 0U64)
         while entry != 0U64 {
             val item = self.entries[entry - 1U64]
@@ -74,11 +74,11 @@ pub impl MidAmbientBodyPlan {
         }
         // Physical lowering may request a prefix of a verified place (for
         // example the pinned cell). Its meaning is the same Mid recipe query.
-        return midAmbientStoragePath(c: c, body: body, place: place)
+        return midAmbientStoragePath(arena: arena, body: body, place: place)
     }
-    inout fn add(c: Comp, body: MidBodyNode, placeId: U64) {
-        if placeId == 0U64 || placeId > c.mid.places.count() { return }
-        val place = c.mid.places[placeId - 1U64]
+    inout fn add(arena: MidCanonicalArena, body: MidBodyNode, placeId: U64) {
+        if placeId == 0U64 || placeId > arena.places.count() { return }
+        val place = arena.places[placeId - 1U64]
         val key = ambientPlaceKey(place: place)
         val head = self.heads.getOr(key: key, fallback: 0U64)
         mut val entry = head
@@ -87,7 +87,7 @@ pub impl MidAmbientBodyPlan {
             if sameAmbientPlace(first: item.place, second: place) { return }
             entry = item.next
         }
-        val path = midAmbientStoragePath(c: c, body: body, place: place)
+        val path = midAmbientStoragePath(arena: arena, body: body, place: place)
         if path.count() != 0U64 {
             self.entries.append(<MidAmbientPlaceEntry place=place path=path next=head />)
             self.heads[key] = self.entries.count()
@@ -152,26 +152,26 @@ pub impl MidAmbientProgram {
                             val statement = c.mid.statements[block.statements.start + statementIndex]
                             mut val destination = 0U64
                             while destination < statement.destinationCount() {
-                                plan.add(c: c, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: destination))
+                                plan.add(arena: c.mid, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: destination))
                                 destination += 1U64
                             }
-                            plan.add(c: c, body: body, placeId: statement.source)
+                            plan.add(arena: c.mid, body: body, placeId: statement.source)
                             if statement.value != 0U64 {
                                 val value = c.mid.rvalues[statement.value - 1U64]
-                                plan.add(c: c, body: body, placeId: value.place)
+                                plan.add(arena: c.mid, body: body, placeId: value.place)
                                 mut val operand = 0U64
                                 while operand < value.operandCount() {
-                                    plan.addOperand(c: c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: operand))
+                                    plan.addOperand(arena: c.mid, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: operand))
                                     operand += 1U64
                                 }
                             }
                             statementIndex += 1U64
                         }
                         val term = c.mid.terminators[block.terminator - 1U64]
-                        plan.add(c: c, body: body, placeId: term.destination)
+                        plan.add(arena: c.mid, body: body, placeId: term.destination)
                         mut val operand = 0U64
                         while operand < c.mid.terminatorOperandCount(term: term) {
-                            plan.addOperand(c: c, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: operand))
+                            plan.addOperand(arena: c.mid, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: operand))
                             operand += 1U64
                         }
                         blockIndex += 1U64
@@ -187,10 +187,10 @@ pub impl MidAmbientProgram {
 }
 
 pub impl MidAmbientBodyPlan {
-    inout fn addOperand(c: Comp, body: MidBodyNode, operandId: U64) {
+    inout fn addOperand(arena: MidCanonicalArena, body: MidBodyNode, operandId: U64) {
         if operandId == 0U64 { return }
-        val operand = c.mid.operands[operandId - 1U64]
-        self.add(c: c, body: body, placeId: operand.place)
-        self.add(c: c, body: body, placeId: operand.accessPlace)
+        val operand = arena.operands[operandId - 1U64]
+        self.add(arena: arena, body: body, placeId: operand.place)
+        self.add(arena: arena, body: body, placeId: operand.accessPlace)
     }
 }
