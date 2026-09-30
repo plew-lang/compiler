@@ -27,7 +27,7 @@ def main():
     out = args.out.resolve(); out.mkdir(parents=True, exist_ok=False)
     prefix = Path('/opt/homebrew/opt/llvm').resolve(); apply()
     watch = [sys.executable, '-B', str(ROOT/'scripts/support/watch-command.py'), '--']
-    inputs = [ROOT/'plewc', ROOT/'Plew.toml', ROOT/'Plew.lock', *sorted(HERE.glob('*.*')),
+    inputs = [ROOT / 'bin/plewc', ROOT/'Plew.toml', ROOT/'Plew.lock', *sorted(HERE.glob('*.*')),
               *sorted((ROOT/'std').rglob('*.pw')), prefix/'lib/libLLVM.dylib', prefix/'bin/clang']
     hashes = {str(p):digest(p) for p in inputs if p.is_file()}
     report = dict(status='running', host=platform.platform(), inputs=hashes, samples=[], checks=[], commands=[],
@@ -69,7 +69,7 @@ def main():
             source.write_text(text)
             start=time.perf_counter_ns()  # Explicit Restart request.
             ir=out/f'{revision}.ll'
-            ir.write_bytes(run(f'compile-{revision}',[ROOT/'plewc',source]))
+            ir.write_bytes(run(f'compile-{revision}',[ROOT / 'bin/plewc',source]))
             compiled=time.perf_counter_ns()
             output=exchange(f'LOAD {ir} {revision}', ['READY ','REJECTED'])
             ready=time.perf_counter_ns()
@@ -82,7 +82,7 @@ def main():
             print(f'[restart-check] ready {revision+1}/{args.runs}',flush=True)
         revision=args.runs-1
         source.write_text(template.replace('counter += 1I64', 'counter += \"invalid\"'))
-        run('source-reject',[ROOT/'plewc',source],accepted=1)
+        run('source-reject',[ROOT / 'bin/plewc',source],accepted=1)
         if exchange('PING',['PONG '])!=f'PONG {7000024+revision}\n':
             raise RuntimeError('source rejection disturbed old application')
         report['checks'].append('source rejection preserves active handler')

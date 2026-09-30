@@ -218,7 +218,7 @@ def main():
     parser.add_argument('--llvm-tools-config', help='matching build-machine clang/opt toolchain; defaults to --llvm-config')
     parser.add_argument('--lto', choices=('off', 'thin'), default='off')
     parser.add_argument('--lto-jobs', type=int, default=max(1, (os.cpu_count() or 1) // 2))
-    parser.add_argument('--carrier', default=str(ROOT / 'plewc'))
+    parser.add_argument('--carrier', default=str(ROOT / 'bin/plewc'))
     parser.add_argument('--output', required=True, help='new staging directory')
     parser.add_argument('--distribution', action='store_true', help='bundle native CLI, resolver and resources')
     parser.add_argument('--llvm-license', help='LLVM license text (default: selected LLVM prefix/LICENSE.TXT)')

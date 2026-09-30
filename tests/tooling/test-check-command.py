@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'plewc')))
+    parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'bin/plewc')))
     args = parser.parse_args()
     compiler = args.compiler.absolute()
     wrapper = [sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--']

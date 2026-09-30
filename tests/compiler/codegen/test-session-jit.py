@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--asan', action='store_true')
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
+compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 config = Path(os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/' + ('llvm@22' if options.asan else 'llvm') + '/bin/llvm-config'))
 
 def query(option):

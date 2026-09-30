@@ -29,7 +29,7 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--compiler', type=Path, default=ROOT / 'plewc')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'bin/plewc')
     parser.add_argument('--llvm-prefix', type=Path,
                         default=Path('/opt/homebrew/opt/llvm'))
     args = parser.parse_args()

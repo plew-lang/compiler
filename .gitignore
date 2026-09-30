@@ -1,7 +1,6 @@
 # bootstrap intermediates (bootstrap.sh emits these; the .seed.ll /
-# .seed.runtime.c + src are tracked). plewc itself is tracked.
+# .seed.runtime.c + src are tracked). bin/plewc itself is tracked.
 /plewc0
-/plewc-*
 /plewc.ll
 /plewc.runtime.c
 /plewc.check.ll
@@ -20,3 +19,6 @@
 
 # Python helper bytecode
 /__pycache__/
+
+# Diagnostic compiler snapshots; canonical bin/plewc and bin/std are tracked.
+/bin/plewc-*

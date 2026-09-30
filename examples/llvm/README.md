@@ -18,7 +18,7 @@ installed, e.g. `brew install llvm`.)
 
 ```sh
 LC=$(brew --prefix llvm)/bin/llvm-config        # or: which llvm-config
-compiler/plewc examples/llvm/BuildAdd.pw > /tmp/build_add.c
+compiler/bin/plewc examples/llvm/BuildAdd.pw > /tmp/build_add.c
 clang /tmp/build_add.c $("$LC" --ldflags --libs core) \
       -Wl,-rpath,"$("$LC" --libdir)" -o /tmp/build_add
 /tmp/build_add

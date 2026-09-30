@@ -17,7 +17,7 @@ def main():
     llvm=Path('/opt/homebrew/opt/llvm').resolve()
     clang=Path('/opt/homebrew/opt/llvm@22/bin/clang').resolve()
     apply(); os.environ['ASAN_OPTIONS']='detect_leaks=1:abort_on_error=0'
-    inputs=[ROOT/'plewc',*sorted(HERE.glob('*.*')),*sorted((ROOT/'std').rglob('*.pw')),
+    inputs=[ROOT / 'bin/plewc',*sorted(HERE.glob('*.*')),*sorted((ROOT/'std').rglob('*.pw')),
             llvm/'lib/libLLVM.dylib',clang,ROOT/'tests/sanitizer/nonvolatile-unused-uaf.ll']
     hashes={str(p):digest(p) for p in inputs if p.is_file()}
     report=dict(status='running',inputs=hashes,commands=[],asan_options=os.environ['ASAN_OPTIONS'])

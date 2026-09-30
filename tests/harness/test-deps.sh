@@ -7,7 +7,7 @@
 # does not exercise. Exits non-zero on the first mismatch.
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-PLEWC="${PLEWC:-$ROOT/plewc}"
+PLEWC="${PLEWC:-$ROOT/bin/plewc}"
 case "$PLEWC" in /*) ;; *) PLEWC="$(pwd)/$PLEWC" ;; esac
 CC=${CC:-clang}
 [ -x "$PLEWC" ] || { echo "test-deps: $PLEWC missing — run ./scripts/build/bootstrap.sh" >&2; exit 1; }
@@ -24,7 +24,9 @@ echo "test-deps: build fresh resolver" >&2
 # Exercise the unmodified CLI with the selected compiler and fresh resolver.
 # Its sibling lookup must not pick the repository binary or cached resolver.
 cp "$ROOT/plew" "$WORK/plew"
-ln -s "$PLEWC" "$WORK/plewc"
+mkdir -p "$WORK/bin"
+ln -s "$PLEWC" "$WORK/bin/plewc"
+ln -s "$ROOT/std" "$WORK/bin/std"
 ln -s "$ROOT/std" "$WORK/std"
 ln -s "$ROOT/resolve" "$WORK/resolve"
 echo "test-deps: resolver built; exercising dependency fixtures" >&2

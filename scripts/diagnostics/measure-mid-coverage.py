@@ -20,7 +20,7 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--compiler", default=os.environ.get("PLEWC", "./plewc"))
+    parser.add_argument("--compiler", default=os.environ.get("PLEWC", "./bin/plewc"))
     parser.add_argument("--output", required=True)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("sources", nargs="*")

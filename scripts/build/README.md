@@ -4,6 +4,17 @@
 entries, normally invoked through the meta repository's `validate` command.
 They do not publish the standalone distribution or change its resource bundle.
 
+## Development compiler snapshots
+
+Keep the canonical compiler at `bin/plewc`. All development scripts use this
+path; there is no compiler executable or compatibility link at the root. Save a diagnostic or recovery
+copy with `python3 -B scripts/build/save-carrier.py candidate` (optionally
+`--source PATH`). It creates `bin/plewc-candidate` and the adjacent
+`std` link required by development compilers. Use that explicit path as the
+validation carrier. Existing snapshots are never overwritten. Do not create
+`plewc-*` in the repository root; diagnostic runs also keep their candidates in `bin/`. Remove snapshots when no longer
+needed. The std link uses the current checkout, not a historical snapshot.
+
 ## Single-file candidate
 
 Build distribution libraries with explicit optimization before packaging. A
@@ -142,7 +153,7 @@ Focused gates:
 python3 -B tests/tooling/test-standalone-build.py
 python3 -B tests/tooling/test-native-object.py \
   --worker tmp/standalone/candidate/llvm-object \
-  --compiler ./plewc \
+  --compiler ./bin/plewc \
   --runtime-object tmp/standalone/candidate/runtime.o
 python3 -B tests/tooling/test-distribution.py \
   --binary tmp/standalone/candidate/plew \

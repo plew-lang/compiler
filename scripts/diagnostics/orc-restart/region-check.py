@@ -18,7 +18,7 @@ def main():
     out = args.out.resolve(); out.mkdir(parents=True, exist_ok=False)
     prefix = Path('/opt/homebrew/opt/llvm').resolve()
     apply()
-    inputs = [ROOT / 'plewc', *sorted(HERE.glob('*.*')), *sorted((ROOT/'std').rglob('*.pw')),
+    inputs = [ROOT / 'bin/plewc', *sorted(HERE.glob('*.*')), *sorted((ROOT/'std').rglob('*.pw')),
               ROOT/'Plew.toml', ROOT/'Plew.lock', prefix/'bin/clang', prefix/'lib/libLLVM.dylib']
     hashes = {str(p): digest(p) for p in inputs if p.is_file()}
     report = dict(status='running', inputs=hashes, commands=[], runs=args.runs)
@@ -31,7 +31,7 @@ def main():
         if status: raise RuntimeError(f'{name} failed: {out/(name+".stderr")}')
         return (out/(name+'.stdout')).read_bytes()
     try:
-        runtime = run('runtime', [ROOT/'plewc','--runtime'])
+        runtime = run('runtime', [ROOT / 'bin/plewc','--runtime'])
         normal = out/'normal-runtime.c'; normal.write_bytes(runtime)
         cache = b'static char* e=0;'
         if runtime.count(cache) != 1: raise RuntimeError('empty-string cache layout changed')
@@ -40,7 +40,7 @@ def main():
         wrapped.write_bytes((HERE/'region-prefix.c').read_bytes()+runtime+(HERE/'region-suffix.c').read_bytes())
         library = out/'runtime.dylib'
         run('runtime-build',[prefix/'bin/clang','-O2','-w','-dynamiclib',wrapped,'-o',library])
-        ir = out/'app.ll'; ir.write_bytes(run('app',[ROOT/'plewc',HERE/'Region.pw']))
+        ir = out/'app.ll'; ir.write_bytes(run('app',[ROOT / 'bin/plewc',HERE/'Region.pw']))
         aot = out/'aot'
         run('aot-build', [prefix/'bin/clang','-w','-O0',ir,normal,'-o',aot])
         if run('aot', [aot]) != b'\n1\n6\n7000012\n999\n6\n': raise RuntimeError('normal AOT oracle mismatch')

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--worker', type=Path, required=True)
-    parser.add_argument('--compiler', type=Path, default=ROOT / 'plewc')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'bin/plewc')
     parser.add_argument('--runtime-object', type=Path, required=True)
     args = parser.parse_args()
     worker = args.worker.resolve()

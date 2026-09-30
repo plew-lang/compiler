@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/../../.."
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 directory=$(mktemp -d "${TMPDIR:-/tmp}/plew-mid-core-string.XXXXXX")
 trap 'rm -f "$directory/input.ll" "$directory/coverage"; rmdir "$directory"' EXIT HUP INT TERM
 # The ordinary intrinsic-call fixture remains in the run corpus. This check

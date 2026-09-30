@@ -44,11 +44,12 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     llvm = Path(os.environ.get('LLVM_PREFIX', '/opt/homebrew/opt/llvm@22'))
     clang, opt = str(llvm / 'bin/clang'), str(llvm / 'bin/opt')
-    carrier = os.environ.get('PLEWC', str(ROOT / 'plewc'))
+    carrier = os.environ.get('PLEWC', str(ROOT / 'bin/plewc'))
     env = dict(os.environ, ASAN_OPTIONS='detect_leaks=0:abort_on_error=0', LSAN_OPTIONS='')
     state = dict(status='running', scope='diagnostic subset; no full-gate claim',
                  rounds=args.rounds, commands=[], measurements=[])
-    binaries = {level: ROOT / ('plewc-' + out.name + '-' + level) for level in ('O1', 'O2')}
+    binary_dir = ROOT / 'bin'
+    binaries = {level: binary_dir / ('plewc-' + out.name + '-' + level) for level in ('O1', 'O2')}
 
     def save():
         (out / 'summary.json').write_text(json.dumps(state, indent=2) + '\n')
@@ -110,7 +111,7 @@ def main():
         state['instrumented_ir_sha256'] = sha(ir)
         candidate_irs = {level: ir for level in binaries}
         if args.preopt:
-            binaries = {'O1': binaries['O1'], 'preopt-O1': ROOT / ('plewc-' + out.name + '-preopt-O1')}
+            binaries = {'O1': binaries['O1'], 'preopt-O1': binary_dir / ('plewc-' + out.name + '-preopt-O1')}
             preopt = out / 'compiler.preopt.ll'
             candidate = out / 'compiler.preopt.inst.ll'
             run('preopt', [opt, '-debug-pass-manager', '-passes=' + PIPELINE, '-S', out / 'compiler.ll', '-o', preopt])

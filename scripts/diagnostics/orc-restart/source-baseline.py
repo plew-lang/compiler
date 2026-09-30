@@ -23,7 +23,7 @@ def main():
         parser.error('--runs must be >= 3')
     source, out = args.source.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    compiler = ROOT / 'plewc'
+    compiler = ROOT / 'bin/plewc'
     inputs = [compiler, source, Path(__file__), ROOT / 'Plew.toml', ROOT / 'Plew.lock',
               *sorted((ROOT / 'std').rglob('*.pw'))]
     hashes = {str(p): digest(p) for p in inputs}

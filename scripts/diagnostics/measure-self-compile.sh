@@ -12,7 +12,7 @@ set -u
 
 cd "$(dirname "$0")/../.."
 
-PLEWC="${PLEWC:?set PLEWC to an explicit existing carrier, for example ./plewc-match-owned-payload}"
+PLEWC="${PLEWC:?set PLEWC to an explicit existing carrier, for example ./bin/plewc-candidate}"
 SOURCE="${SOURCE:-src/_.pw}"
 OUT_DIR="${OUT_DIR:-tmp/perf/$(date +%Y%m%d-%H%M%S)}"
 LLVM_CONFIG="${LLVM_CONFIG:-llvm-config}"

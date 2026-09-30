@@ -22,7 +22,7 @@ command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
 command -v "$LC" >/dev/null 2>&1 || { echo "llvm-config not found (set LLVM_CONFIG)" >&2; exit 1; }
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 [ -x "$PLEWC" ] || { echo "input compiler missing: $PLEWC" >&2; exit 1; }
 
 # See scripts/build/bootstrap.sh: prefer the selected llvm-config's logical libLLVM path
@@ -41,5 +41,5 @@ mkdir -p "$TRACE_DIR"
 python3 ./scripts/support/trace-command.py "$TRACE_DIR/compile.log" -- "$PLEWC" --emit-object /tmp/_plewc.o --trace-phases src/_.pw
 "$PLEWC" --runtime > /tmp/_plewc.runtime.c
 python3 ./scripts/support/llvm_link.py --compiler-backend --config "$LC" --log-prefix "$TRACE_DIR/link" --object /tmp/_plewc.o --runtime /tmp/_plewc.runtime.c --output /tmp/_plewc.new -- $LDLIBS
-mv -f /tmp/_plewc.new plewc
+mv -f /tmp/_plewc.new bin/plewc
 echo "rebuilt plewc from current source"

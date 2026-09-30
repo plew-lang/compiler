@@ -89,7 +89,7 @@ def digest(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', type=Path, default=ROOT/'plewc')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'bin/plewc')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--iterations', type=int, default=20000000)
     parser.add_argument('--runs', type=int, default=7)

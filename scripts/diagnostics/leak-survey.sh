@@ -10,7 +10,7 @@ LLVM="${LLVM_PREFIX:-/opt/homebrew/opt/llvm}"
 OPT="$LLVM/bin/opt"
 CLANG="$LLVM/bin/clang"
 LC="$LLVM/bin/llvm-config"
-PLEWC=./plewc
+PLEWC=./bin/plewc
 
 TMP=/tmp/plew_leaks
 mkdir -p "$TMP"
@@ -28,7 +28,7 @@ results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/fixtures/run/$name.out" ] || exit 0
     ll="$TMP/l_$name.ll"; bin="$TMP/l_$name.bin"; err="$TMP/l_$name.err"
-    ./plewc --asan "$f" > "$ll" 2>/dev/null || { echo "SKIP $name"; exit 0; }
+    ./bin/plewc --asan "$f" > "$ll" 2>/dev/null || { echo "SKIP $name"; exit 0; }
     "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || { echo "SKIP $name"; exit 0; }
     extra_c=""; [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
     "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || { echo "SKIP $name"; exit 0; }

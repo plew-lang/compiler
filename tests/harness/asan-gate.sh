@@ -45,7 +45,7 @@ LIB="$LLVM/lib/libLLVM.dylib"
 for tool in "$OPT" "$CLANG" "$LC"; do
     [ -x "$tool" ] || { echo "asan-gate: missing $tool (set LLVM_PREFIX)" >&2; exit 1; }
 done
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 [ -x "$PLEWC" ] || { echo "asan-gate: run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 
 TMP=/tmp/plew_asan

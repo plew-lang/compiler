@@ -17,14 +17,14 @@
 set -e
 
 # Resolve this script's real directory even when invoked via a PATH symlink,
-# so we always find the sibling plewc (whose dir holds std/).
+# so we always find bin/plewc (whose directory has the std link).
 self=$0
 while [ -h "$self" ]; do
     link=$(readlink "$self")
     case "$link" in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac
 done
 ROOT=$(cd "$(dirname "$self")" && pwd)
-PLEWC="$ROOT/plewc"
+PLEWC="$ROOT/bin/plewc"
 CC=${CC:-clang}
 
 [ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
@@ -53,7 +53,7 @@ mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 
 # ── dependency resolution (spec/17). The resolver is a SEPARATE Plew binary
-# (resolve/_.pw); build it on demand (libc only) next to plewc. ──
+# (resolve/_.pw); build it on demand (libc only) in the repository root. ──
 RESOLVER="$ROOT/plew-resolve"
 RESOLVER_SRC="$ROOT/resolve/_.pw"
 ensure_resolver() {

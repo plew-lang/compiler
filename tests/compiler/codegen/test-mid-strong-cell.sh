@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/../../.."
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 directory=$(mktemp -d "${TMPDIR:-/tmp}/plew-mid-strong-cell.XXXXXX")
 trap 'rm -f "$directory/input.ll" "$directory/trace"; rmdir "$directory"' EXIT HUP INT TERM
 "$PLEWC" --trace-codegen tests/fixtures/run/mid_strong_cell_creation.pw >"$directory/input.ll" 2>"$directory/trace"

@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--asan', action='store_true')
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
+compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 sys.path.insert(0, str(root / 'scripts/support'))
 import llvm_link
 config = os.environ.get("LLVM_CONFIG") or ("/opt/homebrew/opt/llvm@22/bin/llvm-config" if options.asan else shutil.which("llvm-config") or "/opt/homebrew/opt/llvm/bin/llvm-config")

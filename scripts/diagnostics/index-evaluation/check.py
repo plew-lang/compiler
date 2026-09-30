@@ -12,7 +12,7 @@ CASES = ROOT / "tests/fixtures/run"
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--asan', action='store_true')
-parser.add_argument('--compiler', type=Path, default=ROOT / 'plewc')
+parser.add_argument('--compiler', type=Path, default=ROOT / 'bin/plewc')
 parser.add_argument('--llvm-prefix', type=Path, default=Path('/opt/homebrew/opt/llvm@22'))
 args = parser.parse_args()
 out = args.out.resolve()

@@ -18,7 +18,7 @@ import clang_environment
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'plewc')))
+    parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'bin/plewc')))
     parser.add_argument('--worker', type=Path)
     parser.add_argument('--sanitizer-output', action='store_true')
     parser.add_argument('--llvm-config', default=os.environ.get('LLVM_CONFIG', 'llvm-config'))

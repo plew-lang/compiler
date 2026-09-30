@@ -21,7 +21,7 @@ LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 export PLEWC
 [ -x "$PLEWC" ] || { echo "run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 

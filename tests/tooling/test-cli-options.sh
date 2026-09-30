@@ -2,7 +2,7 @@
 # Diagnostic options must compose without changing compilation or gate results.
 set -eu
 cd "$(dirname "$0")/../.."
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 task_dir=$(mktemp -d /tmp/plew-cli-options.XXXXXX)
 source=tests/fixtures/run/mid_build_expr_stmt_category.pw
 for mode in --emit-mid-coverage --require-mid; do

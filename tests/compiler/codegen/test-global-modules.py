@@ -15,7 +15,7 @@ options = parser.parse_args()
 if options.synthetic or options.exposed:
     options.requested = True
 root = Path(__file__).resolve().parents[3]
-compiler = Path(os.environ.get('PLEWC', root / 'plewc')).absolute()
+compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 config = Path(os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config'))
 bindir = Path(subprocess.check_output([str(config), '--bindir'], text=True).strip())
 libdir = config.parent.parent / 'lib'

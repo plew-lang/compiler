@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--runs', type=int, default=101)
     parser.add_argument('--llvm-prefix', type=Path, default=Path('/opt/homebrew/opt/llvm'))
-    parser.add_argument('--compiler', type=Path, default=ROOT / 'plewc')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'bin/plewc')
     args = parser.parse_args()
     if args.runs < 3:
         parser.error('--runs must be >= 3 (first update is reported separately)')

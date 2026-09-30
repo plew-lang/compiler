@@ -98,7 +98,7 @@ python3 ./scripts/support/validation-checkpoint.py
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
 trace compiler-compile ./plewc0 --trace-phases "$PW" > plewc.ll
 ./plewc0 --runtime > plewc.runtime.c
-link compiler-link plewc.ll plewc.runtime.c plewc --compiler-backend $LDLIBS
+link compiler-link plewc.ll plewc.runtime.c bin/plewc --compiler-backend $LDLIBS
 
 if [ "$1" = "--reseed" ]; then
     cp plewc.ll "$SEED_LL"
@@ -110,8 +110,8 @@ if [ "$1" = "--reseed" ]; then
 fi
 
 echo "[4/4] fixpoint: does the freshly built plewc reproduce the seed?"
-trace fixedpoint-compile ./plewc --trace-phases "$PW" > plewc.check.ll
-./plewc --runtime > plewc.check.runtime.c
+trace fixedpoint-compile ./bin/plewc --trace-phases "$PW" > plewc.check.ll
+./bin/plewc --runtime > plewc.check.runtime.c
 if cmp -s "$SEED_LL" plewc.check.ll && cmp -s "$SEED_RT" plewc.check.runtime.c; then
     rm -f plewc0 plewc.ll plewc.runtime.c \
           plewc.check.ll plewc.check.runtime.c

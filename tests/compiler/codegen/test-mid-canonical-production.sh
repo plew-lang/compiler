@@ -325,7 +325,7 @@ PYASYNCDECL
 # synchronous function. This must hold in emitted LLVM, not just the scanner.
 async_directory=$(mktemp -d "${TMPDIR:-/tmp}/plew-mid-async-roots.XXXXXX")
 trap 'rm -f "$async_directory/input.ll" "$async_directory/diagnostics"; rmdir "$async_directory"' EXIT HUP INT TERM
-"${PLEWC:-./plewc}" --require-mid tests/fixtures/run/async_unreachable.pw >"$async_directory/input.ll" 2>"$async_directory/diagnostics" || {
+"${PLEWC:-./bin/plewc}" --require-mid tests/fixtures/run/async_unreachable.pw >"$async_directory/input.ll" 2>"$async_directory/diagnostics" || {
     cat "$async_directory/diagnostics" >&2
     exit 1
 }

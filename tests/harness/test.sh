@@ -19,7 +19,7 @@ LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 [ -x "$PLEWC" ] || { echo "run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 
 # One runtime object per invocation, using the same clang/default O0 as links.

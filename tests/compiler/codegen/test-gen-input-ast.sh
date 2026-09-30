@@ -2,7 +2,7 @@
 # The input AST may be semantically incomplete; the generated program may not.
 set -eu
 cd "$(dirname "$0")/../../.."
-PLEWC="${PLEWC:-./plewc}"
+PLEWC="${PLEWC:-./bin/plewc}"
 LC="${LLVM_CONFIG:-/opt/homebrew/opt/llvm/bin/llvm-config}"
 work=$(mktemp -d tmp/gen_ast.XXXXXX)
 trap 'rm -rf "$work"' EXIT HUP INT TERM

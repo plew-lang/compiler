@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-COMPILER = Path(os.environ.get('PLEWC', ROOT / 'plewc')).absolute()
+COMPILER = Path(os.environ.get('PLEWC', ROOT / 'bin/plewc')).absolute()
 EVIDENCE = ROOT / 'tmp/lazy-build/cli-contract'
 EVIDENCE.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as temporary:
