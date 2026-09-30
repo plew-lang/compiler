@@ -693,14 +693,14 @@ pub impl Comp {
         if f.hasRet {
             try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: f.retTy, offset: offset)
         }
-        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
-        while bi < self.decls.functionBoundCount() {
-            val b: FuncBound = self.decls.functionBoundAt(index: bi)
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val b: FuncBound = self.decls.funcBounds[bi]
             if b.fnIdx == fnIdx {
                 try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
                 try self.checkSurfaceTraitOwner(surfaces: inout surfaces, surfaceMod: surfaceMod, owner: b.constraint.key.owner, offset: offset)
             }
-            bi = self.decls.nextFunctionBound(index: bi)
+            bi += 1
         }
         return <Result.Ok value=() />
     }

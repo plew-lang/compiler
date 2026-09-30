@@ -598,7 +598,7 @@ pub impl Comp {
             if i < types.count() { pty = (try self.lowerType(t: (try self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)))).ref }
             else { pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen) }
             val constraint = try self.lowerValueTraitConstraint(traitType: traitType, fnIdx: fnIdx, types: types, traits: traits)
-            self.decls.registerFunctionBound(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
             i += 1U64
         }
         return <Result.Ok value=() />
@@ -648,7 +648,7 @@ pub impl Comp {
     inout fn appendSyntaxBound(fnIdx: U64, param: Span, rawTrait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {
         val pty = (try self.lowerSyntaxType(id: ty)).ref
         val constraint = try self.lowerSyntaxTraitConstraint(traitTy: traitTy, fnIdx: fnIdx)
-        self.decls.registerFunctionBound(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=constraint />)
+        self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=constraint />)
         return <Result.Ok value=() />
     }
 }

@@ -2,7 +2,6 @@ import ./SourceFiles with { SourceFiles, SourceFileRange }
 import @Std/Set with { Set }
 part ./Ir/Modules
 part ./Ir/AccessCandidates
-part ./Ir/FunctionBounds
 part ./Ir/Callables
 part ./Ir/TraitOwners
 part ./Ir/Types
@@ -3047,10 +3046,7 @@ pub struct Decls {
     pub mut val conformFuncIdPool: Array[U64] = []
     pub mut val methodAliases: Array[MethodAlias] = []
     pub mut val derives: Array[DeriveReq] = []
-    mut val functionBoundRows: Array[FuncBound] = []
-    mut val functionBoundHeads: Dictionary[U64, U64] = [:]
-    mut val functionBoundTails: Dictionary[U64, U64] = [:]
-    mut val functionBoundNext: Array[U64] = []
+    pub mut val funcBounds: Array[FuncBound] = []
     // Func rows are copied throughout selection and emission. Keep every
     // variable-sized signature child in a typed declaration pool so that row
     // inspection is scalar and fixed-point safe.

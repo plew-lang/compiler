@@ -361,9 +361,9 @@ pub impl Comp {
         }
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        mut val bi: U64 = self.decls.firstFunctionBound(fnIdx: fnIdx)
-        while bi < self.decls.functionBoundCount() {
-            val fb: FuncBound = self.decls.functionBoundAt(index: bi)
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
                 val owner: U64 = fb.constraint.key.owner
                 mut val traitIdx: U64 = 0U64
@@ -398,7 +398,7 @@ pub impl Comp {
                     return <Result.Ok value=r />
                 }
             }
-            bi = self.decls.nextFunctionBound(index: bi)
+            bi += 1
         }
         return <Result.Ok value=scalarInfo() />
     }

@@ -16,5 +16,5 @@ fn main() {
     print(c.arena.functionCount())
     print(c.arena.functionAt(index: 0U64).typeParams.count())
     print(c.arena.functionAt(index: 0U64).params.count())
-    print(c.decls.functionBoundCount())
+    print(c.decls.funcBounds.count())
 }
