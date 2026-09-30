@@ -1,3 +1,4 @@
+import ./PublicSurfaceIndex with { PublicSurfaceIndex }
 import ./Ir with { AssociatedBoundEvidence, TraitConstraintRange, SupertraitRef, TraitProofOrigin, DeclarationBoundRef, TraitBound, TraitAssociatedBound, TraitAssociatedBoundRange, ConformBound, ConformBoundRange }
 import @Plew/Syntax with { syntaxTraitAssocType, syntaxAssociatedTypeBound }
 import ./StringLiteral with { decodeStringLiteral }

@@ -1,0 +1,25 @@
+// Derived reachability for one public-API closure check. Declaration identity,
+// not spelling, is the key: aliases and public namespaces preserve the owner.
+// Keep this value local to the check, so loading or editing declarations can
+// never leave a session-wide cached answer behind.
+pub struct PublicSurfaceIndex {
+    mut val declarations: Dictionary[U64, Dictionary[U64, Bool]] = [:]
+}
+pub impl PublicSurfaceIndex {
+    factory
+
+    fn contains(surface: U64) -> Bool {
+        return self.declarations.contains(key: surface)
+    }
+
+    inout fn record(surface: U64, declarations: Dictionary[U64, Bool]) {
+        self.declarations[surface] = declarations
+    }
+
+    fn provides(surface: U64, declaration: U64) -> Bool {
+        match self.declarations.get(key: surface) {
+            Optional.Some(v: val declarations) => { return declarations.getOr(key: declaration, fallback: false) }
+            Optional.None => { return false }
+        }
+    }
+}
