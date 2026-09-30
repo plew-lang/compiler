@@ -22,6 +22,7 @@ pub impl Arena {
         if t.nameId > nameCount { panic "type name is outside the interner" }
         val id = self.typeRows.count()
         if self.typeTerms.count() != id { panic "type representations diverged" }
+        val closedness = self.registeredTypeClosedness(t: t)
         val argsStart: U64 = self.typeArgumentPool.count()
         mut val i: U64 = 0U64
         while i < t.args.count() {
@@ -70,7 +71,7 @@ pub impl Arena {
             self.typeAssocArgumentLabelPool.append(t.assocTraitArgLabels[i])
             i += 1U64
         }
-        self.typeTerms.append(<TypeTerm nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        self.typeTerms.append(<TypeTerm closedness=closedness nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         self.typeRows.append(t)
         if t.args.count() == 0U64 && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && !t.isAny && !t.isSendable {
             while self.bareTypeNameRefs.count() <= t.nameId { self.bareTypeNameRefs.append(0U64) }
@@ -83,7 +84,7 @@ pub impl Arena {
     inout fn resolveTypeDeclaration(index: U64, hasDecl: Bool, declOffset: U64, hasAssocTraitDecl: Bool, assocTraitDeclOffset: U64) {
         val t: TypeRef = self.typeRows[index]
         val term: TypeTerm = self.typeTerms[index]
-        self.typeTerms[index] = <TypeTerm nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable siteOffset=term.siteOffset hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset />
+        self.typeTerms[index] = <TypeTerm closedness=term.closedness nameStart=term.nameStart nameLen=term.nameLen nameId=term.nameId paramId=term.paramId args=term.args isRecord=term.isRecord recordFieldLabels=term.recordFieldLabels recordFieldTerms=term.recordFieldTerms viewExtId=term.viewExtId viewIds=term.viewIds viewSources=term.viewSources isAny=term.isAny argLabels=term.argLabels assocTraitStart=term.assocTraitStart assocTraitLen=term.assocTraitLen assocTraitId=term.assocTraitId assocTraitArgs=term.assocTraitArgs assocTraitArgLabels=term.assocTraitArgLabels assocNameStart=term.assocNameStart assocNameLen=term.assocNameLen assocNameId=term.assocNameId projectionReceiver=term.projectionReceiver isSendable=term.isSendable siteOffset=term.siteOffset hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset />
         self.typeRows[index] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=t.projectionReceiver isSendable=t.isSendable hasDecl=hasDecl declOffset=declOffset hasAssocTraitDecl=hasAssocTraitDecl assocTraitDeclOffset=assocTraitDeclOffset siteOffset=t.siteOffset />
     }
 }
@@ -93,5 +94,87 @@ pub impl Arena {
 pub impl TypeTerm {
     fn hasTopLevelView() -> Bool {
         return self.viewExtId != 0U64 || self.viewIds.len != 0U64
+    }
+}
+
+
+impl Arena {
+    // A future/malformed child cannot supply stable structural evidence.
+    // Keep it unknown so the checked query preserves its existing behavior.
+    fn childTypeClosedness(ref: U64) -> U64 {
+        if ref == 0U64 { return 1U64 }
+        if ref >= self.typeTerms.count() { return 0U64 }
+        return self.typeTerms[ref].closedness
+    }
+
+    fn typeNameIsSelf(start: U64, len: U64) -> Bool {
+        if len != 4U64 { return false }
+        return self.bytes[start] == 'S' && self.bytes[start + 1U64] == 'e' && self.bytes[start + 2U64] == 'l' && self.bytes[start + 3U64] == 'f'
+    }
+
+    fn registeredTypeClosedness(t: TypeRef) -> U64 {
+        if t.paramId != 0U64 || t.assocNameId != 0U64 || t.projectionReceiver != 0U64 { return 2U64 }
+        if !t.isAny && t.nameLen == 4U64 {
+            if t.nameStart > self.bytes.count() || self.bytes.count() - t.nameStart < 4U64 { return 0U64 }
+            if self.typeNameIsSelf(start: t.nameStart, len: t.nameLen) { return 2U64 }
+        }
+        if t.isRecord {
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return 2U64 }
+            mut val index = 0U64
+            while index < t.recordFieldTerms.count() {
+                val state = self.childTypeClosedness(ref: t.recordFieldTerms[index])
+                if state != 1U64 { return state }
+                index += 1U64
+            }
+            return 1U64
+        }
+        mut val index = 0U64
+        while index < t.args.count() {
+            val state = self.childTypeClosedness(ref: t.args[index])
+            if state != 1U64 { return state }
+            index += 1U64
+        }
+        index = 0U64
+        while index < t.assocTraitArgs.count() {
+            val state = self.childTypeClosedness(ref: t.assocTraitArgs[index])
+            if state != 1U64 { return state }
+            index += 1U64
+        }
+        return 1U64
+    }
+}
+
+pub impl Arena {
+    // Unit is zero. Closedness does not normalize projections or choose proof.
+    // Declaration resolution preserves it; structural rebuilding registers a
+    // new term. Unknown rows retain the original recursive check.
+    fn typeIsClosed(ref: U64) -> Bool {
+        if ref == 0U64 { return true }
+        if ref >= self.typeTerms.count() { return false }
+        val state = self.typeTerms[ref].closedness
+        if state != 0U64 { return state == 1U64 }
+        val term = self.typeTerms[ref]
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
+        if !term.isAny && self.typeNameIsSelf(start: term.nameStart, len: term.nameLen) { return false }
+        if term.isRecord {
+            if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
+            mut val index = 0U64
+            while index < term.recordFieldTerms.len {
+                if !self.typeIsClosed(ref: self.typeRecordFieldPool[term.recordFieldTerms.start + index]) { return false }
+                index += 1U64
+            }
+            return true
+        }
+        mut val index = 0U64
+        while index < term.args.len {
+            if !self.typeIsClosed(ref: self.typeArgumentPool[term.args.start + index]) { return false }
+            index += 1U64
+        }
+        index = 0U64
+        while index < term.assocTraitArgs.len {
+            if !self.typeIsClosed(ref: self.typeAssocArgumentPool[term.assocTraitArgs.start + index]) { return false }
+            index += 1U64
+        }
+        return true
     }
 }

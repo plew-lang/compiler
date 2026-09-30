@@ -1,0 +1,76 @@
+import @Std/Io with { write }
+import @Plew/Syntax with { rangeEquals }
+import /Ir with { Arena, TypeRef }
+
+// Reference behavior before registration-time structural evidence.
+fn referenceClosed(arena: Arena, ref: U64) -> Bool {
+    if ref == 0U64 { return true }
+    if ref >= arena.typeTerms.count() { return false }
+    val term = arena.typeTerms[ref]
+    if term.paramId != 0U64 || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 { return false }
+    if !term.isAny && rangeEquals(bytes: arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Self") { return false }
+    if term.isRecord {
+        if term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
+        mut val index = 0U64
+        while index < term.recordFieldTerms.len {
+            if !referenceClosed(arena: arena, ref: arena.typeRecordFieldPool[term.recordFieldTerms.start + index]) { return false }
+            index += 1U64
+        }
+        return true
+    }
+    mut val index = 0U64
+    while index < term.args.len {
+        if !referenceClosed(arena: arena, ref: arena.typeArgumentPool[term.args.start + index]) { return false }
+        index += 1U64
+    }
+    index = 0U64
+    while index < term.assocTraitArgs.len {
+        if !referenceClosed(arena: arena, ref: arena.typeAssocArgumentPool[term.assocTraitArgs.start + index]) { return false }
+        index += 1U64
+    }
+    return true
+}
+fn check(arena: Arena) {
+    mut val index = 0U64
+    while index <= arena.typeCount() + 1U64 {
+        if arena.typeIsClosed(ref: index) != referenceClosed(arena: arena, ref: index) { panic "closedness differs from structural check" }
+        index += 1U64
+    }
+}
+fn main() {
+    mut val arena = <Arena bytes="SelfLeaf".bytes() />
+    arena.reserveTypeSentinel()
+    val leaf = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] />, nameCount: 0U64)
+    val parameter = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 paramId=3U64 args=[] />, nameCount: 0U64)
+    val selfTerm = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=4U64 args=[] />, nameCount: 0U64)
+    val anyTerm = arena.registerType(t: <TypeRef nameStart=0U64 nameLen=4U64 args=[] isAny=true />, nameCount: 0U64)
+    val associated = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] assocNameId=7U64 />, nameCount: 0U64)
+    val projection = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] projectionReceiver=leaf />, nameCount: 0U64)
+    val mismatch = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] isRecord=true recordFieldLabels=[1U64] recordFieldTerms=[] />, nameCount: 0U64)
+    if !arena.typeIsClosed(ref: 0U64) || !arena.typeIsClosed(ref: leaf) || !arena.typeIsClosed(ref: anyTerm) { panic "closed primitive rejected" }
+    if arena.typeIsClosed(ref: parameter) || arena.typeIsClosed(ref: selfTerm) || arena.typeIsClosed(ref: associated) || arena.typeIsClosed(ref: projection) || arena.typeIsClosed(ref: mismatch) { panic "open term accepted" }
+    val children = [0U64, leaf, parameter, selfTerm, anyTerm, associated, projection, mismatch]
+    mut val index = 0U64
+    while index < children.count() {
+        val child = children[index]
+        val parent = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[leaf, child, 0U64] />, nameCount: 0U64)
+        arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[] assocTraitArgs=[parent] />, nameCount: 0U64)
+        arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[parameter] isRecord=true recordFieldLabels=[1U64, 2U64] recordFieldTerms=[parent, leaf] />, nameCount: 0U64)
+        index += 1U64
+    }
+    check(arena: arena)
+    // Unknown evidence must not freeze a false result for a future child.
+    val future = arena.typeCount() + 2U64
+    val pending = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[future] />, nameCount: 0U64)
+    val wrapper = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[pending] />, nameCount: 0U64)
+    val snapshot = arena
+    check(arena: arena)
+    if arena.typeIsClosed(ref: pending) || arena.typeIsClosed(ref: wrapper) { panic "future child accepted" }
+    val published = arena.registerType(t: <TypeRef nameStart=4U64 nameLen=4U64 args=[leaf] />, nameCount: 0U64)
+    if published != future || !arena.typeIsClosed(ref: pending) || !arena.typeIsClosed(ref: wrapper) { panic "unknown evidence became stale" }
+    arena.resolveTypeDeclaration(index: leaf, hasDecl: true, declOffset: 41U64, hasAssocTraitDecl: false, assocTraitDeclOffset: 0U64)
+    check(arena: arena)
+    check(arena: snapshot)
+    if snapshot.typeIsClosed(ref: wrapper) || snapshot.typeAt(index: leaf).hasDecl { panic "snapshot changed" }
+    write(s: "type-term-closedness-ok\n")
+}
