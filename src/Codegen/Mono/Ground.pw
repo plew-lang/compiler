@@ -20,14 +20,14 @@ pub impl Comp {
     // ParamId map is the authority.
     inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64], selfRef: U64 = 0U64, itemRef: U64 = 0U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.typeCount() { return ref }
-        val t: TypeRef = self.arena.typeAt(index: ref)
+        val t = self.arena.typeTerms[ref]
         // Self and Item are proof-derived binders just like ParamId entries,
         // except their values live on the selected receiver proof rather than
         // in a method's generic argument vector. They may occur below a
         // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
         // be part of the recursive term substitution rather than a root-only
         // convenience in groundTermForBody.
-        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.count() == 0U64 {
+        if t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
             if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.typeRefViewSources(ref: ref))
             }
@@ -36,17 +36,17 @@ pub impl Comp {
             }
         }
         if t.isRecord {
-            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
+            if t.recordFieldLabels.len != t.recordFieldTerms.len { return ref }
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
-            while ri < t.recordFieldTerms.count() {
-                val next: U64 = self.groundTermInEnvironment(ref: t.recordFieldTerms[ri], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != t.recordFieldTerms[ri] { changed = true }
+            while ri < t.recordFieldTerms.len {
+                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                if next != self.arena.typeRecordFieldPool[t.recordFieldTerms.start + ri] { changed = true }
                 fields.append(next)
                 ri += 1U64
             }
-            if changed { return self.rebuildRecordTypeTerm(t: t, fieldTerms: fields) }
+            if changed { return self.rebuildRecordTypeTerm(t: self.arena.typeAt(index: ref), fieldTerms: fields) }
             return ref
         }
         // A projection's receiver is a child type term, not the projection
@@ -56,19 +56,19 @@ pub impl Comp {
         // This is also why a closed TypeTerm traversal has to treat the
         // receiver and trait-instance arguments as children together.
         if t.assocNameId != 0U64 {
-            val receiver: U64 = self.typeTermProjectionReceiver(t: t)
+            val receiver: U64 = if t.projectionReceiver != 0U64 { give t.projectionReceiver } else { give self.typeTermProjectionReceiver(t: self.arena.typeAt(index: ref)) }
             val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             mut val traitArgs: Array[U64] = []
             mut val changed: Bool = groundedReceiver != receiver
             mut val ai: U64 = 0U64
-            while ai < t.assocTraitArgs.count() {
-                val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[ai], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-                if next != t.assocTraitArgs[ai] { changed = true }
+            while ai < t.assocTraitArgs.len {
+                val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + ai] { changed = true }
                 traitArgs.append(next)
                 ai += 1U64
             }
             if !changed { return ref }
-            return self.rebuildProjectionTerm(t: t, receiver: groundedReceiver, traitArgs: traitArgs)
+            return self.rebuildProjectionTerm(t: self.arena.typeAt(index: ref), receiver: groundedReceiver, traitArgs: traitArgs)
         }
         // A binder replacement changes its head, never the source-set
         // attached to this occurrence. Preserve it recursively, including
@@ -95,7 +95,7 @@ pub impl Comp {
         // field from being re-read as an unbound nominal type (and recursively
         // registering `Optional[T]`), while preserving the final rule that all
         // newly lowered terms use ParamId.
-        if t.paramId == 0U64 && t.args.count() == 0U64 {
+        if t.paramId == 0U64 && t.args.len == 0U64 {
             mut val termNameId: U64 = t.nameId
             if termNameId == 0U64 {
                 termNameId = intern(c: inout self, start: t.nameStart, len: t.nameLen)
@@ -118,20 +118,20 @@ pub impl Comp {
         mut val assocArgs: Array[U64] = []
         mut val changed: Bool = false
         mut val i: U64 = 0U64
-        while i < t.args.count() {
-            val next: U64 = self.groundTermInEnvironment(ref: t.args[i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != t.args[i] { changed = true }
+        while i < t.args.len {
+            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeArgumentPool[t.args.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+            if next != self.arena.typeArgumentPool[t.args.start + i] { changed = true }
             args.append(next)
             i += 1U64
         }
         i = 0U64
-        while i < t.assocTraitArgs.count() {
-            val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
-            if next != t.assocTraitArgs[i] { changed = true }
+        while i < t.assocTraitArgs.len {
+            val next: U64 = self.groundTermInEnvironment(ref: self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+            if next != self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + i] { changed = true }
             assocArgs.append(next)
             i += 1U64
         }
-        if changed { return self.rebuildTypeTerm(t: t, args: args, assocTraitArgs: assocArgs) }
+        if changed { return self.rebuildTypeTerm(t: self.arena.typeAt(index: ref), args: args, assocTraitArgs: assocArgs) }
         return ref
     }
 
