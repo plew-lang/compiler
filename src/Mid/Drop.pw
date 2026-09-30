@@ -481,7 +481,10 @@ pub impl MidCanonicalDropPlan { factory }
 fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]]) -> MidCanonicalDropPlan {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalDropPlan /> }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    val predecessors = canonicalMidDropPredecessors(arena: arena, body: body, ownership: ownership, accessibility: accessibility)
+    // Most bodies never ask a predecessor question. Do not recompute every
+    // block's exit state until a MaybeOwned/Unavailable entry needs its cliff
+    // classified. The body and input states remain immutable throughout planning.
+    mut val predecessors: Optional[MidDropPredecessors] = <Optional.None />
     mut val needsFlag: Array[Bool] = []
     mut val localI: U64 = 0U64
     while localI < body.locals.len {
@@ -506,7 +509,15 @@ fn canonicalMidDropPlan(arena: MidCanonicalArena, canonical: MidCanonicalBody, o
                         match blockAccessibility[localI] {
                             MidAccessibility.Unavailable => {
                                 needsFlag.set(i: localI, value: true)
-                                cliff = canonicalMidCliffFromPredecessors(body: body, predecessors: predecessors, blockI: blockI, local: localI)
+                                val facts = match predecessors {
+                                    Optional.Some(v: val cached) => { give cached }
+                                    Optional.None => {
+                                        val computed = canonicalMidDropPredecessors(arena: arena, body: body, ownership: ownership, accessibility: accessibility)
+                                        predecessors = <Optional.Some v=computed />
+                                        give computed
+                                    }
+                                }
+                                cliff = canonicalMidCliffFromPredecessors(body: body, predecessors: facts, blockI: blockI, local: localI)
                             }
                             _ => {}
                         }
