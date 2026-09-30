@@ -324,7 +324,7 @@ pub impl Comp {
 
     inout fn firstFuncByName(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -335,7 +335,7 @@ pub impl Comp {
                     return cand.funcIdx
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return self.arena.functionCount()
     }
@@ -353,7 +353,7 @@ pub impl Comp {
             _ => {}
         }
         val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -364,7 +364,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return self.arena.functionCount()
     }
@@ -391,7 +391,7 @@ pub impl Comp {
         }
         val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
         mut val foundInvisible: Bool = false
-        mut val i: U64 = 0
+        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
         while i < self.decls.callableCount() {
             val cand: Callable = self.decls.callableAt(index: i)
             val f: Func = self.arena.functionAt(index: cand.funcIdx)
@@ -405,7 +405,7 @@ pub impl Comp {
                     }
                 }
             }
-            i += 1
+            i = self.decls.nextCallableNamed(index: i)
         }
         return foundInvisible
     }
