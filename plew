@@ -53,8 +53,8 @@ mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 
 # ── dependency resolution (spec/17). The resolver is a SEPARATE Plew binary
-# (resolve/_.pw); build it on demand (libc only) in the repository root. ──
-RESOLVER="$ROOT/plew-resolve"
+# (resolve/_.pw); build it on demand (libc only) in bin/. ──
+RESOLVER="$ROOT/bin/plew-resolve"
 RESOLVER_SRC="$ROOT/resolve/_.pw"
 ensure_resolver() {
     if [ ! -x "$RESOLVER" ] || [ "$RESOLVER_SRC" -nt "$RESOLVER" ]; then

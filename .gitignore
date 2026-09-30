@@ -8,7 +8,7 @@
 
 # the dependency resolver binary (built on demand by `plew`; the source
 # resolve/_.pw is tracked).
-/plew-resolve
+/bin/plew-resolve
 
 # scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
 /tmp/
@@ -22,3 +22,6 @@
 
 # Diagnostic compiler snapshots; canonical bin/plewc and bin/std are tracked.
 /bin/plewc-*
+
+# Local macOS debug bundles are generated artifacts.
+*.dSYM/

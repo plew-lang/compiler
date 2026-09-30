@@ -16,11 +16,13 @@ WORK=$(mktemp -d /tmp/plew-deptest.XXXXXX)
 export PLEW_CACHE="$WORK/cache"
 trap 'rm -rf "$WORK"' EXIT
 
+mkdir -p "$WORK/bin"
+
 # Build the resolver binary (libc only, like any compiled program).
 echo "test-deps: build fresh resolver" >&2
 "$PLEWC" "$ROOT/resolve/_.pw" > "$WORK/resolve.ll"
 "$PLEWC" --runtime > "$WORK/rt.c"
-"$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/plew-resolve"
+"$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/bin/plew-resolve"
 # Exercise the unmodified CLI with the selected compiler and fresh resolver.
 # Its sibling lookup must not pick the repository binary or cached resolver.
 cp "$ROOT/plew" "$WORK/plew"
@@ -79,7 +81,7 @@ name = "app1"
 "Acme/Greet" = { git = "$LEAF", version = "1" }
 EOF
 printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A1/Main.pw"
-( cd "$A1" && "$WORK/plew-resolve" ) > "$A1/Plew.lock"
+( cd "$A1" && "$WORK/bin/plew-resolve" ) > "$A1/Plew.lock"
 check "lock picks 1.2.0" "1.2.0" "$(grep -A2 '\[\[package\]\]' "$A1/Plew.lock" | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/')"
 "$PLEWC" "$A1/Main.pw" > "$WORK/a1.ll"
 "$CC" -w "$WORK/a1.ll" "$WORK/rt.c" -o "$WORK/a1"
@@ -93,7 +95,7 @@ name = "app2"
 "Mid" = { git = "$MID", version = "2" }
 EOF
 printf 'import @Std/Io with { print }\nimport @Mid with { midVal }\nfn main() { print(midVal()) }\n' > "$A2/Main.pw"
-( cd "$A2" && "$WORK/plew-resolve" ) > "$A2/Plew.lock"
+( cd "$A2" && "$WORK/bin/plew-resolve" ) > "$A2/Plew.lock"
 check "transitive lock has 2 pkgs" "2" "$(grep -c '\[\[package\]\]' "$A2/Plew.lock")"
 "$PLEWC" "$A2/Main.pw" > "$WORK/a2.ll"
 "$CC" -w "$WORK/a2.ll" "$WORK/rt.c" -o "$WORK/a2"
@@ -145,7 +147,7 @@ name = "app4"
 "MidB" = { git = "$WORK/midb", version = "1" }
 EOF
 printf 'import @Std/Io with { print }\nimport @MidA with { va }\nimport @MidB with { vb }\nfn main() { print(va() + vb()) }\n' > "$A4/Main.pw"
-( cd "$A4" && "$WORK/plew-resolve" ) > "$A4/Plew.lock"
+( cd "$A4" && "$WORK/bin/plew-resolve" ) > "$A4/Plew.lock"
 check "lock holds both L2 versions" "2" "$(grep -c "git = \"$L2\"" "$A4/Plew.lock")"
 "$PLEWC" "$A4/Main.pw" > "$WORK/a4.ll"
 "$CC" -w "$WORK/a4.ll" "$WORK/rt.c" -o "$WORK/a4"

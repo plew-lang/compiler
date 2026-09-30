@@ -30,8 +30,8 @@ command -v "$LC" >/dev/null 2>&1 || {
 }
 command -v "$LC" >/dev/null 2>&1 || { echo "llvm-config not found (set LLVM_CONFIG)" >&2; exit 1; }
 
-SEED_LL=plewc.seed.ll
-SEED_RT=plewc.seed.runtime.c
+SEED_LL=bootstrap/plewc.seed.ll
+SEED_RT=bootstrap/plewc.seed.runtime.c
 # Absolute entry path: the @Plew/Syntax git dependency resolves through this
 # package's Plew.toml + Plew.lock (findPkgDir walks up from the entry), which is
 # robust no matter the current directory.
@@ -89,8 +89,8 @@ echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # refresh is fine (we rely on what is already cached).
 trace resolver-compile ./plewc0 --trace-phases resolve/_.pw > plew-resolve.ll
 ./plewc0 --runtime > plew-resolve.runtime.c
-link resolver-link plew-resolve.ll plew-resolve.runtime.c plew-resolve
-python3 ./scripts/support/watch-command.py -- ./plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
+link resolver-link plew-resolve.ll plew-resolve.runtime.c bin/plew-resolve
+python3 ./scripts/support/watch-command.py -- ./bin/plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
 rm -f plew-resolve.ll plew-resolve.runtime.c
 
 python3 ./scripts/support/validation-checkpoint.py

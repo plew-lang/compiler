@@ -4,6 +4,11 @@
 entries, normally invoked through the meta repository's `validate` command.
 They do not publish the standalone distribution or change its resource bundle.
 
+The tracked bootstrap inputs are `bootstrap/plewc.seed.ll` and
+`bootstrap/plewc.seed.runtime.c`; keep this pair together. The dependency
+resolver is generated on demand at `bin/plew-resolve`. Debug bundles (`*.dSYM`)
+are local artifacts and must not be committed.
+
 ## Development compiler snapshots
 
 Keep the canonical compiler at `bin/plewc`. All development scripts use this

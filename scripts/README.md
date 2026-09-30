@@ -1,7 +1,8 @@
 # Script layout
 
 Keep the product CLI `plew` at the repository root. Compiler executables live
-in `bin/`. Do not add root shell wrappers for scripts that already have an entry
+in `bin/`, including the generated `plew-resolve` dependency resolver.
+The tracked LLVM/runtime seed pair lives in `bootstrap/`. Do not add root shell wrappers for scripts that already have an entry
 under the directories below.
 
 | Directory | Responsibility | Main entries |
