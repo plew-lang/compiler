@@ -44,5 +44,13 @@ fn main() {
     verify(table: copy, nameId: 0U64, offset: 10001U64)
     verify(table: table, nameId: 0U64, offset: 10001U64)
     verify(table: copy, nameId: 0U64, offset: 10000U64)
+    index = 80U64
+    while index > 0U64 {
+        index -= 1U64
+        val offset = index * 7U64 + 1U64
+        table.registerTraitOwner(<TraitOwner sourceModule=0U64 nameStart=offset nameLen=3U64 nameId=88U64 arity=0U64 />)
+        verify(table: table, nameId: 88U64, offset: offset)
+        verify(table: copy, nameId: 88U64, offset: offset)
+    }
     write(s: "trait-owner-index-ok\n")
 }
