@@ -114,14 +114,14 @@ pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, 
                 mut val statementIndex = 0U64
                 while statementIndex < block.statements.len {
                     val statement = c.mid.statements[block.statements.start + statementIndex]
-                    graph.statement(c: c, body: index, statement: statement)
+                    graph.statement(arena: c.mid, body: index, statement: statement)
                     if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
                         try addFinalDestructionEdge(c: inout c, graph: inout graph, caller: index, type: c.mid.places[statement.destination - 1U64].typeTerm)
                     }
                     statementIndex += 1U64
                 }
                 val term = c.mid.terminators[block.terminator - 1U64]
-                graph.terminatorOperands(c: c, body: index, term: term)
+                graph.terminatorOperands(arena: c.mid, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
                     val selected = c.arena.finalCallees[target.resolution]
@@ -147,7 +147,7 @@ pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, 
         }
         index += 1U64
     }
-    val conflict = graph.solve(c: c)
+    val conflict = graph.solve(arena: c.mid)
     mut val required: Array[U64] = []
     if missingBodies.count() != 0U64 {
         val reachable = graph.reachableDependencies(rootCount: c.mid.globalAccessBodies.count())

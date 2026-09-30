@@ -2,8 +2,7 @@
 // Callers supply graph nodes, known call edges, and canonical storage facts.
 // This module does not discover bodies, resolve call templates, or finalize
 // destruction contracts. Missing edges never constitute a purity proof.
-import ../Frontend with { Comp }
-import ./Ir with { MidOperandNode, MidStatementNode, MidTerminatorNode }
+import ./Ir with { MidCanonicalArena, MidOperandNode, MidStatementNode, MidTerminatorNode }
 import ./Verify with { canonicalMidValuePlacesOverlap }
 
 struct GlobalAccessEffect {
@@ -32,13 +31,13 @@ pub impl GlobalAccessGraph {
     factory empty() { return <GlobalAccessGraph /> }
 }
 
-fn globalPlace(c: Comp, placeId: U64) -> Bool {
+fn globalPlace(arena: MidCanonicalArena, placeId: U64) -> Bool {
     if placeId == 0U64 { return false }
-    val place = c.mid.places[placeId - 1U64]
+    val place = arena.places[placeId - 1U64]
     if place.rootTag != 2U64 || !place.globalMutable { return false }
     mut val index = 0U64
     while index < place.projections.len {
-        if c.mid.projections[place.projections.start + index].tag == 3U64 { return false }
+        if arena.projections[place.projections.start + index].tag == 3U64 { return false }
         index += 1U64
     }
     return true
@@ -46,14 +45,14 @@ fn globalPlace(c: Comp, placeId: U64) -> Bool {
 
 // Equal paths can have different arena IDs. Deduplicate by storage identity,
 // retaining distinct fields and modes. Array indices reserve the container.
-fn sameGlobalPath(c: Comp, first: U64, second: U64) -> Bool {
-    val left = c.mid.places[first - 1U64]
-    val right = c.mid.places[second - 1U64]
+fn sameGlobalPath(arena: MidCanonicalArena, first: U64, second: U64) -> Bool {
+    val left = arena.places[first - 1U64]
+    val right = arena.places[second - 1U64]
     if left.globalTarget != right.globalTarget || left.projections.len != right.projections.len { return false }
     mut val index = 0U64
     while index < left.projections.len {
-        val projection = c.mid.projections[left.projections.start + index]
-        val other = c.mid.projections[right.projections.start + index]
+        val projection = arena.projections[left.projections.start + index]
+        val other = arena.projections[right.projections.start + index]
         if projection.tag != other.tag || projection.index != other.index { return false }
         index += 1U64
     }
@@ -107,62 +106,62 @@ pub impl GlobalAccessGraph {
         return reached
     }
 
-    inout fn add(c: Comp, body: U64, place: U64, writes: Bool) {
-        if !globalPlace(c: c, placeId: place) { return }
+    inout fn add(arena: MidCanonicalArena, body: U64, place: U64, writes: Bool) {
+        if !globalPlace(arena: arena, placeId: place) { return }
         mut val entry = self.heads[body]
         while entry != 0U64 {
             val effect = self.effects[entry - 1U64]
-            if effect.writes == writes && sameGlobalPath(c: c, first: effect.place, second: place) { return }
+            if effect.writes == writes && sameGlobalPath(arena: arena, first: effect.place, second: place) { return }
             entry = effect.next
         }
         self.effects.append(<GlobalAccessEffect body=body place=place writes=writes next=self.heads[body] />)
         self.heads.set(i: body, value: self.effects.count())
     }
 
-    inout fn operand(c: Comp, body: U64, operandId: U64) {
+    inout fn operand(arena: MidCanonicalArena, body: U64, operandId: U64) {
         if operandId == 0U64 { return }
-        val operand = c.mid.operands[operandId - 1U64]
+        val operand = arena.operands[operandId - 1U64]
         mut val place = operand.place
         if operand.accessPlace != 0U64 { place = operand.accessPlace }
-        self.add(c: c, body: body, place: place, writes: operand.tag == 2U64 || operand.tag == 4U64)
+        self.add(arena: arena, body: body, place: place, writes: operand.tag == 2U64 || operand.tag == 4U64)
     }
 
-    inout fn statement(c: Comp, body: U64, statement: MidStatementNode) {
+    inout fn statement(arena: MidCanonicalArena, body: U64, statement: MidStatementNode) {
         mut val destination = 0U64
         while destination < statement.destinationCount() {
-            self.add(c: c, body: body, place: c.mid.statementDestinationAt(statement: statement, index: destination), writes: true)
+            self.add(arena: arena, body: body, place: arena.statementDestinationAt(statement: statement, index: destination), writes: true)
             destination += 1U64
         }
-        self.add(c: c, body: body, place: statement.source, writes: false)
+        self.add(arena: arena, body: body, place: statement.source, writes: false)
         if statement.value != 0U64 {
-            val value = c.mid.rvalues[statement.value - 1U64]
-            self.add(c: c, body: body, place: value.place, writes: false)
+            val value = arena.rvalues[statement.value - 1U64]
+            self.add(arena: arena, body: body, place: value.place, writes: false)
             mut val operand = 0U64
             while operand < value.operandCount() {
-                self.operand(c: c, body: body, operandId: c.mid.rvalueOperandAt(value: value, index: operand))
+                self.operand(arena: arena, body: body, operandId: arena.rvalueOperandAt(value: value, index: operand))
                 operand += 1U64
             }
         }
     }
 
-    inout fn terminatorOperands(c: Comp, body: U64, term: MidTerminatorNode) {
+    inout fn terminatorOperands(arena: MidCanonicalArena, body: U64, term: MidTerminatorNode) {
         mut val operand = 0U64
-        while operand < c.mid.terminatorOperandCount(term: term) {
-            self.operand(c: c, body: body, operandId: c.mid.terminatorOperandAt(term: term, index: operand))
+        while operand < arena.terminatorOperandCount(term: term) {
+            self.operand(arena: arena, body: body, operandId: arena.terminatorOperandAt(term: term, index: operand))
             operand += 1U64
         }
     }
 
-    fn conflicts(c: Comp, callee: U64, operand: MidOperandNode, receiver: Bool, receiverTag: U64 = 0U64) -> Bool {
+    fn conflicts(arena: MidCanonicalArena, callee: U64, operand: MidOperandNode, receiver: Bool, receiverTag: U64 = 0U64) -> Bool {
         val mode = if receiverTag == 0U64 { give operand.tag } else { give receiverTag }
         if mode != 4U64 && !(mode == 3U64 && (receiver || operand.borrowsStorage)) { return false }
         mut val place = operand.place
         if operand.accessPlace != 0U64 { place = operand.accessPlace }
-        if !globalPlace(c: c, placeId: place) { return false }
+        if !globalPlace(arena: arena, placeId: place) { return false }
         mut val entry = self.heads[callee]
         while entry != 0U64 {
             val effect = self.effects[entry - 1U64]
-            if (mode == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(arena: c.mid, leftId: place, rightId: effect.place) { return true }
+            if (mode == 4U64 || effect.writes) && canonicalMidValuePlacesOverlap(arena: arena, leftId: place, rightId: effect.place) { return true }
             entry = effect.next
         }
         return false
@@ -171,14 +170,14 @@ pub impl GlobalAccessGraph {
     // Returns the one-based caller node containing a conflict, or zero.
     // Nodes are opaque to this solver: declaration bodies, concrete bodies,
     // and destruction summaries are selected by their respective collectors.
-    inout fn solve(c: Comp) -> U64 {
+    inout fn solve(arena: MidCanonicalArena) -> U64 {
         mut val index = 0U64
         while index < self.effects.count() {
             val effect = self.effects[index]
             mut val entry = self.incoming[effect.body]
             while entry != 0U64 {
                 val call = self.calls[entry - 1U64]
-                self.add(c: c, body: call.caller, place: effect.place, writes: effect.writes)
+                self.add(arena: arena, body: call.caller, place: effect.place, writes: effect.writes)
                 entry = call.next
             }
             index += 1U64
@@ -188,14 +187,14 @@ pub impl GlobalAccessGraph {
             val call = self.calls[index]
             if call.term == 0U64 { index += 1U64
                 continue }
-            val term = c.mid.terminators[call.term - 1U64]
+            val term = arena.terminators[call.term - 1U64]
             if term.callReceiver != 0U64 {
-                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
-                if receiver.operand != 0U64 && self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[receiver.operand - 1U64], receiver: true, receiverTag: call.receiverTag) { return call.caller + 1U64 }
+                val receiver = arena.callReceivers[term.callReceiver - 1U64]
+                if receiver.operand != 0U64 && self.conflicts(arena: arena, callee: call.callee, operand: arena.operands[receiver.operand - 1U64], receiver: true, receiverTag: call.receiverTag) { return call.caller + 1U64 }
             }
             mut val argument = 0U64
             while argument < term.args.len {
-                if self.conflicts(c: c, callee: call.callee, operand: c.mid.operands[c.mid.callArguments[term.args.start + argument] - 1U64], receiver: false) { return call.caller + 1U64 }
+                if self.conflicts(arena: arena, callee: call.callee, operand: arena.operands[arena.callArguments[term.args.start + argument] - 1U64], receiver: false) { return call.caller + 1U64 }
                 argument += 1U64
             }
             index += 1U64

@@ -102,7 +102,7 @@ impl DeclarationAccessState {
                 while statementIndex < block.statements.len {
                     val statementId = block.statements.start + statementIndex
                     val statement = c.mid.statements[statementId]
-                    self.graph.statement(c: c, body: index, statement: statement)
+                    self.graph.statement(arena: c.mid, body: index, statement: statement)
                     if statement.tag == 2U64 || statement.tag == 3U64 || statement.tag == 4U64 || statement.tag == 10U64 {
                         val place = c.mid.places[statement.destination - 1U64]
                         self.destruction(c: c, caller: index, term: place.typeTerm, recipe: place.typeRecipe)
@@ -116,7 +116,7 @@ impl DeclarationAccessState {
                     statementIndex += 1U64
                 }
                 val term = c.mid.terminators[block.terminator - 1U64]
-                self.graph.terminatorOperands(c: c, body: index, term: term)
+                self.graph.terminatorOperands(arena: c.mid, body: index, term: term)
                 if term.tag == 4U64 {
                     val target = c.mid.callTargets[term.callTarget - 1U64]
                     if target.tag == 3U64 {
@@ -282,7 +282,7 @@ pub fn analyzeDeclarationGlobalAccessRoots(c: inout Comp, templates: inout MidFu
     while index < roots.count() { state.demand(owner: roots[index])
         index += 1U64 }
     try state.close(c: inout c, templates: inout templates, requests: inout requests)
-    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(c: c) obligations=state.obligations /> />
+    return <Result.Ok value=<DeclarationAccessAnalysis nodes=state.owners conflictingNode=state.graph.solve(arena: c.mid) obligations=state.obligations /> />
 }
 
 // Local place conflicts do not require a mutable global or executable instance.
