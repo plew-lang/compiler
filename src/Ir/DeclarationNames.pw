@@ -3,10 +3,6 @@
 pub impl Arena {
     fn functionCount() -> U64 { return self.funcs.count() }
     fn functionAt(index: U64) -> Func { return self.funcs[index] }
-    fn functionHasPlewBody(index: U64) -> Bool {
-        val declaration = self.funcs[index]
-        return declaration.body != 0U64 && !declaration.isExtern
-    }
     fn structCount() -> U64 { return self.structs.count() }
     fn structAt(index: U64) -> StructDef { return self.structs[index] }
     fn enumCount() -> U64 { return self.enums.count() }
