@@ -3369,6 +3369,8 @@ pub impl TypeCache { factory }
 pub struct InternedSpan {
     pub val start: U64
     pub val len: U64
+    // Source bytes are append-only; a published span keeps this hash.
+    pub val hash: U64
 }
 pub impl InternedSpan { factory }
 

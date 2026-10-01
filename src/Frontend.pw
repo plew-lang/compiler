@@ -900,6 +900,12 @@ pub impl Comp {
 // would be a cycle). `intern`/`spansEqual` are used pervasively by every pass and
 // are exported; `internHash`/`internGrow` are interner-internal.
 
+fn validateInternedSpan(byteCount: U64, start: U64, len: U64) {
+    if start > byteCount || len > byteCount - start {
+        panic "compiler bug: interner stored a span outside the source buffer"
+    }
+}
+
 // Compare two name spans for byte equality against the shared source buffer.
 pub fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
     // Every interner key is a slice of the shared source buffer.  Keep this
@@ -907,9 +913,8 @@ pub fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64)
     // into an effectively unbounded read, which presented as a compiler hang.
     // This is an internal invariant, not a source-program diagnostic.
     val byteCount: U64 = c.arena.bytes.count()
-    if aStart > byteCount || aLen > byteCount - aStart || bStart > byteCount || bLen > byteCount - bStart {
-        panic "compiler bug: interner stored a span outside the source buffer"
-    }
+    validateInternedSpan(byteCount: byteCount, start: aStart, len: aLen)
+    validateInternedSpan(byteCount: byteCount, start: bStart, len: bLen)
     if aLen != bLen {
         return false
     }
@@ -926,6 +931,7 @@ pub fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64)
 
 // FNV-1a hash of a name span (used to place spans into the bucket index).
 fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
+    validateInternedSpan(byteCount: c.arena.bytes.count(), start: start, len: len)
     mut val h: U64 = 14695981039346656037U64
     mut val j: U64 = 0
     while j < len {
@@ -937,7 +943,7 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
 }
 
 // Grow the bucket index (double, or 8 from empty), re-placing every interned span
-// by re-hashing. The dense interner.entries array is untouched (ids stay
+// using their stored hashes. The dense interner.entries array is untouched (ids stay
 // stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
 fn internGrow(c: inout Comp) {
     mut val newCap: U64 = 8
@@ -953,8 +959,8 @@ fn internGrow(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.interner.entries.count() {
         val entry: InternedSpan = c.interner.entries[i]
-        val code: U64 = internHash(c: inout c, start: entry.start, len: entry.len)
-        mut val slot: U64 = code & (newCap - 1)
+        validateInternedSpan(byteCount: c.arena.bytes.count(), start: entry.start, len: entry.len)
+        mut val slot: U64 = entry.hash & (newCap - 1)
         while nb[slot] != 0 {
             slot = (slot + 1) & (newCap - 1)
         }
@@ -980,14 +986,17 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     while true {
         val b: U64 = c.interner.buckets[slot]
         if b == 0 {
-            c.interner.entries.append(<InternedSpan start=start len=len />)
+            c.interner.entries.append(<InternedSpan start=start len=len hash=code />)
             val id: U64 = c.interner.entries.count()
             c.interner.buckets.set(i: slot, value: id)
             return id
         }
         val entry: InternedSpan = c.interner.entries[b - 1]
-        if spansEqual(c: inout c, aStart: entry.start, aLen: entry.len, bStart: start, bLen: len) {
-            return b
+        if entry.hash == code {
+            if spansEqual(c: inout c, aStart: entry.start, aLen: entry.len, bStart: start, bLen: len) { return b }
+        } else {
+            // Hash rejection must not hide a malformed stored span.
+            validateInternedSpan(byteCount: c.arena.bytes.count(), start: entry.start, len: entry.len)
         }
         slot = (slot + 1) & (cap - 1)
     }
