@@ -11,7 +11,7 @@ pub impl Comp {
     inout fn typeIsTransitivelyUnique(ref: U64) -> Bool {
         if ref == 0U64 || ref >= self.arena.typeCount() { return false }
         if self.arena.typeTermIsUnique(ref: ref) { return true }
-        val underlying = self.newtypeUnderlying(ref: ref)
+        val underlying = self.arena.newtypeUnderlying(ref: ref)
         if underlying != 0U64 { return self.typeIsTransitivelyUnique(ref: underlying) }
         val si: U64 = self.structIndexForType(ref: ref)
         if si < self.arena.structCount() {

@@ -700,7 +700,7 @@ pub impl Comp {
         // query so every caller applies the same rule.
         mut val resolvedRef: U64 = surfaceRef
         val original: TypeRef = self.arena.typeAt(index: surfaceRef)
-        val underlying: U64 = self.newtypeUnderlying(ref: surfaceRef)
+        val underlying: U64 = self.arena.newtypeUnderlying(ref: surfaceRef)
         if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
@@ -727,7 +727,7 @@ pub impl Comp {
         }
         mut val resolvedRef: U64 = surfaceRef
         val original: TypeRef = self.arena.typeAt(index: surfaceRef)
-        val underlying: U64 = self.newtypeUnderlying(ref: surfaceRef)
+        val underlying: U64 = self.arena.newtypeUnderlying(ref: surfaceRef)
         if underlying != 0U64 && underlying < self.arena.typeCount() {
             resolvedRef = underlying
         }
@@ -1080,7 +1080,7 @@ pub impl Comp {
     inout fn receiverDeclarationMatches(f: Func, receiverRef: U64) -> Bool {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || f.recvTy == 0U64 || f.recvTy >= self.arena.typeCount() { return true }
         mut val receiver = receiverRef
-        val underlying = self.newtypeUnderlying(ref: receiver)
+        val underlying = self.arena.newtypeUnderlying(ref: receiver)
         if underlying != 0U64 { receiver = underlying }
         val selected = self.arena.typeTerms[receiver]
         val declared = self.arena.typeTerms[f.recvTy]

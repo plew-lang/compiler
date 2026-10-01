@@ -148,15 +148,6 @@ pub impl Comp {
     // witness call is free at -O (spec/12: primitives are not special-cased — the
     // operator desugars to a witness uniformly, the cost is hidden in the floor).
 
-    // Resolved types carry declaration identity; representation queries must
-    // never select an unrelated declaration with the same spelling.
-    fn newtypeUnderlying(ref: U64) -> U64 {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return 0U64 }
-        val type = self.arena.typeTerms[ref]
-        if !type.hasDecl { return 0U64 }
-        return self.arena.newtypeUnderlyingByOffset(offset: type.declOffset)
-    }
-
     // Written names are resolved in their lexical module before asking for
     // newtype representation. Keep this boundary for name-only callers.
     inout fn newtypeUnderRef(start: U64, len: U64) -> U64 {

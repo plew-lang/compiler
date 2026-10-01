@@ -1077,7 +1077,7 @@ pub impl Comp {
         // call re-enters here with a reified proof.
         if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return <Result.Ok value=0U64 />}
         mut val adapterTarget: U64 = 0U64
-        val underlying: U64 = self.newtypeUnderlyingTypeRef(ref: environment.receiverRef)
+        val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
             adapterTarget = (try self.enqueueFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying))
             if adapterTarget == 0U64 {

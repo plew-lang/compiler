@@ -983,7 +983,7 @@ pub impl Comp {
         mut val owner = typeRef
         mut val remaining = self.arena.newtypeCount()
         while remaining != 0U64 {
-            val underlying = self.newtypeUnderlying(ref: owner)
+            val underlying = self.arena.newtypeUnderlying(ref: owner)
             if underlying == 0U64 { break }
             owner = underlying
             remaining -= 1U64

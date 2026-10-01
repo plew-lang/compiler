@@ -416,7 +416,7 @@ pub impl Comp {
         // (spec/10: methods, conformances, operators, factories). So `UserId = String`
         // satisfies `where T: Format` because String does — `print(u)` type-checks and
         // dispatches to String's witness (the newtype shares String's representation).
-        val underlying = self.newtypeUnderlying(ref: typeRef)
+        val underlying = self.arena.newtypeUnderlying(ref: typeRef)
         if underlying != 0U64 { return self.conformExists(typeRef: underlying, traitOwner: traitOwner) }
         return false
     }
@@ -438,7 +438,7 @@ pub impl Comp {
             }
             i += 1
         }
-        val underlying = self.newtypeUnderlying(ref: typeRef)
+        val underlying = self.arena.newtypeUnderlying(ref: typeRef)
         if underlying != 0U64 { return self.conformExistsTraitInstance(typeRef: underlying, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams) }
         return false
     }

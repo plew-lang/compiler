@@ -57,7 +57,7 @@ pub impl Comp {
         if self.primOrStringIsSendable(t: t) {
             return <Result.Ok value=true />
         }
-        val under: U64 = self.newtypeUnderlying(ref: rr)
+        val under: U64 = self.arena.newtypeUnderlying(ref: rr)
         if under != 0U64 {
             return <Result.Ok value=(try self.typeRefIsSendableDepth(ref: under, depth: depth - 1U64)) />
         }

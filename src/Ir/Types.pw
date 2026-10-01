@@ -2,6 +2,15 @@
 // It is not type equality: owner, binder, projection and provenance remain in
 // the returned row and are interpreted by their existing semantic consumers.
 pub impl Arena {
+    // Resolved types carry declaration identity; representation queries must
+    // never select an unrelated declaration with the same spelling.
+    fn newtypeUnderlying(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.typeCount() { return 0U64 }
+        val type = self.typeTerms[ref]
+        if !type.hasDecl { return 0U64 }
+        return self.newtypeUnderlyingByOffset(offset: type.declOffset)
+    }
+
     fn typeCount() -> U64 { return self.typeRows.count() }
     fn typeAt(index: U64) -> TypeRef { return self.typeRows[index] }
 
