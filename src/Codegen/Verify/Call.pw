@@ -84,7 +84,7 @@ pub impl Comp {
         mut val theFi: U64 = self.arena.functionCount()
         mut val count: U64 = 0
         mut val anyGen: Bool = false
-        mut val fi: U64 = 0
+        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: q)
         while fi < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: fi)
             if f.nameId == q && !f.hasRecv && !f.isExtern {
@@ -95,7 +95,7 @@ pub impl Comp {
                     theFi = fi
                 }
             }
-            fi += 1
+            fi = self.arena.nextFunctionNamed(index: fi)
         }
         if anyGen || count != 1U64 {
             return <Result.Ok value=() />
