@@ -3,7 +3,7 @@ import ../Diag with { CompileDiagnostic }
 // later passes consume the frontend resolver's declaration identity rather than
 // recovering a place by spelling from the AST.
 
-import ../Frontend with { Comp }
+import ../Frontend with { Comp, isMutableRefInst }
 import ../Ir with { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
@@ -466,7 +466,7 @@ fn midNormalizedInoutPlaceForSourceExpr(c: inout Comp, state: inout MidBuildStat
 // gated until the call's exclusivity checks have been elaborated.
 fn midNormalizedReferenceArgument(c: inout Comp, state: inout MidBuildState, base: U64, typeTerm: U64, hasField: Bool, fieldIndex: U64, fieldIsBoxed: Bool = false) -> MidNormalizedCallArgumentBuild {
     val referenceTerm: U64 = c.semanticExprTerm(exprId: base)
-    if referenceTerm == 0U64 || !c.isMutableRefInst(ref: referenceTerm) { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
+    if referenceTerm == 0U64 || !isMutableRefInst(arena: c.arena, ref: referenceTerm) { return <MidNormalizedCallArgumentBuild error=<MidBuildError.MissingSemanticType /> /> }
     val reference: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: referenceTerm, allowAccessMarker: false)
     match reference.error { MidBuildError.None => {} _ => { return <MidNormalizedCallArgumentBuild error=reference.error /> } }
     val local: U64 = addMidTemporary(state: inout state, typeTerm: referenceTerm)
@@ -1518,12 +1518,12 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         }
 
         Expr.Arrow(base: val base, nameStart: _, nameLen: _) => {
-            if allowAccessMarker && !c.isMutableRefInst(ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
+            if allowAccessMarker && !isMutableRefInst(arena: c.arena, ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             if exprId >= c.arena.semanticExprTypes.count() || !c.arena.semanticExprTypes[exprId].hasFieldProjection { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
             return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: true, fieldIndex: c.arena.semanticExprTypes[exprId].fieldProjectionIndex, fieldIsBoxed: c.arena.semanticExprTypes[exprId].fieldProjectionIsBoxed)
         }
         Expr.Deref(base: val base) => {
-            if allowAccessMarker && !c.isMutableRefInst(ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
+            if allowAccessMarker && !isMutableRefInst(arena: c.arena, ref: c.semanticExprTerm(exprId: base)) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UnloweredReference /> /> /> }
             return materializeMidReferencePlace(c: inout c, state: inout state, base: base, typeTerm: typeTerm, hasField: false, fieldIndex: 0U64)
         }
         // An Array expression reaching Mid without a SemanticAggregate means

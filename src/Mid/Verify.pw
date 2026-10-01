@@ -3,7 +3,7 @@ import ./AccessScopes with { canonicalMidAccessScopesValid }
 // Structural and ownership verification for Mid IR. This consumes only Mid
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
-import ../Frontend with { Comp }
+import ../Frontend with { Comp, isMutableRefInst }
 import ../Ir with { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
 import ./Ir with { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
 import ./Types with { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
@@ -356,7 +356,7 @@ fn canonicalMidWritablePhysicalPath(c: Comp, body: MidBodyNode, place: MidPlaceN
     while projectionI < place.projections.len {
         val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
         if projection.tag == 3U64 {
-            if !c.isMutableRefInst(ref: currentTerm) { return false }
+            if !isMutableRefInst(arena: c.arena, ref: currentTerm) { return false }
         } else if projection.tag != 1U64 && projection.tag != 4U64 { return false }
         currentTerm = projection.typeTerm
         projectionI += 1U64
