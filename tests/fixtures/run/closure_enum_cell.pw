@@ -1,0 +1,38 @@
+use @Std/Io only { print }
+use @Std/Core only { Ref }
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id) }
+}
+enum State { Empty Held(value: Ref[Resource]) }
+fn identity(state: State) -> I64 {
+    match state {
+        State.Empty => { return 0 }
+        State.Held(value: val value) => { return value->id }
+    }
+}
+fn makeStepper() -> fn() -> I64 {
+    mut val state = <State.Held value=<Ref value=<Resource id=1 /> /> />
+    return fn() -> I64 {
+        val next = identity(state: state) + 1
+        state = <State.Held value=<Ref value=<Resource id=next /> /> />
+        return identity(state: state)
+    }
+}
+fn shared() {
+    mut val state = <State.Empty />
+    val current = fn() -> I64 { return identity(state: state) }
+    val replaceState = fn() { state = <State.Held value=<Ref value=<Resource id=4 /> /> /> }
+    replaceState()
+    print(current())
+    state = <State.Empty />
+    print(current())
+}
+fn main() {
+    shared()
+    val next = makeStepper()
+    print(next())
+    val alias = next
+    print(alias())
+    print(99I64)
+}

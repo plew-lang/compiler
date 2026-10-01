@@ -42,7 +42,7 @@ def main():
                 assert 'finalize-callables:start' not in built.stderr, 'build concretized before rejecting a static error'
 
         for name in ('closure_generic_capture_enum', 'polymorphic_recursion'):
-            source = ROOT / 'tests/fixtures/reject' / (name + '.pw')
+            source = ROOT / 'tests/fixtures' / ('run' if name == 'closure_generic_capture_enum' else 'reject') / (name + '.pw')
             result = subprocess.run([*wrapper, str(compiler), '--check', str(source)], capture_output=True, text=True)
             assert result.returncode == 0 and result.stdout == '' and result.stderr == '', (name, result)
     print('check-command: passed')

@@ -1,0 +1,7 @@
+enum Value { Item(value: I64) }
+fn update(value: inout Value, inspect: fn() -> Value) { value = inspect() }
+fn main() {
+    mut val value = <Value.Item value=7 />
+    val inspect = fn() -> Value { return value }
+    update(value: inout value, inspect: inspect)
+}

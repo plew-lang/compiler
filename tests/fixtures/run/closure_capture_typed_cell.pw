@@ -1,0 +1,31 @@
+use @Std/Io only { print }
+enum Value[T] { Item(value: T) }
+struct Snapshot { val text: String }
+fn exchanger[T](initial: T) -> fn(next: T) -> T {
+    mut val current = initial
+    return fn(next: T) -> T {
+        val prior = current
+        current = next
+        return prior
+    }
+}
+fn main() {
+    val exchange = exchanger(initial: <Value[String].Item value="fir" + "st" />)
+    match exchange(next: <Value[String].Item value="second" />) {
+        Value.Item(value: val value) => { print(value) }
+    }
+    match exchange(next: <Value[String].Item value="third" />) {
+        Value.Item(value: val value) => { print(value) }
+    }
+    val array = exchanger(initial: [1I64, 2I64])
+    val old = array(next: [3I64])
+    print(old[0])
+    val newer = array(next: [])
+    print(newer[0])
+    val text = exchanger(initial: "he" + "llo")
+    print(text(next: "world"))
+    print(text(next: "end"))
+    val record = exchanger(initial: <Snapshot text="original" />)
+    val snapshot = record(next: <Snapshot text="replacement" />)
+    print(snapshot.text)
+}

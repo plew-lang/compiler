@@ -30,13 +30,13 @@ fn main() {
             if diagnostic.message != "borrowed global storage overlaps an access in the called body" { panic diagnostic.message }
         }
     }
-    match checked(source: "enum Value { Item(value: I64) } fn captured[T](value: T) -> fn() -> T { return fn() -> T { return value } } fn main() { val closure = captured(value: <Value.Item value=1I64 />) }") {
+    match checked(source: "struct Value[T] { val value: T } fn captured[T](value: T) -> fn() -> T { return fn() -> T { return value } } fn main() { val closure = captured(value: <Value[I64] value=1I64 />) }") {
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         ProgramCheckResult.Success(program: val program) => {
             match prepareCheckedProgram(checked: move program) {
                 ExecutableCompilationResult.Success(compilation: val compilation) => { panic "concrete limit accepted" }
                 ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => {
-                    if diagnostic.message != "v1 rejects closure capture of unique, generic-instantiated, enum, or function-typed values" { panic diagnostic.message }
+                    if diagnostic.message != "closure capture does not support unique, generic struct, or function-typed values" { panic diagnostic.message }
                 }
             }
         }

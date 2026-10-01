@@ -147,14 +147,14 @@ pub impl LlvmCtx {
         return self.closures.count()
     }
 
-    inout fn declareClosure(c: inout Comp, semanticIndex: U64, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
-        val closure: SemanticClosure = c.decls.semanticClosures[semanticIndex]
-        val bodyId: U64 = c.findBodyInstance(fnIdx: closure.bodyKey, environment: environment)
-        if bodyId == 0U64 {
-            return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized BodyInstance") />
-        }
+    inout fn declareClosure(c: inout Comp, bodyId: U64) -> Result[(), CompileDiagnostic] {
         if self.closureSlot(bodyId: bodyId) < self.closures.count() { return <Result.Ok value=() /> }
         val frozen = c.arena.closureSignature(bodyId: bodyId)
+        if frozen.declarationIndex == 0U64 || frozen.declarationIndex > c.decls.semanticClosures.count() {
+            return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: closure signature has no lexical declaration") />
+        }
+        val semanticIndex = frozen.declarationIndex - 1U64
+        val closure = c.decls.semanticClosures[semanticIndex]
         val functionType: U64 = frozen.functionTypeTerm
         if functionType == 0U64 || functionType >= c.arena.typeCount() || frozen.captures.count() != closure.captures.count() {
             return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: closure.exprId), msg: "internal error: reachable closure has no finalized signature") />
@@ -185,26 +185,17 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
-    // Only frontend-reachable lexical instances make their frozen closures
-    // executable. Unused declarations and abstract instances are not roots.
-    // Nested closures remain rejected by the frontend's current v1 boundary.
+    // Consume actual frozen closure instances. A lazy session can register many
+    // instances of their owner without preparing any of those bodies yet; the
+    // owner's reachability does not imply a closure ABI exists in every instance.
     inout fn collectClosures(c: inout Comp) -> Result[(), CompileDiagnostic] {
-        mut val closureI: U64 = 0U64
-        while closureI < c.decls.semanticClosures.count() {
-            val closure: SemanticClosure = c.decls.semanticClosures[closureI]
-            if closure.ownerFnIdx == 18446744073709551615U64 {
-                try self.declareClosure(c: inout c, semanticIndex: closureI, environment: <InstanceEnvironment />)
-            } else {
-                mut val bodyI: U64 = 0U64
-                while bodyI < c.monoWork.bodyCount() {
-                    val body: BodyInstance = c.arena.bodyInstanceAt(index: c.monoWork.bodyAt(index: bodyI) - 1U64)
-                    if c.arena.bodyIsCallable(bodyId: c.monoWork.bodyAt(index: bodyI)) && (try c.semanticBodyOwner(fnIdx: body.fnIdx)) == closure.ownerFnIdx {
-                        try self.declareClosure(c: inout c, semanticIndex: closureI, environment: body.environment)
-                    }
-                    bodyI += 1U64
-                }
+        mut val index = 0U64
+        while index < c.monoWork.bodyCount() {
+            val bodyId = c.monoWork.bodyAt(index: index)
+            if c.arena.bodySignature(bodyId: bodyId).closureSignatureId != 0U64 {
+                try self.declareClosure(c: inout c, bodyId: bodyId)
             }
-            closureI += 1U64
+            index += 1U64
         }
         return <Result.Ok value=() />
     }

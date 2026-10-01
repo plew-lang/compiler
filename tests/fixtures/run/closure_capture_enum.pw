@@ -1,3 +1,4 @@
+use @Std/Io only { print }
 enum Maybe {
     Some(value: I64)
     None
@@ -11,4 +12,5 @@ fn main() {
             Maybe.None => { return 0 }
         }
     }
+    print(f())
 }

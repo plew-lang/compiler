@@ -44,3 +44,6 @@ tests/fixtures/run/conformance_registration_index.pw
 tests/fixtures/run/body_type_result_index.pw
 tests/fixtures/run/body_worklist_index.pw
 tests/fixtures/run/type_compatibility_canonical.pw
+tests/fixtures/run/closure_enum_owned.pw
+tests/fixtures/run/closure_enum_cell.pw
+tests/fixtures/run/closure_capture_typed_cell.pw

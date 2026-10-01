@@ -1,0 +1,34 @@
+use @Std/Io only { print }
+
+enum Value[T] { Empty Item(value: T) }
+enum Tree { Leaf(text: String) Branch(child: Tree) }
+fn captured[T](value: T) -> fn() -> T { return fn() -> T { return value } }
+fn text(tree: Tree) -> String {
+    match tree {
+        Tree.Leaf(text: val value) => { return value }
+        Tree.Branch(child: val child) => { return text(tree: child) }
+    }
+}
+fn main() {
+    val string = captured(value: <Value[String].Item value="he" + "llo" />)
+    val alias = string
+    match alias() {
+        Value.Item(value: val value) => { print(value) }
+        Value.Empty => { panic "lost string" }
+    }
+    mut val numbers: Array[I64] = [7, 8]
+    val array = captured(value: <Value[Array[I64]].Item value=numbers />)
+    numbers[0] = 99
+    match array() {
+        Value.Item(value: val values) => { print(values[0]) }
+        Value.Empty => { panic "lost array" }
+    }
+    val tree = captured(value: <Tree.Branch child=<Tree.Leaf text="lea" + "f" /> />)
+    print(text(tree: tree()))
+    print(text(tree: tree()))
+    val empty = captured(value: <Value[String].Empty />)
+    match empty() {
+        Value.Empty => { print("empty") }
+        Value.Item(value: _) => { panic "changed variant" }
+    }
+}

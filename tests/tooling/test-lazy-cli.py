@@ -25,6 +25,9 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
             assert result.stdout == output, (name, result.stdout)
         print('PASS lazy CLI ' + name, flush=True)
         return result
+    for name in ('closure_enum_owned', 'closure_enum_cell', 'closure_capture_typed_cell'):
+        fixture = ROOT / 'tests/fixtures/run' / (name + '.pw')
+        run(name, fixture.read_text(), 0, fixture.with_suffix('.out').read_bytes())
     unused = 'use @Std/Io only { print }\nfn main() { print(42I64) }\nfn unused() { missing() }\n'
     run('unused', unused, 0, b'42\n')
     run('check-unused', unused, 1, mode='--check')

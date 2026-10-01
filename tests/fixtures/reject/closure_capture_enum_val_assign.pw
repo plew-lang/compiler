@@ -1,0 +1,5 @@
+enum Value { Item(value: I64) }
+fn main() {
+    val value = <Value.Item value=1 />
+    val replaceValue = fn() { value = <Value.Item value=2 /> }
+}

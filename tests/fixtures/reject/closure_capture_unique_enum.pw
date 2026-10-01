@@ -1,0 +1,7 @@
+unique enum Token { Value(value: I64) }
+fn main() {
+    val token = <Token.Value value=1 />
+    val inspect = fn() -> I64 {
+        match token { Token.Value(value: val value) => { return value } }
+    }
+}

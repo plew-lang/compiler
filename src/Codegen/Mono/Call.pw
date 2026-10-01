@@ -5249,6 +5249,10 @@ pub impl Comp {
             }
             return true
         }
+        val enumIndex = self.enumIndexForType(ref: lo.ty)
+        if enumIndex < self.arena.enumCount() {
+            return !self.arena.enumAt(index: enumIndex).isUnique
+        }
         return false
     }
 
@@ -5261,26 +5265,13 @@ pub impl Comp {
                 return <Result.Ok value=lo.isMut />
             }
         }
-        mut val boxed: Bool = false
-        if lo.isMut {
-            // a mutable capture must share storage (reference capture). v1 boxes only
-            // scalar (`mut val`) cells; mutable non-scalar capture is additive later.
-            // (an array's type span names its element, so guard isArray explicitly.)
-            if lo.isArray {
-                return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "v1 rejects closure capture of mutable non-scalar values (`mut val` array/struct/string); use an explicit Ref/MutableRef wrapper when shared state is intended") />
-            } else {
-                if self.isPrimType(start: lo.tyStart, len: lo.tyLen) {
-                    boxed = true
-                } else {
-                    return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "v1 rejects closure capture of mutable non-scalar values (`mut val` array/struct/string); use an explicit Ref/MutableRef wrapper when shared state is intended") />
-                }
-            }
-        } else {
-            if !(self.captureSupported(lo: lo)) {
-                return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "v1 rejects closure capture of unique, generic-instantiated, enum, or function-typed values") />
-            }
+        // Environment slots and shared cells use the same finalized value layout
+        // and destruction path. Mutability selects storage sharing, not a second
+        // list of supported value representations.
+        if !self.captureSupported(lo: lo) {
+            return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture does not support unique, generic struct, or function-typed values") />
         }
-        return <Result.Ok value=boxed />
+        return <Result.Ok value=lo.isMut />
     }
 
     // Declaration recording owns capture identities and modes. Executable
