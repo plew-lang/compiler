@@ -160,8 +160,8 @@ pub impl Comp {
         // an unknown / another generic's type parameter (which unifies at instantiation,
         // e.g. passing this fn's `T` to `f[U](x: U)`). Active only while checking a generic
         // template body (curCheckFn valid); elsewhere isTypeParamOf is false.
-        val eTp: Bool = self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: te.paramId)
-        val iTp: Bool = self.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: tin.paramId)
+        val eTp: Bool = self.arena.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: te.paramId)
+        val iTp: Bool = self.arena.isTypeParamIdentityOf(fnIdx: self.cur.checkFn, identity: tin.paramId)
         if eTp {
             if iTp {
                 // both are this function's parameters: compatible iff the SAME one.

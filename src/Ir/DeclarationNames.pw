@@ -145,6 +145,18 @@ pub impl Arena {
         return self.funcs.count()
     }
 
+    // A term belongs to its lexical binder, never another same-spelled binder.
+    fn isTypeParamIdentityOf(fnIdx: U64, identity: U64) -> Bool {
+        if identity == 0U64 || fnIdx >= self.functionCount() { return false }
+        val parameters = self.functionAt(index: fnIdx).typeParams
+        mut val index = 0U64
+        while index < parameters.count() {
+            if self.funcBindAt(binds: parameters, index: index).paramId == identity { return true }
+            index += 1U64
+        }
+        return false
+    }
+
     fn hasTypeParameterName(nameId: U64) -> Bool {
         return !self.concreteTypeNameIds.contains(nameId) && self.typeParameterNameIds.contains(nameId)
     }
