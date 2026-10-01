@@ -109,6 +109,9 @@ trap 'rm -f ./plewc_asan ./plewc_asan_ownership' EXIT
 echo "== C. run corpus under ASan + LeakSanitizer =="
 # C/D use identical C compilation flags and separate program processes. Share
 # only the immutable runtime object within this run, never execution state.
+# Large compiler-importing fixtures can exceed the per-worker idle deadline
+# under parallel load. Observe real LLVM pass execution, as in compiler linking
+# above, rather than mistaking silent code generation for a stalled process.
 RT_OBJECT="$TMP/rt.asan.o"
 python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w -c "$RT" -o "$RT_OBJECT" 2>"$TMP/runtime-object.err"
 export RT_OBJECT
@@ -119,7 +122,7 @@ c_results=$(printf '%s\n' tests/fixtures/run/*.pw | xargs -P "$JOBS" -n 1 sh -c 
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     extra_c=""; [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
     python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/trace-command.py "$err.link.raw" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $extra_c $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     run_exit=0
     infile="tests/fixtures/run/$name.in"
     if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > /dev/null 2>"$err" || run_exit=$?
@@ -167,7 +170,7 @@ d_results=$(printf '%s\n' tests/fixtures/panic/*.pw | xargs -P "$JOBS" -n 1 sh -
     ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
     python3 ./scripts/support/watch-command.py -- "$PLEWC" --asan "$f" > "$ll" 2>"$err.compile" || { echo "FAIL compile $f (diagnostic: $err.compile)"; exit 0; }
     python3 ./scripts/support/watch-command.py -- "$OPT" -passes=asan "$ll" -o "$ll.inst.bc" 2>"$err.instrument" || { echo "FAIL instrument $f (diagnostic: $err.instrument)"; exit 0; }
-    python3 ./scripts/support/watch-command.py -- "$CLANG" -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
+    python3 ./scripts/support/trace-command.py "$err.link.raw" -- "$CLANG" -Xclang -fdebug-pass-manager -mllvm -debug-pass=Executions -fsanitize=address -w "$ll.inst.bc" "$RT_OBJECT" $PLEW_LD -o "$bin" 2>"$err.link" || { echo "FAIL link $f (diagnostic: $err.link)"; exit 0; }
     want=$(cat "tests/fixtures/panic/$name.panic")
     code=0
     # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
