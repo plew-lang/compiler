@@ -1,0 +1,6 @@
+import ./A with { f as g }
+import ./Barrel with { g }
+import @Std/Io with { print }
+fn main() { print(g(value: 1I64))
+print(g(text: "s"))
+print(g(flag: true)) }

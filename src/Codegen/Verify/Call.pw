@@ -80,22 +80,20 @@ pub impl Comp {
     }
 
     inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val theFi: U64 = self.arena.functionCount()
-        mut val count: U64 = 0
-        mut val anyGen: Bool = false
-        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: q)
-        while fi < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: fi)
-            if f.nameId == q && !f.hasRecv && !f.isExtern {
-                if f.typeParams.count() > 0U64 {
-                    anyGen = true
-                } else {
-                    count += 1U64
-                    theFi = fi
-                }
+        val candidates = self.visibleFreeFunctions(nameStart: nameStart, nameLen: nameLen)
+        mut val theFi = self.arena.functionCount()
+        mut val count = 0U64
+        mut val anyGen = false
+        mut val index = 0U64
+        while index < candidates.count() {
+            val fi = candidates[index]
+            val f = self.arena.functionAt(index: fi)
+            if !f.isExtern {
+                if f.typeParams.count() > 0U64 { anyGen = true }
+                else { count += 1U64
+                    theFi = fi }
             }
-            fi = self.arena.nextFunctionNamed(index: fi)
+            index += 1U64
         }
         if anyGen || count != 1U64 {
             return <Result.Ok value=() />

@@ -1,0 +1,8 @@
+import ./Lib with { f }
+import @Std/Io with { print }
+fn main() {
+print(f(left: 1I64))
+print(f(right: 1I64))
+print(f(value: 1I64))
+print(f(value: "s"))
+}

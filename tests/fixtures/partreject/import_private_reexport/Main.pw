@@ -1,0 +1,2 @@
+import ./Barrel with { f }
+fn main() { f(secret: 1I64) }

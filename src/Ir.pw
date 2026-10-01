@@ -3169,6 +3169,7 @@ pub impl ImportOrigin { factory }
 pub struct Modules {
     mut val files: SourceFiles = <SourceFiles />
     mut val syntaxRootModules: Set[U64] = Set.new()
+    mut val publicDeclarationOffsets: Set[U64] = Set.new()
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
     // Resolved import edges: fieldStart is importer, fieldLen is target module;
@@ -3191,7 +3192,9 @@ pub struct Modules {
     mut val qualifiedUses: Array[ImportOrigin] = []
     mut val qualifiedUseOffsets: Dictionary[U64, U64] = [:]
     mut val importOrigins: Array[ImportOrigin] = []
+    mut val importOriginNext: Array[U64] = []
     mut val reExportOrigins: Array[ImportOrigin] = []
+    mut val reExportOriginNext: Array[U64] = []
     mut val importOriginNames: Dictionary[U64, Dictionary[U64, U64]] = [:]
     mut val reExportOriginNames: Dictionary[U64, Dictionary[U64, U64]] = [:]
     // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the

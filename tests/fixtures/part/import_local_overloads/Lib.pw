@@ -1,0 +1,2 @@
+pub fn f(value: String) -> I64 { return 1I64 }
+pub fn f(other: I64) -> I64 { return 2I64 }

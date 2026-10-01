@@ -1,0 +1,2 @@
+import ./Lib
+fn main() { Lib.f(secret: 1I64) }

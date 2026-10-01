@@ -1,0 +1,5 @@
+import ./A with { f }
+import ./B with { f }
+import @Std/Io with { print }
+fn main() { print(f(value: 1I64))
+print(f(value: "s")) }

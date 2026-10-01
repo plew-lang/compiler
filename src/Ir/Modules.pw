@@ -2,6 +2,9 @@
 // The loader supplies resolved package roles; physical directory names do not
 // confer a Syntax compatibility role on arbitrary source files.
 pub impl Modules {
+    inout fn registerPublicDeclaration(offset: U64) { self.publicDeclarationOffsets.insert(offset) }
+    fn isPublicDeclaration(offset: U64) -> Bool { return self.publicDeclarationOffsets.contains(offset) }
+
     inout fn registerQualifiedUse(origin~: ImportOrigin) {
         self.qualifiedUseOffsets[origin.localStart] = self.qualifiedUses.count() + 1U64
         self.qualifiedUses.append(origin)
@@ -22,6 +25,12 @@ pub impl Modules {
                 names[nameId] = self.reExportOrigins.count() + 1U64
                 self.reExportOriginNames[origin.localModule] = names
             }
+            mut val previous = names.getOr(key: nameId, fallback: 0U64)
+            if previous != 0U64 && previous <= self.reExportOrigins.count() {
+                while self.reExportOriginNext[previous - 1U64] != 0U64 { previous = self.reExportOriginNext[previous - 1U64] }
+                self.reExportOriginNext[previous - 1U64] = self.reExportOrigins.count() + 1U64
+            }
+            self.reExportOriginNext.append(0U64)
             self.reExportOrigins.append(origin)
         } else {
             mut val names = self.importOriginNames.getOr(key: origin.localModule, fallback: empty)
@@ -29,6 +38,12 @@ pub impl Modules {
                 names[nameId] = self.importOrigins.count() + 1U64
                 self.importOriginNames[origin.localModule] = names
             }
+            mut val previous = names.getOr(key: nameId, fallback: 0U64)
+            if previous != 0U64 && previous <= self.importOrigins.count() {
+                while self.importOriginNext[previous - 1U64] != 0U64 { previous = self.importOriginNext[previous - 1U64] }
+                self.importOriginNext[previous - 1U64] = self.importOrigins.count() + 1U64
+            }
+            self.importOriginNext.append(0U64)
             self.importOrigins.append(origin)
         }
     }
@@ -43,6 +58,16 @@ pub impl Modules {
         val empty: Dictionary[U64, U64] = [:]
         val names = self.reExportOriginNames.getOr(key: moduleId, fallback: empty)
         val entry = names.getOr(key: nameId, fallback: 0U64)
+        if entry != 0U64 { return entry - 1U64 }
+        return self.reExportOrigins.count()
+    }
+    fn nextImportOriginNamed(index: U64) -> U64 {
+        val entry = self.importOriginNext[index]
+        if entry != 0U64 { return entry - 1U64 }
+        return self.importOrigins.count()
+    }
+    fn nextReExportOriginNamed(index: U64) -> U64 {
+        val entry = self.reExportOriginNext[index]
         if entry != 0U64 { return entry - 1U64 }
         return self.reExportOrigins.count()
     }

@@ -240,51 +240,82 @@ pub impl Comp {
         return false
     }
 
+    // The written scope contributes declaration identities, not a single owner.
+    // A public surface can contain local overloads and forwarded overloads.
+    inout fn appendFreeFunctionSurface(moduleId: U64, nameId: U64, publicOnly: Bool, candidates: inout Array[U64]) {
+        mut val index = self.decls.firstCallableNamed(nameId: nameId)
+        while index < self.decls.callableCount() {
+            val candidate = self.decls.callableAt(index: index)
+            val function = self.arena.functionAt(index: candidate.funcIdx)
+            if candidate.sourceModule == moduleId && !(function.hasRecv || function.isAssoc) {
+                if !publicOnly || self.modules.isPublicDeclaration(offset: function.defOffset) {
+                    if !idInSet(set: candidates, id: candidate.funcIdx) { candidates.append(candidate.funcIdx) }
+                }
+            }
+            index = self.decls.nextCallableNamed(index: index)
+        }
+        index = self.modules.firstReExportOriginNamed(moduleId: moduleId, nameId: nameId)
+        while index < self.modules.reExportOriginCount() {
+            val origin = self.modules.reExportOriginAt(index: index)
+            if origin.localModule == moduleId && !origin.isNamespace {
+                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
+                    self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
+                }
+            }
+            index = self.modules.nextReExportOriginNamed(index: index)
+        }
+    }
+
+    inout fn visibleFreeFunctions(nameStart: U64, nameLen: U64) -> Array[U64] {
+        mut val candidates: Array[U64] = []
+        val qualified = self.modules.qualifiedUseIndex(offset: nameStart)
+        if qualified < self.modules.qualifiedUseCount() {
+            val origin = self.modules.qualifiedUseAt(index: qualified)
+            if !origin.isNamespace {
+                self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
+            }
+            return candidates
+        }
+        val moduleId = self.moduleOf(offset: nameStart)
+        val nameId = intern(c: inout self, start: nameStart, len: nameLen)
+        self.appendFreeFunctionSurface(moduleId: moduleId, nameId: nameId, publicOnly: false, candidates: inout candidates)
+        mut val index = self.modules.firstImportOriginNamed(moduleId: moduleId, nameId: nameId)
+        while index < self.modules.importOriginCount() {
+            val origin = self.modules.importOriginAt(index: index)
+            if origin.localModule == moduleId && !origin.isNamespace {
+                if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
+                    self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
+                }
+            }
+            index = self.modules.nextImportOriginNamed(index: index)
+        }
+        return candidates
+    }
+
     inout fn findFunc(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        // Resolve the written binding once, then overload only within its
-        // defining module. Import edges and unrelated same-spelled declarations
-        // cannot change the selected overload set.
         mut val firstLabel = self.arena.functionCount()
         mut val typeMatch = self.arena.functionCount()
         mut val typeMatch2 = self.arena.functionCount()
-        mut val targetModule = 4000000000U64
-        mut val lookupStart = nameStart
-        mut val lookupLen = nameLen
-        match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
-            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
-                targetModule = moduleId
-                lookupStart = start
-                lookupLen = len
-            }
-            _ => {}
-        }
-        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            // a bare call never resolves to a method (`hasRecv`) or an associated fn
-            // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
-            // `recv.`) qualification. Skipping them keeps a free fn / local closure
-            // named `add` from colliding with Core's `Add.add` (spec/07).
-            if !(f.hasRecv || f.isAssoc) {
-                if f.nameId == qId {
-                    if cand.sourceModule == targetModule {
-                        val matchRank = (try self.callableArgMatchRank(f: f, args: args))
-                        if matchRank != 0U64 {
-                            if firstLabel == self.arena.functionCount() { firstLabel = cand.funcIdx }
-                            if matchRank == 2U64 {
-                                if typeMatch == self.arena.functionCount() { typeMatch = cand.funcIdx }
-                                else if typeMatch2 == self.arena.functionCount() { typeMatch2 = cand.funcIdx }
-                            }
-                        }
-                    }
+        val candidates = self.visibleFreeFunctions(nameStart: nameStart, nameLen: nameLen)
+        mut val i = 0U64
+        while i < candidates.count() {
+            val functionId = candidates[i]
+            val f = self.arena.functionAt(index: functionId)
+            val matchRank = (try self.callableArgMatchRank(f: f, args: args))
+            if matchRank != 0U64 {
+                if firstLabel == self.arena.functionCount() { firstLabel = functionId }
+                if matchRank == 2U64 {
+                    if typeMatch == self.arena.functionCount() { typeMatch = functionId }
+                    else if typeMatch2 == self.arena.functionCount() { typeMatch2 = functionId }
                 }
             }
-            i = self.decls.nextCallableNamed(index: i)
+            i += 1U64
         }
         if typeMatch != self.arena.functionCount() {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
+            if typeMatch2 != self.arena.functionCount() {
+                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple visible function declarations match the argument labels and types") />
+            }
             return <Result.Ok value=typeMatch />
         }
         if firstLabel != self.arena.functionCount() { return <Result.Ok value=firstLabel /> }
@@ -297,6 +328,7 @@ pub impl Comp {
         // type match preferred. Normal compilation never reaches this — it returns
         // "not found" (firstLabel == count) so checkUseVisibility can demand an import.
         if self.genMode {
+            val qId = intern(c: inout self, start: nameStart, len: nameLen)
             mut val gLabel: U64 = self.arena.functionCount()
             mut val gj: U64 = self.decls.firstCallableNamed(nameId: qId)
             while gj < self.decls.callableCount() {
@@ -341,31 +373,8 @@ pub impl Comp {
     }
 
     inout fn firstVisibleFuncByName(useMod: U64, nameStart: U64, nameLen: U64) -> U64 {
-        mut val targetModule = 4000000000U64
-        mut val lookupStart = nameStart
-        mut val lookupLen = nameLen
-        match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
-            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
-                targetModule = moduleId
-                lookupStart = start
-                lookupLen = len
-            }
-            _ => {}
-        }
-        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if !(f.hasRecv || f.isAssoc) {
-                if f.nameId == qId {
-                    if cand.sourceModule == targetModule {
-                        return cand.funcIdx
-                    }
-                }
-            }
-            i = self.decls.nextCallableNamed(index: i)
-        }
+        val candidates = self.visibleFreeFunctions(nameStart: nameStart, nameLen: nameLen)
+        if candidates.count() > 0U64 { return candidates[0U64] }
         return self.arena.functionCount()
     }
 
@@ -378,36 +387,28 @@ pub impl Comp {
     // remaining mismatch is a normal overload/type error) or when nothing matches the labels
     // (a local / closure / builtin, handled elsewhere).
     inout fn labelMatchOnlyInvisible(useMod: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
-        mut val targetModule = 4000000000U64
+        val candidates = self.visibleFreeFunctions(nameStart: nameStart, nameLen: nameLen)
+        mut val index = 0U64
+        while index < candidates.count() {
+            if self.paramsLabelsOk(params: self.arena.functionAt(index: candidates[index]).params, args: args) { return false }
+            index += 1U64
+        }
+        // Diagnose inaccessible declarations without adding them to resolution.
         mut val lookupStart = nameStart
         mut val lookupLen = nameLen
         match self.moduleBindingAt(nameStart: nameStart, nameLen: nameLen) {
-            ModuleBinding.Declaration(val moduleId, nameStart: val start, nameLen: val len) => {
-                targetModule = moduleId
-                lookupStart = start
-                lookupLen = len
-            }
+            ModuleBinding.Declaration(moduleId: _, nameStart: val start, nameLen: val len) => { lookupStart = start
+                lookupLen = len }
             _ => {}
         }
-        val qId: U64 = intern(c: inout self, start: lookupStart, len: lookupLen)
-        mut val foundInvisible: Bool = false
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if !(f.hasRecv || f.isAssoc) {
-                if f.nameId == qId {
-                    if self.paramsLabelsOk(params: f.params, args: args) {
-                        if cand.sourceModule == targetModule {
-                            return false
-                        }
-                        foundInvisible = true
-                    }
-                }
-            }
-            i = self.decls.nextCallableNamed(index: i)
+        val nameId = intern(c: inout self, start: lookupStart, len: lookupLen)
+        index = self.decls.firstCallableNamed(nameId: nameId)
+        while index < self.decls.callableCount() {
+            val function = self.arena.functionAt(index: self.decls.callableAt(index: index).funcIdx)
+            if !(function.hasRecv || function.isAssoc) && self.paramsLabelsOk(params: function.params, args: args) { return true }
+            index = self.decls.nextCallableNamed(index: index)
         }
-        return foundInvisible
+        return false
     }
 
     inout fn firstMethodRetType(typeStart: U64, typeLen: U64, name: String) -> TypeInfo {

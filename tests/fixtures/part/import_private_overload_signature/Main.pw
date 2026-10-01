@@ -1,0 +1,3 @@
+import ./Lib with { f }
+import @Std/Io with { print }
+fn main() { print(f(value: 7I64)) }

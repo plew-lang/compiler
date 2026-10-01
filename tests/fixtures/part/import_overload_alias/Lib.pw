@@ -1,0 +1,4 @@
+pub fn f(left: I64) -> I64 { return 11I64 }
+pub fn f(right: I64) -> I64 { return 22I64 }
+pub fn f(value: I64) -> I64 { return 33I64 }
+pub fn f(value: String) -> I64 { return 44I64 }

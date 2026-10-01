@@ -68,19 +68,9 @@ pub impl Comp {
                 } else { self.resolveLexicalModuleExpr(id: recv, names: inout names) }
                 self.resolveLexicalModuleArgs(args: args, names: inout names)
             }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                if !self.lexicalNameBound(names: names, start: nameStart, len: nameLen) {
-                    val moduleId = self.moduleOf(offset: nameStart)
-                    val nameId = intern(c: inout self, start: nameStart, len: nameLen)
-                    val index = self.modules.firstImportOriginNamed(moduleId: moduleId, nameId: nameId)
-                    if index < self.modules.importOriginCount() {
-                        val origin = self.modules.importOriginAt(index: index)
-                        if !origin.isNamespace && !spansEqual(c: inout self, aStart: origin.localStart, aLen: origin.localLength, bStart: origin.sourceStart, bLen: origin.sourceLength) {
-                            self.modules.registerQualifiedUse(<ImportOrigin localStart=origin.sourceStart localLength=origin.sourceLength localModule=moduleId sourceStart=origin.sourceStart sourceLength=origin.sourceLength targetModule=origin.targetModule />)
-                            self.arena.exprs[id] = <Expr.Call nameStart=origin.sourceStart nameLen=origin.sourceLength args=args />
-                        }
-                    }
-                }
+            Expr.Call(nameStart: _, nameLen: _, val args) => {
+                // Preserve the written name and use-site offset. A flat alias
+                // contributes an overload set; it is not a qualified call.
                 self.resolveLexicalModuleArgs(args: args, names: inout names)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {

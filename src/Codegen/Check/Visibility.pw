@@ -113,6 +113,14 @@ pub impl Comp {
         return false
     }
 
+    inout fn importOriginHasOnlyFunctions(origin: ImportOrigin) -> Bool {
+        if origin.isNamespace { return false }
+        if self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength).nameLen != 0U64 { return false }
+        mut val candidates: Array[U64] = []
+        self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
+        return candidates.count() > 0U64
+    }
+
     // Every imported binding must exist on its selected module's public
     // surface. Re-export chains use the same query as qualified call resolution.
     inout fn checkImports() -> Result[(), CompileDiagnostic] {
@@ -138,9 +146,8 @@ pub impl Comp {
             }
             i += 1U64
         }
-        // `with { name }` introduces a flat local binding.  Two distinct
-        // import origins under the same local spelling have no provenance at a
-        // bare call site, so require an explicit `as` before resolver lookup.
+        // Flat imports of free functions combine overload sets. Non-callable
+        // bindings still require a unique source (or an explicit alias).
         i = 0U64
         while i < self.modules.importOriginCount() {
             val a: ImportOrigin = self.modules.importOriginAt(index: i)
@@ -151,7 +158,7 @@ pub impl Comp {
                     if spansEqual(c: inout self, aStart: a.localStart, aLen: a.localLength, bStart: b.localStart, bLen: b.localLength) {
                         val left = self.moduleBindingFromOrigin(origin: a)
                         val right = self.moduleBindingFromOrigin(origin: b)
-                        if !self.sameModuleBinding(left: left, right: right) {
+                        if !self.sameModuleBinding(left: left, right: right) && !(self.importOriginHasOnlyFunctions(origin: a) && self.importOriginHasOnlyFunctions(origin: b)) {
                             return <Result.Err error=self.diagnosticAt(offset: a.localStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)") />
                         }
                     }
@@ -897,17 +904,13 @@ pub impl Comp {
             }
             gi += 1
         }
-        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: declarationNameId)
-        while fi < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: fi)
-            if !(f.hasRecv) {
-                if !(f.isAssoc) {
-                    if self.funcDeclModule(f: f) == declarationModule && spansEqual(c: inout self, aStart: f.nameStart, aLen: f.nameLen, bStart: declarationName, bLen: declarationLength) {
-                        try self.checkSurfaceFuncSignature(surfaces: inout surfaces, surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
-                    }
-                }
-            }
-            fi = self.arena.nextFunctionNamed(index: fi)
+        mut val functions: Array[U64] = []
+        self.appendFreeFunctionSurface(moduleId: entryModule, nameId: intern(c: inout self, start: e.nameStart, len: e.nameLen), publicOnly: true, candidates: inout functions)
+        mut val fi = 0U64
+        while fi < functions.count() {
+            val functionId = functions[fi]
+            try self.checkSurfaceFuncSignature(surfaces: inout surfaces, surfaceMod: surfaceMod, fnIdx: functionId, offset: self.arena.functionAt(index: functionId).nameStart)
+            fi += 1U64
         }
         return <Result.Ok value=() />
     }
