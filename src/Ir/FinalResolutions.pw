@@ -1,0 +1,66 @@
+// Frozen resolution index readers preserve full keys and table-count misses.
+// Producers retain semantic publication; lookup depends only on stored facts.
+pub impl Arena {
+    fn finalCalleeKeyEqual(entry: U64, bodyId: U64, siteKey: CallSiteKey) -> Bool {
+        val e: CallResolution = self.finalCallees[entry]
+        return e.bodyId == bodyId && e.siteKey.sameKey(other: siteKey)
+    }
+
+    fn finalCalleeHash(bodyId: U64, siteKey: CallSiteKey) -> U64 {
+        // Keep every intermediate below 2^32.  U64 overflow is a checked
+        // runtime failure in the compiler itself, so an ordinary polynomial
+        // hash must normalize each full-width source offset before mixing.
+        val modulus: U64 = 4294967291U64
+        mut val h: U64 = bodyId % modulus
+        h = ((h + siteKey.ownerFnIdx % modulus) * 65537U64) % modulus
+        h = ((h + siteKey.originKind % modulus) * 65537U64) % modulus
+        h = ((h + siteKey.originStart % modulus) * 65537U64) % modulus
+        h = ((h + siteKey.originEnd % modulus) * 65537U64) % modulus
+        h = ((h + siteKey.originSerial % modulus) * 65537U64) % modulus
+        h = ((h + siteKey.slot % modulus) * 65537U64) % modulus
+        return h
+    }
+
+    fn finalCalleeIndexForKey(bodyId: U64, siteKey: CallSiteKey) -> U64 {
+        val capacity: U64 = self.finalCalleeIndexSlots.count()
+        if capacity == 0U64 { return self.finalCallees.count() }
+        mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
+        while self.finalCalleeIndexSlots[indexSlot] != 0U64 {
+            val entry: U64 = self.finalCalleeIndexSlots[indexSlot] - 1U64
+            if self.finalCalleeKeyEqual(entry: entry, bodyId: bodyId, siteKey: siteKey) { return entry }
+            indexSlot = (indexSlot + 1U64) % capacity
+        }
+        return self.finalCallees.count()
+    }
+
+    fn finalAggregateHash(bodyId: U64, exprId: U64) -> U64 {
+        val modulus: U64 = 4294967291U64
+        return (((bodyId % modulus + exprId % modulus) * 65537U64) + 17U64) % modulus
+    }
+
+    fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
+        val capacity: U64 = self.finalTryIndexSlots.count()
+        if capacity == 0U64 { return self.finalTries.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        while self.finalTryIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.finalTryIndexSlots[slot] - 1U64
+            val fact: FinalTryResolution = self.finalTries[entry]
+            if fact.bodyId == bodyId && fact.exprId == exprId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.finalTries.count()
+    }
+
+    fn finalForIndex(bodyId: U64, stmtId: U64) -> U64 {
+        val capacity: U64 = self.finalForIndexSlots.count()
+        if capacity == 0U64 { return self.finalFors.count() }
+        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
+        while self.finalForIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.finalForIndexSlots[slot] - 1U64
+            val fact: FinalForResolution = self.finalFors[entry]
+            if fact.bodyId == bodyId && fact.stmtId == stmtId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.finalFors.count()
+    }
+}

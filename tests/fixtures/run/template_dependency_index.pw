@@ -6,7 +6,7 @@ fn main() {
     // Storage-level body identities: no generic environment needs interning.
     compiler.cur.bodyId = 1U64
     val firstKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: 0U64).unwrap()
-    if compiler.finalCalleeIndexForKey(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "empty index must miss" }
+    if compiler.arena.finalCalleeIndexForKey(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "empty index must miss" }
     // One implicit site with many independent slots forces repeated rehash.
     mut val slot: U64 = 0U64
     while slot < 257U64 {
@@ -23,7 +23,7 @@ fn main() {
     // still distinguish a full-width slot with exactly the same hash.
     val collidingSlot: U64 = 4294967291U64
     val collidingKey = compiler.currentCallSiteKey(exprId: 0U64, siteIsStmt: true, slot: collidingSlot).unwrap()
-    if compiler.finalCalleeHash(bodyId: 1U64, siteKey: firstKey) != compiler.finalCalleeHash(bodyId: 1U64, siteKey: collidingKey) { panic "fixture must collide" }
+    if compiler.arena.finalCalleeHash(bodyId: 1U64, siteKey: firstKey) != compiler.arena.finalCalleeHash(bodyId: 1U64, siteKey: collidingKey) { panic "fixture must collide" }
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: collidingSlot, recvTypeRef: 0U64, resultTypeRef: 700U64).unwrap()
     if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: collidingKey).unwrap() != 700U64 { panic "hash collision confused slots" }
     // An expression call and an implicit protocol call never share identity.
@@ -32,7 +32,7 @@ fn main() {
     if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: expressionKey).unwrap() != 900U64 { panic "origin namespace aliased" }
     // The same lexical site in another instance has an independent result.
     compiler.cur.bodyId = 2U64
-    if compiler.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "body identity lost" }
+    if compiler.arena.finalCalleeIndexForKey(bodyId: 2U64, siteKey: firstKey) != compiler.finalCalleeCount() { panic "body identity lost" }
     compiler.appendFinalCallee(exprId: 0U64, callee: 0U64, siteIsStmt: true, slot: 0U64, recvTypeRef: 0U64, resultTypeRef: 800U64).unwrap()
     if compiler.bodyCalleeResultForTemplateDependency(exprId: 0U64, siteKey: firstKey).unwrap() != 800U64 { panic "miss stayed cached" }
     compiler.cur.bodyId = 1U64

@@ -239,7 +239,7 @@ pub impl Comp {
             return <Result.Ok value=(try self.groundAndRecordBodyType(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].term, environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)) />
         }
         if kind == 2U64 {
-            val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: self.arena.semanticTypeRecipes[recipeId - 1U64].callSite)
+            val index: U64 = self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: self.arena.semanticTypeRecipes[recipeId - 1U64].callSite)
             if index < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[index].resultTypeRef />}
             return <Result.Ok value=0U64 />
         }
@@ -663,7 +663,7 @@ pub impl Comp {
         val bodyId: U64 = self.currentBodyInstanceId()
         // Dependency identity is the finalized body plus semantic call site.
         // ExprId is only a diagnostic anchor, just as for other indexed readers.
-        val index: U64 = self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
+        val index: U64 = self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey)
         if index < self.finalCalleeCount() {
             return <Result.Ok value=self.arena.finalCallees[index].resultTypeRef />
         }
@@ -1838,25 +1838,7 @@ pub impl Comp {
         return <Result.Ok value=<CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=slot /> />
     }
 
-    fn finalCalleeKeyEqual(entry: U64, bodyId: U64, siteKey: CallSiteKey) -> Bool {
-        val e: CallResolution = self.arena.finalCallees[entry]
-        return e.bodyId == bodyId && self.sameCallSiteKey(a: e.siteKey, b: siteKey)
-    }
 
-    fn finalCalleeHash(bodyId: U64, siteKey: CallSiteKey) -> U64 {
-        // Keep every intermediate below 2^32.  U64 overflow is a checked
-        // runtime failure in the compiler itself, so an ordinary polynomial
-        // hash must normalize each full-width source offset before mixing.
-        val modulus: U64 = 4294967291U64
-        mut val h: U64 = bodyId % modulus
-        h = ((h + siteKey.ownerFnIdx % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originKind % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originStart % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originEnd % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.originSerial % modulus) * 65537U64) % modulus
-        h = ((h + siteKey.slot % modulus) * 65537U64) % modulus
-        return h
-    }
 
     inout fn rebuildFinalCalleeIndex(capacity: U64) {
         self.arena.finalCalleeIndexSlots = []
@@ -1868,7 +1850,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[entry]
-            mut val slot: U64 = self.finalCalleeHash(bodyId: e.bodyId, siteKey: e.siteKey) % capacity
+            mut val slot: U64 = self.arena.finalCalleeHash(bodyId: e.bodyId, siteKey: e.siteKey) % capacity
             while self.arena.finalCalleeIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -2031,7 +2013,7 @@ pub impl Comp {
         val evaluationArguments: CallResolutionArgumentRange = self.pushFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
         self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=typeArgs parameterTypeRefs=parameterTypes argumentConversions=conversions receiverPassing=receiverPassing argumentPassings=passings arguments=evaluationArguments recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
-        mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
+        mut val indexSlot: U64 = self.arena.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
             indexSlot = (indexSlot + 1U64) % capacity
         }
@@ -2414,29 +2396,13 @@ pub impl Comp {
         return <Result.Ok value=0U64 />
     }
 
-    // The final-call index is frontend-owned semantic output.  It accepts the
-    // complete published key, rather than reconstructing one from a backend
-    // cursor or an AST navigation anchor.  `finalCalleeCount()` is the sole
-    // not-found sentinel, matching the other final-resolution index readers.
-    fn finalCalleeIndexForKey(bodyId: U64, siteKey: CallSiteKey) -> U64 {
-        val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
-        if capacity == 0U64 { return self.finalCalleeCount() }
-        mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
-        while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
-            val entry: U64 = self.arena.finalCalleeIndexSlots[indexSlot] - 1U64
-            if self.finalCalleeKeyEqual(entry: entry, bodyId: bodyId, siteKey: siteKey) { return entry }
-            indexSlot = (indexSlot + 1U64) % capacity
-        }
-        return self.finalCalleeCount()
-    }
-
     // AST navigation adapter for legacy backend sites.  The semantic lookup
     // itself remains the explicit-key reader above, which Mid can use without
     // reintroducing an ambient body or ExprId dependency.
     inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
-        return <Result.Ok value=self.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey) />
+        return <Result.Ok value=self.arena.finalCalleeIndexForKey(bodyId: bodyId, siteKey: siteKey) />
     }
 
     // A call in a body without substitutions is instance-invariant.  Its
@@ -2472,7 +2438,6 @@ pub impl Comp {
     }
 
 
-
     // The receiver identity selected with a final callable.  This is a table
     // read, never a backend type-recovery query.
     inout fn bodyCalleeReceiverRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
@@ -2480,7 +2445,6 @@ pub impl Comp {
         if i < self.finalCalleeCount() { return <Result.Ok value=self.arena.finalCallees[i].recvTypeRef />}
         return <Result.Ok value=0U64 />
     }
-
 
 
     inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
@@ -2947,15 +2911,6 @@ pub impl Comp {
         return <Result.Ok value=conversions />
     }
 
-    // Final aggregate resolutions are indexed exactly like final calls.  A
-    // BodyInstance can instantiate the same source ExprId many ways, while an
-    // aggregate expression can contain another aggregate with a distinct
-    // ExprId; neither array position nor spelling is semantic identity.
-    fn finalAggregateHash(bodyId: U64, exprId: U64) -> U64 {
-        val modulus: U64 = 4294967291U64
-        return (((bodyId % modulus + exprId % modulus) * 65537U64) + 17U64) % modulus
-    }
-
     inout fn rebuildFinalAggregateIndex(capacity: U64) {
         self.arena.finalAggregateIndexSlots = []
         mut val zero: U64 = 0U64
@@ -2966,7 +2921,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalAggregates.count() {
             val fact: FinalAggregateResolution = self.arena.finalAggregates[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
             while self.arena.finalAggregateIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -2988,7 +2943,7 @@ pub impl Comp {
     inout fn finalAggregateIndex(bodyId: U64, exprId: U64) -> U64 {
         val capacity: U64 = self.arena.finalAggregateIndexSlots.count()
         if capacity == 0U64 { return self.arena.finalAggregates.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
         while self.arena.finalAggregateIndexSlots[slot] != 0U64 {
             val entry: U64 = self.arena.finalAggregateIndexSlots[slot] - 1U64
             val fact: FinalAggregateResolution = self.arena.finalAggregates[entry]
@@ -3007,7 +2962,7 @@ pub impl Comp {
         self.ensureFinalAggregateIndex(nextCount: self.arena.finalAggregates.count() + 1U64)
         self.arena.finalAggregates.append(fact)
         val capacity: U64 = self.arena.finalAggregateIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
         while self.arena.finalAggregateIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -3024,7 +2979,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalStorages.count() {
             val fact: FinalStorageResolution = self.arena.finalStorages[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
             while self.arena.finalStorageIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -3046,7 +3001,7 @@ pub impl Comp {
     inout fn finalStorageIndex(bodyId: U64, stmtId: U64) -> U64 {
         val capacity: U64 = self.arena.finalStorageIndexSlots.count()
         if capacity == 0U64 { return self.arena.finalStorages.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
         while self.arena.finalStorageIndexSlots[slot] != 0U64 {
             val entry: U64 = self.arena.finalStorageIndexSlots[slot] - 1U64
             val fact: FinalStorageResolution = self.arena.finalStorages[entry]
@@ -3065,7 +3020,7 @@ pub impl Comp {
         self.ensureFinalStorageIndex(nextCount: self.arena.finalStorages.count() + 1U64)
         self.arena.finalStorages.append(fact)
         val capacity: U64 = self.arena.finalStorageIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
         while self.arena.finalStorageIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -3082,7 +3037,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalReturns.count() {
             val fact: FinalReturnResolution = self.arena.finalReturns[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
             while self.arena.finalReturnIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -3104,7 +3059,7 @@ pub impl Comp {
     inout fn finalReturnIndex(bodyId: U64, exprId: U64) -> U64 {
         val capacity: U64 = self.arena.finalReturnIndexSlots.count()
         if capacity == 0U64 { return self.arena.finalReturns.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
         while self.arena.finalReturnIndexSlots[slot] != 0U64 {
             val entry: U64 = self.arena.finalReturnIndexSlots[slot] - 1U64
             val fact: FinalReturnResolution = self.arena.finalReturns[entry]
@@ -3123,7 +3078,7 @@ pub impl Comp {
         self.ensureFinalReturnIndex(nextCount: self.arena.finalReturns.count() + 1U64)
         self.arena.finalReturns.append(fact)
         val capacity: U64 = self.arena.finalReturnIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
         while self.arena.finalReturnIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -3145,7 +3100,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalAwaits.count() {
             val fact: FinalAwaitResolution = self.arena.finalAwaits[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
             while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -3168,7 +3123,7 @@ pub impl Comp {
     fn finalAwaitIndex(bodyId: U64, exprId: U64) -> U64 {
         val capacity: U64 = self.arena.finalAwaitIndexSlots.count()
         if capacity == 0U64 { return self.arena.finalAwaits.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
         while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
             val entry: U64 = self.arena.finalAwaitIndexSlots[slot] - 1U64
             val fact: FinalAwaitResolution = self.arena.finalAwaits[entry]
@@ -3187,7 +3142,7 @@ pub impl Comp {
         self.ensureFinalAwaitIndex(nextCount: self.arena.finalAwaits.count() + 1U64)
         self.arena.finalAwaits.append(fact)
         val capacity: U64 = self.arena.finalAwaitIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
         while self.arena.finalAwaitIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -3231,7 +3186,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalTries.count() {
             val fact: FinalTryResolution = self.arena.finalTries[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
             while self.arena.finalTryIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -3249,23 +3204,8 @@ pub impl Comp {
         }
     }
 
-    // Returns the table-count sentinel when the active body has no frozen
-    // `try` propagation fact for this source expression.
-    fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
-        val capacity: U64 = self.arena.finalTryIndexSlots.count()
-        if capacity == 0U64 { return self.arena.finalTries.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: exprId) % capacity
-        while self.arena.finalTryIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.arena.finalTryIndexSlots[slot] - 1U64
-            val fact: FinalTryResolution = self.arena.finalTries[entry]
-            if fact.bodyId == bodyId && fact.exprId == exprId { return entry }
-            slot = (slot + 1U64) % capacity
-        }
-        return self.arena.finalTries.count()
-    }
-
     inout fn putFinalTry(fact: FinalTryResolution) {
-        val prior: U64 = self.finalTryIndex(bodyId: fact.bodyId, exprId: fact.exprId)
+        val prior: U64 = self.arena.finalTryIndex(bodyId: fact.bodyId, exprId: fact.exprId)
         if prior < self.arena.finalTries.count() {
             self.arena.finalTries.set(i: prior, value: fact)
             return
@@ -3273,7 +3213,7 @@ pub impl Comp {
         self.ensureFinalTryIndex(nextCount: self.arena.finalTries.count() + 1U64)
         self.arena.finalTries.append(fact)
         val capacity: U64 = self.arena.finalTryIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.exprId) % capacity
         while self.arena.finalTryIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }
@@ -3290,7 +3230,7 @@ pub impl Comp {
         mut val entry: U64 = 0U64
         while entry < self.arena.finalFors.count() {
             val fact: FinalForResolution = self.arena.finalFors[entry]
-            mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+            mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
             while self.arena.finalForIndexSlots[slot] != 0U64 {
                 slot = (slot + 1U64) % capacity
             }
@@ -3308,23 +3248,8 @@ pub impl Comp {
         }
     }
 
-    // Returns the table-count sentinel when the active body has no frozen
-    // iteration fact for this source statement.
-    fn finalForIndex(bodyId: U64, stmtId: U64) -> U64 {
-        val capacity: U64 = self.arena.finalForIndexSlots.count()
-        if capacity == 0U64 { return self.arena.finalFors.count() }
-        mut val slot: U64 = self.finalAggregateHash(bodyId: bodyId, exprId: stmtId) % capacity
-        while self.arena.finalForIndexSlots[slot] != 0U64 {
-            val entry: U64 = self.arena.finalForIndexSlots[slot] - 1U64
-            val fact: FinalForResolution = self.arena.finalFors[entry]
-            if fact.bodyId == bodyId && fact.stmtId == stmtId { return entry }
-            slot = (slot + 1U64) % capacity
-        }
-        return self.arena.finalFors.count()
-    }
-
     inout fn putFinalFor(fact: FinalForResolution) {
-        val prior: U64 = self.finalForIndex(bodyId: fact.bodyId, stmtId: fact.stmtId)
+        val prior: U64 = self.arena.finalForIndex(bodyId: fact.bodyId, stmtId: fact.stmtId)
         if prior < self.arena.finalFors.count() {
             self.arena.finalFors.set(i: prior, value: fact)
             return
@@ -3332,7 +3257,7 @@ pub impl Comp {
         self.ensureFinalForIndex(nextCount: self.arena.finalFors.count() + 1U64)
         self.arena.finalFors.append(fact)
         val capacity: U64 = self.arena.finalForIndexSlots.count()
-        mut val slot: U64 = self.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
+        mut val slot: U64 = self.arena.finalAggregateHash(bodyId: fact.bodyId, exprId: fact.stmtId) % capacity
         while self.arena.finalForIndexSlots[slot] != 0U64 {
             slot = (slot + 1U64) % capacity
         }

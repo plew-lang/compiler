@@ -1,3 +1,4 @@
+part ./Ir/FinalResolutions
 import ./SourceFiles with { SourceFiles, SourceFileRange }
 import @Std/Set with { Set }
 part ./Ir/Modules
