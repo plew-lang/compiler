@@ -408,7 +408,6 @@ pub impl Comp {
         mut val matchRef: U64 = typeRef
         mut val depth: U64 = 0U64
         while matchRef != 0U64 && matchRef < self.arena.typeCount() && depth < self.arena.newtypeCount() {
-            val receiver: TypeRef = self.arena.typeAt(index: matchRef)
             val underlying: U64 = self.newtypeUnderlying(ref: matchRef)
             if underlying == 0U64 || underlying == matchRef { break }
             matchRef = underlying
