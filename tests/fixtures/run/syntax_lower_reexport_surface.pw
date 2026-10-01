@@ -21,7 +21,7 @@ fn main() {
     c.lowerSyntaxImport(imp: imp)
 
     print(c.modules.exports.count())
-    print(c.modules.exports.at(index: 0).nameLen)
-    print(c.modules.exports.at(index: 1).nameLen)
+    print(c.modules.exports[0].nameLen)
+    print(c.modules.exports[1].nameLen)
     print(c.modules.imports.count())
 }
