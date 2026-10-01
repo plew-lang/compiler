@@ -111,7 +111,7 @@ pub impl Comp {
         }
         // Only unsuffixed numeric syntax accepts a floating context. Named
         // values and explicit suffixes must pass ordinary type compatibility.
-        if self.contextualNumericExpression(exprId: valueExpr) {
+        if contextualNumericExpression(self.arena.exprs, exprId: valueExpr) {
             val expectedGround = (try self.groundTypeRef(ref: expectedRef))
             if expectedGround < self.arena.typeCount() {
                 val expected = self.arena.typeAt(index: expectedGround)

@@ -1371,21 +1371,9 @@ pub impl Comp {
         return <Result.Ok value=acceptsContext />
     }
 
-    // Only an entirely unsuffixed numeric expression accepts a sibling's
-    // numeric context. A named value or explicit suffix owns its own type.
-    fn contextualNumericExpression(exprId: U64) -> Bool {
-        match self.arena.exprs[exprId] {
-            Expr.Int(value: _, offset: _, isBool: val isBool, tyStart: _, tyLen: val suffixLen, isNeg: _) => { return !isBool && suffixLen == 0U64 }
-            Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => { return suffixLen == 0U64 }
-            Expr.Unary(op: val op, operand: val operand) => { return op == opSub() && self.contextualNumericExpression(exprId: operand) }
-            Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => { return (op == opAdd() || op == opSub() || op == opMul() || op == opDiv() || op == opRem()) && self.contextualNumericExpression(exprId: lhs) && self.contextualNumericExpression(exprId: rhs) }
-            _ => { return false }
-        }
-    }
-
     inout fn acceptsFloatingOperandContext(exprId: U64, siblingExprId: U64, siblingTerm: U64) -> Bool {
         if siblingTerm == 0U64 || siblingTerm >= self.arena.typeCount() { return false }
-        if self.contextualNumericExpression(exprId: siblingExprId) || !self.contextualNumericExpression(exprId: exprId) { return false }
+        if contextualNumericExpression(self.arena.exprs, exprId: siblingExprId) || !contextualNumericExpression(self.arena.exprs, exprId: exprId) { return false }
         val type = self.arena.typeTerms[siblingTerm]
         return self.isFloatType(start: type.nameStart, len: type.nameLen)
     }
@@ -1522,7 +1510,7 @@ pub impl Comp {
         val floatingContext = self.isFloatType(start: expectedNumeric.nameStart, len: expectedNumeric.nameLen)
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
-                if floatingContext && self.contextualNumericExpression(exprId: exprId) {
+                if floatingContext && contextualNumericExpression(self.arena.exprs, exprId: exprId) {
                     try self.recordSemanticExprExpectedResult(exprId: operand, expectedTerm: expectedTerm)
                     self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                     try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true)
@@ -1531,7 +1519,7 @@ pub impl Comp {
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                if floatingContext && self.contextualNumericExpression(exprId: exprId) {
+                if floatingContext && contextualNumericExpression(self.arena.exprs, exprId: exprId) {
                     try self.recordSemanticExprExpectedResult(exprId: lhs, expectedTerm: expectedTerm)
                     try self.recordSemanticExprExpectedResult(exprId: rhs, expectedTerm: expectedTerm)
                     self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
