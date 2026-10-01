@@ -1,0 +1,32 @@
+import /Ir with { ModuleExports, Bind }
+import @Std/Io with { write }
+
+fn main() {
+    mut val entries = <ModuleExports />
+    if entries.firstIn(moduleId: 0U64) != entries.count() { panic "empty must miss" }
+    mut val index = 0U64
+    while index < 200U64 {
+        entries.append(<Bind nameStart=index nameLen=1U64 fieldStart=index % 3U64 fieldLen=0U64 />)
+        index += 1U64
+    }
+    mut val moduleId = 0U64
+    while moduleId < 3U64 {
+        index = entries.firstIn(moduleId: moduleId)
+        mut val expected = moduleId
+        while index < entries.count() {
+            if index != expected || entries.at(index: index).nameStart != expected { panic "order mismatch" }
+            expected += 3U64
+            index = entries.nextIn(index: index)
+        }
+        if expected < 200U64 { panic "missing row" }
+        moduleId += 1U64
+    }
+    val snapshot = entries
+    entries.append(<Bind nameStart=0U64 nameLen=1U64 fieldStart=0U64 fieldLen=0U64 />)
+    if entries.nextIn(index: 198U64) != 200U64 { panic "duplicate lost" }
+    if snapshot.count() != 200U64 || snapshot.nextIn(index: 198U64) != snapshot.count() { panic "snapshot mutated" }
+    entries.append(<Bind nameStart=42U64 nameLen=1U64 fieldStart=18446744073709551615U64 fieldLen=0U64 />)
+    if entries.firstIn(moduleId: 18446744073709551615U64) != 201U64 { panic "full width module lost" }
+    if snapshot.firstIn(moduleId: 18446744073709551615U64) != snapshot.count() { panic "insertion leaked" }
+    write(s: "ok\n")
+}

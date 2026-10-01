@@ -71,13 +71,13 @@ pub impl Comp {
         // re-exported by @Std/Lang (the primitives — defined in @Std/Core). A re-export
         // records the forwarded name as exported by Lang (`fieldStart` = the Lang module),
         // using the name's span in Lang's own source (so `moduleOf` is reliable).
-        i = 0
+        i = self.modules.exports.firstIn(moduleId: lm)
         while i < self.modules.exports.count() {
-            val e: Bind = self.modules.exports[i]
+            val e: Bind = self.modules.exports.at(index: i)
             if e.fieldStart == lm {
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) { return true }
             }
-            i += 1
+            i = self.modules.exports.nextIn(index: i)
         }
         return false
     }

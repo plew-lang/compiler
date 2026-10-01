@@ -82,7 +82,7 @@ pub impl Comp {
     inout fn isExportedName(nameStart: U64, nameLen: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.modules.exports.count() {
-            val e: Bind = self.modules.exports[i]
+            val e: Bind = self.modules.exports.at(index: i)
             if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
                 return true
             }
@@ -100,15 +100,15 @@ pub impl Comp {
     // This is the (name, module) pairing that keeps a private same-named decl in another
     // module from riding an unrelated module's export of the same text.
     inout fn isExportedFromModule(mod: U64, nameStart: U64, nameLen: U64) -> Bool {
-        mut val i: U64 = 0
+        mut val i: U64 = self.modules.exports.firstIn(moduleId: mod)
         while i < self.modules.exports.count() {
-            val e: Bind = self.modules.exports[i]
+            val e: Bind = self.modules.exports.at(index: i)
             if self.exportEntrySurfaceModule(e: e) == mod {
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
                     return true
                 }
             }
-            i += 1
+            i = self.modules.exports.nextIn(index: i)
         }
         return false
     }
@@ -512,9 +512,9 @@ pub impl Comp {
     inout fn collectPublicSurfaceDeclarations(surfaceMod: U64, declarations: inout Dictionary[U64, Bool], visited: inout Dictionary[U64, Bool]) {
         if visited.getOr(key: surfaceMod, fallback: false) { return }
         visited[surfaceMod] = true
-        mut val i: U64 = 0
+        mut val i: U64 = self.modules.exports.firstIn(moduleId: surfaceMod)
         while i < self.modules.exports.count() {
-            val e: Bind = self.modules.exports[i]
+            val e: Bind = self.modules.exports.at(index: i)
             if self.exportEntrySurfaceModule(e: e) == surfaceMod {
                 match self.moduleBindingFromSurface(moduleId: surfaceMod, nameStart: e.nameStart, nameLen: e.nameLen) {
                     ModuleBinding.Namespace(val moduleId) => {
@@ -527,7 +527,7 @@ pub impl Comp {
                     ModuleBinding.Missing => {}
                 }
             }
-            i += 1
+            i = self.modules.exports.nextIn(index: i)
         }
     }
 
@@ -840,11 +840,11 @@ pub impl Comp {
             ModuleBinding.Namespace(val moduleId) => {
                 // Imports form a DAG. Retain the original public root while
                 // walking the namespace's public declarations.
-                mut val index = 0U64
+                mut val index = self.modules.exports.firstIn(moduleId: moduleId)
                 while index < self.modules.exports.count() {
-                    val child = self.modules.exports[index]
+                    val child = self.modules.exports.at(index: index)
                     if self.exportEntrySurfaceModule(e: child) == moduleId { try self.checkExportEntrySurface(surfaces: inout surfaces, e: child, apiRoot: surfaceMod) }
-                    index += 1U64
+                    index = self.modules.exports.nextIn(index: index)
                 }
                 return <Result.Ok value=() />
             }
@@ -915,9 +915,9 @@ pub impl Comp {
         mut val surfaces = <PublicSurfaceIndex />
         mut val exi: U64 = 0
         while exi < self.modules.exports.count() {
-            val exSurface: U64 = self.exportEntrySurfaceModule(e: self.modules.exports[exi])
+            val exSurface: U64 = self.exportEntrySurfaceModule(e: self.modules.exports.at(index: exi))
             if self.isPackageRootModule(mod: exSurface) {
-                try self.checkExportEntrySurface(surfaces: inout surfaces, e: self.modules.exports[exi])
+                try self.checkExportEntrySurface(surfaces: inout surfaces, e: self.modules.exports.at(index: exi))
             }
             exi += 1
         }
