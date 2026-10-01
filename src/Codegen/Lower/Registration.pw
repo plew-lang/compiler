@@ -6,10 +6,10 @@
 
 pub impl Comp {
     inout fn funcDeclModule(f: Func) -> U64 {
-        if self.offsetIsLoaded(offset: f.defOffset) {
-            return self.moduleOf(offset: f.defOffset)
+        match self.modules.sourceFileContaining(offset: f.defOffset) {
+            Optional.Some(v: val index) => { return self.modules.sourceFileRange(index: index).moduleId }
+            Optional.None => { return self.moduleOf(offset: f.nameStart) }
         }
-        return self.moduleOf(offset: f.nameStart)
     }
 
     // Namespace and receiver-head filtering only.  This deliberately does NOT
