@@ -4,6 +4,7 @@
 set -eu
 cd "$(dirname "$0")/../.."
 
+mkdir -p "$(pwd)/tmp"
 tmp=$(mktemp -d "$(pwd)/tmp/plew-measure-fingerprint.XXXXXX")
 trap 'exit_code=$?; rm -rf "$tmp"; exit "$exit_code"' EXIT
 mkdir -p "$tmp/src"

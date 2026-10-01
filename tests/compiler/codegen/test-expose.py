@@ -85,7 +85,9 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-collision-') as folder:
         source.write_text('import ./Library as Library\nextern(c) { fn entry(value~: ' + parameter + ') -> ' + result + ' }\nfn main() { val value = entry(1' + parameter + ') }\n')
         execution = subprocess.run([str(compiler), str(source)], capture_output=True, timeout=55)
         assert execution.returncode != 0, (parameter, result)
-        expected = b'conflicting C function ABI for external name' if parameter == 'I8' else b'type mismatch'
+        # Namespace-only imports do not contribute bare-call candidates. The
+        # local extern call is type-correct; the external ABI conflict is the error.
+        expected = b'conflicting C function ABI for external name'
         assert expected in execution.stderr, execution.stderr
 # Choose a generated private name from real compiler output, then publish
 # exactly that spelling. Private naming must not constrain source API names.
