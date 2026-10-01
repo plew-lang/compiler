@@ -58,7 +58,7 @@ pub impl Comp {
             }
             i = self.arena.nextStructNamed(index: i)
         }
-        i = 0
+        i = self.arena.firstEnumNamed(nameId: qId)
         while i < self.arena.enumCount() {
             val ed: EnumDef = self.arena.enumAt(index: i)
             if ed.nameId == qId {
@@ -66,7 +66,7 @@ pub impl Comp {
                     if self.moduleOf(offset: ed.defOffset) == lm { return true }
                 }
             }
-            i += 1
+            i = self.arena.nextEnumNamed(index: i)
         }
         // re-exported by @Std/Lang (the primitives — defined in @Std/Core). A re-export
         // records the forwarded name as exported by Lang (`fieldStart` = the Lang module),
