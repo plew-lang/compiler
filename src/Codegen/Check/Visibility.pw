@@ -856,37 +856,38 @@ pub impl Comp {
             ModuleBinding.Missing => { return <Result.Ok value=() /> }
         }
         val identity = self.typeDeclIdentityInModule(mod: declarationModule, start: declarationName, len: declarationLength)
-        mut val si: U64 = 0
+        val declarationNameId = intern(c: inout self, start: declarationName, len: declarationLength)
+        mut val si: U64 = self.arena.firstStructNamed(nameId: declarationNameId)
         while si < self.arena.structCount() {
             val sd: StructDef = self.arena.structAt(index: si)
             if identity.nameLen != 0U64 && sd.defOffset == identity.nameStart {
                 try self.checkStructSurfaceInModule(surfaces: inout surfaces, surfaceMod: surfaceMod, sd: sd)
             }
-            si += 1
+            si = self.arena.nextStructNamed(index: si)
         }
-        mut val ei: U64 = 0
+        mut val ei: U64 = self.arena.firstEnumNamed(nameId: declarationNameId)
         while ei < self.arena.enumCount() {
             val ed: EnumDef = self.arena.enumAt(index: ei)
             if identity.nameLen != 0U64 && ed.defOffset == identity.nameStart {
                 try self.checkEnumSurfaceInModule(surfaces: inout surfaces, surfaceMod: surfaceMod, ed: ed)
             }
-            ei += 1
+            ei = self.arena.nextEnumNamed(index: ei)
         }
-        mut val nti: U64 = 0
+        mut val nti: U64 = self.arena.firstNewtypeNamed(nameId: declarationNameId)
         while nti < self.arena.newtypeCount() {
             val nt: NewtypeDef = self.arena.newtypeAt(index: nti)
             if identity.nameLen != 0U64 && nt.defOffset == identity.nameStart {
                 try self.checkNewtypeSurfaceInModule(surfaces: inout surfaces, surfaceMod: surfaceMod, nt: nt)
             }
-            nti += 1
+            nti = self.arena.nextNewtypeNamed(index: nti)
         }
-        mut val ti: U64 = 0
+        mut val ti: U64 = self.decls.firstTraitNamed(nameId: declarationNameId)
         while ti < self.decls.traitCount() {
             val td: TraitDef = self.decls.traitAt(index: ti)
             if identity.nameLen != 0U64 && td.nameStart == identity.nameStart {
                 try self.checkTraitSurfaceInModule(surfaces: inout surfaces, surfaceMod: surfaceMod, td: td)
             }
-            ti += 1
+            ti = self.decls.nextTraitNamed(index: ti)
         }
         mut val gi: U64 = 0
         while gi < self.arena.globals.count() {
@@ -896,7 +897,7 @@ pub impl Comp {
             }
             gi += 1
         }
-        mut val fi: U64 = 0
+        mut val fi: U64 = self.arena.firstFunctionNamed(nameId: declarationNameId)
         while fi < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: fi)
             if !(f.hasRecv) {
@@ -906,7 +907,7 @@ pub impl Comp {
                     }
                 }
             }
-            fi += 1
+            fi = self.arena.nextFunctionNamed(index: fi)
         }
         return <Result.Ok value=() />
     }
